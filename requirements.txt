@@ -1,6 +1,6 @@
 Streamlit
 panda
 numpy
-richieste
-cuscino
+request
+pillow
 opencv-python-headless
