@@ -1,6 +1,6 @@
 Streamlit
 pandas
 numpy
-request
+requests
 pillow
 opencv-python-headless
