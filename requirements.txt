@@ -1,5 +1,5 @@
 Streamlit
-panda
+pandas
 numpy
 request
 pillow
