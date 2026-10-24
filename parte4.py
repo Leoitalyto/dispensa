@@ -76,6 +76,7 @@ with tab_aggiungi:
             st.session_state[K("categoria")] = info.get("categoria", "")
             st.session_state[K("extra")] = info.get("extra", {})
             st.session_state[K("info")] = dict({k: v for k, v in info.items() if k != "quantita"}, barcode=codice, per_chi=per_chi_sel)
+            avviso_inserimento(st.session_state[K("info")], per_chi_sel, allergie_di(per_chi_sel), K("avviso_mostrato") + codice)
     elif codice and not ean_valido(codice):
         st.error(t("Il codice non sembra corretto (di solito ha 13 numeri). Controlla le cifre."))
 
@@ -330,6 +331,7 @@ with tab_info:
 - ⚫ scuro: già scaduto"""))
     st.markdown(t("""**Allergeni: leggi sempre l'etichetta.** I dati dei prodotti arrivano da *Open Food Facts*, un database compilato dagli utenti: possono essere incompleti o non aggiornati. L'app ti aiuta, ma non sostituisce la lettura dell'etichetta sulla confezione, soprattutto in caso di allergia o celiachia."""))
     st.markdown(t("""**Come aggiungere un prodotto:** scheda ➕ Aggiungi, fotografa il codice a barre (o scrivi i numeri), controlla i dati, scrivi quante unità hai e la scadenza."""))
+    st.markdown(t("**Pulsanti degli allergeni:** i prodotti che possono dare allergie hanno un pulsante giallo con il nome dell'allergene (per esempio Glutine). Toccalo: si apre una schermata con la composizione e gli ingredienti del prodotto. Lo stesso avviso compare subito quando inserisci un prodotto."))
     st.markdown(t("""**La tua dispensa è solo tua:** ogni persona ha la sua password e vede solo i propri prodotti. Con "Esci" chiudi l'accesso su questo telefono."""))
     st.markdown(t("""**Cercare online:** nella scheda Dispensa, sotto i prodotti, scegli "Dettagli prodotto": trovi valori nutrizionali, ingredienti e collegamenti per cercare prezzi, offerte e recensioni su Google, Amazon e Open Prices."""))
     st.markdown(t("""**Adulti, neonati, animali:** quando aggiungi un prodotto scegli per chi è. Nella scheda Dispensa trovi tre sezioni separate; le allergie del neonato si impostano nel menu a sinistra. Per neonati e animali i dati arrivano anche da Open Products Facts e Open Pet Food Facts, che hanno meno prodotti."""))

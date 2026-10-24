@@ -205,6 +205,7 @@ if st.session_state.get("riapri_intro") or not (dati.get("intro_vista") or st.se
 La dispensa è solo tua: nessun altro vede i tuoi prodotti."""))
         st.info("✍️ " + t("Se non puoi fotografare nulla o scansionare codici, va bene lo stesso: nella scheda ➕ Aggiungi puoi compilare tutto a mano (bastano nome, unità e scadenza) oppure scrivere solo i numeri del codice a barre."))
         st.markdown("🧑 👶 🐾 " + t("Quando aggiungi un prodotto scegli per chi è: adulti, neonati (0-2 anni) o animali. Nella pagina principale li trovi in tre sezioni separate."))
+        st.markdown("🌾 " + t("**Pulsanti degli allergeni:** i prodotti che possono dare allergie hanno un pulsante giallo con il nome dell'allergene (per esempio Glutine). Toccalo: si apre una schermata con la composizione e gli ingredienti del prodotto. Lo stesso avviso compare subito quando inserisci un prodotto."))
         st.markdown("💬 " + t("Per un'idea o una richiesta usa la scheda Suggerimenti: la legge l'amministratore."))
         if st.button(t("Ho capito, iniziamo"), type="primary", key="chiudi_intro"):
             st.session_state["intro_chiusa"] = True
