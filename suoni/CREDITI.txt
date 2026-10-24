@@ -1,0 +1,16 @@
+CREDITI DEI SUONI / SOUND CREDITS
+
+I file gatto.wav e cane.wav in questa cartella sono registrazioni vere, ritagliate dal dataset ESC-50
+(Karol J. Piczak, https://github.com/karolpiczak/ESC-50), che raccoglie suoni di Freesound.org.
+Sono stati modificati: ritagliati, ridotta la frequenza di campionamento e regolato il volume.
+
+- gatto.wav: "Cat meow" di philsapphire (Freesound, suono n. 256452)
+  http://www.freesound.org/people/philsapphire/sounds/256452/
+  Licenza: CC0 (pubblico dominio).
+
+- cane.wav: "dog barking" di Tomlija (Freesound, suono n. 97392)
+  http://www.freesound.org/people/Tomlija/sounds/97392/
+  Licenza: Creative Commons Attribution (CC BY) - https://creativecommons.org/licenses/by/3.0/
+  Credito richiesto: Tomlija (Freesound.org).
+
+- leone.wav: suono generato al computer (nessun diritto di terzi).
