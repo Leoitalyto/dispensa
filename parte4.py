@@ -106,15 +106,25 @@ with tab_aggiungi:
     nome = a1.text_input(t("Nome del prodotto *"), key=K("nome"))
     marca = a2.text_input(t("Marca"), key=K("marca"))
     categoria = st.text_input(t("Categoria"), key=K("categoria"))
+    piu_scad = st.checkbox("🗓️ " + t("Ho confezioni con scadenze diverse"), key=K("piu_scad"))
     b1, b2, b3 = st.columns(3)
     quant = b1.number_input(t("Quante unità hai? *"), min_value=0.0, step=1.0, key=K("quant"),
-                            help=t("Quanti pacchi, bottiglie, barattoli..."))
+                            help=t("Quanti pacchi, bottiglie, barattoli..."), disabled=piu_scad)
     fval = b2.number_input(t("Contenuto di ogni unità"), min_value=0.0, step=10.0, key=K("fval"),
                            help=t("Es. 500 (se è un pacco da 500 g). Lascia 0 se non serve."))
     funita = b3.selectbox(t("Unità del contenuto"), UNITA_CONTENUTO, key=K("funita"))
     d1, d2 = st.columns([2, 1])
-    senza_scad = d2.checkbox(t("Senza scadenza"), key=K("senza_scad"))
-    scad = d1.date_input(t("Scadenza"), key=K("scad"), format="DD/MM/YYYY", disabled=senza_scad)
+    senza_scad = d2.checkbox(t("Senza scadenza"), key=K("senza_scad"), disabled=piu_scad)
+    scad = d1.date_input(t("Scadenza"), key=K("scad"), format="DD/MM/YYYY", disabled=senza_scad or piu_scad)
+    lotti = []
+    if piu_scad:
+        st.caption(t("Scrivi per ogni scadenza quante confezioni scadono in quella data."))
+        n_lotti = int(st.number_input(t("Quante scadenze diverse hai?"), min_value=2, max_value=10, value=2, step=1, key=K("n_lotti")))
+        for i in range(n_lotti):
+            l1, l2 = st.columns([1, 2])
+            q_i = l1.number_input(f"{t('Unità')} ({i + 1})", min_value=0.0, step=1.0, value=1.0, key=K(f"lq_{i}"))
+            d_i = l2.date_input(f"{t('Scadenza')} ({i + 1})", value=aggiungi_mesi(data_oggi, 3 + 3 * i), format="DD/MM/YYYY", key=K(f"ld_{i}"))
+            lotti.append((q_i, d_i))
 
     with st.expander(("🌾 " + t("Allergeni e ingredienti")) if per_chi_sel != "animali" else ("🥣 " + t("Composizione"))):
         if per_chi_sel != "animali":
@@ -135,24 +145,36 @@ with tab_aggiungi:
     if st.button("💾 " + t("Salva in dispensa"), type="primary", width="stretch"):
         if not nome.strip():
             st.error(t("Scrivi il nome del prodotto."))
-        elif quant <= 0:
+        elif not piu_scad and quant <= 0:
             st.error(t("Indica quante unità hai (almeno 1)."))
+        elif piu_scad and not any(q > 0 for q, _ in lotti):
+            st.error(t("Indica almeno una scadenza con almeno 1 unità."))
         else:
             immagine = foto_a_data_uri(foto_prod.getvalue()) if foto_prod is not None else st.session_state.get(K("immagine"), "")
-            riga = {
-                "id": uuid.uuid4().hex[:10], "barcode": codice if ean_valido(codice) else "",
-                "nome": nome.strip(), "marca": marca.strip(), "quantita": float(quant),
+            base = {
+                "barcode": codice if ean_valido(codice) else "",
+                "nome": nome.strip(), "marca": marca.strip(),
                 "formato_valore": float(fval) if fval else None, "formato_unita": funita if fval else None,
-                "scadenza": None if senza_scad else scad.isoformat(),
                 "immagine": immagine, "allergeni": allergeni, "tracce": tracce,
                 "senza_glutine": bool(senza_glutine), "allergeni_noti": bool(noti or allergeni),
                 "ingredienti": ingredienti.strip(), "note": note.strip(),
                 "categoria": categoria.strip(), "extra": st.session_state.get(K("extra"), {}), "per_chi": per_chi_sel,
                 "aggiunto_da": utente.strip(), "aggiunto_il": datetime.now().isoformat(timespec="seconds"),
             }
+            if piu_scad:                      # una riga per ogni scadenza (se due righe hanno la stessa data, le unisco)
+                per_data = {}
+                for q, d_ in lotti:
+                    if q > 0:
+                        per_data[d_.isoformat()] = per_data.get(d_.isoformat(), 0.0) + float(q)
+                parti = sorted(per_data.items(), key=lambda x: x[0])
+                parti = [(q, d_) for d_, q in parti]
+            else:
+                parti = [(float(quant), None if senza_scad else scad.isoformat())]
+            nuove = [dict(base, id=uuid.uuid4().hex[:10], quantita=q, scadenza=d_) for q, d_ in parti]
             try:
-                salva(lambda d: d.setdefault("articoli", []).append(riga), f"Aggiunto {riga['nome']}")
-                st.session_state["messaggio"] = "✅ " + t("{nome} aggiunto alla dispensa.", nome=riga["nome"])
+                salva(lambda d: d.setdefault("articoli", []).extend(nuove), f"Aggiunto {base['nome']}")
+                st.session_state["messaggio"] = "✅ " + (t("{nome} aggiunto alla dispensa.", nome=base["nome"]) if len(nuove) == 1
+                                                         else t("{nome}: aggiunte {n} scadenze.", nome=base["nome"], n=len(nuove)))
                 st.session_state["n_form"] = n + 1
                 st.session_state["ultimo_per_chi"] = per_chi_sel
                 st.rerun()
