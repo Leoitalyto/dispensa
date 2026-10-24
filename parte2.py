@@ -98,7 +98,7 @@ class ArchivioGitHub:
                 return dati
             except Conflitto:                    # qualcun altro ha salvato nel frattempo: riprovo
                 time.sleep(0.5 * (tentativo + 1))
-        raise RuntimeError("Non riesco a salvare: troppe modifiche contemporanee. Riprova.")
+        raise RuntimeError(t("Non riesco a salvare: troppe modifiche contemporanee. Riprova."))
 
     def elimina(self, nome, messaggio=""):
         _, sha = self._leggi(nome)
@@ -308,16 +308,16 @@ def badge_allergeni(r, mie):
     pezzi = []
     allergeni, tracce = r.get("allergeni") or [], r.get("tracce") or []
     if not r.get("allergeni_noti") and not allergeni:
-        pezzi.append("<span class='badge'>❔ Allergeni non verificati</span>")
+        pezzi.append(f"<span class='badge'>❔ {t('Allergeni non verificati')}</span>")
     for a in allergeni:
         classe = "pericolo" if a in mie else ""
-        icona = "⚠️ Contiene " if a in mie else ""
-        pezzi.append(f"<span class='badge {classe}'>{icona}{html.escape(a)}</span>")
+        icona = f"⚠️ {t('Contiene')} " if a in mie else ""
+        pezzi.append(f"<span class='badge {classe}'>{icona}{html.escape(t_all(a))}</span>")
     for a in tracce:
         classe = "attenzione" if a in mie else ""
-        pezzi.append(f"<span class='badge {classe}'>tracce di {html.escape(a)}</span>")
+        pezzi.append(f"<span class='badge {classe}'>{t('tracce di')} {html.escape(t_all(a))}</span>")
     if r.get("senza_glutine"):
-        pezzi.append("<span class='badge bene'>🌾 Senza glutine</span>")
+        pezzi.append(f"<span class='badge bene'>🌾 {t('Senza glutine')}</span>")
     return "".join(pezzi)
 
 
@@ -337,10 +337,85 @@ def scheda_html(r, data_oggi, mie):
 def avviso_html(titolo, classe, righe, data_oggi):
     voci = "".join(
         f"<li><b>{html.escape(r.get('nome', ''))}</b>: {html.escape(descrivi([r]))} "
-        f"· scade il {data_it(r['scadenza'])} ({testo_giorni(*stato_scadenza(r['scadenza'], data_oggi)).lower()})</li>"
+        f"· {t('scade il')} {data_it(r['scadenza'])} ({testo_giorni(*stato_scadenza(r['scadenza'], data_oggi))})</li>"
         for r in righe)
     return (f"<div class='avviso {classe}'><h3>{titolo}</h3>"
-            f"<div class='tot'>In totale: {html.escape(descrivi(righe))}</div><ul>{voci}</ul></div>")
+            f"<div class='tot'>{t('In totale:')} {html.escape(descrivi(righe))}</div><ul>{voci}</ul></div>")
+
+
+GRADO_COLORI = {"a": "#038141", "b": "#85bb2f", "c": "#fecb02", "d": "#ee8100", "e": "#e63e11"}
+
+
+def badge_grado(nome, grado):
+    if not grado:
+        return ""
+    testo = "#3b2d00" if grado == "c" else "#fff"
+    return (f"<span class='badge' style='background:{GRADO_COLORI[grado]};color:{testo};font-weight:700'>"
+            f"{html.escape(nome)} {grado.upper()}</span>")
+
+
+def sino(v):
+    return {"si": t("Sì"), "no": t("No")}.get(v, t("Non noto"))
+
+
+def mostra_scheda(p, mie, mostra_link=True):
+    """Pannello con le informazioni di un prodotto: valori nutrizionali, ingredienti, prezzi e collegamenti online."""
+    extra = p.get("extra") or {}
+    c1, c2 = st.columns([1, 3])
+    src = src_sicuro(p.get("immagine") or "")
+    if src:
+        c1.image(src, width=110)
+    c2.markdown(f"**{p.get('nome', '')}**" + (f" · {p['marca']}" if p.get("marca") else ""))
+    c2.caption(descrivi([p]) if p.get("quantita") else "")
+    gradi = badge_grado("Nutri-Score", extra.get("nutriscore")) + badge_grado("Eco-Score", extra.get("ecoscore"))
+    if extra.get("nova"):
+        gradi += f"<span class='badge'>NOVA {extra['nova']}</span>"
+    st.markdown(gradi + badge_allergeni(p, mie), unsafe_allow_html=True)
+
+    n = extra.get("nutrienti") or {}
+    if n:
+        voci = [("energia_kcal", "Energia (kcal)"), ("grassi", "Grassi (g)"), ("saturi", "di cui saturi (g)"),
+                ("carboidrati", "Carboidrati (g)"), ("zuccheri", "di cui zuccheri (g)"), ("fibre", "Fibre (g)"),
+                ("proteine", "Proteine (g)"), ("sale", "Sale (g)")]
+        st.dataframe(pd.DataFrame([{t("Valori nutrizionali"): t(nome), t("Per 100 g"): fmt_num(n[k])}
+                                   for k, nome in voci if k in n]), hide_index=True)
+    else:
+        st.caption(t("Nessun dato nutrizionale disponibile."))
+
+    righe = []
+    categoria = p.get("categoria") or ""
+    if categoria:
+        righe.append(f"**{t('Categoria')}:** {categoria}")
+    if any(extra.get(k, "?") != "?" for k in ("vegano", "vegetariano", "olio_palma")):
+        righe.append(f"**{t('Vegano')}:** {sino(extra.get('vegano'))} · **{t('Vegetariano')}:** "
+                     f"{sino(extra.get('vegetariano'))} · **{t('Olio di palma')}:** {sino(extra.get('olio_palma'))}")
+    if extra.get("origine"):
+        righe.append(f"**{t('Provenienza')}:** {extra['origine']}")
+    if extra.get("paesi"):
+        righe.append(f"**{t('Venduto in')}:** {extra['paesi']}")
+    if extra.get("additivi") is not None:
+        righe.append(f"**{t('Additivi')}:** {extra['additivi']}")
+    if p.get("ingredienti"):
+        righe.append(f"**{t('Ingredienti')}:** {p['ingredienti']}")
+    if righe:
+        st.markdown("\n\n".join(righe))
+
+    if mostra_link:
+        if p.get("barcode"):
+            prezzi = cerca_prezzi(p["barcode"])
+            if prezzi:
+                st.markdown(f"**💶 {t('Prezzi segnalati dalla community (Open Prices)')}**")
+                for z in prezzi:
+                    importo = f"{z['prezzo']:.2f}" if lingua() == "en" else f"{z['prezzo']:.2f}".replace(".", ",")
+                    st.write(f"{importo} {z['valuta']} · {z['negozio'] or '—'} · {z['data']}")
+            else:
+                st.caption(t("Nessun prezzo segnalato."))
+        st.markdown(f"**🔗 {t('Cerca online')}**")
+        colonne = st.columns(2)
+        for i, (etichetta, url) in enumerate(link_online(p.get("nome", ""), p.get("marca", ""), p.get("barcode", ""),
+                                                           p.get("immagine", ""))):
+            colonne[i % 2].link_button(etichetta, url, width="stretch")
+        st.caption(t("I collegamenti aprono siti esterni: prezzi e recensioni non sono verificati da questa app."))
 
 
 # >>> FINE PARTE 2 di 4: adesso incolla la PARTE 3 qui sotto <<<
