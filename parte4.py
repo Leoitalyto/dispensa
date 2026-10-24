@@ -6,6 +6,9 @@
 with tab_aggiungi:
     n = st.session_state.setdefault("n_form", 0)
     K = lambda nome: f"{nome}_{n}"
+    st.session_state.setdefault(K("per_chi"), st.session_state.get("ultimo_per_chi", "adulti"))
+    per_chi_sel = st.radio("👪 " + t("Per chi è il prodotto?"), list(CATEGORIE), format_func=nome_cat,
+                           horizontal=True, key=K("per_chi"))
     st.subheader("1️⃣ " + t("Leggi il codice a barre (facoltativo)"))
     usa_camera = st.toggle("📷 " + t("Usa la fotocamera del telefono"), key=K("usa_camera"))
     foto_codice = st.camera_input(t("Inquadra il codice a barre e scatta"), key=K("camera")) if usa_camera else None
@@ -46,15 +49,15 @@ with tab_aggiungi:
                            placeholder=t("es. 8076809513388")).strip()
 
     # ricerca: prima nella dispensa, poi su Open Food Facts
-    if codice and ean_valido(codice) and st.session_state.get(K("cercato")) != codice:
-        st.session_state[K("cercato")] = codice
+    if codice and ean_valido(codice) and st.session_state.get(K("cercato")) != (codice, per_chi_sel):
+        st.session_state[K("cercato")] = (codice, per_chi_sel)
         gia = [a for a in articoli if a.get("barcode") == codice]
         info = None
         if gia:
             info, origine = dict(gia[-1]), "dispensa"
         else:
             with st.spinner(t("Cerco il prodotto su Open Food Facts...")):
-                grezzo = cerca_open_food_facts(codice)
+                grezzo = cerca_prodotto(codice, per_chi_sel)
             info = interpreta_prodotto(grezzo, lingua()) if grezzo and "errore" not in grezzo else grezzo
             origine = "off"
         st.session_state[K("origine")] = origine if info and "errore" not in info else ("errore" if info else "nontrovato")
@@ -72,7 +75,7 @@ with tab_aggiungi:
             st.session_state[K("noti")] = bool(info.get("allergeni_noti"))
             st.session_state[K("categoria")] = info.get("categoria", "")
             st.session_state[K("extra")] = info.get("extra", {})
-            st.session_state[K("info")] = dict({k: v for k, v in info.items() if k != "quantita"}, barcode=codice)
+            st.session_state[K("info")] = dict({k: v for k, v in info.items() if k != "quantita"}, barcode=codice, per_chi=per_chi_sel)
     elif codice and not ean_valido(codice):
         st.error(t("Il codice non sembra corretto (di solito ha 13 numeri). Controlla le cifre."))
 
@@ -89,7 +92,7 @@ with tab_aggiungi:
     scheda = st.session_state.get(K("info"))
     if scheda and origine in ("off", "dispensa"):
         with st.expander("📋 " + t("Informazioni trovate sul prodotto"), expanded=True):
-            mostra_scheda(scheda, mie)
+            mostra_scheda(scheda, allergie_di(per_chi_sel))
 
     st.subheader("2️⃣ " + t("Dati del prodotto"))
     for chiave, valore in (("nome", ""), ("marca", ""), ("quant", 1.0), ("fval", 0.0), ("funita", "g"),
@@ -113,11 +116,14 @@ with tab_aggiungi:
     senza_scad = d2.checkbox(t("Senza scadenza"), key=K("senza_scad"))
     scad = d1.date_input(t("Scadenza"), key=K("scad"), format="DD/MM/YYYY", disabled=senza_scad)
 
-    with st.expander("🌾 " + t("Allergeni e ingredienti")):
-        allergeni = st.multiselect(t("Contiene"), ELENCO_ALLERGENI, key=K("allergeni"), format_func=t_all)
-        tracce = st.multiselect(t("Può contenere tracce di"), ELENCO_ALLERGENI, key=K("tracce"), format_func=t_all)
-        senza_glutine = st.checkbox(t("Etichettato senza glutine"), key=K("senza_glutine"))
-        noti = st.checkbox(t("Ho controllato l'etichetta: gli allergeni indicati sono completi"), key=K("noti"))
+    with st.expander(("🌾 " + t("Allergeni e ingredienti")) if per_chi_sel != "animali" else ("🥣 " + t("Composizione"))):
+        if per_chi_sel != "animali":
+            allergeni = st.multiselect(t("Contiene"), ELENCO_ALLERGENI, key=K("allergeni"), format_func=t_all)
+            tracce = st.multiselect(t("Può contenere tracce di"), ELENCO_ALLERGENI, key=K("tracce"), format_func=t_all)
+            senza_glutine = st.checkbox(t("Etichettato senza glutine"), key=K("senza_glutine"))
+            noti = st.checkbox(t("Ho controllato l'etichetta: gli allergeni indicati sono completi"), key=K("noti"))
+        else:
+            allergeni, tracce, senza_glutine, noti = [], [], False, False
         ingredienti = st.text_area(t("Ingredienti"), key=K("ingredienti"), height=90)
     with st.expander("📷 " + t("Foto del prodotto")):
         if st.session_state.get(K("immagine")):
@@ -141,13 +147,14 @@ with tab_aggiungi:
                 "immagine": immagine, "allergeni": allergeni, "tracce": tracce,
                 "senza_glutine": bool(senza_glutine), "allergeni_noti": bool(noti or allergeni),
                 "ingredienti": ingredienti.strip(), "note": note.strip(),
-                "categoria": categoria.strip(), "extra": st.session_state.get(K("extra"), {}),
+                "categoria": categoria.strip(), "extra": st.session_state.get(K("extra"), {}), "per_chi": per_chi_sel,
                 "aggiunto_da": utente.strip(), "aggiunto_il": datetime.now().isoformat(timespec="seconds"),
             }
             try:
                 salva(lambda d: d.setdefault("articoli", []).append(riga), f"Aggiunto {riga['nome']}")
                 st.session_state["messaggio"] = "✅ " + t("{nome} aggiunto alla dispensa.", nome=riga["nome"])
                 st.session_state["n_form"] = n + 1
+                st.session_state["ultimo_per_chi"] = per_chi_sel
                 st.rerun()
             except Exception as e:
                 st.error(t("Non sono riuscito a salvare: {e}", e=e))
@@ -162,7 +169,7 @@ with tab_gestisci:
         st.info(t("Non c'è ancora nulla da gestire."))
     else:
         df = pd.DataFrame([{
-            "id": r["id"], "🗑️": False, "Prodotto": r.get("nome", ""), "Unità": float(r.get("quantita") or 0),
+            "id": r["id"], "🗑️": False, "Prodotto": r.get("nome", ""), "Per chi": nome_cat(categoria_di(r)), "Unità": float(r.get("quantita") or 0),
             "Contenuto": r.get("formato_valore") or 0.0, "Misura": r.get("formato_unita") or "g",
             "Scadenza": date.fromisoformat(r["scadenza"]) if r.get("scadenza") else None,
             "Note": r.get("note", ""),
@@ -172,6 +179,7 @@ with tab_gestisci:
             column_config={
                 "🗑️": st.column_config.CheckboxColumn("🗑️", width="small"),
                 "Prodotto": st.column_config.TextColumn(t("Prodotto")),
+                "Per chi": st.column_config.SelectboxColumn(t("Per chi"), options=[nome_cat(c) for c in CATEGORIE]),
                 "Unità": st.column_config.NumberColumn(t("Unità"), min_value=0.0, step=1.0),
                 "Contenuto": st.column_config.NumberColumn(t("Contenuto"), min_value=0.0),
                 "Misura": st.column_config.SelectboxColumn(t("Misura"), options=UNITA_CONTENUTO),
@@ -201,6 +209,7 @@ if tab_utenti is not None:
     with tab_utenti:
         st.subheader(t("Utenti e password"))
         st.caption(t("Ogni persona ha la sua password e la sua dispensa separata. Tu non vedi le dispense degli altri."))
+        st.caption(t("Al primo accesso la persona può scegliere una password sua."))
         if sess["uid"] == "prova":
             st.info(t("Modalità prova: gli utenti non vengono conservati."))
         nuova = st.session_state.get("pw_mostrata")
@@ -223,7 +232,7 @@ if tab_utenti is not None:
                 pw = genera_password({u.get("hash") for u in leggi_utenti()})
                 nuovo = {"id": uuid.uuid4().hex[:8], "nome": nome_nuovo.strip(), "hash": hash_password(pw),
                          "attivo": True, "creato": adesso().isoformat(timespec="minutes"), "ultimo_accesso": None,
-                         "lingua": lingua_nuovo}
+                         "lingua": lingua_nuovo, "deve_cambiare": True}
                 try:
                     salva_file("utenti.json", lambda d: d.setdefault("utenti", []).append(nuovo),
                                f"Nuovo utente {nuovo['nome']}")
@@ -241,6 +250,8 @@ if tab_utenti is not None:
                 ultimo = u.get("ultimo_accesso")
                 st.markdown(f"**{u['nome']}** · " + ("✅ " + t("Attivo") if attivo else "⛔ " + t("Bloccato")))
                 st.caption(t("Ultimo accesso:") + " " + (ultimo.replace("T", " ") if ultimo else t("mai")))
+                if u.get("deve_cambiare"):
+                    st.caption("🔑 " + t("Non ha ancora scelto una sua password."))
                 b1, b2, b3 = st.columns(3)
                 if b1.button("🔑 " + t("Nuova password"), key=f"np_{u['id']}"):
                     pw = genera_password({x.get("hash") for x in elenco})
@@ -250,6 +261,7 @@ if tab_utenti is not None:
                             if x["id"] == uid:
                                 x["hash"] = h
                                 x["attivo"] = True
+                                x["deve_cambiare"] = True
                     try:
                         salva_file("utenti.json", cambia, f"Nuova password per {u['nome']}")
                         st.session_state["pw_mostrata"] = {"nome": u["nome"], "password": pw}
@@ -280,6 +292,12 @@ if tab_utenti is not None:
                             st.error(t("Non sono riuscito a eliminare: {e}", e=e))
 
 # ---------------------------------------------------------------------
+# MESSAGGI / SUGGERIMENTI
+# ---------------------------------------------------------------------
+with tab_messaggi:
+    scheda_messaggi()
+
+# ---------------------------------------------------------------------
 # INFO
 # ---------------------------------------------------------------------
 with tab_info:
@@ -292,6 +310,9 @@ with tab_info:
     st.markdown(t("""**Come aggiungere un prodotto:** scheda ➕ Aggiungi, fotografa il codice a barre (o scrivi i numeri), controlla i dati, scrivi quante unità hai e la scadenza."""))
     st.markdown(t("""**La tua dispensa è solo tua:** ogni persona ha la sua password e vede solo i propri prodotti. Con "Esci" chiudi l'accesso su questo telefono."""))
     st.markdown(t("""**Cercare online:** nella scheda Dispensa, sotto i prodotti, scegli "Dettagli prodotto": trovi valori nutrizionali, ingredienti e collegamenti per cercare prezzi, offerte e recensioni su Google, Amazon e Open Prices."""))
+    st.markdown(t("""**Adulti, neonati, animali:** quando aggiungi un prodotto scegli per chi è. Nella scheda Dispensa trovi tre sezioni separate; le allergie del neonato si impostano nel menu a sinistra. Per neonati e animali i dati arrivano anche da Open Products Facts e Open Pet Food Facts, che hanno meno prodotti."""))
+    st.markdown(t("""**Suggerimenti e richieste:** nella scheda Suggerimenti puoi scrivere all'amministratore un'idea, una richiesta di novità o un problema. Se risponde, vedi la risposta nella stessa scheda."""))
+    st.markdown(t("""**La tua password:** puoi cambiarla quando vuoi dal menu a sinistra, alla voce Cambia password."""))
     st.markdown(t("Dati dei prodotti: Open Food Facts (licenza ODbL)."))
     if e_admin:
         st.markdown(t("**Per l'amministratore: impostazioni (Streamlit → Settings → Secrets)**"))
