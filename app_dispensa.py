@@ -1,4 +1,4 @@
-# Carica l'app (parte1.py, parte2.py, lingue*.py, parte3.py, parte4.py) come se fosse un unico file.
+# Carica l'app (parte1.py, parte2.py, aggiunte.py, lingue*.py, parte3.py, parte4.py) come se fosse un unico file.
 import glob
 import os
 
@@ -10,7 +10,7 @@ def _carica(percorso):
         exec(compile(_f.read(), percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py"):
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)
