@@ -128,6 +128,14 @@ except Exception as e:
     st.stop()
 articoli = dati.get("articoli", [])
 
+# --- primo accesso: la persona puo' scegliere una password tua (l'amministratore la cambia in Secrets) ---
+if not e_admin and sess.get("uid") != "prova" and not st.session_state.get("pw_piu_tardi"):
+    _rec = next((u for u in leggi_utenti() if u["id"] == sess["uid"]), None)
+    if _rec and _rec.get("deve_cambiare"):
+        st.markdown(HERO, unsafe_allow_html=True)
+        schermata_primo_accesso()
+        st.stop()
+
 with st.sidebar:
     st.header("👤 " + (t("Amministratore") if e_admin and utente == "Amministratore" else utente))
     if e_admin:
@@ -138,6 +146,12 @@ with st.sidebar:
     if st.button("❓ " + t("Come si usa")):
         st.session_state["riapri_intro"] = True
         st.rerun()
+    if e_admin:
+        with st.expander("🔑 " + t("Password")):
+            st.caption(t("La password dell'amministratore si cambia in Streamlit → Settings → Secrets (admin_password)."))
+    elif sess.get("uid") != "prova":
+        with st.expander("🔑 " + t("Cambia password")):
+            modulo_cambio_password()
     selettore_lingua("barra")
     st.header("🌾 " + t("Allergie"))
     mie = st.multiselect(t("Segnala i prodotti che contengono:"), ELENCO_ALLERGENI, key="mie_allergie",
@@ -146,6 +160,15 @@ with st.sidebar:
     if sorted(mie) != sorted(dati.get("allergie", [])):
         try:
             salva(lambda d: d.__setitem__("allergie", list(mie)), "Allergie")
+        except Exception:
+            pass
+    with st.expander("👶 " + t("Allergie del neonato")):
+        mie_neonato = st.multiselect(t("Segnala i prodotti che contengono:"), ELENCO_ALLERGENI, key="mie_allergie_neonato",
+                                     default=[a for a in dati.get("allergie_neonato", []) if a in ELENCO_ALLERGENI],
+                                     format_func=t_all)
+    if sorted(mie_neonato) != sorted(dati.get("allergie_neonato", [])):
+        try:
+            salva(lambda d: d.__setitem__("allergie_neonato", list(mie_neonato)), "Allergie neonato")
         except Exception:
             pass
     solo_sicuri = st.checkbox(t("Mostra solo prodotti sicuri per me"), value=False,
@@ -158,6 +181,13 @@ with st.sidebar:
     if st.button("🔄 " + t("Aggiorna")):
         carica_dati.clear()
         st.rerun()
+
+
+
+def allergie_di(sezione):
+    """Allergie da controllare: le tue per gli adulti, quelle del neonato per i neonati, nessuna per gli animali."""
+    return mie if sezione == "adulti" else mie_neonato if sezione == "neonati" else []
+
 
 # --- intestazione e avvisi ---
 st.markdown(HERO, unsafe_allow_html=True)
@@ -174,6 +204,8 @@ if st.session_state.get("riapri_intro") or not (dati.get("intro_vista") or st.se
 
 La dispensa è solo tua: nessun altro vede i tuoi prodotti."""))
         st.info("✍️ " + t("Se non puoi fotografare nulla o scansionare codici, va bene lo stesso: nella scheda ➕ Aggiungi puoi compilare tutto a mano (bastano nome, unità e scadenza) oppure scrivere solo i numeri del codice a barre."))
+        st.markdown("🧑 👶 🐾 " + t("Quando aggiungi un prodotto scegli per chi è: adulti, neonati (0-2 anni) o animali. Nella pagina principale li trovi in tre sezioni separate."))
+        st.markdown("💬 " + t("Per un'idea o una richiesta usa la scheda Suggerimenti: la legge l'amministratore."))
         if st.button(t("Ho capito, iniziamo"), type="primary", key="chiudi_intro"):
             st.session_state["intro_chiusa"] = True
             st.session_state.pop("riapri_intro", None)
@@ -185,9 +217,15 @@ La dispensa è solo tua: nessun altro vede i tuoi prodotti."""))
             st.rerun()
 
 con_stato = [(r, *stato_scadenza(r.get("scadenza"), data_oggi)) for r in articoli]
-scaduti = sorted([r for r, s, g in con_stato if s == "scaduto"], key=lambda r: r["scadenza"])
-rossi = sorted([r for r, s, g in con_stato if s == "rosso"], key=lambda r: r["scadenza"])
-arancioni = sorted([r for r, s, g in con_stato if s == "arancione"], key=lambda r: r["scadenza"])
+
+
+def _con_icona(r):
+    return dict(r, nome=f"{icona_cat(categoria_di(r))} {r.get('nome', '')}")
+
+
+scaduti = sorted([_con_icona(r) for r, s, g in con_stato if s == "scaduto"], key=lambda r: r["scadenza"])
+rossi = sorted([_con_icona(r) for r, s, g in con_stato if s == "rosso"], key=lambda r: r["scadenza"])
+arancioni = sorted([_con_icona(r) for r, s, g in con_stato if s == "arancione"], key=lambda r: r["scadenza"])
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric(t("Prodotti"), len(articoli))
@@ -205,10 +243,14 @@ if arancioni:
 if st.session_state.get("messaggio"):
     st.success(st.session_state.pop("messaggio"))
 
-_nomi_schede = ["🏠 " + t("Dispensa"), "➕ " + t("Aggiungi"), "✏️ " + t("Gestisci")] + (["👥 " + t("Utenti")] if e_admin else []) + ["ℹ️ " + t("Info")]
+_n_nuovi = sum(1 for m in carica_messaggi() if not m.get("letto")) if e_admin else 0
+_nome_messaggi = ("📬 " + t("Messaggi") + (f" ({_n_nuovi})" if _n_nuovi else "")) if e_admin else "💬 " + t("Suggerimenti")
+_nomi_schede = (["🏠 " + t("Dispensa"), "➕ " + t("Aggiungi"), "✏️ " + t("Gestisci")] + (["👥 " + t("Utenti")] if e_admin else [])
+                + [_nome_messaggi, "ℹ️ " + t("Info")])
 _schede = st.tabs(_nomi_schede)
 tab_dispensa, tab_aggiungi, tab_gestisci = _schede[0], _schede[1], _schede[2]
 tab_utenti = _schede[3] if e_admin else None
+tab_messaggi = _schede[-2]
 tab_info = _schede[-1]
 
 # ---------------------------------------------------------------------
@@ -234,8 +276,9 @@ with tab_dispensa:
             continue
         if filtro == "scaduti" and stato != "scaduto":
             continue
-        if solo_sicuri and mie:
-            if any(a in mie for a in (r.get("allergeni") or [])) or not (r.get("allergeni_noti") or r.get("allergeni")):
+        _lista = allergie_di(categoria_di(r))
+        if solo_sicuri and _lista:
+            if any(a in _lista for a in (r.get("allergeni") or [])) or not (r.get("allergeni_noti") or r.get("allergeni")):
                 continue
         visibili.append((r, stato, giorni))
     visibili.sort(key=lambda x: (x[0].get("scadenza") or "9999-12-31"))
@@ -244,32 +287,41 @@ with tab_dispensa:
         st.info(t("La dispensa è vuota. Vai nella scheda ➕ Aggiungi per inserire il primo prodotto."))
     elif not visibili:
         st.info(t("Nessun prodotto corrisponde ai filtri."))
-    elif vista == "schede":
-        st.markdown("<div class='griglia'>" + "".join(scheda_html(r, data_oggi, mie) for r, _, _ in visibili) + "</div>",
-                    unsafe_allow_html=True)
-    else:
-        tab = pd.DataFrame([{
-            t("Foto"): src_sicuro(r.get("immagine") or "") or None,
-            t("Prodotto"): r.get("nome", ""), t("Marca"): r.get("marca", ""),
-            t("Quantità"): descrivi([r]),
-            t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",
-            t("Allergeni"): ", ".join(t_all(a) for a in (r.get("allergeni") or []))
-                            or ("—" if r.get("allergeni_noti") else t("non verificati")),
-            "_stato": s,
-        } for r, s, g in visibili])
-        sfondi = {"rosso": "background-color:#ffcdd2", "arancione": "background-color:#ffe0b2",
-                  "scaduto": "background-color:#d7ccc8", "ok": "", "nessuna": ""}
-        stile = tab.style.apply(lambda riga: [sfondi[riga["_stato"]]] * len(riga), axis=1)
-        st.dataframe(stile, hide_index=True, height=min(700, 60 + 72 * len(tab)),
-                     column_config={t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
-                                    "_stato": None})
+
+    for sezione in CATEGORIE:
+        gruppo = [x for x in visibili if categoria_di(x[0]) == sezione]
+        st.subheader(f"{nome_cat(sezione)} · {len(gruppo)}")
+        if not gruppo:
+            st.caption(t("Nessun prodotto in questa sezione."))
+            continue
+        if vista == "schede":
+            st.markdown("<div class='griglia'>" + "".join(scheda_html(r, data_oggi, allergie_di(sezione)) for r, _, _ in gruppo)
+                        + "</div>", unsafe_allow_html=True)
+        else:
+            tab = pd.DataFrame([{
+                t("Foto"): src_sicuro(r.get("immagine") or "") or None,
+                t("Prodotto"): r.get("nome", ""), t("Marca"): r.get("marca", ""),
+                t("Quantità"): descrivi([r]),
+                t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",
+                t("Allergeni"): ", ".join(t_all(a) for a in (r.get("allergeni") or []))
+                                or ("—" if r.get("allergeni_noti") else t("non verificati")),
+                "_stato": s,
+            } for r, s, g in gruppo])
+            sfondi = {"rosso": "background-color:#ffcdd2", "arancione": "background-color:#ffe0b2",
+                      "scaduto": "background-color:#d7ccc8", "ok": "", "nessuna": ""}
+            stile = tab.style.apply(lambda riga: [sfondi[riga["_stato"]]] * len(riga), axis=1)
+            st.dataframe(stile, hide_index=True, height=min(700, 60 + 72 * len(tab)),
+                         column_config={t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
+                                        "_stato": None})
 
     if visibili:
         st.divider()
-        _nomi = {r["id"]: r.get("nome", "") + (f" · {r['marca']}" if r.get("marca") else "") for r, _, _ in visibili}
+        _nomi = {r["id"]: f"{icona_cat(categoria_di(r))} {r.get('nome', '')}" + (f" · {r['marca']}" if r.get("marca") else "")
+                 for r, _, _ in visibili}
         scelto = st.selectbox("🔍 " + t("Dettagli prodotto"), [""] + list(_nomi),
                               format_func=lambda i: _nomi.get(i, t("Scegli un prodotto")))
         if scelto:
-            mostra_scheda(next(r for r in articoli if r["id"] == scelto), mie)
+            _riga = next(r for r in articoli if r["id"] == scelto)
+            mostra_scheda(_riga, allergie_di(categoria_di(_riga)))
 
 # >>> FINE PARTE 3 di 4: adesso incolla la PARTE 4 qui sotto <<<
