@@ -24,6 +24,24 @@ _JS_FOTO = r"""
       };
     }
   } catch (e) {}
+  /* 1b) pulsante 'Volantini' sulle schede: manda l'id del prodotto al campo nascosto di Streamlit */
+  try {
+    if (!w.__volAttivo) {
+      w.__volAttivo = true;
+      doc.addEventListener('click', function (e) {
+        var el = e.target && e.target.closest ? e.target.closest('[data-vol]') : null;
+        if (!el) return;
+        var inp = doc.querySelector('input[aria-label="volantini-trigger"]');
+        if (!inp) return;
+        e.preventDefault(); e.stopPropagation();
+        var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, el.getAttribute('data-vol') + '|' + Date.now());
+        inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+        inp.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+        inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+      }, true);
+    }
+  } catch (e) {}
   /* 2) tasti 'Scatta' e 'Carica dal telefono': aprono la fotocamera vera (lato posteriore) o la galleria del telefono
         e passano la foto al campo nascosto di Streamlit */
   try {

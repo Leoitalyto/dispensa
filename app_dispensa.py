@@ -10,9 +10,9 @@ def _carica(percorso):
         exec(compile(_f.read(), percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py"):
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)
-for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py"):
+for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
     _carica(os.path.join(_cartella, _nome))

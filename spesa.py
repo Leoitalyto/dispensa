@@ -103,14 +103,27 @@ def _corpo_spesa():
     if not lista:
         st.info(t("La lista della spesa è vuota."))
         return
-    lista.sort(key=lambda x: (bool(x.get("preso")), x.get("aggiunto_il", "")))
+    negozi = sorted({(x.get("negozio") or "").strip() for x in lista if (x.get("negozio") or "").strip()})
+    filtro_neg = "Tutti"
+    if negozi:
+        filtro_neg = st.selectbox("🏪 Mostra", ["Tutti"] + negozi + ["Senza negozio"], key="spesa_filtro_negozio")
+    lista.sort(key=lambda x: (bool(x.get("preso")), (x.get("negozio") or "~").lower(), x.get("aggiunto_il", "")))
+    if filtro_neg == "Senza negozio":
+        lista = [x for x in lista if not (x.get("negozio") or "").strip()]
+    elif filtro_neg != "Tutti":
+        lista = [x for x in lista if (x.get("negozio") or "").strip() == filtro_neg]
+    if not lista:
+        st.info(t("La lista della spesa è vuota."))
+        return
     df = pd.DataFrame([{"id": x["id"], "Preso": bool(x.get("preso")),
                         "Prodotto": x.get("nome", "") + (f" · {x['marca']}" if x.get("marca") else ""),
+                        "Dove": (_dove(x) if "_dove" in globals() else ""),
                         "🗑️": False} for x in lista]).set_index("id")
-    modificata = st.data_editor(df, hide_index=True, width="stretch", key=f"editor_spesa_{len(lista)}_{giro}",
-                                disabled=["Prodotto"],
+    modificata = st.data_editor(df, hide_index=True, width="stretch", key=f"editor_spesa_{len(lista)}_{giro}_{filtro_neg}",
+                                disabled=["Prodotto", "Dove"],
                                 column_config={"Preso": st.column_config.CheckboxColumn(t("Preso"), width="small"),
                                                "Prodotto": st.column_config.TextColumn(t("Prodotto")),
+                                               "Dove": st.column_config.TextColumn("🏪 Dove"),
                                                "🗑️": st.column_config.CheckboxColumn("🗑️", width="small")})
 
     def _applica(d):
