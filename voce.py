@@ -13,6 +13,7 @@ _CAMPI_VOCE = [
     ("Codice a barre (i numeri sotto le barre)", "sostituisci", "cifre"),
     ("Il tuo messaggio", "aggiungi", "testo"), ("Risposta", "aggiungi", "testo"),
     ("Nome della persona", "sostituisci", "nome"), ("Cosa devi comprare?", "sostituisci", "nome"),
+    ("Scrivi dove lo metti", "sostituisci", "nome"),
 ]
 
 _JS_VOCE = r"""
@@ -71,11 +72,21 @@ _JS_VOCE = r"""
     w.setTimeout(function () { if (m.parentElement) m.remove(); }, 4000);
   }
 
+  function togliMessaggi(cont) {
+    var m = cont && cont.parentElement && cont.parentElement.querySelector('.vc-msg');
+    if (m) m.remove();
+  }
+
   function ascolta(el, c, b, cont) {
+    // secondo tocco = spegne subito (anche se il browser non risponde): il rosso sparisce e si puo' riaccendere
     if (attivo) {
-      var stessa = attivo.el === el;
-      try { attivo.rec.stop(); } catch (e) {}
+      var vecchio = attivo;
+      var stessa = vecchio.el === el;
       attivo = null;
+      vecchio.b.classList.remove('vc-on');
+      togliMessaggi(vecchio.cont);
+      try { vecchio.rec.stop(); } catch (e) {}
+      w.setTimeout(function () { try { vecchio.rec.abort(); } catch (e) {} }, 3000);
       if (stessa) return;
     }
     var rec = new SR();
@@ -84,19 +95,27 @@ _JS_VOCE = r"""
     rec.continuous = false;
     rec.maxAlternatives = 1;
     var detto = '';
-    attivo = {rec: rec, el: el};
+    var mio = {rec: rec, el: el, b: b, cont: cont};
+    attivo = mio;
     b.classList.add('vc-on');
     messaggio(cont, 'ascolto', true);
+    var limite = w.setTimeout(function () { try { rec.stop(); } catch (e) {} }, 25000);
+    function chiudi() {
+      w.clearTimeout(limite);
+      if (attivo === mio) attivo = null;
+      b.classList.remove('vc-on');
+    }
     rec.onresult = function (e) {
       for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) detto += e.results[i][0].transcript + ' '; }
     };
     rec.onerror = function (e) {
+      chiudi();
       var perm = (e.error === 'not-allowed' || e.error === 'service-not-allowed');
+      if (e.error === 'aborted') { togliMessaggi(cont); return; }
       messaggio(cont, perm ? 'permesso' : (e.error === 'no-speech' ? 'nulla' : 'errore'), false);
     };
     rec.onend = function () {
-      b.classList.remove('vc-on');
-      attivo = null;
+      chiudi();
       var vm = cont.parentElement && cont.parentElement.querySelector('.vc-msg.vc-ok');
       if (vm) vm.remove();
       var nuovo = pulisci(detto, c);
@@ -104,7 +123,7 @@ _JS_VOCE = r"""
       if (c.modo === 'aggiungi' && el.value && el.value.trim()) nuovo = el.value.replace(/\s+$/, '') + ' ' + nuovo;
       imposta(el, nuovo);
     };
-    try { rec.start(); } catch (err) { b.classList.remove('vc-on'); attivo = null; }
+    try { rec.start(); } catch (err) { chiudi(); togliMessaggi(cont); }
   }
 
   function aggiungi(el, c) {
