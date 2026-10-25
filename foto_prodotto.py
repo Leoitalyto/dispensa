@@ -3,7 +3,9 @@
 La foto viene scontornata (sfondo tolto) e addrizzata in modo automatico, poi mostrata AMPIA nel riquadro della scheda.
 Caricato da app_dispensa.py dopo account.py e prima di parte3.py."""
 import base64
+import hashlib
 import html
+import json
 import io
 
 import cv2
@@ -348,7 +350,7 @@ def scontorna_e_addrizza(dati, lato=720):
 # ---------------------------------------------------------------------
 # Campo foto (uno solo, in alto) usato da "Aggiungi" e da "Modifica"
 # ---------------------------------------------------------------------
-_VERSIONE_FOTO = 7
+_VERSIONE_FOTO = 8
 
 
 def _foto_lavorata(dati):
@@ -385,6 +387,246 @@ def _ritocco(uri, grado, sopra, sotto, sinistra, destra):
     buf = io.BytesIO()
     im.save(buf, "WEBP", quality=86, method=6)
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+_EDITOR_JS = r'''(function () {
+  var IMG_SRC = __IMG__, ETICHETTA = __LABEL__;
+  var cv = document.getElementById('cv'), rl = document.getElementById('rl');
+  var cx = cv.getContext('2d'), rx = rl.getContext('2d');
+  var img = new Image(), pronto = false;
+  var ang = 0, c = {x0: 0, y0: 0, x1: 1, y1: 1};
+  var PX_GRADO = 13, MAXANG = 45, timer = null, ultimo = null, dpr = Math.max(1, window.devicePixelRatio || 1);
+
+  function parentWin() {
+    var w = window;
+    for (var i = 0; i < 4; i++) {
+      try { if (w.document.querySelector('[data-testid="stApp"],.stApp')) return w; } catch (e) {}
+      if (w.parent === w) break;
+      w = w.parent;
+    }
+    return null;
+  }
+  function campo() {
+    var P = parentWin();
+    if (!P) return null;
+    return P.document.querySelector('input[aria-label="' + ETICHETTA + '"]');
+  }
+  function scrivi(v) {
+    var P = parentWin(), el = campo();
+    if (!P || !el || el.value === v) return;
+    var setter = Object.getOwnPropertyDescriptor(P.HTMLInputElement.prototype, 'value').set;
+    setter.call(el, v);
+    el.dispatchEvent(new P.Event('input', {bubbles: true}));
+    el.dispatchEvent(new P.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+    el.dispatchEvent(new P.FocusEvent('focusout', {bubbles: true}));
+  }
+  function valore() {
+    return ang.toFixed(2) + '|' + c.x0.toFixed(4) + '|' + c.y0.toFixed(4) + '|' + c.x1.toFixed(4) + '|' + c.y1.toFixed(4);
+  }
+  function conferma() {
+    clearTimeout(timer);
+    timer = setTimeout(function () { scrivi(valore()); }, 450);
+  }
+  function leggiIniziale() {
+    try {
+      var el = campo();
+      if (el && el.value) {
+        var p = el.value.split('|').map(parseFloat);
+        if (p.length === 5 && p.every(function (n) { return isFinite(n); })) {
+          ang = Math.max(-MAXANG, Math.min(MAXANG, p[0]));
+          c = {x0: p[1], y0: p[2], x1: p[3], y1: p[4]};
+        }
+      }
+    } catch (e) {}
+  }
+
+  function misure() {
+    var a = ang * Math.PI / 180, co = Math.abs(Math.cos(a)), si = Math.abs(Math.sin(a));
+    var W = img.width * co + img.height * si, H = img.width * si + img.height * co;
+    var vw = cv.clientWidth, vh = cv.clientHeight, m = 14;
+    var s = Math.min((vw - 2 * m) / W, (vh - 2 * m) / H);
+    return {W: W, H: H, s: s, bx: (vw - W * s) / 2, by: (vh - H * s) / 2, vw: vw, vh: vh};
+  }
+  function disegna() {
+    if (!pronto) return;
+    var m = misure();
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx.clearRect(0, 0, m.vw, m.vh);
+    cx.fillStyle = '#edf7f1'; cx.fillRect(0, 0, m.vw, m.vh);
+    cx.save();
+    cx.translate(m.bx + m.W * m.s / 2, m.by + m.H * m.s / 2);
+    cx.rotate(-ang * Math.PI / 180);
+    cx.drawImage(img, -img.width * m.s / 2, -img.height * m.s / 2, img.width * m.s, img.height * m.s);
+    cx.restore();
+    var X0 = m.bx + c.x0 * m.W * m.s, Y0 = m.by + c.y0 * m.H * m.s, X1 = m.bx + c.x1 * m.W * m.s, Y1 = m.by + c.y1 * m.H * m.s;
+    cx.fillStyle = 'rgba(8,30,20,.55)';
+    cx.fillRect(0, 0, m.vw, Y0); cx.fillRect(0, Y1, m.vw, m.vh - Y1);
+    cx.fillRect(0, Y0, X0, Y1 - Y0); cx.fillRect(X1, Y0, m.vw - X1, Y1 - Y0);
+    cx.strokeStyle = 'rgba(255,255,255,.95)'; cx.lineWidth = 1.5; cx.strokeRect(X0, Y0, X1 - X0, Y1 - Y0);
+    cx.strokeStyle = 'rgba(255,255,255,.35)'; cx.lineWidth = 1;
+    for (var i = 1; i < 3; i++) {
+      cx.beginPath(); cx.moveTo(X0 + (X1 - X0) * i / 3, Y0); cx.lineTo(X0 + (X1 - X0) * i / 3, Y1); cx.stroke();
+      cx.beginPath(); cx.moveTo(X0, Y0 + (Y1 - Y0) * i / 3); cx.lineTo(X1, Y0 + (Y1 - Y0) * i / 3); cx.stroke();
+    }
+    cx.strokeStyle = '#fff'; cx.lineWidth = 4; var L = 20;
+    [[X0, Y0, 1, 1], [X1, Y0, -1, 1], [X0, Y1, 1, -1], [X1, Y1, -1, -1]].forEach(function (p) {
+      cx.beginPath(); cx.moveTo(p[0], p[1] + p[3] * L); cx.lineTo(p[0], p[1]); cx.lineTo(p[0] + p[2] * L, p[1]); cx.stroke();
+    });
+    [[(X0 + X1) / 2, Y0, 1], [(X0 + X1) / 2, Y1, 1], [X0, (Y0 + Y1) / 2, 0], [X1, (Y0 + Y1) / 2, 0]].forEach(function (p) {
+      cx.beginPath();
+      if (p[2]) { cx.moveTo(p[0] - 14, p[1]); cx.lineTo(p[0] + 14, p[1]); } else { cx.moveTo(p[0], p[1] - 14); cx.lineTo(p[0], p[1] + 14); }
+      cx.stroke();
+    });
+    document.getElementById('val').textContent = (ang > 0 ? '+' : '') + ang.toFixed(1) + '\u00b0';
+    disegnaRighello();
+  }
+  function disegnaRighello() {
+    var w = rl.clientWidth, h = rl.clientHeight, mid = w / 2;
+    rx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rx.clearRect(0, 0, w, h);
+    rx.fillStyle = '#ffffff'; rx.fillRect(0, 0, w, h);
+    rx.textAlign = 'center'; rx.font = '600 11px system-ui,sans-serif';
+    for (var v = -MAXANG; v <= MAXANG; v += 1) {
+      var x = mid + (v - ang) * PX_GRADO;
+      if (x < -10 || x > w + 10) continue;
+      var lungo = (v % 5 === 0);
+      rx.strokeStyle = lungo ? '#0f766e' : '#8db8ae'; rx.lineWidth = lungo ? 2 : 1;
+      rx.beginPath(); rx.moveTo(x, h - 8); rx.lineTo(x, h - (lungo ? 28 : 18)); rx.stroke();
+      if (v % 10 === 0) { rx.fillStyle = '#35564a'; rx.fillText(String(v), x, 16); }
+    }
+    rx.strokeStyle = '#f59e0b'; rx.lineWidth = 3;
+    rx.beginPath(); rx.moveTo(mid, 22); rx.lineTo(mid, h - 4); rx.stroke();
+  }
+  function ridimensiona() {
+    [cv, rl].forEach(function (el) { el.width = Math.round(el.clientWidth * dpr); el.height = Math.round(el.clientHeight * dpr); });
+    disegna();
+  }
+
+  // ----- cornice di ritaglio -----
+  var modo = null, inizio = null;
+  function pos(e) { var r = cv.getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top}; }
+  function tocco(p) {
+    var m = misure(), T = 26;
+    var X0 = m.bx + c.x0 * m.W * m.s, Y0 = m.by + c.y0 * m.H * m.s, X1 = m.bx + c.x1 * m.W * m.s, Y1 = m.by + c.y1 * m.H * m.s;
+    var nx0 = Math.abs(p.x - X0) < T, nx1 = Math.abs(p.x - X1) < T, ny0 = Math.abs(p.y - Y0) < T, ny1 = Math.abs(p.y - Y1) < T;
+    var dentroX = p.x > X0 - T && p.x < X1 + T, dentroY = p.y > Y0 - T && p.y < Y1 + T;
+    var h = '';
+    if (ny0 && dentroX) h += 'n'; else if (ny1 && dentroX) h += 's';
+    if (nx0 && dentroY) h += 'w'; else if (nx1 && dentroY) h += 'e';
+    if (h) return h;
+    if (p.x > X0 && p.x < X1 && p.y > Y0 && p.y < Y1) return 'm';
+    return null;
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    var p = pos(e); modo = tocco(p);
+    if (!modo) return;
+    inizio = {p: p, c: {x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1}};
+    cv.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!modo) return;
+    var m = misure(), p = pos(e), dx = (p.x - inizio.p.x) / (m.W * m.s), dy = (p.y - inizio.p.y) / (m.H * m.s), o = inizio.c, MIN = 0.1;
+    var n = {x0: o.x0, y0: o.y0, x1: o.x1, y1: o.y1};
+    if (modo === 'm') {
+      var w = o.x1 - o.x0, h = o.y1 - o.y0;
+      n.x0 = Math.max(0, Math.min(1 - w, o.x0 + dx)); n.x1 = n.x0 + w;
+      n.y0 = Math.max(0, Math.min(1 - h, o.y0 + dy)); n.y1 = n.y0 + h;
+    } else {
+      if (modo.indexOf('w') >= 0) n.x0 = Math.max(0, Math.min(o.x1 - MIN, o.x0 + dx));
+      if (modo.indexOf('e') >= 0) n.x1 = Math.min(1, Math.max(o.x0 + MIN, o.x1 + dx));
+      if (modo.indexOf('n') >= 0) n.y0 = Math.max(0, Math.min(o.y1 - MIN, o.y0 + dy));
+      if (modo.indexOf('s') >= 0) n.y1 = Math.min(1, Math.max(o.y0 + MIN, o.y1 + dy));
+    }
+    c = n; disegna(); e.preventDefault();
+  });
+  function fine(e) { if (modo) { modo = null; conferma(); } }
+  cv.addEventListener('pointerup', fine); cv.addEventListener('pointercancel', fine);
+
+  // ----- righello: si trascina per ruotare -----
+  var rIn = null;
+  rl.addEventListener('pointerdown', function (e) { rIn = {x: e.clientX, a: ang}; rl.setPointerCapture(e.pointerId); e.preventDefault(); });
+  rl.addEventListener('pointermove', function (e) {
+    if (!rIn) return;
+    ang = Math.max(-MAXANG, Math.min(MAXANG, Math.round((rIn.a - (e.clientX - rIn.x) / PX_GRADO) * 10) / 10));
+    c = {x0: 0, y0: 0, x1: 1, y1: 1};                 // dopo aver girato si ritaglia di nuovo
+    disegna(); e.preventDefault();
+  });
+  function fineR() { if (rIn) { rIn = null; conferma(); } }
+  rl.addEventListener('pointerup', fineR); rl.addEventListener('pointercancel', fineR);
+
+  function passo(d) { ang = Math.max(-MAXANG, Math.min(MAXANG, Math.round((ang + d) * 10) / 10)); c = {x0: 0, y0: 0, x1: 1, y1: 1}; disegna(); conferma(); }
+  document.getElementById('meno').addEventListener('click', function () { passo(-0.5); });
+  document.getElementById('piu').addEventListener('click', function () { passo(0.5); });
+  document.getElementById('reset').addEventListener('click', function () { ang = 0; c = {x0: 0, y0: 0, x1: 1, y1: 1}; disegna(); conferma(); });
+
+  window.addEventListener('resize', ridimensiona);
+  img.onload = function () { pronto = true; leggiIniziale(); ridimensiona(); };
+  img.src = IMG_SRC;
+})();
+'''
+
+
+_EDITOR_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:transparent;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#10261a;-webkit-user-select:none;user-select:none}
+#box{width:100%;max-width:600px;margin:0 auto}
+#cv{width:100%;height:340px;display:block;border-radius:18px;touch-action:none;box-shadow:0 6px 16px rgba(0,60,50,.15)}
+#rl{width:100%;height:62px;display:block;margin-top:10px;border-radius:16px;touch-action:none;box-shadow:inset 0 0 0 2px #cfe8de}
+.riga{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:10px}
+#val{min-width:84px;text-align:center;font-weight:900;font-size:1.15rem;color:#0f766e}
+button{flex:1;min-height:46px;border-radius:999px;border:2px solid rgba(13,148,136,.45);background:#fff;color:#0f766e;font-weight:800;font-size:1rem;box-shadow:0 3px 0 rgba(0,100,90,.2)}
+button:active{transform:translateY(2px);box-shadow:none}
+#reset{flex:1.4}
+.nota{margin-top:8px;text-align:center;font-size:.78rem;font-weight:700;opacity:.65}
+</style></head><body><div id="box">
+<canvas id="cv"></canvas>
+<canvas id="rl"></canvas>
+<div class="riga"><button id="meno">&minus;0,5&deg;</button><div id="val">0&deg;</div><button id="piu">+0,5&deg;</button><button id="reset">&#8634; __RIPRISTINA__</button></div>
+<div class="nota">__NOTA__</div>
+</div>
+<script>__JS__</script></body></html>"""
+
+
+def _editor_html(uri, etichetta):
+    js = _EDITOR_JS.replace("__IMG__", json.dumps(uri)).replace("__LABEL__", json.dumps(etichetta))
+    return (_EDITOR_HTML.replace("__RIPRISTINA__", html.escape(t("Ripristina")).encode("ascii", "xmlcharrefreplace").decode())
+            .replace("__NOTA__", html.escape(t("Trascina il righello per raddrizzare · trascina la cornice per tagliare")).encode("ascii", "xmlcharrefreplace").decode())
+            .replace("__JS__", js))
+
+
+def _ritocco_params(uri, params):
+    """Applica il ritocco deciso nell'editor: 'angolo|x0|y0|x1|y1' (angolo positivo = antiorario; ritaglio in frazioni dell'immagine girata)."""
+    try:
+        a, x0, y0, x1, y1 = [float(v) for v in str(params).split("|")]
+    except Exception:
+        return uri
+    a = max(-45.0, min(45.0, a))
+    x0, y0, x1, y1 = [max(0.0, min(1.0, v)) for v in (x0, y0, x1, y1)]
+    if x1 - x0 < 0.05 or y1 - y0 < 0.05 or (abs(a) < 0.05 and x0 < 0.001 and y0 < 0.001 and x1 > 0.999 and y1 > 0.999):
+        return uri
+    im = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
+    if abs(a) >= 0.05:
+        im = im.rotate(a, resample=Image.BICUBIC, expand=True)
+    w, h = im.size
+    im = im.crop((int(round(x0 * w)), int(round(y0 * h)), int(round(x1 * w)), int(round(y1 * h))))
+    arr = np.array(im)
+    ys, xs = np.where(arr[:, :, 3] > 40)
+    if len(xs):
+        marg = int(0.02 * max(xs.max() - xs.min(), ys.max() - ys.min()))
+        im = im.crop((max(0, xs.min() - marg), max(0, ys.min() - marg), min(im.width, xs.max() + marg + 1), min(im.height, ys.max() + marg + 1)))
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=86, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _mostra_editor(codice, altezza=545):
+    if hasattr(st, "iframe"):
+        st.iframe(codice, height=altezza)
+    else:
+        import streamlit.components.v1 as _comp_editor
+        _comp_editor.html(codice, height=altezza)
 
 
 def foto_ampia_html(src):
@@ -429,15 +671,22 @@ def campo_foto(chiave, attuale=""):
         with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
             automatica = _foto_lavorata(file.getvalue())
         ident_f = f"{chiave}_{getattr(file, 'file_id', None) or file.name + str(file.size)}"
-        # ritocco a mano: sotto la foto, con anteprima subito (ogni foto nuova riparte da zero)
-        with st.expander("🛠️ " + t("Raddrizza e taglia a mano"), expanded=False):
+        # editor come quello del telefono: righello per raddrizzare e cornice per tagliare
+        sigla = hashlib.md5(ident_f.encode()).hexdigest()[:10]
+        etichetta = f"ritocco{sigla}"
+        with st.container(key="nascosti_rit_" + sigla):
+            params = st.text_input(etichetta, key=f"rit_{sigla}", label_visibility="collapsed")
+        _mostra_editor(_editor_html(automatica, etichetta))
+        nuova = _ritocco_params(automatica, params)
+        with st.expander("🛠️ " + t("Controlli di riserva"), expanded=False):
             grado = st.slider("↻ " + t("Gira (gradi): positivo = senso antiorario"), -30.0, 30.0, 0.0, 0.5, key=f"rot_{ident_f}")
             c1, c2 = st.columns(2)
             sopra = c1.slider("⬆️ " + t("Taglia sopra (%)"), 0, 40, 0, key=f"ts_{ident_f}")
             sotto = c2.slider("⬇️ " + t("Taglia sotto (%)"), 0, 40, 0, key=f"tb_{ident_f}")
             sinistra = c1.slider("⬅️ " + t("Taglia a sinistra (%)"), 0, 40, 0, key=f"tl_{ident_f}")
             destra = c2.slider("➡️ " + t("Taglia a destra (%)"), 0, 40, 0, key=f"tr_{ident_f}")
-        nuova = _ritocco(automatica, grado, sopra, sotto, sinistra, destra)
+        if grado or sopra or sotto or sinistra or destra:
+            nuova = _ritocco(nuova, grado, sopra, sotto, sinistra, destra)
         st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
         st.caption(f"✅ {t('Foto pronta: sfondo tolto e prodotto raddrizzato.')} (v{_VERSIONE_FOTO})")
     elif attuale and src_sicuro(attuale):
