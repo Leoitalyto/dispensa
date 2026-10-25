@@ -107,6 +107,9 @@ with tab_aggiungi:
     nome = a1.text_input(t("Nome del prodotto *"), key=K("nome"))
     marca = a2.text_input(t("Marca"), key=K("marca"))
     categoria = st.text_input(t("Categoria"), key=K("categoria"))
+    st.session_state.setdefault(K("posto"), st.session_state.get("ultimo_posto", "dispensa"))
+    posto = st.selectbox(t("Dove lo metti?"), list(POSTI), format_func=nome_posto_scelta, key=K("posto"))
+    posto_altro = st.text_input(t("Scrivi dove lo metti"), key=K("posto_altro")) if posto == "altro" else ""
     piu_scad = st.checkbox("🗓️ " + t("Ho confezioni con scadenze diverse"), key=K("piu_scad"))
     b1, b2, b3 = st.columns(3)
     quant = b1.number_input(t("Quante unità hai? *"), min_value=0.0, step=1.0, key=K("quant"),
@@ -160,6 +163,7 @@ with tab_aggiungi:
                 "senza_glutine": bool(senza_glutine), "allergeni_noti": bool(noti or allergeni),
                 "ingredienti": ingredienti.strip(), "note": note.strip(),
                 "categoria": categoria.strip(), "extra": st.session_state.get(K("extra"), {}), "per_chi": per_chi_sel,
+                "posto": posto, "posto_altro": posto_altro.strip() if posto == "altro" else "",
                 "aggiunto_da": utente.strip(), "aggiunto_il": datetime.now().isoformat(timespec="seconds"),
             }
             if piu_scad:                      # una riga per ogni scadenza (se due righe hanno la stessa data, le unisco)
@@ -178,6 +182,7 @@ with tab_aggiungi:
                                                          else t("{nome}: aggiunte {n} scadenze.", nome=base["nome"], n=len(nuove)))
                 st.session_state["n_form"] = n + 1
                 st.session_state["ultimo_per_chi"] = per_chi_sel
+                st.session_state["ultimo_posto"] = posto
                 st.rerun()
             except Exception as e:
                 st.error(t("Non sono riuscito a salvare: {e}", e=e))
@@ -192,7 +197,7 @@ with tab_gestisci:
         st.info(t("Non c'è ancora nulla da gestire."))
     else:
         df = pd.DataFrame([{
-            "id": r["id"], "🗑️": False, "Prodotto": r.get("nome", ""), "Per chi": nome_cat(categoria_di(r)), "Unità": float(r.get("quantita") or 0),
+            "id": r["id"], "🗑️": False, "Prodotto": r.get("nome", ""), "Per chi": nome_cat(categoria_di(r)), "Posto": nome_posto_scelta(posto_di(r)), "Unità": float(r.get("quantita") or 0),
             "Contenuto": r.get("formato_valore") or 0.0, "Misura": r.get("formato_unita") or "g",
             "Scadenza": date.fromisoformat(r["scadenza"]) if r.get("scadenza") else None,
             "Note": r.get("note", ""),
@@ -203,6 +208,7 @@ with tab_gestisci:
                 "🗑️": st.column_config.CheckboxColumn("🗑️", width="small"),
                 "Prodotto": st.column_config.TextColumn(t("Prodotto")),
                 "Per chi": st.column_config.SelectboxColumn(t("Per chi"), options=[nome_cat(c) for c in CATEGORIE]),
+                "Posto": st.column_config.SelectboxColumn(t("Posto"), options=[nome_posto_scelta(k) for k in POSTI]),
                 "Unità": st.column_config.NumberColumn(t("Unità"), min_value=0.0, step=1.0),
                 "Contenuto": st.column_config.NumberColumn(t("Contenuto"), min_value=0.0),
                 "Misura": st.column_config.SelectboxColumn(t("Misura"), options=UNITA_CONTENUTO),
