@@ -77,45 +77,106 @@ def _angolo_da_raddrizzare(maschera):
 
 def _angolo_dal_testo(rgb, mask):
     """Per i prodotti senza lati dritti (vassoi tondi, buste...): si guarda l'inclinazione delle scritte.
-    Si prova a girare l'immagine e si sceglie l'angolo in cui le righe di testo diventano orizzontali
-    (profilo di proiezione). Ritorna l'angolo da applicare (come getRotationMatrix2D) o 0."""
+    Si isolano i tratti sottili (le lettere), si prova a girare l'immagine e si sceglie l'angolo in cui le righe
+    di testo diventano orizzontali. Ritorna l'angolo da applicare (come getRotationMatrix2D) o 0."""
     h, w = mask.shape
-    sc = 380.0 / max(h, w) if max(h, w) > 380 else 1.0
+    sc = 700.0 / max(h, w) if max(h, w) > 700 else 1.0
     g = cv2.cvtColor(cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
-    m = cv2.resize((mask > 127).astype(np.uint8) * 255, (g.shape[1], g.shape[0]), interpolation=cv2.INTER_NEAREST)
-    m = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(3, g.shape[1] // 14) | 1,) * 2))   # via il bordo del prodotto
-    if m.mean() < 8:
+    mk = cv2.resize((mask > 127).astype(np.uint8) * 255, (g.shape[1], g.shape[0]), interpolation=cv2.INTER_NEAREST)
+    mk = cv2.erode(mk, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(3, g.shape[1] // 12) | 1,) * 2))   # via il bordo del prodotto
+    if mk.mean() < 8:
         return 0.0
-    g = cv2.GaussianBlur(g, (0, 0), 0.8)
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(5, g.shape[1] // 70) | 1,) * 2)
+    tratti = cv2.add(cv2.morphologyEx(g, cv2.MORPH_BLACKHAT, k), cv2.morphologyEx(g, cv2.MORPH_TOPHAT, k))
+    tratti = cv2.GaussianBlur(tratti, (0, 0), 0.8)
     gh, gw = g.shape
     lato = int(np.hypot(gh, gw)) + 2
-    cx, cy = gw / 2.0, gh / 2.0
 
     def punteggio(a):
-        M = cv2.getRotationMatrix2D((cx, cy), a, 1.0)
+        M = cv2.getRotationMatrix2D((gw / 2.0, gh / 2.0), a, 1.0)
         M[0, 2] += (lato - gw) / 2.0
         M[1, 2] += (lato - gh) / 2.0
-        gr = cv2.warpAffine(g, M, (lato, lato), flags=cv2.INTER_LINEAR, borderValue=0)
-        mr = cv2.warpAffine(m, M, (lato, lato), flags=cv2.INTER_NEAREST, borderValue=0)
-        dy = np.abs(cv2.Sobel(gr, cv2.CV_32F, 0, 1, ksize=3)) * (mr > 0)
-        righe = dy.sum(axis=1)
-        return float(np.var(righe))
+        r = cv2.warpAffine(tratti, M, (lato, lato), flags=cv2.INTER_LINEAR, borderValue=0)
+        mr = cv2.warpAffine(mk, M, (lato, lato), flags=cv2.INTER_NEAREST, borderValue=0)
+        return float(np.var((r.astype(np.float32) * (mr > 0)).sum(axis=1)))
 
     base = punteggio(0.0)
     if base <= 0:
         return 0.0
     migliore, miglior_ang = base, 0.0
-    for a in np.arange(-45.0, 45.01, 1.5):
+    for a in np.arange(-45.0, 45.01, 1.0):
         p = punteggio(a)
         if p > migliore:
             migliore, miglior_ang = p, float(a)
-    for a in np.arange(miglior_ang - 1.5, miglior_ang + 1.51, 0.5):        # rifinitura
+    for a in np.arange(miglior_ang - 1.0, miglior_ang + 1.01, 0.25):        # rifinitura
         p = punteggio(a)
         if p > migliore:
             migliore, miglior_ang = p, float(a)
-    if abs(miglior_ang) < 2.0 or migliore < base * 1.10:                    # poca differenza: lascio com'e'
+    if abs(miglior_ang) < 1.0 or migliore < base * 1.08:                    # poca differenza: lascio com'e'
         return 0.0
     return miglior_ang
+
+
+def _affina_bordo(rgb, alfa):
+    """Fa aderire il bordo ai contorni veri della foto: GrabCut lavora solo in una fascia stretta attorno alla maschera AI."""
+    try:
+        h, w = alfa.shape
+        sc = 560.0 / max(h, w) if max(h, w) > 560 else 1.0
+        piccola = cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA)
+        b = (cv2.resize(alfa, (piccola.shape[1], piccola.shape[0]), interpolation=cv2.INTER_AREA) > 127).astype(np.uint8)
+        fascia = max(3, int(0.022 * max(piccola.shape[:2])))
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * fascia + 1,) * 2)
+        gc = np.full(b.shape, cv2.GC_PR_BGD, np.uint8)
+        gc[b > 0] = cv2.GC_PR_FGD
+        gc[cv2.erode(b, k) > 0] = cv2.GC_FGD
+        gc[cv2.dilate(b, k) == 0] = cv2.GC_BGD
+        bg, fg = np.zeros((1, 65), np.float64), np.zeros((1, 65), np.float64)
+        cv2.grabCut(cv2.cvtColor(piccola, cv2.COLOR_RGB2BGR), gc, None, bg, fg, 4, cv2.GC_INIT_WITH_MASK)
+        nuovo = np.where((gc == cv2.GC_FGD) | (gc == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
+        n, etich, stat, _ = cv2.connectedComponentsWithStats(nuovo)
+        if n <= 1:
+            return alfa
+        nuovo = np.where(etich == 1 + int(np.argmax(stat[1:, cv2.CC_STAT_AREA])), 255, 0).astype(np.uint8)
+        cont, _ = cv2.findContours(nuovo, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        pieno = np.zeros_like(nuovo)
+        cv2.drawContours(pieno, cont, -1, 255, cv2.FILLED)
+        rapporto = pieno.sum() / max(1.0, float(b.sum()) * 255.0)
+        if rapporto < 0.9 or rapporto > 1.08:                              # ha esagerato: tengo la maschera AI
+            return alfa
+        pieno = cv2.morphologyEx(pieno, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+        pieno = cv2.resize(pieno, (w, h), interpolation=cv2.INTER_LINEAR)
+        return cv2.GaussianBlur(pieno, (0, 0), 1.1)
+    except Exception:
+        return alfa
+
+
+def _ruota_piccola(img, ang, interp, bordo=0):
+    h, w = img.shape[:2]
+    diag = int(np.hypot(h, w)) + 4
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), ang, 1.0)
+    M[0, 2] += (diag - w) / 2.0
+    M[1, 2] += (diag - h) / 2.0
+    return cv2.warpAffine(img, M, (diag, diag), flags=interp, borderValue=bordo)
+
+
+def _angolo_totale(rgb, mask):
+    """Si stima l'angolo, si gira una copia piccola e si misura di nuovo: fino a 3 volte, cosi' l'errore residuo sparisce."""
+    h, w = mask.shape
+    sc = 700.0 / max(h, w) if max(h, w) > 700 else 1.0
+    r = cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA)
+    m = cv2.resize(mask, (r.shape[1], r.shape[0]), interpolation=cv2.INTER_AREA)
+    totale = 0.0
+    for _ in range(3):
+        a = _angolo_scelto(r, m)
+        if not a or abs(totale + a) > 60:
+            break
+        totale += a
+        r = _ruota_piccola(r, a, cv2.INTER_LINEAR)
+        m = _ruota_piccola(m, a, cv2.INTER_LINEAR)
+        ys, xs = np.where(m > 40)
+        if len(xs):
+            r, m = r[ys.min():ys.max() + 1, xs.min():xs.max() + 1], m[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    return totale
 
 
 def _angolo_scelto(rgb, mask):
@@ -136,26 +197,31 @@ def _angolo_scelto(rgb, mask):
     return ang_lati
 
 
-_URL_MODELLO = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
-_PERCORSO_MODELLO = "/tmp/u2netp.onnx"
+_MODELLI = [("https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx", "/tmp/silueta.onnx", 40_000_000),
+            ("https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx", "/tmp/u2netp.onnx", 4_000_000)]
 
 
 @st.cache_resource(show_spinner=False)
 def _sessione_modello():
-    """Piccolo modello AI (4,6 MB) che riconosce il prodotto in primo piano. None se non e' disponibile."""
+    """Modello AI che riconosce il prodotto in primo piano (prima 'silueta', piu' preciso; se non si scarica, il piu' leggero). None se non disponibile."""
     try:
         import os
         import onnxruntime as ort
         import requests
-        if not os.path.exists(_PERCORSO_MODELLO) or os.path.getsize(_PERCORSO_MODELLO) < 4_000_000:
-            r = requests.get(_URL_MODELLO, timeout=60)
-            r.raise_for_status()
-            with open(_PERCORSO_MODELLO + ".tmp", "wb") as f:
-                f.write(r.content)
-            os.replace(_PERCORSO_MODELLO + ".tmp", _PERCORSO_MODELLO)
-        return ort.InferenceSession(_PERCORSO_MODELLO, providers=["CPUExecutionProvider"])
     except Exception:
         return None
+    for url, percorso, minimo in _MODELLI:
+        try:
+            if not os.path.exists(percorso) or os.path.getsize(percorso) < minimo:
+                r = requests.get(url, timeout=90)
+                r.raise_for_status()
+                with open(percorso + ".tmp", "wb") as f:
+                    f.write(r.content)
+                os.replace(percorso + ".tmp", percorso)
+            return ort.InferenceSession(percorso, providers=["CPUExecutionProvider"])
+        except Exception:
+            continue
+    return None
 
 
 def _maschera_ai(rgb):
@@ -192,7 +258,7 @@ def _maschera_ai(rgb):
     vicino = cv2.dilate(pieno, k)                                          # bordo morbido ma solo accanto al prodotto
     morbido = (np.clip((y - 0.35) / 0.3, 0, 1) * 255).astype(np.uint8)
     alfa = np.where(pieno > 0, 255, np.minimum(morbido, vicino)).astype(np.uint8)
-    return cv2.GaussianBlur(alfa, (0, 0), 0.9)
+    return _affina_bordo(rgb, cv2.GaussianBlur(alfa, (0, 0), 0.9))
 
 
 def scontorna_e_addrizza(dati, lato=720):
@@ -215,7 +281,7 @@ def scontorna_e_addrizza(dati, lato=720):
         rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
     else:
         rgba = np.dstack([rgb, mask])
-        ang = _angolo_scelto(rgb, mask)
+        ang = _angolo_totale(rgb, mask)
         if ang:
             diag = int(np.hypot(h, w)) + 4
             M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
