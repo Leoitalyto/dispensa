@@ -350,7 +350,7 @@ def scontorna_e_addrizza(dati, lato=720):
 # ---------------------------------------------------------------------
 # Campo foto (uno solo, in alto) usato da "Aggiungi" e da "Modifica"
 # ---------------------------------------------------------------------
-_VERSIONE_FOTO = 8
+_VERSIONE_FOTO = 9
 
 
 def _foto_lavorata(dati):
@@ -390,7 +390,7 @@ def _ritocco(uri, grado, sopra, sotto, sinistra, destra):
 
 
 _EDITOR_JS = r'''(function () {
-  var IMG_SRC = __IMG__, ETICHETTA = __LABEL__;
+  var IMG_SRC = __IMG__, ETICHETTA = __LABEL__, LBL_SALVA = __L_SALVA__, LBL_SALVATO = __L_SALVATO__, LBL_NONSALVATO = __L_NONSALVATO__;
   var cv = document.getElementById('cv'), rl = document.getElementById('rl');
   var cx = cv.getContext('2d'), rx = rl.getContext('2d');
   var img = new Image(), pronto = false;
@@ -423,10 +423,15 @@ _EDITOR_JS = r'''(function () {
   function valore() {
     return ang.toFixed(2) + '|' + c.x0.toFixed(4) + '|' + c.y0.toFixed(4) + '|' + c.x1.toFixed(4) + '|' + c.y1.toFixed(4);
   }
-  function conferma() {
-    clearTimeout(timer);
-    timer = setTimeout(function () { scrivi(valore()); }, 450);
+  var stato = 'neutro';
+  function aggiornaStato() {
+    var b = document.getElementById('salva'), s = document.getElementById('stato');
+    if (stato === 'sporco') { b.className = ''; b.innerHTML = LBL_SALVA; s.className = 'su'; s.textContent = LBL_NONSALVATO; }
+    else if (stato === 'salvato') { b.className = 'ok'; b.innerHTML = '&#10004; ' + LBL_SALVATO; s.className = ''; s.textContent = ''; }
+    else { b.className = ''; b.innerHTML = LBL_SALVA; s.className = ''; s.textContent = ''; }
   }
+  function conferma() { stato = 'sporco'; aggiornaStato(); }
+  function salva() { scrivi(valore()); stato = 'salvato'; aggiornaStato(); }
   function leggiIniziale() {
     try {
       var el = campo();
@@ -557,10 +562,11 @@ _EDITOR_JS = r'''(function () {
   function passo(d) { ang = Math.max(-MAXANG, Math.min(MAXANG, Math.round((ang + d) * 10) / 10)); c = {x0: 0, y0: 0, x1: 1, y1: 1}; disegna(); conferma(); }
   document.getElementById('meno').addEventListener('click', function () { passo(-0.5); });
   document.getElementById('piu').addEventListener('click', function () { passo(0.5); });
-  document.getElementById('reset').addEventListener('click', function () { ang = 0; c = {x0: 0, y0: 0, x1: 1, y1: 1}; disegna(); conferma(); });
+  document.getElementById('reset').addEventListener('click', function () { ang = 0; c = {x0: 0, y0: 0, x1: 1, y1: 1}; disegna(); salva(); });
+  document.getElementById('salva').addEventListener('click', salva);
 
   window.addEventListener('resize', ridimensiona);
-  img.onload = function () { pronto = true; leggiIniziale(); ridimensiona(); };
+  img.onload = function () { pronto = true; leggiIniziale(); ridimensiona(); aggiornaStato(); };
   img.src = IMG_SRC;
 })();
 '''
@@ -579,20 +585,28 @@ html,body{margin:0;background:transparent;font-family:system-ui,-apple-system,'S
 button{flex:1;min-height:46px;border-radius:999px;border:2px solid rgba(13,148,136,.45);background:#fff;color:#0f766e;font-weight:800;font-size:1rem;box-shadow:0 3px 0 rgba(0,100,90,.2)}
 button:active{transform:translateY(2px);box-shadow:none}
 #reset{flex:1.4}
+#salva{width:100%;flex:none;margin-top:10px;min-height:54px;border:0;color:#fff;font-size:1.1rem;background:linear-gradient(135deg,#00a98f,#0288d1);box-shadow:0 4px 0 rgba(0,70,90,.35)}
+#salva.ok{background:linear-gradient(135deg,#43a047,#1b7a2e);box-shadow:0 4px 0 rgba(10,70,20,.4)}
+#stato{min-height:18px;margin-top:6px;text-align:center;font-weight:800;font-size:.85rem;color:#b45309}
 .nota{margin-top:8px;text-align:center;font-size:.78rem;font-weight:700;opacity:.65}
 </style></head><body><div id="box">
 <canvas id="cv"></canvas>
 <canvas id="rl"></canvas>
 <div class="riga"><button id="meno">&minus;0,5&deg;</button><div id="val">0&deg;</div><button id="piu">+0,5&deg;</button><button id="reset">&#8634; __RIPRISTINA__</button></div>
+<button id="salva">__SALVA__</button><div id="stato"></div>
 <div class="nota">__NOTA__</div>
 </div>
 <script>__JS__</script></body></html>"""
 
 
 def _editor_html(uri, etichetta):
-    js = _EDITOR_JS.replace("__IMG__", json.dumps(uri)).replace("__LABEL__", json.dumps(etichetta))
+    js = (_EDITOR_JS.replace("__IMG__", json.dumps(uri)).replace("__LABEL__", json.dumps(etichetta))
+          .replace("__L_SALVA__", json.dumps("\U0001F4BE " + t("Salva posizione e ritaglio")))
+          .replace("__L_SALVATO__", json.dumps(t("Salvato")))
+          .replace("__L_NONSALVATO__", json.dumps(t("Modifiche non ancora salvate"))))
     return (_EDITOR_HTML.replace("__RIPRISTINA__", html.escape(t("Ripristina")).encode("ascii", "xmlcharrefreplace").decode())
-            .replace("__NOTA__", html.escape(t("Trascina il righello per raddrizzare · trascina la cornice per tagliare")).encode("ascii", "xmlcharrefreplace").decode())
+            .replace("__NOTA__", html.escape(t("Trascina il righello per raddrizzare · trascina la cornice per tagliare · poi tocca Salva")).encode("ascii", "xmlcharrefreplace").decode())
+            .replace("__SALVA__", html.escape("\U0001F4BE " + t("Salva posizione e ritaglio")).encode("ascii", "xmlcharrefreplace").decode())
             .replace("__JS__", js))
 
 
@@ -621,7 +635,7 @@ def _ritocco_params(uri, params):
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def _mostra_editor(codice, altezza=545):
+def _mostra_editor(codice, altezza=650):
     if hasattr(st, "iframe"):
         st.iframe(codice, height=altezza)
     else:
