@@ -7,40 +7,55 @@ import json
 _JS_FOTO = r"""
 (function () {
   var w = window, doc = w.document;
+  /* 1) la fotocamera interna (riserva) parte dal lato posteriore */
   try {
-    w.__fotoTesto = __TESTO__;
-    if (w.__fotoAttivo) { if (w.__fotoApplica) w.__fotoApplica(); return; }
-    w.__fotoAttivo = true;
-    function crea(box) {
-      var btn = doc.createElement('button');
-      btn.type = 'button'; btn.className = 'cam-btn';
-      btn.innerHTML = '<span>📷</span>' + (w.__fotoTesto || 'Scatta foto');
+    var md = w.navigator.mediaDevices;
+    if (md && md.getUserMedia && !w.__gumPatched) {
+      w.__gumPatched = true;
+      var orig = md.getUserMedia.bind(md);
+      md.getUserMedia = function (c) {
+        try {
+          if (c && c.video) {
+            if (c.video === true) c.video = {};
+            if (typeof c.video === 'object') { delete c.video.deviceId; c.video.facingMode = {ideal: 'environment'}; }
+          }
+        } catch (e) {}
+        return orig(c);
+      };
+    }
+  } catch (e) {}
+  /* 2) tasti 'Scatta' e 'Carica dal telefono': aprono la fotocamera vera (lato posteriore) o la galleria del telefono
+        e passano la foto al campo nascosto di Streamlit */
+  try {
+    if (w.__scattaAttivo) return;
+    w.__scattaAttivo = true;
+    doc.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var c = b.closest('[class*="st-key-scatta_"],[class*="st-key-galleria_"]');
+      if (!c) return;
+      var cls = c.className || '';
+      var m = cls.match(/st-key-(scatta|galleria)_(\S+)/);
+      if (!m) return;
+      var camera = (m[1] === 'scatta'), chiave = m[2];
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       var inp = doc.createElement('input');
-      inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment'); inp.style.display = 'none';
-      btn.appendChild(inp);
-      btn.addEventListener('click', function (e) { if (e.target !== inp) { e.preventDefault(); inp.click(); } });
+      inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+      if (camera) inp.setAttribute('capture', 'environment');
       inp.addEventListener('change', function () {
         var f = inp.files && inp.files[0];
-        var dest = box.querySelector('input[type="file"]:not(.cam-btn input)');
-        if (!f || !dest) return;
-        var dt = new w.DataTransfer(); dt.items.add(f);
-        dest.files = dt.files;
-        dest.dispatchEvent(new w.Event('change', {bubbles: true}));
-        inp.value = '';
+        if (f) {
+          var dest = doc.querySelector('[class~="st-key-' + (camera ? 'fotocam_' : 'fotogal_') + chiave + '"] input[type="file"]');
+          if (dest) {
+            var dt = new w.DataTransfer(); dt.items.add(f); dest.files = dt.files;
+            dest.dispatchEvent(new w.Event('change', {bubbles: true}));
+          }
+        }
+        if (inp.parentNode) inp.parentNode.removeChild(inp);
       });
-      box.insertBefore(btn, box.firstChild);
-    }
-    function applica() {
-      var boxes = doc.querySelectorAll('[class*="st-key-fotocam_"]');
-      for (var i = 0; i < boxes.length; i++) {
-        var b = boxes[i];
-        if (!b.querySelector(':scope > .cam-btn')) crea(b);
-        else b.querySelector(':scope > .cam-btn').firstChild.nextSibling.textContent = w.__fotoTesto || 'Scatta foto';
-      }
-    }
-    w.__fotoApplica = applica;
-    new w.MutationObserver(applica).observe(doc.body, {childList: true, subtree: true});
-    applica();
+      doc.body.appendChild(inp);
+      inp.click();
+    }, true);
   } catch (e) {}
 })();
 """

@@ -9,7 +9,7 @@ import io
 import cv2
 import numpy as np
 import streamlit as st
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 
 def _maschera_prodotto(bgr):
@@ -129,10 +129,10 @@ def _maschera_ai(rgb):
     return cv2.GaussianBlur(alfa, (0, 0), 0.9)
 
 
-def scontorna_e_addrizza(dati, lato=560):
+def scontorna_e_addrizza(dati, lato=720):
     """Da una foto (bytes) a una immagine WebP trasparente, ritagliata sul prodotto e addrizzata. Ritorna 'data:image/webp;base64,...'."""
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
-    img.thumbnail((900, 900))
+    img.thumbnail((1200, 1200))
     rgb = np.array(img)
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     h, w = bgr.shape[:2]
@@ -163,9 +163,12 @@ def scontorna_e_addrizza(dati, lato=560):
             x0, x1 = max(0, xs.min() - marg), min(rgba.shape[1], xs.max() + marg + 1)
             rgba = rgba[y0:y1, x0:x1]
     out = Image.fromarray(rgba, "RGBA")
-    out.thumbnail((lato, lato))
+    out.thumbnail((lato, lato), Image.LANCZOS)
+    nitida = out.convert("RGB").filter(ImageFilter.UnsharpMask(radius=1.4, percent=70, threshold=3))   # un po' piu' nitida
+    nitida.putalpha(out.getchannel("A"))
+    out = nitida
     buf = io.BytesIO()
-    out.save(buf, "WEBP", quality=82, method=6)
+    out.save(buf, "WEBP", quality=86, method=6)
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -182,7 +185,7 @@ def _foto_lavorata(dati):
         try:
             mem[chiave] = scontorna_e_addrizza(dati)
         except Exception:
-            mem[chiave] = foto_a_data_uri(dati, 560)         # se qualcosa va storto resta la foto normale
+            mem[chiave] = foto_a_data_uri(dati, 720)         # se qualcosa va storto resta la foto normale
     return mem[chiave]
 
 
@@ -191,15 +194,38 @@ def foto_ampia_html(src):
 
 
 def campo_foto(chiave, attuale=""):
-    """Punto unico per la foto. A sinistra il tasto Fotocamera (parte dalla fotocamera POSTERIORE, lo fa fotocamera.py),
-    a destra il tasto per caricare dal telefono. Ritorna la nuova foto pronta (data URI) oppure ''."""
+    """Punto unico per la foto. A sinistra 'Scatta' (apre la fotocamera VERA del telefono, lato posteriore, con messa a fuoco),
+    a destra 'Carica dal telefono'. I due tasti li gestisce fotocamera.py: la foto scelta finisce nei campi nascosti qui sotto.
+    Se il javascript non funzionasse, i tasti mostrano i normali campi di scatto / caricamento."""
     with st.container(key="azioni_foto_" + chiave):
-        c_cam, c_file = st.columns(2, gap="small")
-        usa_cam = c_cam.toggle("📷 " + t("Fotocamera"), key=f"{chiave}_cam")
-        file_caricato = c_file.file_uploader("📁 " + t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"],
-                                             key=f"fotogal_{chiave}", label_visibility="visible")
-    scatto = st.camera_input(t("Scatta la foto del prodotto"), key=f"fotocam_{chiave}") if usa_cam else None
-    file = scatto if scatto is not None else file_caricato
+        c_cam, c_gal = st.columns(2, gap="small")
+        premuto_cam = c_cam.button("📷 " + t("Scatta la foto"), key=f"scatta_{chiave}", width="stretch")
+        premuto_gal = c_gal.button("📁 " + t("Carica dal telefono"), key=f"galleria_{chiave}", width="stretch")
+    with st.container(key="nascosti_" + chiave):
+        foto_cam = st.file_uploader("camera", type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}")
+        foto_gal = st.file_uploader("galleria", type=["jpg", "jpeg", "png", "webp"], key=f"fotogal_{chiave}")
+    if premuto_cam:
+        st.session_state[f"{chiave}_fall_cam"] = True
+    if premuto_gal:
+        st.session_state[f"{chiave}_fall_gal"] = True
+    fall_cam = st.camera_input(t("Scatta la foto del prodotto"), key=f"camfall_{chiave}") if st.session_state.get(f"{chiave}_fall_cam") else None
+    fall_gal = st.file_uploader(t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"], key=f"galfall_{chiave}") if st.session_state.get(f"{chiave}_fall_gal") else None
+
+    # tra le possibili foto vale l'ultima arrivata
+    viste = st.session_state.setdefault(f"{chiave}_viste", {})
+    ultima = st.session_state.get(f"{chiave}_ultima")
+    candidati = {"cam": foto_cam, "gal": foto_gal, "fcam": fall_cam, "fgal": fall_gal}
+    for nome, f in candidati.items():
+        if f is None:
+            viste.pop(nome, None)
+            continue
+        ident = getattr(f, "file_id", None) or f"{f.name}{f.size}"
+        if viste.get(nome) != ident:
+            viste[nome] = ident
+            ultima = nome
+    st.session_state[f"{chiave}_ultima"] = ultima
+    file = candidati.get(ultima) or next((f for f in candidati.values() if f is not None), None)
+
     nuova = ""
     if file is not None:
         with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
@@ -215,7 +241,7 @@ CSS = CSS.replace("</style>", """
 /* foto ampia: scheda in home, anteprima e modifica */
 .scheda .foto{height:250px !important;padding:8px !important;overflow:hidden}
 .scheda .foto img{width:100% !important;height:100% !important;max-width:100% !important;max-height:none !important;object-fit:contain !important;border-radius:0 !important}
-.foto-ampia{height:260px;border-radius:24px;padding:10px;background:linear-gradient(180deg,#ffffff,#edf7f1);
+.foto-ampia{height:380px;border-radius:24px;padding:10px;background:linear-gradient(180deg,#ffffff,#edf7f1);
  box-shadow:inset 0 0 0 1px rgba(0,0,0,.04),0 8px 18px rgba(0,0,0,.08);margin:6px 0}
 .foto-ampia img{width:100%;height:100%;object-fit:contain}
 [class*="st-key-fotocam_"]{display:flex !important;flex-direction:row !important;gap:10px;align-items:stretch}
