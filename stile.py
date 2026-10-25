@@ -137,11 +137,11 @@ CSS = CSS.replace("</style>", """
 [data-testid="stDialog"] [role="dialog"] h2{font-weight:900;letter-spacing:-.01em}
 [data-testid="stDialog"] button[aria-label="Close"]{border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 4px 12px rgba(0,0,0,.12)}
 [data-testid="stDialog"] audio{width:100%;border-radius:999px;background:rgba(255,255,255,.88);box-shadow:0 10px 24px rgba(0,60,50,.14)}
-[data-testid="stDialog"] [data-testid="stHorizontalBlock"]{background:rgba(255,255,255,.78);border-radius:26px;padding:10px;
+[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has(.chip-info){background:rgba(255,255,255,.78);border-radius:26px;padding:10px;
  box-shadow:0 10px 24px rgba(0,60,50,.1);border:1px solid rgba(255,255,255,.95);align-items:center}
-[data-testid="stDialog"] [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;gap:12px !important}
-[data-testid="stDialog"] [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]:first-child{flex:0 0 76px !important;width:76px !important;min-width:76px !important}
-[data-testid="stDialog"] [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]:last-child{flex:1 1 0 !important;min-width:0 !important;width:auto !important}
+[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has(.chip-info){flex-wrap:nowrap !important;gap:12px !important}
+[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has(.chip-info)>[data-testid="stColumn"]:first-child{flex:0 0 76px !important;width:76px !important;min-width:76px !important}
+[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has(.chip-info)>[data-testid="stColumn"]:last-child{flex:1 1 0 !important;min-width:0 !important;width:auto !important}
 [data-testid="stDialog"] .stMarkdown strong{font-weight:900;font-size:1.05rem}
 [data-testid="stDialog"] .scadenza{white-space:nowrap;font-size:.85rem !important;padding:6px 14px !important}
 .chip-info{background:rgba(255,255,255,.85);border-radius:16px;padding:7px 11px;font-size:.82rem;font-weight:700;box-shadow:inset 0 0 0 1px rgba(0,0,0,.05);margin:4px 0 6px}

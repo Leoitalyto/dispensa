@@ -9,6 +9,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 archivio = crea_archivio()
 data_oggi = oggi()
 configurato = bool(password_admin())
+_FOTO_VUOTA = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="      # pixel trasparente
 HERO = (f"<div class='hero'><div class='hero-ico'>🥫</div><div><h1>{t('La nostra dispensa')}</h1>"
         f"<p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
 
@@ -294,11 +295,15 @@ with tab_dispensa:
             st.caption(t("Nessun prodotto in questa sezione."))
             continue
         if vista == "schede":
-            st.markdown("<div class='griglia'>" + "".join(scheda_html(r, data_oggi, allergie_di(sezione)) for r, _, _ in gruppo)
-                        + "</div>", unsafe_allow_html=True)
+            for _i in range(0, len(gruppo), 3):
+                for _col, (r, _, _) in zip(st.columns(3), gruppo[_i:_i + 3]):
+                    with _col:
+                        st.markdown(scheda_html(r, data_oggi, allergie_di(sezione)), unsafe_allow_html=True)
+                        if st.button("🗑️ " + t("Elimina"), key="cest_" + r["id"], width="stretch"):
+                            apri_elimina([r["id"]])
         else:
             tab = pd.DataFrame([{
-                t("Foto"): src_sicuro(r.get("immagine") or "") or None,
+                t("Foto"): src_sicuro(r.get("immagine") or "") or _FOTO_VUOTA,
                 t("Prodotto"): r.get("nome", ""), t("Marca"): r.get("marca", ""),
                 t("Quantità"): descrivi([r]),
                 t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",
@@ -308,10 +313,17 @@ with tab_dispensa:
             } for r, s, g in gruppo])
             sfondi = {"rosso": "background-color:#ffcdd2", "arancione": "background-color:#ffe0b2",
                       "scaduto": "background-color:#d7ccc8", "ok": "", "nessuna": ""}
+            tab.insert(0, "🗑️", False)
+            tab.index = [r["id"] for r, _, _ in gruppo]
             stile = tab.style.apply(lambda riga: [sfondi[riga["_stato"]]] * len(riga), axis=1)
-            st.dataframe(stile, hide_index=True, height=min(700, 60 + 72 * len(tab)),
-                         column_config={t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
-                                        "_stato": None})
+            _mod = st.data_editor(stile, hide_index=True, height=min(700, 60 + 72 * len(tab)), key="tabella_" + sezione,
+                                  disabled=[c for c in tab.columns if c != "🗑️"],
+                                  column_config={"🗑️": st.column_config.CheckboxColumn("🗑️", width="small"),
+                                                 t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
+                                                 "_stato": None})
+            _spunte = list(_mod.index[_mod["🗑️"]])
+            if st.button("🗑️ " + t("Elimina le righe spuntate"), key="cest_tab_" + sezione, disabled=not _spunte):
+                apri_elimina(_spunte)
 
     if visibili:
         st.divider()
