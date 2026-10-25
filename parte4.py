@@ -203,11 +203,42 @@ if tab_utenti is not None:
         st.caption(t("Al primo accesso la persona può scegliere una password sua."))
         if sess["uid"] == "prova":
             st.info(t("Modalità prova: gli utenti non vengono conservati."))
+
+        def _link_app():
+            """Indirizzo pubblico dell'app (lo stesso per tutti): scheme + dominio della pagina aperta."""
+            from urllib.parse import urlsplit
+            try:
+                u = urlsplit(str(st.context.url))
+                if u.scheme and u.netloc:
+                    return f"{u.scheme}://{u.netloc}"
+            except Exception:
+                pass
+            try:
+                h = st.context.headers
+                host = h.get("X-Forwarded-Host") or h.get("Host")
+                if host:
+                    proto = h.get("X-Forwarded-Proto") or ("http" if host.startswith(("localhost", "127.")) else "https")
+                    return f"{proto}://{host}"
+            except Exception:
+                pass
+            return ""
+
+        link_pubblico = _link_app()
+        if not link_pubblico:
+            link_pubblico = st.text_input("🔗 " + t("Incolla qui il link della tua app"), key="link_app_manuale").strip()
+        if link_pubblico:
+            st.markdown("**🔗 " + t("Link da mandare") + "**")
+            st.code(link_pubblico, language=None)
+            st.caption(t("È sempre lo stesso per tutte le persone: cambia solo la password. Chi apre il link scrive la sua password e tocca Entra."))
         nuova = st.session_state.get("pw_mostrata")
         if nuova:
             st.success(t("Password per {nome}: copiala e mandala alla persona (per esempio su WhatsApp). Non verrà mostrata più.",
                          nome=nuova["nome"]))
             st.code(nuova["password"], language=None)
+            if link_pubblico:
+                st.markdown("**📨 " + t("Messaggio pronto da copiare e mandare") + "**")
+                st.code(t("Ciao {nome}! Ecco l'app Dispensa: {link}\nApri il link, scrivi questa password e tocca Entra:\n{password}\nAl primo accesso potrai scegliere una password tua.",
+                          nome=nuova["nome"], link=link_pubblico, password=nuova["password"]), language=None)
             if st.button(t("Ho copiato la password")):
                 st.session_state.pop("pw_mostrata", None)
                 st.rerun()
