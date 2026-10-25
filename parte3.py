@@ -301,8 +301,12 @@ with tab_dispensa:
                 for _col, (r, _, _) in zip(st.columns(3), gruppo[_i:_i + 3]):
                     with _col:
                         st.markdown(scheda_html(r, data_oggi, allergie_di(sezione)), unsafe_allow_html=True)
-                        if st.button(t("Elimina"), icon=":material/delete:", key="cest_" + r["id"], width="stretch"):
-                            apri_elimina([r["id"]])
+                        with st.container(key="azioni_" + r["id"]):
+                            _b_el, _b_mo = st.columns(2, gap="small")
+                            if _b_el.button(t("Elimina"), icon=":material/delete:", key="cest_" + r["id"], width="stretch"):
+                                apri_elimina([r["id"]])
+                            if _b_mo.button(t("Modifica"), icon=":material/edit:", key="modif_" + r["id"], width="stretch"):
+                                apri_modifica(r["id"])
         else:
             tab = pd.DataFrame([{
                 t("Foto"): src_sicuro(r.get("immagine") or "") or _FOTO_VUOTA,
@@ -324,8 +328,14 @@ with tab_dispensa:
                                                  t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
                                                  "_stato": None})
             _spunte = list(_mod.index[_mod["🗑️"]])
-            if st.button(t("Elimina le righe spuntate"), icon=":material/delete:", key="cest_tab_" + sezione, disabled=not _spunte):
-                apri_elimina(_spunte)
+            with st.container(key="azioni_tab_" + sezione):
+                _t_el, _t_mo = st.columns(2, gap="small")
+                if _t_el.button(t("Elimina le righe spuntate"), icon=":material/delete:", key="cest_tab_" + sezione, disabled=not _spunte, width="stretch"):
+                    apri_elimina(_spunte)
+                if _t_mo.button(t("Modifica la riga spuntata"), icon=":material/edit:", key="modif_tab_" + sezione, disabled=len(_spunte) != 1, width="stretch"):
+                    apri_modifica(_spunte[0])
+            if len(_spunte) > 1:
+                st.caption(t("Spunta una sola riga da modificare."))
 
     if visibili:
         st.divider()

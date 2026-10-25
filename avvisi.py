@@ -302,9 +302,14 @@ def _elenco_avviso():
             c2.markdown(f"<div class='chip-info'>📦 {html.escape(descrivi([r]))} · {testo_giorni(stato, giorni)} · {data_it(r['scadenza'])}</div>"
                         f"<span class='scadenza' style='--c:{COLORI[stato]}'>{testo_giorni(stato, giorni)}</span>",
                         unsafe_allow_html=True)
-            if st.button(t("Elimina"), icon=":material/delete:", key="cest_av_" + r["id"], width="stretch"):
-                st.session_state["elimina_dopo"] = [r["id"]]
-                st.rerun()
+            with st.container(key="azioni_av_" + r["id"]):
+                _a_el, _a_mo = st.columns(2, gap="small")
+                if _a_el.button(t("Elimina"), icon=":material/delete:", key="cest_av_" + r["id"], width="stretch"):
+                    st.session_state["elimina_dopo"] = [r["id"]]
+                    st.rerun()
+                if _a_mo.button(t("Modifica"), icon=":material/edit:", key="modif_av_" + r["id"], width="stretch"):
+                    st.session_state["modifica_dopo"] = r["id"]
+                    st.rerun()
     with st.expander("🔊 " + t("Cosa significano i suoni?")):
         st.caption(t("Per ogni sezione suona il suono dell'urgenza maggiore."))
         for c in CATEGORIE:
@@ -321,3 +326,6 @@ if (scaduti or rossi or arancioni) and not st.session_state.get("avviso_mostrato
 
 if st.session_state.get("elimina_dopo"):          # "Elimina" premuto nell'avviso: si apre la finestra di eliminazione
     apri_elimina(st.session_state.pop("elimina_dopo"))
+
+if st.session_state.get("modifica_dopo"):          # "Modifica" premuto nell'avviso: si apre la finestra di modifica
+    apri_modifica(st.session_state.pop("modifica_dopo"))

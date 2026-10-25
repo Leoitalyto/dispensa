@@ -9,42 +9,9 @@ with tab_aggiungi:
     st.session_state.setdefault(K("per_chi"), st.session_state.get("ultimo_per_chi", "adulti"))
     per_chi_sel = st.radio("👪 " + t("Per chi è il prodotto?"), list(CATEGORIE), format_func=nome_cat,
                            horizontal=True, key=K("per_chi"))
-    st.subheader("1️⃣ " + t("Leggi il codice a barre (facoltativo)"))
-    usa_camera = st.toggle("📷 " + t("Usa la fotocamera del telefono"), key=K("usa_camera"))
-    foto_codice = st.camera_input(t("Inquadra il codice a barre e scatta"), key=K("camera")) if usa_camera else None
-    foto_file = st.file_uploader(t("…oppure carica una foto del codice"), type=["jpg", "jpeg", "png"], key=K("file_codice"))
-    for sorgente in (foto_codice, foto_file):
-        if sorgente is not None:
-            dati_img = sorgente.getvalue()
-            impronta = hash(dati_img)
-            if st.session_state.get(K("ultima_foto")) != impronta:
-                st.session_state[K("ultima_foto")] = impronta
-                letto = leggi_foto(dati_img)
-                if letto.get("ean"):
-                    st.session_state[K("codice")] = letto["ean"]
-                    st.session_state[K("cercato")] = None       # forza la ricerca
-                    if letto.get("scadenza"):                    # i QR GS1 possono contenere la scadenza
-                        st.session_state[K("scad")] = date.fromisoformat(letto["scadenza"])
-                        st.session_state[K("senza_scad")] = False
-                        st.session_state[K("scad_letta")] = letto["scadenza"]
-                    if letto.get("lotto"):
-                        st.session_state[K("note")] = t("lotto") + " " + letto["lotto"]
-                    st.session_state[K("qr")] = letto if letto.get("link") else None
-                elif letto.get("testo"):
-                    st.session_state[K("qr")] = letto
-                else:
-                    st.session_state[K("codice_non_letto")] = True
-    if st.session_state.pop(K("codice_non_letto"), False):
-        st.warning(t("Non riesco a leggere il codice dalla foto. Riprova più vicino e con più luce, oppure scrivi i numeri qui sotto."))
-    qr = st.session_state.get(K("qr"))
-    if qr:
-        st.info(t("QR letto: {testo}", testo=qr.get("link") or qr["testo"][:200]))
-        if qr.get("link"):
-            st.link_button(t("Apri il link del QR"), qr["link"])
-        if not qr.get("ean"):
-            st.warning(t("Il QR non contiene un codice a barre del prodotto: scrivi il codice o il nome."))
-    if st.session_state.get(K("scad_letta")):
-        st.success("📅 " + t("Ho letto anche la scadenza dal codice: controllala."))
+    st.subheader("1️⃣ " + t("Foto del prodotto"))
+    st.session_state[K("foto_pronta")] = campo_foto(K("fotoprod"))      # unico punto per la foto: scontornata e addrizzata, finisce nella home
+    st.subheader("2️⃣ " + t("Codice a barre (scrivilo a mano, facoltativo)"))
     codice = st.text_input(t("Codice a barre (i numeri sotto le barre)"), key=K("codice"),
                            placeholder=t("es. 8076809513388")).strip()
 
@@ -95,7 +62,7 @@ with tab_aggiungi:
         with st.expander("📋 " + t("Informazioni trovate sul prodotto"), expanded=True):
             mostra_scheda(scheda, allergie_di(per_chi_sel))
 
-    st.subheader("2️⃣ " + t("Dati del prodotto"))
+    st.subheader("3️⃣ " + t("Dati del prodotto"))
     for chiave, valore in (("nome", ""), ("marca", ""), ("quant", 1.0), ("fval", 0.0), ("funita", "g"),
                            ("allergeni", []), ("tracce", []), ("senza_glutine", False), ("ingredienti", ""),
                            ("note", ""), ("senza_scad", False), ("noti", False), ("immagine", ""),
@@ -139,11 +106,6 @@ with tab_aggiungi:
         else:
             allergeni, tracce, senza_glutine, noti = [], [], False, False
         ingredienti = st.text_area(t("Ingredienti"), key=K("ingredienti"), height=90)
-    with st.expander("📷 " + t("Foto del prodotto")):
-        if st.session_state.get(K("immagine")):
-            st.image(src_sicuro(st.session_state[K("immagine")]), width=140)
-        foto_prod = st.file_uploader(t("Carica o scatta una foto (sostituisce quella attuale)"),
-                                     type=["jpg", "jpeg", "png"], key=K("foto_prod"))
     note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))
 
     if st.button("💾 " + t("Salva in dispensa"), type="primary", width="stretch"):
@@ -154,7 +116,7 @@ with tab_aggiungi:
         elif piu_scad and not any(q > 0 for q, _ in lotti):
             st.error(t("Indica almeno una scadenza con almeno 1 unità."))
         else:
-            immagine = foto_a_data_uri(foto_prod.getvalue()) if foto_prod is not None else st.session_state.get(K("immagine"), "")
+            immagine = st.session_state.get(K("foto_pronta")) or st.session_state.get(K("immagine"), "")
             base = {
                 "barcode": codice if ean_valido(codice) else "",
                 "nome": nome.strip(), "marca": marca.strip(),
