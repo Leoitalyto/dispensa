@@ -62,7 +62,7 @@ def _angolo_da_raddrizzare(maschera):
     for i in range(len(poli)):
         d = poli[(i + 1) % len(poli)] - poli[i]
         lung = float(np.hypot(*d))
-        if lung < 0.06 * max(rw, rh):                                    # lati cortissimi (angoli arrotondati): li ignoro
+        if lung < 0.18 * max(rw, rh):                                    # lati corti (angoli arrotondati, smussi): li ignoro
             continue
         teta = np.arctan2(d[1], d[0])
         vx += lung * np.cos(4 * teta)                                    # periodo di 90 gradi: i lati opposti e quelli ortogonali contano uguale
@@ -118,6 +118,24 @@ def _angolo_dal_testo(rgb, mask):
     return miglior_ang
 
 
+def _angolo_scelto(rgb, mask):
+    """Scatole e lattine (forma rettangolare): si raddrizza dai lati. Vassoi tondi, buste e simili: dalle scritte."""
+    binaria = (mask > 127).astype(np.uint8) * 255
+    cont, _ = cv2.findContours(binaria, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cont:
+        return 0.0
+    c = max(cont, key=cv2.contourArea)
+    (_, _), (rw, rh), _ = cv2.minAreaRect(c)
+    rettangolare = rw > 1 and rh > 1 and cv2.contourArea(c) / (rw * rh) >= 0.9
+    ang_lati = _angolo_da_raddrizzare(binaria)
+    if rettangolare and ang_lati:
+        return ang_lati
+    ang_testo = _angolo_dal_testo(rgb, mask)
+    if ang_testo and abs(ang_testo) <= 35:                                  # angoli estremi: probabile errore, meglio non girare
+        return ang_testo
+    return ang_lati
+
+
 _URL_MODELLO = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
 _PERCORSO_MODELLO = "/tmp/u2netp.onnx"
 
@@ -165,6 +183,11 @@ def _maschera_ai(rgb):
     area = pieno.mean() / 255.0
     if area < 0.05 or area > 0.97:
         return None
+    grande = max(cont, key=cv2.contourArea)
+    guscio = np.zeros_like(pieno)
+    cv2.drawContours(guscio, [cv2.convexHull(grande)], -1, 255, cv2.FILLED)
+    if 0 < pieno.mean() / max(guscio.mean(), 1e-6) <= 1.0 and guscio.mean() / max(pieno.mean(), 1e-6) <= 1.22:
+        pieno = guscio                                                       # prodotto quasi convesso: tolgo le "morsi" ai bordi
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     vicino = cv2.dilate(pieno, k)                                          # bordo morbido ma solo accanto al prodotto
     morbido = (np.clip((y - 0.35) / 0.3, 0, 1) * 255).astype(np.uint8)
@@ -192,9 +215,7 @@ def scontorna_e_addrizza(dati, lato=720):
         rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
     else:
         rgba = np.dstack([rgb, mask])
-        ang = _angolo_da_raddrizzare((mask > 127).astype(np.uint8) * 255)          # prima dai lati dritti (scatole, lattine)
-        if not ang:
-            ang = _angolo_dal_testo(rgb, mask)                                   # altrimenti dalle scritte (vassoi tondi, buste)
+        ang = _angolo_scelto(rgb, mask)
         if ang:
             diag = int(np.hypot(h, w)) + 4
             M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
@@ -309,4 +330,9 @@ CSS = CSS.replace("</style>", """
 [class*="st-key-modif_"] button p{font-weight:800 !important;color:#0f766e !important}
 [class*="st-key-modif_"] button:hover{background:#ccfbf1 !important}
 [class*="st-key-modif_"] button:disabled{opacity:.5}
+[class*="st-key-nascosti_"]{display:none !important}
+[class*="st-key-scatta_"] button,[class*="st-key-galleria_"] button{min-height:64px;border-radius:999px !important;font-weight:800 !important;font-size:1.02rem;
+ border:2px solid rgba(13,148,136,.45) !important;box-shadow:0 4px 0 rgba(0,100,90,.25)}
+[class*="st-key-scatta_"] button{background:linear-gradient(135deg,#00a98f,#0288d1) !important;color:#fff !important;border:0 !important}
+[class*="st-key-scatta_"] button p{color:#fff !important}
 </style>""".replace("__CARICA__", t("Carica dal telefono")))
