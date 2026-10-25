@@ -72,7 +72,10 @@ CSS = CSS.replace("</style>", _CSS_VETRO_1.replace("__VASETTI_URL__", ('url("' +
 
 if lingua() in LINGUE_DA_DESTRA or lingua() == "ar":
     CSS = CSS.replace("</style>", """
+/* arabo: la scrittura va da destra a sinistra solo nei contenuti; la struttura della pagina (menu laterale, barra in alto) resta come sempre */
+.stApp,[data-testid="stAppViewContainer"],[data-testid="stSidebar"],[data-testid="stHeader"]{direction:ltr !important}
+[data-testid="stMainBlockContainer"],[data-testid="stSidebarUserContent"]{direction:rtl}
 .hero{padding:0 12px 0 0 !important}
-.hero::after{right:auto;left:-4px;background-position:left top;transform:scaleX(-1)}
+.hero::after{right:auto;left:-4px;background-position:left top}
 .kpi{padding:9px 9px 9px 7px !important}.kpi-ico{right:auto !important;left:8px !important}
 </style>""")
