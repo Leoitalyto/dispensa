@@ -173,7 +173,7 @@ with tab_aggiungi:
                 parti = [(float(quant), None if senza_scad else scad.isoformat())]
             nuove = [dict(base, id=uuid.uuid4().hex[:10], quantita=q, scadenza=d_) for q, d_ in parti]
             try:
-                salva(lambda d: d.setdefault("articoli", []).extend(nuove), f"Aggiunto {base['nome']}")
+                salva(lambda d: (d.setdefault("articoli", []).extend(nuove), togli_da_spesa(d, nuove)), f"Aggiunto {base['nome']}")
                 st.session_state["messaggio"] = "✅ " + (t("{nome} aggiunto alla dispensa.", nome=base["nome"]) if len(nuove) == 1
                                                          else t("{nome}: aggiunte {n} scadenze.", nome=base["nome"], n=len(nuove)))
                 st.session_state["n_form"] = n + 1
@@ -317,6 +317,9 @@ if tab_utenti is not None:
 # ---------------------------------------------------------------------
 # MESSAGGI / SUGGERIMENTI
 # ---------------------------------------------------------------------
+with tab_spesa:
+    scheda_spesa()
+
 with tab_messaggi:
     scheda_messaggi()
 

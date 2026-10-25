@@ -241,16 +241,18 @@ if rossi:
 if arancioni:
     st.markdown(avviso_html("🟠 " + t("Scadono entro 2 mesi"), "arancione", arancioni, data_oggi), unsafe_allow_html=True)
 
+_posto_messaggio = st.empty()          # posto fisso: cosi' le schede non tornano alla prima quando il messaggio sparisce
 if st.session_state.get("messaggio"):
-    st.success(st.session_state.pop("messaggio"))
+    _posto_messaggio.success(st.session_state.pop("messaggio"))
 
 _n_nuovi = sum(1 for m in carica_messaggi() if not m.get("letto")) if e_admin else 0
 _nome_messaggi = ("📬 " + t("Messaggi") + (f" ({_n_nuovi})" if _n_nuovi else "")) if e_admin else "💬 " + t("Suggerimenti")
 _nomi_schede = (["🏠 " + t("Dispensa"), "➕ " + t("Aggiungi"), "✏️ " + t("Gestisci")] + (["👥 " + t("Utenti")] if e_admin else [])
-                + [_nome_messaggi, "ℹ️ " + t("Info")])
+                + ["🛒 " + t("Spesa"), _nome_messaggi, "ℹ️ " + t("Info")])
 _schede = st.tabs(_nomi_schede)
 tab_dispensa, tab_aggiungi, tab_gestisci = _schede[0], _schede[1], _schede[2]
 tab_utenti = _schede[3] if e_admin else None
+tab_spesa = _schede[-3]
 tab_messaggi = _schede[-2]
 tab_info = _schede[-1]
 
@@ -324,5 +326,18 @@ with tab_dispensa:
         if scelto:
             _riga = next(r for r in articoli if r["id"] == scelto)
             mostra_scheda(_riga, allergie_di(categoria_di(_riga)))
+            if st.button("➖ " + t("Ne ho consumato uno"), key="consuma_" + _riga["id"]):
+                _esito = {}
+                try:
+                    salva(lambda d: _esito.update(consuma_uno(d, _riga["id"])), "Consumato un prodotto")
+                    if _esito.get("stato") == "finito":
+                        st.session_state["messaggio"] = "🛒 " + t("{nome} è finito: l'ho messo nella lista della spesa.", nome=_esito["nome"])
+                    elif _esito.get("stato") == "altre":
+                        st.session_state["messaggio"] = "✅ " + t("{nome}: questa scadenza è finita, ma hai ancora altre unità in dispensa.", nome=_esito["nome"])
+                    elif _esito.get("stato") == "resta":
+                        st.session_state["messaggio"] = "✅ " + t("Ne ho consumato uno: restano {n} unità.", n=fmt_num(_esito["n"]))
+                    st.rerun()
+                except Exception as e:
+                    st.error(t("Non sono riuscito a salvare: {e}", e=e))
 
 # >>> FINE PARTE 3 di 4: adesso incolla la PARTE 4 qui sotto <<<

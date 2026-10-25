@@ -17,6 +17,34 @@ def _maiuscola(s):
     return s[:1].upper() + s[1:]
 
 
+def _ingredienti_html(testo, r, mie):
+    """Ingredienti in HTML sicuro, con le parole degli allergeni evidenziate (rosso se sono le tue allergie)."""
+    allergeni = [a for a in list(r.get("allergeni") or []) + list(r.get("tracce") or [])]
+    parole = {}
+    for a in allergeni:
+        for p, it in SINONIMI_ALLERGENI.items():
+            if it == a and len(p) > 2:
+                parole[p.lower()] = a
+        for nome in (a, t_all(a)):
+            if len(nome) > 2:
+                parole[nome.lower()] = a
+    if not parole:
+        return _md_sicuro(testo)
+    # confronto senza accenti, ma lunghezza invariata (cosi' le posizioni restano quelle del testo originale)
+    norm = "".join((lambda x: x if len(x) == 1 else c)(_senza_accenti(c)) for c in testo)
+    chiavi = {_senza_accenti(p).lower(): a for p, a in parole.items()}
+    modello = re.compile(r"(?<!\w)(" + "|".join(re.escape(k) for k in sorted(chiavi, key=len, reverse=True)) + r")(?!\w)",
+                         re.IGNORECASE)
+    pezzi, ultimo = [], 0
+    for m in modello.finditer(norm):
+        a = chiavi.get(m.group(1).lower())
+        pezzi.append(_md_sicuro(testo[ultimo:m.start()]))
+        pezzi.append(f"<mark class='ev{' mio' if a in mie else ''}'>{_md_sicuro(testo[m.start():m.end()])}</mark>")
+        ultimo = m.end()
+    pezzi.append(_md_sicuro(testo[ultimo:]))
+    return "".join(pezzi)
+
+
 # ---------- la schermata con la composizione del prodotto ----------
 def composizione_html(r, mie, evidenzia=None):
     """Nome, allergeni (con a chi sono controindicati) e ingredienti del prodotto."""
@@ -33,7 +61,7 @@ def composizione_html(r, mie, evidenzia=None):
                  if voci else "")
     ingr = (r.get("ingredienti") or "").strip()
     manca = t("Ingredienti non disponibili: controlla l'etichetta sulla confezione.")
-    testo_ingr = _md_sicuro(ingr) if ingr else f"<i>{html.escape(manca)}</i>"
+    testo_ingr = _ingredienti_html(ingr, r, mie) if ingr else f"<i>{html.escape(manca)}</i>"
     auto = t("Traduzione automatica: può contenere errori. Fa fede l'etichetta.")
     tradotto = f"<div class='nota'>{html.escape(auto)}</div>" if (r.get("extra") or {}).get("ingredienti_tradotti") else ""
     fede = t("Fa fede sempre l'etichetta sulla confezione.")
@@ -168,6 +196,8 @@ details.allerg[open]>.allerg-pannello{position:fixed;z-index:1000002;left:50%;to
 .comp-lista li.sel{outline:3px solid #f9a825;box-shadow:0 4px 12px rgba(249,168,37,.45)}
 .comp-contro{display:block;font-weight:600;font-size:.85rem;opacity:.85}
 .comp-ingr{font-weight:700;line-height:1.45;padding:2px 4px}
+.comp-ingr mark.ev{background:linear-gradient(transparent 30%,#ffe066 30%);color:inherit;border-radius:4px;padding:0 3px;font-weight:900}
+.comp-ingr mark.ev.mio{background:#ffcdd2;color:#7f0000}
 @media (prefers-reduced-motion:reduce){.allerg-btn.mio,details.allerg[open]>.allerg-pannello{animation:none}}
 </style>""".replace("__GRANA__", _GRANA))
 
