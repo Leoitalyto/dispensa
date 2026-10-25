@@ -348,7 +348,7 @@ def scontorna_e_addrizza(dati, lato=720):
 # ---------------------------------------------------------------------
 # Campo foto (uno solo, in alto) usato da "Aggiungi" e da "Modifica"
 # ---------------------------------------------------------------------
-_VERSIONE_FOTO = 6
+_VERSIONE_FOTO = 7
 
 
 def _foto_lavorata(dati):
@@ -363,6 +363,28 @@ def _foto_lavorata(dati):
         except Exception:
             mem[chiave] = foto_a_data_uri(dati, 720)         # se qualcosa va storto resta la foto normale
     return mem[chiave]
+
+
+def _ritocco(uri, grado, sopra, sotto, sinistra, destra):
+    """Correzione a mano sulla foto gia' scontornata: taglia i bordi (in %) e gira di 'grado' gradi. Ritorna un nuovo data URI."""
+    if not grado and not (sopra or sotto or sinistra or destra):
+        return uri
+    im = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
+    w, h = im.size
+    x0, x1 = int(w * sinistra / 100.0), w - int(w * destra / 100.0)
+    y0, y1 = int(h * sopra / 100.0), h - int(h * sotto / 100.0)
+    if x1 - x0 > 20 and y1 - y0 > 20:
+        im = im.crop((x0, y0, x1, y1))
+    if grado:
+        im = im.rotate(grado, resample=Image.BICUBIC, expand=True)           # positivo = in senso antiorario
+    a = np.array(im)
+    ys, xs = np.where(a[:, :, 3] > 40)
+    if len(xs):
+        marg = int(0.02 * max(xs.max() - xs.min(), ys.max() - ys.min()))
+        im = im.crop((max(0, xs.min() - marg), max(0, ys.min() - marg), min(im.width, xs.max() + marg + 1), min(im.height, ys.max() + marg + 1)))
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=86, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def foto_ampia_html(src):
@@ -405,9 +427,19 @@ def campo_foto(chiave, attuale=""):
     nuova = ""
     if file is not None:
         with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
-            nuova = _foto_lavorata(file.getvalue())
+            automatica = _foto_lavorata(file.getvalue())
+        ident_f = f"{chiave}_{getattr(file, 'file_id', None) or file.name + str(file.size)}"
+        # ritocco a mano: sotto la foto, con anteprima subito (ogni foto nuova riparte da zero)
+        with st.expander("🛠️ " + t("Raddrizza e taglia a mano"), expanded=False):
+            grado = st.slider("↻ " + t("Gira (gradi): positivo = senso antiorario"), -30.0, 30.0, 0.0, 0.5, key=f"rot_{ident_f}")
+            c1, c2 = st.columns(2)
+            sopra = c1.slider("⬆️ " + t("Taglia sopra (%)"), 0, 40, 0, key=f"ts_{ident_f}")
+            sotto = c2.slider("⬇️ " + t("Taglia sotto (%)"), 0, 40, 0, key=f"tb_{ident_f}")
+            sinistra = c1.slider("⬅️ " + t("Taglia a sinistra (%)"), 0, 40, 0, key=f"tl_{ident_f}")
+            destra = c2.slider("➡️ " + t("Taglia a destra (%)"), 0, 40, 0, key=f"tr_{ident_f}")
+        nuova = _ritocco(automatica, grado, sopra, sotto, sinistra, destra)
         st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
-        st.caption("✅ " + t("Foto pronta: sfondo tolto e prodotto raddrizzato."))
+        st.caption(f"✅ {t('Foto pronta: sfondo tolto e prodotto raddrizzato.')} (v{_VERSIONE_FOTO})")
     elif attuale and src_sicuro(attuale):
         st.markdown(foto_ampia_html(src_sicuro(attuale)), unsafe_allow_html=True)
     return nuova
