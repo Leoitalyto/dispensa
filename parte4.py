@@ -239,14 +239,18 @@ if tab_utenti is not None:
                 st.markdown("**📨 " + t("Messaggio pronto da copiare e mandare") + "**")
                 st.code(t("Ciao {nome}! Ecco l'app Dispensa: {link}\nApri il link, scrivi questa password e tocca Entra:\n{password}\nAl primo accesso potrai scegliere una password tua.",
                           nome=nuova["nome"], link=link_pubblico, password=nuova["password"]), language=None)
-            if st.button(t("Ho copiato la password")):
+            if st.button("✅ " + t("Fatto, ho mandato tutto: crea un altro utente"), type="primary", width="stretch", key="chiudi_pw"):
                 st.session_state.pop("pw_mostrata", None)
                 st.rerun()
-        with st.form("nuovo_utente", clear_on_submit=True):
-            nome_nuovo = st.text_input(t("Nome della persona"))
-            lingua_nuovo = st.selectbox(t("Lingua della persona"), list(LINGUE), index=list(LINGUE).index(lingua()),
-                                        format_func=lambda c: LINGUE[c])
-            crea = st.form_submit_button("➕ " + t("Crea utente e genera password"))
+        crea = False
+        nome_nuovo = ""
+        lingua_nuovo = lingua()
+        if not nuova:                                   # finche' la password e' sul video, il modulo resta nascosto
+            with st.form("nuovo_utente", clear_on_submit=True):
+                nome_nuovo = st.text_input(t("Nome della persona"))
+                lingua_nuovo = st.selectbox(t("Lingua della persona"), list(LINGUE), index=list(LINGUE).index(lingua()),
+                                            format_func=lambda c: LINGUE[c])
+                crea = st.form_submit_button("➕ " + t("Crea utente e genera password"))
         if crea:
             if not nome_nuovo.strip():
                 st.error(t("Scrivi il nome della persona."))
