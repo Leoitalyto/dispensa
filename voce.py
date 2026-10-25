@@ -17,7 +17,7 @@ _CAMPI_VOCE = [
 
 _JS_VOCE = r"""
 (function () {
-  var w = (window.parent && window.parent !== window) ? window.parent : window;
+  var w = window;
   var CONFIG = __CONFIG__;
   w.__vocaleConfig = CONFIG;
   if (w.__vocaleAttivo) { if (w.__vocaleScansiona) w.__vocaleScansiona(); return; }
@@ -154,7 +154,9 @@ def _avvia_voce():
                   "nulla": t("Non ho sentito niente: riprova."), "errore": t("Non riesco a usare la voce su questo telefono.")},
     }
     codice = _JS_VOCE.replace("__CONFIG__", json.dumps(config, ensure_ascii=False))
-    pagina = ("<script>(function(){var P=(window.parent&&window.parent!==window)?window.parent:window;"
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
               "var s=P.document.createElement('script');s.textContent=" + json.dumps(codice) + ";P.document.head.appendChild(s);})();</script>")
     try:
         st.html(pagina, unsafe_allow_javascript=True)
