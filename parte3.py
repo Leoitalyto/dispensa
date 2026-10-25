@@ -10,8 +10,10 @@ archivio = crea_archivio()
 data_oggi = oggi()
 configurato = bool(password_admin())
 _FOTO_VUOTA = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="      # pixel trasparente
-HERO = (f"<div class='hero'><div class='hero-ico'>🥫</div><div><h1>{t('La nostra dispensa')}</h1>"
-        f"<p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
+HERO = ("<div class='hero'><div class='hero-ico'><svg viewBox='0 0 24 24' width='30' height='30' fill='none' stroke='#fff' "
+        "stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='6' y='2.8' width='12' height='3.6' rx='1.4'/>"
+        "<path d='M7 6.4h10v12.3a2.3 2.3 0 0 1-2.3 2.3H9.3A2.3 2.3 0 0 1 7 18.7z'/><path d='M12 17c-2.6-.2-3.6-2-3.4-4 2.2.1 3.6 1.4 3.4 4z'/></svg></div>"
+        f"<div class='hero-testi'><h1>{t('La nostra dispensa')}</h1><p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
 
 
 def leggi_utenti():
@@ -243,9 +245,9 @@ if st.session_state.get("messaggio"):
     _posto_messaggio.success(st.session_state.pop("messaggio"))
 
 _n_nuovi = sum(1 for m in carica_messaggi() if not m.get("letto")) if e_admin else 0
-_nome_messaggi = ("📬 " + t("Messaggi") + (f" ({_n_nuovi})" if _n_nuovi else "")) if e_admin else "💬 " + t("Suggerimenti")
-_nomi_schede = (["🏠 " + t("Dispensa"), "➕ " + t("Aggiungi"), "✏️ " + t("Gestisci")] + (["👥 " + t("Utenti")] if e_admin else [])
-                + ["🛒 " + t("Spesa"), _nome_messaggi, "ℹ️ " + t("Info")])
+_nome_messaggi = (":material/mail: " + t("Messaggi") + (f" ({_n_nuovi})" if _n_nuovi else "")) if e_admin else ":material/chat: " + t("Suggerimenti")
+_nomi_schede = ([":material/home: " + t("Dispensa"), ":material/add: " + t("Aggiungi"), ":material/edit: " + t("Gestisci")] + ([":material/group: " + t("Utenti")] if e_admin else [])
+                + [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/info: " + t("Info")])
 _schede = st.tabs(_nomi_schede)
 tab_dispensa, tab_aggiungi, tab_gestisci = _schede[0], _schede[1], _schede[2]
 tab_utenti = _schede[3] if e_admin else None
@@ -299,7 +301,7 @@ with tab_dispensa:
                 for _col, (r, _, _) in zip(st.columns(3), gruppo[_i:_i + 3]):
                     with _col:
                         st.markdown(scheda_html(r, data_oggi, allergie_di(sezione)), unsafe_allow_html=True)
-                        if st.button("🗑️ " + t("Elimina"), key="cest_" + r["id"], width="stretch"):
+                        if st.button(t("Elimina"), icon=":material/delete:", key="cest_" + r["id"], width="stretch"):
                             apri_elimina([r["id"]])
         else:
             tab = pd.DataFrame([{
@@ -322,7 +324,7 @@ with tab_dispensa:
                                                  t("Foto"): st.column_config.ImageColumn(t("Foto"), width="small"),
                                                  "_stato": None})
             _spunte = list(_mod.index[_mod["🗑️"]])
-            if st.button("🗑️ " + t("Elimina le righe spuntate"), key="cest_tab_" + sezione, disabled=not _spunte):
+            if st.button(t("Elimina le righe spuntate"), icon=":material/delete:", key="cest_tab_" + sezione, disabled=not _spunte):
                 apri_elimina(_spunte)
 
     if visibili:

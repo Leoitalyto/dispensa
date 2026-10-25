@@ -56,8 +56,10 @@ def apri_elimina(ids):
 
 
 CSS = CSS.replace("</style>", """
-[class*="st-key-cest_"]{margin-top:-6px}
-[class*="st-key-cest_"] button{width:100%;border-radius:999px !important;background:rgba(254,226,226,.92) !important;color:#b91c1c !important;
- border:2px solid rgba(220,38,38,.35) !important;font-weight:800 !important;box-shadow:0 4px 0 rgba(185,28,28,.18)}
-[class*="st-key-cest_"] button:hover{background:#fecaca !important}
+[class*="st-key-cest_"]{margin-top:0}
+[class*="st-key-cest_"] button{width:100%;min-height:52px;border-radius:999px !important;background:rgba(255,255,255,.78) !important;color:#c62828 !important;
+ border:2px solid rgba(220,38,38,.28) !important;font-weight:800 !important;box-shadow:0 8px 18px rgba(0,60,50,.1)}
+[class*="st-key-cest_"] button p{font-weight:800 !important;color:#c62828 !important}
+[class*="st-key-cest_"] button:hover{background:#fee2e2 !important}
+[class*="st-key-cest_"] button:disabled{opacity:.5}
 </style>""")

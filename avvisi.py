@@ -279,7 +279,12 @@ with st.sidebar:
 
 def _elenco_avviso():
     if _suono_ok:
-        st.audio(suono_avviso(situazioni_presenti()), format="audio/wav", autoplay=True)
+        _wav = suono_avviso(situazioni_presenti())
+        try:
+            import streamlit.components.v1 as _comp
+            _comp.html(player_html(_wav), height=96)
+        except Exception:
+            st.audio(_wav, format="audio/wav", autoplay=True)
     for titolo, righe, classe in (("⚫ " + t("Scaduti"), scaduti, "s-scaduti"), ("🔴 " + t("Scadono entro 1 mese"), rossi, "s-rossi"),
                                   ("🟠 " + t("Scadono entro 2 mesi"), arancioni, "s-arancio")):
         if not righe:
@@ -295,8 +300,11 @@ def _elenco_avviso():
             stato, giorni = stato_scadenza(r.get("scadenza"), data_oggi)
             c2.markdown(f"**{r.get('nome', '')}**" + (f" · {r['marca']}" if r.get("marca") else ""))
             c2.markdown(f"<div class='chip-info'>📦 {html.escape(descrivi([r]))} · {testo_giorni(stato, giorni)} · {data_it(r['scadenza'])}</div>"
-                        f"<span class='scadenza' style='--c:{COLORI[stato]}'>{ICONE[stato]} {testo_giorni(stato, giorni)}</span>",
+                        f"<span class='scadenza' style='--c:{COLORI[stato]}'>{testo_giorni(stato, giorni)}</span>",
                         unsafe_allow_html=True)
+            if st.button(t("Elimina"), icon=":material/delete:", key="cest_av_" + r["id"], width="stretch"):
+                st.session_state["elimina_dopo"] = [r["id"]]
+                st.rerun()
     with st.expander("🔊 " + t("Cosa significano i suoni?")):
         st.caption(t("Per ogni sezione suona il suono dell'urgenza maggiore."))
         for c in CATEGORIE:
@@ -310,3 +318,6 @@ def _elenco_avviso():
 if (scaduti or rossi or arancioni) and not st.session_state.get("avviso_mostrato"):
     st.session_state["avviso_mostrato"] = True
     st.dialog("⚠️ " + t("Prodotti da controllare"))(_elenco_avviso)()
+
+if st.session_state.get("elimina_dopo"):          # "Elimina" premuto nell'avviso: si apre la finestra di eliminazione
+    apri_elimina(st.session_state.pop("elimina_dopo"))
