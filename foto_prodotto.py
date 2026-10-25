@@ -75,6 +75,49 @@ def _angolo_da_raddrizzare(maschera):
     return float(ang)
 
 
+def _angolo_dal_testo(rgb, mask):
+    """Per i prodotti senza lati dritti (vassoi tondi, buste...): si guarda l'inclinazione delle scritte.
+    Si prova a girare l'immagine e si sceglie l'angolo in cui le righe di testo diventano orizzontali
+    (profilo di proiezione). Ritorna l'angolo da applicare (come getRotationMatrix2D) o 0."""
+    h, w = mask.shape
+    sc = 380.0 / max(h, w) if max(h, w) > 380 else 1.0
+    g = cv2.cvtColor(cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
+    m = cv2.resize((mask > 127).astype(np.uint8) * 255, (g.shape[1], g.shape[0]), interpolation=cv2.INTER_NEAREST)
+    m = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(3, g.shape[1] // 14) | 1,) * 2))   # via il bordo del prodotto
+    if m.mean() < 8:
+        return 0.0
+    g = cv2.GaussianBlur(g, (0, 0), 0.8)
+    gh, gw = g.shape
+    lato = int(np.hypot(gh, gw)) + 2
+    cx, cy = gw / 2.0, gh / 2.0
+
+    def punteggio(a):
+        M = cv2.getRotationMatrix2D((cx, cy), a, 1.0)
+        M[0, 2] += (lato - gw) / 2.0
+        M[1, 2] += (lato - gh) / 2.0
+        gr = cv2.warpAffine(g, M, (lato, lato), flags=cv2.INTER_LINEAR, borderValue=0)
+        mr = cv2.warpAffine(m, M, (lato, lato), flags=cv2.INTER_NEAREST, borderValue=0)
+        dy = np.abs(cv2.Sobel(gr, cv2.CV_32F, 0, 1, ksize=3)) * (mr > 0)
+        righe = dy.sum(axis=1)
+        return float(np.var(righe))
+
+    base = punteggio(0.0)
+    if base <= 0:
+        return 0.0
+    migliore, miglior_ang = base, 0.0
+    for a in np.arange(-45.0, 45.01, 1.5):
+        p = punteggio(a)
+        if p > migliore:
+            migliore, miglior_ang = p, float(a)
+    for a in np.arange(miglior_ang - 1.5, miglior_ang + 1.51, 0.5):        # rifinitura
+        p = punteggio(a)
+        if p > migliore:
+            migliore, miglior_ang = p, float(a)
+    if abs(miglior_ang) < 2.0 or migliore < base * 1.10:                    # poca differenza: lascio com'e'
+        return 0.0
+    return miglior_ang
+
+
 _URL_MODELLO = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
 _PERCORSO_MODELLO = "/tmp/u2netp.onnx"
 
@@ -149,7 +192,9 @@ def scontorna_e_addrizza(dati, lato=720):
         rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
     else:
         rgba = np.dstack([rgb, mask])
-        ang = _angolo_da_raddrizzare((mask > 127).astype(np.uint8) * 255)
+        ang = _angolo_da_raddrizzare((mask > 127).astype(np.uint8) * 255)          # prima dai lati dritti (scatole, lattine)
+        if not ang:
+            ang = _angolo_dal_testo(rgb, mask)                                   # altrimenti dalle scritte (vassoi tondi, buste)
         if ang:
             diag = int(np.hypot(h, w)) + 4
             M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
