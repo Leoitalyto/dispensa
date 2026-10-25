@@ -302,9 +302,11 @@ with tab_dispensa:
                     with _col:
                         st.markdown(scheda_html(r, data_oggi, allergie_di(sezione)), unsafe_allow_html=True)
                         with st.container(key="azioni_" + r["id"]):
-                            _b_el, _b_mo = st.columns(2, gap="small")
+                            _b_el, _b_in, _b_mo = st.columns(3, gap="small")
                             if _b_el.button(t("Elimina"), icon=":material/delete:", key="cest_" + r["id"], width="stretch"):
                                 apri_elimina([r["id"]])
+                            if _b_in.button(t("Info"), icon=":material/info:", key="info_" + r["id"], width="stretch"):
+                                apri_guida()
                             if _b_mo.button(t("Modifica"), icon=":material/edit:", key="modif_" + r["id"], width="stretch"):
                                 apri_modifica(r["id"])
         else:

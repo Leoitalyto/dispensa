@@ -330,19 +330,7 @@ with tab_messaggi:
 # INFO
 # ---------------------------------------------------------------------
 with tab_info:
-    st.markdown(t("""**Come funzionano i colori**
-- 🟢 verde: più di 2 mesi alla scadenza
-- 🟠 arancione: la scadenza è entro 2 mesi
-- 🔴 rosso: la scadenza è entro 1 mese
-- ⚫ scuro: già scaduto"""))
-    st.markdown(t("""**Allergeni: leggi sempre l'etichetta.** I dati dei prodotti arrivano da *Open Food Facts*, un database compilato dagli utenti: possono essere incompleti o non aggiornati. L'app ti aiuta, ma non sostituisce la lettura dell'etichetta sulla confezione, soprattutto in caso di allergia o celiachia."""))
-    st.markdown(t("""**Come aggiungere un prodotto:** scheda ➕ Aggiungi, fotografa il codice a barre (o scrivi i numeri), controlla i dati, scrivi quante unità hai e la scadenza."""))
-    st.markdown(t("**Pulsanti degli allergeni:** i prodotti che possono dare allergie hanno un pulsante giallo con il nome dell'allergene (per esempio Glutine). Toccalo: si apre una schermata con la composizione e gli ingredienti del prodotto. Lo stesso avviso compare subito quando inserisci un prodotto."))
-    st.markdown(t("""**La tua dispensa è solo tua:** ogni persona ha la sua password e vede solo i propri prodotti. Con "Esci" chiudi l'accesso su questo telefono."""))
-    st.markdown(t("""**Cercare online:** nella scheda Dispensa, sotto i prodotti, scegli "Dettagli prodotto": trovi valori nutrizionali, ingredienti e collegamenti per cercare prezzi, offerte e recensioni su Google, Amazon e Open Prices."""))
-    st.markdown(t("""**Adulti, neonati, animali:** quando aggiungi un prodotto scegli per chi è. Nella scheda Dispensa trovi tre sezioni separate; le allergie del neonato si impostano nel menu a sinistra. Per neonati e animali i dati arrivano anche da Open Products Facts e Open Pet Food Facts, che hanno meno prodotti."""))
-    st.markdown(t("""**Suggerimenti e richieste:** nella scheda Suggerimenti puoi scrivere all'amministratore un'idea, una richiesta di novità o un problema. Se risponde, vedi la risposta nella stessa scheda."""))
-    st.markdown(t("""**La tua password:** puoi cambiarla quando vuoi dal menu a sinistra, alla voce Cambia password."""))
+    mostra_guida()
     st.markdown(t("Dati dei prodotti: Open Food Facts (licenza ODbL)."))
     if e_admin:
         st.markdown(t("**Per l'amministratore: impostazioni (Streamlit → Settings → Secrets)**"))
