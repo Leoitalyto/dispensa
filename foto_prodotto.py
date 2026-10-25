@@ -76,45 +76,51 @@ def _angolo_da_raddrizzare(maschera):
 
 
 def _angolo_dal_testo(rgb, mask):
-    """Per i prodotti senza lati dritti (vassoi tondi, buste...): si guarda l'inclinazione delle scritte.
-    Si isolano i tratti sottili (le lettere), si prova a girare l'immagine e si sceglie l'angolo in cui le righe
-    di testo diventano orizzontali. Ritorna l'angolo da applicare (come getRotationMatrix2D) o 0."""
+    """Inclinazione delle scritte piccole (le righe di testo, non i grandi loghi). Ritorna (angolo da applicare, affidabilita').
+    Si isolano i tratti sottili, si scartano le lettere enormi dei loghi, si prova a girare e si sceglie l'angolo in cui
+    le righe diventano orizzontali. Affidabilita' = quanto il risultato e' piu' netto che senza girare (1 = nessuna)."""
     h, w = mask.shape
-    sc = 700.0 / max(h, w) if max(h, w) > 700 else 1.0
+    sc = 800.0 / max(h, w) if max(h, w) > 800 else 1.0
     g = cv2.cvtColor(cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
     mk = cv2.resize((mask > 127).astype(np.uint8) * 255, (g.shape[1], g.shape[0]), interpolation=cv2.INTER_NEAREST)
-    mk = cv2.erode(mk, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(3, g.shape[1] // 12) | 1,) * 2))   # via il bordo del prodotto
+    mk = cv2.erode(mk, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(3, g.shape[1] // 14) | 1,) * 2))   # via il bordo del prodotto
     if mk.mean() < 8:
-        return 0.0
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(5, g.shape[1] // 70) | 1,) * 2)
+        return 0.0, 1.0
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (max(5, g.shape[1] // 80) | 1,) * 2)
     tratti = cv2.add(cv2.morphologyEx(g, cv2.MORPH_BLACKHAT, k), cv2.morphologyEx(g, cv2.MORPH_TOPHAT, k))
-    tratti = cv2.GaussianBlur(tratti, (0, 0), 0.8)
+    _, bn = cv2.threshold(tratti, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    bn = cv2.bitwise_and(bn, mk)
+    n, etich, stat, _ = cv2.connectedComponentsWithStats(bn)
     gh, gw = g.shape
+    buone = np.zeros_like(bn)
+    for i in range(1, n):
+        x, y, ww, hh, area = stat[i]
+        if hh <= 0.045 * gh and ww <= 0.25 * gw and area >= 6:              # solo lettere piccole
+            buone[etich == i] = 255
+    if (buone > 0).sum() < 300:
+        return 0.0, 1.0
     lato = int(np.hypot(gh, gw)) + 2
 
     def punteggio(a):
         M = cv2.getRotationMatrix2D((gw / 2.0, gh / 2.0), a, 1.0)
         M[0, 2] += (lato - gw) / 2.0
         M[1, 2] += (lato - gh) / 2.0
-        r = cv2.warpAffine(tratti, M, (lato, lato), flags=cv2.INTER_LINEAR, borderValue=0)
-        mr = cv2.warpAffine(mk, M, (lato, lato), flags=cv2.INTER_NEAREST, borderValue=0)
-        return float(np.var((r.astype(np.float32) * (mr > 0)).sum(axis=1)))
+        r = cv2.warpAffine(buone, M, (lato, lato), flags=cv2.INTER_LINEAR, borderValue=0)
+        return float(np.var(r.astype(np.float32).sum(axis=1)))
 
     base = punteggio(0.0)
     if base <= 0:
-        return 0.0
+        return 0.0, 1.0
     migliore, miglior_ang = base, 0.0
-    for a in np.arange(-45.0, 45.01, 1.0):
+    for a in np.arange(-30.0, 30.01, 0.5):
         p = punteggio(a)
         if p > migliore:
             migliore, miglior_ang = p, float(a)
-    for a in np.arange(miglior_ang - 1.0, miglior_ang + 1.01, 0.25):        # rifinitura
+    for a in np.arange(miglior_ang - 0.5, miglior_ang + 0.51, 0.1):         # rifinitura
         p = punteggio(a)
         if p > migliore:
             migliore, miglior_ang = p, float(a)
-    if abs(miglior_ang) < 1.0 or migliore < base * 1.08:                    # poca differenza: lascio com'e'
-        return 0.0
-    return miglior_ang
+    return miglior_ang, migliore / base
 
 
 def _affina_bordo(rgb, alfa):
@@ -180,7 +186,7 @@ def _angolo_totale(rgb, mask):
 
 
 def _angolo_scelto(rgb, mask):
-    """Scatole e lattine (forma rettangolare): si raddrizza dai lati. Vassoi tondi, buste e simili: dalle scritte."""
+    """Prima le scritte (sono quello che l'utente legge): se sono chiare, comandano loro. Altrimenti, per scatole e lattine, i lati dritti."""
     binaria = (mask > 127).astype(np.uint8) * 255
     cont, _ = cv2.findContours(binaria, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not cont:
@@ -188,11 +194,15 @@ def _angolo_scelto(rgb, mask):
     c = max(cont, key=cv2.contourArea)
     (_, _), (rw, rh), _ = cv2.minAreaRect(c)
     rettangolare = rw > 1 and rh > 1 and cv2.contourArea(c) / (rw * rh) >= 0.9
+    ang_testo, fiducia = _angolo_dal_testo(rgb, mask)
+    if abs(ang_testo) < 0.7:
+        ang_testo = 0.0
+    if ang_testo and fiducia >= 1.25 and abs(ang_testo) <= 30:
+        return ang_testo
     ang_lati = _angolo_da_raddrizzare(binaria)
     if rettangolare and ang_lati:
         return ang_lati
-    ang_testo = _angolo_dal_testo(rgb, mask)
-    if ang_testo and abs(ang_testo) <= 35:                                  # angoli estremi: probabile errore, meglio non girare
+    if ang_testo and fiducia >= 1.08 and abs(ang_testo) <= 30:
         return ang_testo
     return ang_lati
 
@@ -224,6 +234,33 @@ def _sessione_modello():
     return None
 
 
+def _toglie_code(pieno):
+    """Toglie le 'code' che sporgono dal prodotto (un lembo di tovaglia, un'ombra lunga): si apre la forma con un cerchio grande
+    e si riporta indietro solo un po' di bordo, cosi' gli angoli restano. Se la forma e' sottile non si tocca niente."""
+    ys, xs = np.where(pieno > 0)
+    if len(xs) == 0:
+        return pieno
+    bw, bh = xs.max() - xs.min() + 1, ys.max() - ys.min() + 1
+    sc = 400.0 / max(pieno.shape) if max(pieno.shape) > 400 else 1.0
+    p = cv2.resize(pieno, (max(1, int(pieno.shape[1] * sc)), max(1, int(pieno.shape[0] * sc))), interpolation=cv2.INTER_AREA)
+    p = (p > 127).astype(np.uint8) * 255
+    lato = min(bw, bh) * sc
+    r = int(0.14 * lato)
+    if r < 3:
+        return pieno
+    aperto = cv2.morphologyEx(p, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1,) * 2))
+    if aperto.sum() < 0.65 * p.sum():                                        # forma sottile o strana: non toccare
+        return pieno
+    n, etich, stat, _ = cv2.connectedComponentsWithStats(aperto)
+    if n <= 1:
+        return pieno
+    aperto = np.where(etich == 1 + int(np.argmax(stat[1:, cv2.CC_STAT_AREA])), 255, 0).astype(np.uint8)
+    r2 = max(2, int(0.045 * lato))
+    ripristino = cv2.dilate(aperto, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r2 + 1,) * 2))
+    ripristino = cv2.resize(ripristino, (pieno.shape[1], pieno.shape[0]), interpolation=cv2.INTER_LINEAR)
+    return cv2.bitwise_and(pieno, (ripristino > 127).astype(np.uint8) * 255)
+
+
 def _maschera_ai(rgb):
     """Trasparenza (0-255) del prodotto con il modello AI, oppure None se non riesce / non trova un prodotto sensato."""
     sess = _sessione_modello()
@@ -248,6 +285,10 @@ def _maschera_ai(rgb):
     cv2.drawContours(pieno, cont, -1, 255, cv2.FILLED)                     # niente buchi dentro il prodotto
     area = pieno.mean() / 255.0
     if area < 0.05 or area > 0.97:
+        return None
+    pieno = _toglie_code(pieno)
+    cont, _ = cv2.findContours(pieno, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cont:
         return None
     grande = max(cont, key=cv2.contourArea)
     guscio = np.zeros_like(pieno)
