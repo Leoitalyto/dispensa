@@ -1,4 +1,4 @@
-# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, account.py, lingue*.py, parte3.py, parte4.py, avvisi.py) come se fosse un unico file.
+# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, account.py, lingue*.py, parte3.py, parte4.py, avvisi.py, voce.py) come se fosse un unico file.
 import glob
 import os
 
@@ -14,5 +14,5 @@ for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interatt
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)
-for _nome in ("parte3.py", "parte4.py", "avvisi.py"):
+for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py"):
     _carica(os.path.join(_cartella, _nome))
