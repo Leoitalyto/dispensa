@@ -136,14 +136,11 @@ def foto_ampia_html(src):
 
 
 def campo_foto(chiave, attuale=""):
-    """Mostra il punto unico per la foto. Ritorna la nuova foto pronta (data URI) oppure '' se non ne e' stata scelta una.
-    I campi con chiave che inizia per 'fotocam_' aprono subito la fotocamera POSTERIORE (lo fa fotocamera.py)."""
-    galleria = st.toggle("🖼️ " + t("Scelgo una foto dalla galleria invece di scattare"), key=f"{chiave}_gal")
-    if galleria:
-        file = st.file_uploader(t("Carica una foto dalla galleria"), type=["jpg", "jpeg", "png", "webp"], key=f"fotogal_{chiave}")
-    else:
-        file = st.file_uploader("📷 " + t("Scatta la foto del prodotto"), type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}")
-        st.caption(t("Si apre la fotocamera posteriore. Il prodotto viene ritagliato e raddrizzato da solo."))
+    """Punto unico per la foto: a sinistra il tasto 'Scatta foto' (fotocamera POSTERIORE, creato da fotocamera.py),
+    a destra 'Carica dal telefono'. Ritorna la nuova foto pronta (data URI) oppure '' se non ne e' stata scelta una."""
+    st.markdown("**📷 " + t("Scatta la foto del prodotto") + "**")
+    file = st.file_uploader(t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}",
+                            label_visibility="collapsed")
     nuova = ""
     if file is not None:
         with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
@@ -162,7 +159,17 @@ CSS = CSS.replace("</style>", """
 .foto-ampia{height:260px;border-radius:24px;padding:10px;background:linear-gradient(180deg,#ffffff,#edf7f1);
  box-shadow:inset 0 0 0 1px rgba(0,0,0,.04),0 8px 18px rgba(0,0,0,.08);margin:6px 0}
 .foto-ampia img{width:100%;height:100%;object-fit:contain}
-[class*="st-key-fotocam_"] section,[class*="st-key-fotogal_"] section{border-radius:24px;border:2px dashed #14b8a6;background:rgba(255,255,255,.75);padding:20px}
+[class*="st-key-fotocam_"]{display:flex !important;flex-direction:row !important;gap:10px;align-items:stretch}
+[class*="st-key-fotocam_"]>div{flex:1 1 0;min-width:0}
+.cam-btn{flex:1 1 0;min-width:0;min-height:100px;border:0;border-radius:24px;background:linear-gradient(135deg,#14b8a6,#06b6d4);color:#fff;
+ font-weight:900;font-size:1.05rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
+ box-shadow:0 10px 22px rgba(6,182,212,.4);font-family:inherit}
+.cam-btn span{font-size:2rem;line-height:1}
+[class*="st-key-fotocam_"] [data-testid="stFileUploaderDropzoneInstructions"]{display:none !important}
+[class*="st-key-fotocam_"] section{min-height:100px;display:flex;align-items:center;justify-content:center;padding:8px;border-radius:24px;
+ border:2px dashed #14b8a6;background:rgba(255,255,255,.75)}
+[class*="st-key-fotocam_"] section button{font-size:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important}
+[class*="st-key-fotocam_"] section button::after{content:"🖼️ __CARICA__";font-size:1rem;font-weight:800;color:#0f766e}
 /* due tasti affiancati ma separati: Elimina e Modifica (anche su telefono) */
 [class*="st-key-azioni_"] [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:nowrap !important;gap:10px !important}
 [class*="st-key-azioni_"] [data-testid="stColumn"],[class*="st-key-azioni_"] [data-testid="column"]{min-width:0 !important;width:auto !important;flex:1 1 0 !important}
@@ -172,4 +179,4 @@ CSS = CSS.replace("</style>", """
 [class*="st-key-modif_"] button p{font-weight:800 !important;color:#0f766e !important}
 [class*="st-key-modif_"] button:hover{background:#ccfbf1 !important}
 [class*="st-key-modif_"] button:disabled{opacity:.5}
-</style>""")
+</style>""".replace("__CARICA__", t("Carica dal telefono")))
