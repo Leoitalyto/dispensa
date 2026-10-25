@@ -180,4 +180,10 @@ details.tasto-bug[open]>.allerg-pannello{border-top-color:#2e7d32}
 .bug-tab{width:100%;border-collapse:collapse;font-weight:700;margin:2px 0 6px}
 .bug-tab td{padding:5px 8px;border-bottom:1px solid #e3efe7}
 .bug-tab td:last-child{text-align:right;white-space:nowrap}
+/* Senza glutine: piu' visibile, bordo oro lucido e ombre 3D */
+.allerg-riga .badge.bene{display:inline-block;padding:5px 17px 6px !important;border-radius:999px !important;font-size:1rem !important;font-weight:900 !important;
+ color:#fff !important;opacity:1 !important;text-shadow:0 1px 2px rgba(0,0,0,.55);border:3px solid transparent !important;
+ background:linear-gradient(#6fdc7c 0%,#2fa046 48%,#1b6b2c 100%) padding-box,
+  linear-gradient(135deg,#fff6b8 0%,#ffd700 25%,#b8860b 50%,#ffe680 75%,#d4a000 100%) border-box !important;
+ box-shadow:0 3px 0 #8a6200,0 7px 12px rgba(0,0,0,.35),inset 0 2px 2px rgba(255,255,255,.65),inset 0 -3px 5px rgba(0,0,0,.28) !important}
 </style>""")
