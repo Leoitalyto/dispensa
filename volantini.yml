@@ -1,0 +1,20 @@
+name: Aggiorna volantini
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"      # ogni lunedì alle 5:00 (ora UTC)
+  workflow_dispatch:          # e anche a mano, dal pulsante "Run workflow"
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pdfplumber
+      - run: python aggiorna_volantini.py
+        env:
+          DATI_TOKEN: ${{ secrets.DATI_TOKEN }}
+          DATI_REPO: ${{ secrets.DATI_REPO }}
