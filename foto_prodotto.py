@@ -348,10 +348,13 @@ def scontorna_e_addrizza(dati, lato=720):
 # ---------------------------------------------------------------------
 # Campo foto (uno solo, in alto) usato da "Aggiungi" e da "Modifica"
 # ---------------------------------------------------------------------
+_VERSIONE_FOTO = 6
+
+
 def _foto_lavorata(dati):
     """Scontorna e addrizza una sola volta per ogni foto (la scelta resta in memoria durante la sessione)."""
     mem = st.session_state.setdefault("_foto_lavorate", {})
-    chiave = hash(dati)
+    chiave = (hash(dati), _VERSIONE_FOTO)                      # se cambia il metodo, le vecchie foto in memoria non valgono piu'
     if chiave not in mem:
         if len(mem) >= 4:
             mem.pop(next(iter(mem)))
