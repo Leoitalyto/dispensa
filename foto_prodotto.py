@@ -75,25 +75,80 @@ def _angolo_da_raddrizzare(maschera):
     return float(ang)
 
 
+_URL_MODELLO = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
+_PERCORSO_MODELLO = "/tmp/u2netp.onnx"
+
+
+@st.cache_resource(show_spinner=False)
+def _sessione_modello():
+    """Piccolo modello AI (4,6 MB) che riconosce il prodotto in primo piano. None se non e' disponibile."""
+    try:
+        import os
+        import onnxruntime as ort
+        import requests
+        if not os.path.exists(_PERCORSO_MODELLO) or os.path.getsize(_PERCORSO_MODELLO) < 4_000_000:
+            r = requests.get(_URL_MODELLO, timeout=60)
+            r.raise_for_status()
+            with open(_PERCORSO_MODELLO + ".tmp", "wb") as f:
+                f.write(r.content)
+            os.replace(_PERCORSO_MODELLO + ".tmp", _PERCORSO_MODELLO)
+        return ort.InferenceSession(_PERCORSO_MODELLO, providers=["CPUExecutionProvider"])
+    except Exception:
+        return None
+
+
+def _maschera_ai(rgb):
+    """Trasparenza (0-255) del prodotto con il modello AI, oppure None se non riesce / non trova un prodotto sensato."""
+    sess = _sessione_modello()
+    if sess is None:
+        return None
+    try:
+        h, w = rgb.shape[:2]
+        x = cv2.resize(rgb, (320, 320), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+        x = ((x - np.array([0.485, 0.456, 0.406], np.float32)) / np.array([0.229, 0.224, 0.225], np.float32)).transpose(2, 0, 1)[None]
+        y = sess.run(None, {sess.get_inputs()[0].name: x.astype(np.float32)})[0][0, 0]
+        y = (y - y.min()) / (y.max() - y.min() + 1e-8)
+        y = cv2.resize(y, (w, h), interpolation=cv2.INTER_CUBIC)
+    except Exception:
+        return None
+    sicuro = (y > 0.5).astype(np.uint8) * 255
+    n, etich, stat, _ = cv2.connectedComponentsWithStats(sicuro)
+    if n <= 1:
+        return None
+    sicuro = np.where(etich == 1 + int(np.argmax(stat[1:, cv2.CC_STAT_AREA])), 255, 0).astype(np.uint8)
+    cont, _ = cv2.findContours(sicuro, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    pieno = np.zeros_like(sicuro)
+    cv2.drawContours(pieno, cont, -1, 255, cv2.FILLED)                     # niente buchi dentro il prodotto
+    area = pieno.mean() / 255.0
+    if area < 0.05 or area > 0.97:
+        return None
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    vicino = cv2.dilate(pieno, k)                                          # bordo morbido ma solo accanto al prodotto
+    morbido = (np.clip((y - 0.35) / 0.3, 0, 1) * 255).astype(np.uint8)
+    alfa = np.where(pieno > 0, 255, np.minimum(morbido, vicino)).astype(np.uint8)
+    return cv2.GaussianBlur(alfa, (0, 0), 0.9)
+
+
 def scontorna_e_addrizza(dati, lato=560):
     """Da una foto (bytes) a una immagine WebP trasparente, ritagliata sul prodotto e addrizzata. Ritorna 'data:image/webp;base64,...'."""
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
     img.thumbnail((900, 900))
-    bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    rgb = np.array(img)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     h, w = bgr.shape[:2]
-    # la ricerca del prodotto si fa su una copia piccola (veloce), poi la maschera si porta alla misura piena
-    scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
-    piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
-    mp = _maschera_prodotto(piccola)
-    if mp is None:
-        rgba = np.dstack([cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), np.full((h, w), 255, np.uint8)])
-        mask = None
+    mask = _maschera_ai(rgb)
+    if mask is None:                                                         # riserva: metodo senza modello
+        scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
+        piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
+        mp = _maschera_prodotto(piccola)
+        if mp is not None:
+            mask = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
+            mask = cv2.GaussianBlur(mask, (0, 0), 1.6)
+            mask = np.clip((mask.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
+    if mask is None:
+        rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
     else:
-        mask = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
-        mask = cv2.GaussianBlur(mask, (0, 0), 1.6)                           # bordo morbido, senza scalini
-        mask = np.clip((mask.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
-        rgba = np.dstack([cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), mask])
-    if mask is not None:
+        rgba = np.dstack([rgb, mask])
         ang = _angolo_da_raddrizzare((mask > 127).astype(np.uint8) * 255)
         if ang:
             diag = int(np.hypot(h, w)) + 4
@@ -136,11 +191,15 @@ def foto_ampia_html(src):
 
 
 def campo_foto(chiave, attuale=""):
-    """Punto unico per la foto: a sinistra il tasto 'Scatta foto' (fotocamera POSTERIORE, creato da fotocamera.py),
-    a destra 'Carica dal telefono'. Ritorna la nuova foto pronta (data URI) oppure '' se non ne e' stata scelta una."""
-    st.markdown("**📷 " + t("Scatta la foto del prodotto") + "**")
-    file = st.file_uploader(t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}",
-                            label_visibility="collapsed")
+    """Punto unico per la foto. A sinistra il tasto Fotocamera (parte dalla fotocamera POSTERIORE, lo fa fotocamera.py),
+    a destra il tasto per caricare dal telefono. Ritorna la nuova foto pronta (data URI) oppure ''."""
+    with st.container(key="azioni_foto_" + chiave):
+        c_cam, c_file = st.columns(2, gap="small")
+        usa_cam = c_cam.toggle("📷 " + t("Fotocamera"), key=f"{chiave}_cam")
+        file_caricato = c_file.file_uploader("📁 " + t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"],
+                                             key=f"fotogal_{chiave}", label_visibility="visible")
+    scatto = st.camera_input(t("Scatta la foto del prodotto"), key=f"fotocam_{chiave}") if usa_cam else None
+    file = scatto if scatto is not None else file_caricato
     nuova = ""
     if file is not None:
         with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
