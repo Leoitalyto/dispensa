@@ -280,11 +280,11 @@ with st.sidebar:
 def _elenco_avviso():
     if _suono_ok:
         st.audio(suono_avviso(situazioni_presenti()), format="audio/wav", autoplay=True)
-    for titolo, righe in (("⚫ " + t("Scaduti"), scaduti), ("🔴 " + t("Scadono entro 1 mese"), rossi),
-                          ("🟠 " + t("Scadono entro 2 mesi"), arancioni)):
+    for titolo, righe, classe in (("⚫ " + t("Scaduti"), scaduti, "s-scaduti"), ("🔴 " + t("Scadono entro 1 mese"), rossi, "s-rossi"),
+                                  ("🟠 " + t("Scadono entro 2 mesi"), arancioni, "s-arancio")):
         if not righe:
             continue
-        st.markdown(f"**{titolo} ({len(righe)})**")
+        st.markdown(intestazione_sezione(titolo, len(righe), classe), unsafe_allow_html=True)
         for r in righe:
             c1, c2 = st.columns([1, 4])
             src = src_sicuro(r.get("immagine") or "")
@@ -294,7 +294,9 @@ def _elenco_avviso():
                 c1.markdown("<div style='font-size:42px'>🥫</div>", unsafe_allow_html=True)
             stato, giorni = stato_scadenza(r.get("scadenza"), data_oggi)
             c2.markdown(f"**{r.get('nome', '')}**" + (f" · {r['marca']}" if r.get("marca") else ""))
-            c2.caption(f"📦 {descrivi([r])} · {testo_giorni(stato, giorni)} · {data_it(r['scadenza'])}")
+            c2.markdown(f"<div class='chip-info'>📦 {html.escape(descrivi([r]))} · {testo_giorni(stato, giorni)} · {data_it(r['scadenza'])}</div>"
+                        f"<span class='scadenza' style='--c:{COLORI[stato]}'>{ICONE[stato]} {testo_giorni(stato, giorni)}</span>",
+                        unsafe_allow_html=True)
     with st.expander("🔊 " + t("Cosa significano i suoni?")):
         st.caption(t("Per ogni sezione suona il suono dell'urgenza maggiore."))
         for c in CATEGORIE:

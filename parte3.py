@@ -9,8 +9,8 @@ st.markdown(CSS, unsafe_allow_html=True)
 archivio = crea_archivio()
 data_oggi = oggi()
 configurato = bool(password_admin())
-HERO = (f"<div class='hero'><h1>🥫 {t('La nostra dispensa')}</h1>"
-        f"<p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div>")
+HERO = (f"<div class='hero'><div class='hero-ico'>🥫</div><div><h1>{t('La nostra dispensa')}</h1>"
+        f"<p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
 
 
 def leggi_utenti():
@@ -228,11 +228,7 @@ scaduti = sorted([_con_icona(r) for r, s, g in con_stato if s == "scaduto"], key
 rossi = sorted([_con_icona(r) for r, s, g in con_stato if s == "rosso"], key=lambda r: r["scadenza"])
 arancioni = sorted([_con_icona(r) for r, s, g in con_stato if s == "arancione"], key=lambda r: r["scadenza"])
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric(t("Prodotti"), len(articoli))
-c2.metric("🟠 " + t("Entro 2 mesi"), len(arancioni))
-c3.metric("🔴 " + t("Entro 1 mese"), len(rossi))
-c4.metric("⚫ " + t("Scaduti"), len(scaduti))
+st.markdown(kpi_html(len(articoli), len(arancioni), len(rossi), len(scaduti)), unsafe_allow_html=True)
 
 if scaduti:
     st.markdown(avviso_html("⚫ " + t("Scaduti: da buttare o controllare"), "scaduto", scaduti, data_oggi), unsafe_allow_html=True)
