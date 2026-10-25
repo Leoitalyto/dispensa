@@ -20,26 +20,11 @@ _JS_VOCE = r"""
   var w = window;
   var CONFIG = __CONFIG__;
   var doc = w.document;
-  function avviso(testo, colore) {
-    try {
-      var b = doc.getElementById('vc-diag');
-      if (!b) {
-        b = doc.createElement('div');
-        b.id = 'vc-diag';
-        b.style.cssText = 'position:fixed;top:72px;left:8px;right:8px;z-index:2147483000;color:#fff;font:13px/1.4 sans-serif;padding:10px 14px;border-radius:14px;box-shadow:0 8px 22px rgba(0,0,0,.35)';
-        b.addEventListener('click', function () { b.remove(); });
-        doc.body.appendChild(b);
-      }
-      b.style.background = colore || '#10293F';
-      b.textContent = testo;
-      w.setTimeout(function () { if (b.parentElement) b.remove(); }, 30000);
-    } catch (e) {}
-  }
   try {
   w.__vocaleConfig = CONFIG;
   if (w.__vocaleAttivo) { if (w.__vocaleScansiona) w.__vocaleScansiona(); return; }
   var SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-  if (!SR) { avviso('DIAGNOSI VOCE: il programma parte, ma questo browser non ha il riconoscimento vocale. Apri l\'app con Chrome (menu \u22EE > Apri in Chrome). Tocca per chiudere.', '#8A2E2E'); return; }
+  if (!SR) return;
   w.__vocaleAttivo = true;
   var stile = doc.createElement('style');
   stile.textContent = '.vc-mic{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;border:0;' +
@@ -156,13 +141,7 @@ _JS_VOCE = r"""
     attesa = w.setTimeout(function () { attesa = null; scansiona(); }, 250);
   }).observe(doc.body, {childList: true, subtree: true});
   scansiona();
-  w.setTimeout(function () {
-    var n = doc.querySelectorAll('.vc-mic').length;
-    if (n > 0) { avviso('DIAGNOSI VOCE: tutto ok, ' + n + ' microfoni attaccati ai campi. Tocca per chiudere.', '#0B7A69'); return; }
-    var nomi = Array.prototype.slice.call(doc.querySelectorAll('input[type=text], input:not([type]), textarea'), 0, 6).map(function (e) { return '[' + e.getAttribute('aria-label') + ']'; }).join(' ');
-    avviso('DIAGNOSI VOCE: il programma parte e il browser ha il riconoscimento vocale, ma non trovo i campi giusti. Campi visti: ' + (nomi || 'nessuno') + '. Tocca per chiudere.', '#B26A00');
-  }, 2500);
-  } catch (err) { avviso('DIAGNOSI VOCE: errore nel programma: ' + err + '. Tocca per chiudere.', '#8A2E2E'); }
+  } catch (err) { /* se qualcosa non va, l'app funziona come prima, senza microfoni */ }
 })();
 """
 
