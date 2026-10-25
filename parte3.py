@@ -334,7 +334,8 @@ with tab_dispensa:
         if scelto:
             _riga = next(r for r in articoli if r["id"] == scelto)
             mostra_scheda(_riga, allergie_di(categoria_di(_riga)))
-            if st.button("➖ " + t("Ne ho consumato uno"), key="consuma_" + _riga["id"]):
+            _b_meno, _b_piu = st.columns(2)
+            if _b_meno.button("➖ " + t("Ne ho consumato uno"), key="consuma_" + _riga["id"], width="stretch"):
                 _esito = {}
                 try:
                     salva(lambda d: _esito.update(consuma_uno(d, _riga["id"])), "Consumato un prodotto")
@@ -344,6 +345,16 @@ with tab_dispensa:
                         st.session_state["messaggio"] = "✅ " + t("{nome}: questa scadenza è finita, ma hai ancora altre unità in dispensa.", nome=_esito["nome"])
                     elif _esito.get("stato") == "resta":
                         st.session_state["messaggio"] = "✅ " + t("Ne ho consumato uno: restano {n} unità.", n=fmt_num(_esito["n"]))
+                    st.rerun()
+                except Exception as e:
+                    st.error(t("Non sono riuscito a salvare: {e}", e=e))
+
+            if _b_piu.button("➕ " + t("Ne ho aggiunto uno"), key="aggiungi_" + _riga["id"], width="stretch"):
+                _esito = {}
+                try:
+                    salva(lambda d: _esito.update(aggiungi_uno(d, _riga["id"])), "Aggiunta un'unità")
+                    if _esito.get("stato") == "aggiunto":
+                        st.session_state["messaggio"] = "✅ " + t("Ne ho aggiunto uno: ora sono {n} unità.", n=fmt_num(_esito["n"]))
                     st.rerun()
                 except Exception as e:
                     st.error(t("Non sono riuscito a salvare: {e}", e=e))

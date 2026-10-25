@@ -60,3 +60,15 @@ _FRASI = {
 for _lg, _liste in _FRASI.items():
     assert len(_liste) == len(_CHIAVI), _lg
     TRADUZIONI.setdefault(_lg, {}).update(dict(zip(_CHIAVI, _liste)))
+
+
+_AGGIUNTO = {
+    "en": ("I added one", "I added one: now {n} units."),
+    "es": ("He añadido uno", "He añadido uno: ahora hay {n} unidades."),
+    "fr": ("J'en ai ajouté un", "J'en ai ajouté un : il y en a maintenant {n} unités."),
+    "de": ("Ich habe eins hinzugefügt", "Ich habe eins hinzugefügt: Jetzt sind es {n} Einheiten."),
+    "ro": ("Am adăugat unul", "Am adăugat unul: acum sunt {n} unități."),
+    "ar": ("أضفتُ واحدة", "أضفتُ واحدة: أصبح لديك الآن {n} وحدات."),
+}
+for _lg, (_bottone, _messaggio) in _AGGIUNTO.items():
+    TRADUZIONI.setdefault(_lg, {}).update({"Ne ho aggiunto uno": _bottone, "Ne ho aggiunto uno: ora sono {n} unità.": _messaggio})

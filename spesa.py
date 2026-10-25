@@ -42,6 +42,15 @@ def consuma_uno(d, id_riga):
     return {"stato": "finito", "nome": riga.get("nome", "")}
 
 
+def aggiungi_uno(d, id_riga):
+    """Aggiunge un'unita' al prodotto."""
+    riga = next((r for r in d.get("articoli", []) if r.get("id") == id_riga), None)
+    if riga is None:
+        return {"stato": "assente"}
+    riga["quantita"] = float(riga.get("quantita") or 0) + 1
+    return {"stato": "aggiunto", "nome": riga.get("nome", ""), "n": riga["quantita"]}
+
+
 # i prodotti messi a 0 unita' nella tabella 'Gestisci' finiscono anch'essi nella lista della spesa
 _applica_modifiche_senza_spesa = applica_modifiche
 
