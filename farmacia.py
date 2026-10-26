@@ -138,13 +138,21 @@ def _fa_dialogo(pid, med_id=None):
             st.error("Scrivi il nome del medicinale.")
             return
         foto = "" if togli_foto else m.get("foto", "")
+        grande, da_cancellare = (None if togli_foto else m.get("foto_grande")), ([m["foto_grande"]["id"]] if togli_foto and m.get("foto_grande") else [])
         if foto_up is not None:
             try:
                 foto = foto_a_data_uri(foto_up.getvalue(), 400)
-            except Exception:
-                st.error("Non riesco a leggere la foto: prova con un'altra.")
+                nuovo_rif = _fa_salva_files([foto_up])[0]
+            except ValueError as e:
+                st.error(str(e))
                 return
-        rec = {"foto": foto, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
+            except Exception:
+                st.error("Non riesco a leggere o salvare la foto: prova con un'altra.")
+                return
+            if grande:
+                da_cancellare.append(grande["id"])
+            grande = nuovo_rif
+        rec = {"foto": foto, "foto_grande": grande, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
                "dosaggio": dosaggio.strip(), "forma": forma, "quantita": float(quantita), "unita": unita,
                "scadenza": scadenza.isoformat() if scadenza else None,
                "acquisto": acquisto.isoformat() if acquisto else None, "profilo": per, "note": note.strip()}
@@ -162,6 +170,7 @@ def _fa_dialogo(pid, med_id=None):
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
+        _fa_cancella_files(da_cancellare)
         trovate = _fa_conflitti(f, per, rec)
         st.session_state["fa_msg"] = ("⚠️ Medicinale salvato, ma attenzione: contiene «" + "», «".join(trovate) +
                                       "», segnato come allergia di questo profilo." if trovate else "✅ Medicinale salvato.")
@@ -169,20 +178,49 @@ def _fa_dialogo(pid, med_id=None):
 
 
 @st.dialog("Elimina medicinale")
+def _fa_cancella_medicinali(ids):
+    f = _fa_dati()
+    foto = [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m["id"] in ids and m.get("foto_grande")]
+    _fa_salva(lambda f: f.__setitem__("medicinali", [x for x in f["medicinali"] if x["id"] not in ids]),
+              "Farmacia: eliminato")
+    _fa_cancella_files(foto)
+
+
 def _fa_dialogo_elimina(med_id, nome):
-    st.write(f"Vuoi eliminare **{nome}**?")
+    _fa_dialogo_elimina_medicinali([med_id], nome)
+
+
+@st.dialog("Elimina medicinale")
+def _fa_dialogo_elimina_medicinali(ids, etichetta):
+    st.write(f"Vuoi eliminare **{etichetta}**?")
     c1, c2 = st.columns(2)
     if c1.button("Sì, elimina", type="primary", width="stretch"):
         try:
-            _fa_salva(lambda f: f.__setitem__("medicinali", [x for x in f["medicinali"] if x["id"] != med_id]),
-                      "Farmacia: eliminato")
+            _fa_cancella_medicinali(list(ids))
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
-        st.session_state["fa_msg"] = "🗑️ Medicinale eliminato."
+        st.session_state["fa_msg"] = "🗑️ Medicinale eliminato." if len(ids) == 1 else "🗑️ Medicinali eliminati."
         st.rerun()
     if c2.button("Annulla", width="stretch"):
         st.rerun()
+
+
+@st.dialog("Foto della confezione", width="large")
+def _fa_dialogo_foto(m):
+    dati = None
+    g = m.get("foto_grande")
+    if g:
+        d = carica_dati(crea_archivio(), _fa_percorso_doc(g["id"]))
+        if d.get("b64"):
+            dati = base64.b64decode(d["b64"])
+    if dati is None and m.get("foto"):
+        dati = base64.b64decode(m["foto"].split(",", 1)[1])
+    st.caption(m.get("nome", ""))
+    if dati:
+        st.image(dati)
+    else:
+        st.info("Nessuna foto.")
 
 
 # ---------------------------------------------------------------- schermata
@@ -200,7 +238,7 @@ def _fa_card(m, data_oggi, conflitti=()):
         extra += f"<div class='riga'>📝 {e(m['note'])}</div>"
     foto = ""
     if m.get("foto") and src_sicuro(m["foto"]):
-        foto = (f"<img src='{e(m['foto'], quote=True)}' alt='' style='float:right;max-width:84px;max-height:84px;"
+        foto = (f"<img src='{e(m['foto'], quote=True)}' alt='' style='float:right;max-width:120px;max-height:120px;"
                 "border-radius:12px;margin-left:8px'>")
     for c in conflitti:
         extra = (f"<div class='riga' style='color:#b71c1c;font-weight:800'>🚨 Attenzione: «{e(c)}» è segnato come "
@@ -233,7 +271,11 @@ def schermata_farmacia():
     nomi = {p["id"]: p["nome"] for p in profili}
     if st.session_state.get("fa_profilo") not in nomi:
         st.session_state["fa_profilo"] = profili[0]["id"]
-    pid = st.selectbox("👤 Profilo", list(nomi), format_func=lambda i: nomi[i], key="fa_profilo")
+    gruppi_p = {p["id"]: p.get("gruppo") for p in profili}
+    pid = st.selectbox("👤 Profilo", list(nomi),
+                       format_func=lambda i: nomi[i] + (f" · 🩸 {gruppi_p[i]}" if gruppi_p.get(i) else ""),
+                       key="fa_profilo")
+    _fa_scheda_gruppo(nomi[pid], gruppi_p.get(pid))
 
     with st.expander(f"👥 Gestisci profili ({len(profili)}/{MAX_PROFILI})"):
         with st.form("fa_nuovo_profilo", clear_on_submit=True):
@@ -248,13 +290,17 @@ def schermata_farmacia():
             except Exception as e:
                 st.error(f"Non sono riuscito a salvare: {e}")
         with st.form("fa_rinomina"):
-            nuovo_nome = st.text_input(f"Cambia il nome di «{nomi[pid]}»", value=nomi[pid])
-            ok_rin = st.form_submit_button("Cambia nome")
-        if ok_rin and nuovo_nome.strip():
+            nuovo_nome = st.text_input(f"Nome del profilo «{nomi[pid]}»", value=nomi[pid])
+            opzioni_g = ["Non indicato"] + GRUPPI
+            scelto_g = st.radio("🩸 Gruppo sanguigno", opzioni_g, horizontal=True, key="fa_gruppo_" + pid,
+                                index=opzioni_g.index(gruppi_p[pid]) if gruppi_p.get(pid) in GRUPPI else 0)
+            ok_rin = st.form_submit_button("Salva nome e gruppo")
+        if ok_rin:
             def _rin(f):
                 for p in f["profili"]:
                     if p["id"] == pid:
-                        p["nome"] = nuovo_nome.strip()
+                        p["nome"] = nuovo_nome.strip() or p["nome"]
+                        p["gruppo"] = None if scelto_g == "Non indicato" else scelto_g
             try:
                 _fa_salva(_rin, "Farmacia: nome profilo")
                 st.rerun()
@@ -296,6 +342,7 @@ def schermata_farmacia():
         filtro = c2.selectbox("Mostra", list(FILTRI_MED), format_func=lambda k: FILTRI_MED[k],
                               label_visibility="collapsed", key="fa_filtro")
         ordine = c3.selectbox("Ordina", ["Per scadenza", "Per nome"], label_visibility="collapsed", key="fa_ordine")
+        vista = st.radio("Vista", ["Schede", "Tabella"], horizontal=True, key="fa_vista", label_visibility="collapsed")
 
         visibili = []
         for m, s in stati:
@@ -320,19 +367,7 @@ def schermata_farmacia():
             st.info(f"Nessun medicinale per {nomi[pid]}. Tocca «Aggiungi medicinale» per inserire il primo.")
         elif not visibili:
             st.info("Nessun medicinale corrisponde ai filtri.")
-        for m in visibili:
-            with st.container(border=True):
-                st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
-                _q = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
-                l1, l2 = st.columns(2, gap="small")
-                l1.link_button("📖 Foglio illustrativo", "https://www.google.com/search?q=" + _q, width="stretch")
-                l2.link_button("🏛️ Banca dati AIFA", "https://www.aifa.gov.it/riassunto-caratteristiche-e-foglio-illustrativo",
-                               width="stretch")
-                b1, b2 = st.columns(2, gap="small")
-                if b1.button("Elimina", icon=":material/delete:", key="fa_el_" + m["id"], width="stretch"):
-                    _fa_dialogo_elimina(m["id"], m.get("nome", ""))
-                if b2.button("Modifica", icon=":material/edit:", key="fa_mo_" + m["id"], width="stretch"):
-                    _fa_dialogo(pid, m["id"])
+        _fa_elenco_medicinali(f, pid, visibili, vista, oggi_)
 
         if visibili:
             st.caption("📖 Controindicazioni e avvertenze sono nel foglio illustrativo ufficiale: leggilo o chiedi al "
@@ -664,6 +699,7 @@ def _fa_cancella_files(ids):
 def _fa_elimina_profilo(f, pid):
     ids = [a["id"] for v in f.get("visite", []) if v.get("profilo", "p0") == pid for a in v.get("allegati", [])]
     ids += [a["id"] for a in (f.get("vaccini_doc") or {}).get(pid, [])]
+    ids += [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid and m.get("foto_grande")]
 
     def _m(f):
         f["profili"] = [p for p in f["profili"] if p["id"] != pid]
@@ -946,7 +982,8 @@ def _fa_tab_vaccini(f, pid, nomi, oggi_):
 def _fa_esporta(f, pid, nomi):
     with st.expander("📦 Esporta i dati di questo profilo"):
         chiavi = ("medicinali", "terapie", "visite", "vaccinazioni")
-        dati = {"profilo": nomi[pid]}
+        dati = {"profilo": nomi[pid],
+                "gruppo_sanguigno": next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None)}
         for k in chiavi:
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
         dati["allergie_dichiarate"] = (f.get("allergie") or {}).get(pid, [])
@@ -1318,6 +1355,7 @@ table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{border:1px s
 .nota{{font-size:.8rem;color:#444;margin-top:18px}}.box{{background:#f3f3f3;padding:8px 12px;border-radius:8px}}</style></head><body>
 <h1>Report delle terapie – {e(nomi[pid])}</h1>
 <p>Periodo: dal {data_it(da.isoformat())} al {data_it(a.isoformat())} · Creato il {data_it(oggi_.isoformat())}</p>
+<p>Gruppo sanguigno: <b>{e(next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None) or "non indicato")}</b></p>
 <div class="box"><b>Riepilogo:</b> {riepilogo}</div>
 <h2>Allergie e intolleranze dichiarate</h2><p>{e(", ".join(allergie)) if allergie else "Nessuna dichiarata"}</p>
 <h2>Terapie attive</h2><table><tr><th>Medicinale</th><th>Quantità</th><th>Giorni</th><th>Orari</th><th>Periodo</th><th>Note</th></tr>{t_ter}</table>
@@ -1363,3 +1401,101 @@ def _fa_report_medico(f, pid, nomi, oggi_):
                            file_name=nome_file + ".html", mime="text/html", width="stretch")
         b2.download_button("📊 Scarica per Excel", csv, file_name=nome_file + ".csv", mime="text/csv", width="stretch")
         st.caption("Il file «da stampare» si apre nel browser: da lì puoi stamparlo o salvarlo in PDF e mostrarlo al medico.")
+
+
+# =====================================================================
+# GRUPPO SANGUIGNO (icone a goccia) E ELENCO MEDICINALI A SCHEDE O TABELLA
+# =====================================================================
+GRUPPI = ["A+", "B+", "AB+", "0+", "A-", "B-", "AB-", "0-"]
+_FA_FOTO_VUOTA = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
+
+
+@st.cache_resource
+def _fa_icone_gruppi():
+    """Ritaglia le otto gocce dall'immagine gruppi.webp (4 colonne x 2 righe) e le dà come immagini piccole."""
+    try:
+        cartella = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        cartella = "."
+    foglio = Image.open(os.path.join(cartella, "gruppi.webp")).convert("RGBA")   # se manca, non si memorizza l'errore
+    w, h = foglio.width // 4, foglio.height // 2
+    risultato = {}
+    for i, g in enumerate(GRUPPI):
+        cella = foglio.crop(((i % 4) * w, (i // 4) * h, (i % 4) * w + w, (i // 4) * h + h))
+        buf = io.BytesIO()
+        cella.save(buf, "WEBP", quality=88)
+        risultato[g] = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    return risultato
+
+
+def _fa_scheda_gruppo(nome, gruppo):
+    stile = ("display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.78);border-radius:18px;"
+             "padding:8px 14px;margin:6px 0;color:#1b2b2b")
+    if gruppo:
+        try:
+            uri = _fa_icone_gruppi().get(gruppo)
+        except Exception:
+            uri = None
+        goccia = (f"<img src='{uri}' alt='{html.escape(gruppo)}' style='height:84px'>" if uri else "<span style='font-size:2rem'>🩸</span>")
+        st.markdown(f"<div style='{stile}'>{goccia}<div><b style='font-size:1.1rem'>{html.escape(nome)}</b><br>"
+                    f"Gruppo sanguigno: <b style='font-size:1.3rem;color:#b71c1c'>{html.escape(gruppo)}</b></div></div>",
+                    unsafe_allow_html=True)
+    else:
+        st.caption("🩸 Gruppo sanguigno non indicato: puoi sceglierlo in «Gestisci profili».")
+
+
+def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
+    if vista == "Tabella":
+        sfondi = {"rosso": "background-color:#ffcdd2", "arancione": "background-color:#ffe0b2",
+                  "scaduto": "background-color:#d7ccc8", "ok": "", "nessuna": ""}
+        righe = []
+        for m in visibili:
+            stato, giorni = stato_scadenza(m.get("scadenza"), oggi_)
+            righe.append({"Foto": src_sicuro(m.get("foto") or "") or _FA_FOTO_VUOTA, "Medicinale": m.get("nome", ""),
+                          "Marca": m.get("marca", ""), "Principio attivo": m.get("principio", ""),
+                          "Dosaggio": m.get("dosaggio", ""), "Forma": m.get("forma", ""),
+                          "Quantità": f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}",
+                          "Scadenza": data_it(m["scadenza"]) if m.get("scadenza") else "",
+                          "Stato": f"{ICONE[stato]} {testo_giorni(stato, giorni)}",
+                          "Allergia": "🚨" if _fa_conflitti(f, pid, m) else "", "_stato": stato})
+        if not righe:
+            return
+        tab = pd.DataFrame(righe)
+        tab.insert(0, "🗑️", False)
+        tab.index = [m["id"] for m in visibili]
+        stile = tab.style.apply(lambda riga: [sfondi[riga["_stato"]]] * len(riga), axis=1)
+        mod = st.data_editor(stile, hide_index=True, height=min(700, 60 + 72 * len(tab)), key="fa_tab_" + pid,
+                             disabled=[c for c in tab.columns if c != "🗑️"],
+                             column_config={"🗑️": st.column_config.CheckboxColumn("🗑️", width="small"),
+                                            "Foto": st.column_config.ImageColumn("Foto", width="small"), "_stato": None})
+        spunte = list(mod.index[mod["🗑️"]])
+        t1, t2 = st.columns(2, gap="small")
+        if t1.button("Elimina le righe spuntate", icon=":material/delete:", key="fa_tab_el_" + pid,
+                     disabled=not spunte, width="stretch"):
+            nomi_sp = ", ".join(m.get("nome", "") for m in visibili if m["id"] in spunte)
+            _fa_dialogo_elimina_medicinali(spunte, nomi_sp)
+        if t2.button("Modifica la riga spuntata", icon=":material/edit:", key="fa_tab_mo_" + pid,
+                     disabled=len(spunte) != 1, width="stretch"):
+            _fa_dialogo(pid, spunte[0])
+        sel = next((m for m in visibili if len(spunte) == 1 and m["id"] == spunte[0]), None)
+        if sel and sel.get("foto") and st.button("🔍 Ingrandisci la foto della riga spuntata", key="fa_tab_foto_" + pid,
+                                                 width="stretch"):
+            _fa_dialogo_foto(sel)
+        if len(spunte) > 1:
+            st.caption("Spunta una sola riga da modificare.")
+        return
+    for m in visibili:
+        with st.container(border=True):
+            st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
+            if m.get("foto") and st.button("🔍 Ingrandisci la foto", key="fa_foto_" + m["id"], width="stretch"):
+                _fa_dialogo_foto(m)
+            _q = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
+            l1, l2 = st.columns(2, gap="small")
+            l1.link_button("📖 Foglio illustrativo", "https://www.google.com/search?q=" + _q, width="stretch")
+            l2.link_button("🏛️ Banca dati AIFA", "https://www.aifa.gov.it/riassunto-caratteristiche-e-foglio-illustrativo",
+                           width="stretch")
+            b1, b2 = st.columns(2, gap="small")
+            if b1.button("Elimina", icon=":material/delete:", key="fa_el_" + m["id"], width="stretch"):
+                _fa_dialogo_elimina(m["id"], m.get("nome", ""))
+            if b2.button("Modifica", icon=":material/edit:", key="fa_mo_" + m["id"], width="stretch"):
+                _fa_dialogo(pid, m["id"])
