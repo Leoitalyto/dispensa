@@ -1,16 +1,40 @@
-# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, posto.py, account.py, foto_prodotto.py, modifica.py, bugiardino.py, guida.py, lingue*.py, parte3.py, parte4.py, avvisi.py, voce.py, fotocamera.py) come se fosse un unico file.
+# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, posto.py, account.py, foto_prodotto.py, modifica.py, bugiardino.py, guida.py, lingue*.py, parte3.py, parte4.py, avvisi.py, voce.py, fotocamera.py, farmacia.py) come se fosse un unico file.
 import glob
 import os
 
 _cartella = os.path.dirname(os.path.abspath(__file__))
 
+# Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
+# se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
+_AGGANCI = {
+    "parte3.py": [
+        ("f1, f2, f3 = st.columns([3, 2, 2])",
+         "f1, f2, f3, f4 = st.columns([3, 2, 2, 1])"),
+        ('_viste = {"schede": "Schede", "tabella": "Tabella"}',
+         'with f4:\n        icona_farmacia()\n    _viste = {"schede": "Schede", "tabella": "Tabella"}'),
+        ("# --- intestazione e avvisi ---",
+         'if st.session_state.get("farmacia_aperta"):\n    schermata_farmacia()\n    st.stop()\n'
+         "# --- intestazione e avvisi ---"),
+    ],
+}
+
 
 def _carica(percorso):
     with open(percorso, encoding="utf-8") as _f:
-        exec(compile(_f.read(), percorso, "exec"), globals())
+        _testo = _f.read()
+    _punti = _AGGANCI.get(os.path.basename(percorso))
+    if _punti:
+        _testo = _testo.replace("\r\n", "\n")
+        for _cerca, _sostituisci in _punti:
+            if _testo.count(_cerca) == 1:
+                _testo = _testo.replace(_cerca, _sostituisci)
+            else:
+                import streamlit as _st
+                _st.sidebar.caption("⚠️ Farmacia: punto di aggancio non trovato in " + os.path.basename(percorso))
+    exec(compile(_testo, percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py"):
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)
