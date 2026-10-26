@@ -34,6 +34,10 @@ _FA_CSS = """<style>
 .fa-med .scad{display:inline-block;color:#fff;background:var(--c);border-radius:999px;padding:3px 12px;
  font-size:.82rem;font-weight:700;margin-top:6px}
 @media (max-width:640px){.fa-kpi{grid-template-columns:repeat(2,1fr)}}
+.cm{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}
+.cm th{font-size:.72rem;font-weight:800;color:#1b2b2b;padding:2px}
+.cm td{height:58px;vertical-align:top;border-radius:10px;padding:3px 4px;font-size:.7rem;color:#1b2b2b;background:rgba(255,255,255,.55)}
+.cm td b{font-size:.85rem}.cm td.oggi{outline:3px solid #0f766e}
 </style>"""
 
 
@@ -600,6 +604,8 @@ def _fa_tab_terapie(f, pid, nomi, oggi_):
                 st.caption("Nessuna assunzione.")
             for ora, t_ in dosi_d:
                 _fa_riga_dose(f, pid, d, ora, t_, ora_adesso, f"s{i}")
+
+    _fa_calendario_mese(f, pid, oggi_)
 
     st.subheader("📋 Programmi di terapia")
     programmi = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid]
@@ -1664,3 +1670,63 @@ def _fa_assicura_fotocamera():
             exec(compile(fh.read(), percorso, "exec"), globals())
     except Exception:
         pass
+
+
+# =====================================================================
+# CALENDARIO MENSILE (si può sfogliare fino a 20 anni avanti)
+# =====================================================================
+import calendar as _cal
+
+MESI_IT = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre",
+           "Novembre", "Dicembre"]
+
+
+def _fa_calendario_mese(f, pid, oggi_):
+    with st.expander("📆 Calendario mensile (si può sfogliare fino a 20 anni)"):
+        c1, c2 = st.columns(2)
+        anni = list(range(oggi_.year - 1, oggi_.year + 21))
+        anno = c1.selectbox("Anno", anni, index=anni.index(oggi_.year), key="fa_cal_anno")
+        mese = c2.selectbox("Mese", list(range(1, 13)), format_func=lambda i: MESI_IT[i - 1], index=oggi_.month - 1,
+                            key="fa_cal_mese")
+        registro = f.get("registro") or {}
+        righe_html = ""
+        con_dosi = []
+        for sett in _cal.Calendar(firstweekday=0).monthdayscalendar(anno, mese):
+            righe_html += "<tr>"
+            for giorno in sett:
+                if giorno == 0:
+                    righe_html += "<td style='background:transparent'></td>"
+                    continue
+                d = date(anno, mese, giorno)
+                dosi = _fa_dosi_giorno(f, pid, d)
+                tot = len(dosi)
+                prese = sum(1 for ora, t_ in dosi if _fa_chiave(t_, d, ora) in registro)
+                if tot:
+                    con_dosi.append(giorno)
+                if not tot:
+                    sfondo, testo = "", ""
+                elif d > oggi_:
+                    sfondo, testo = "background:#e3f2fd;", f"⏳ {tot}"
+                elif prese == tot:
+                    sfondo, testo = "background:#c8e6c9;", f"✅ {prese}/{tot}"
+                elif prese == 0 and d < oggi_:
+                    sfondo, testo = "background:#ffcdd2;", f"❌ 0/{tot}"
+                else:
+                    sfondo, testo = "background:#ffe0b2;", f"⚠️ {prese}/{tot}"
+                classe = " class='oggi'" if d == oggi_ else ""
+                righe_html += f"<td{classe} style='{sfondo}'><b>{giorno}</b><br>{testo}</td>"
+            righe_html += "</tr>"
+        st.markdown("<table class='cm'><tr>" + "".join(f"<th>{g}</th>" for g in GIORNI_SETT) + "</tr>" + righe_html + "</table>",
+                    unsafe_allow_html=True)
+        st.caption("✅ tutte prese · ⚠️ alcune da registrare · ❌ nessuna registrata · ⏳ ancora da fare. "
+                   "Scegli un giorno qui sotto per vedere le assunzioni e segnarle.")
+        if not con_dosi:
+            st.caption("Nessuna assunzione programmata in questo mese.")
+            return
+        predefinito = oggi_.day if (anno, mese) == (oggi_.year, oggi_.month) and oggi_.day in con_dosi else con_dosi[0]
+        giorno_sel = st.selectbox("Apri un giorno", con_dosi, index=con_dosi.index(predefinito), key="fa_cal_giorno",
+                                  format_func=lambda g: f"{g} {MESI_IT[mese - 1]}")
+        d_sel = date(anno, mese, giorno_sel)
+        ora_adesso = adesso()
+        for ora, t_ in _fa_dosi_giorno(f, pid, d_sel):
+            _fa_riga_dose(f, pid, d_sel, ora, t_, ora_adesso, "m")
