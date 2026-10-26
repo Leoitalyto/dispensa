@@ -227,7 +227,7 @@ def testo_dosi(d, dosi):
         else:
             righe.append(f"• 💊 {nome}{extra}" + (f" – {quantita}" if quantita else "") + f" – ore {ora}")
     righe.append("")
-    righe.append("Quando l'hai presa, tocca «✔ Presa» nella Farmacia dell'app.")
+    righe.append("Quando l'hai presa, segnalo nella Farmacia dell'app (scheda Terapie).")
     return "\n".join(righe)
 
 

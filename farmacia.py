@@ -340,6 +340,7 @@ def schermata_farmacia():
 
     with tab_ter:
         _fa_tab_terapie(f, pid, nomi, oggi_)
+        _fa_report_medico(f, pid, nomi, oggi_)
     with tab_vis:
         _fa_tab_visite(f, pid, nomi, oggi_)
     with tab_vac:
@@ -402,26 +403,38 @@ def _fa_segna(f, pid, t_, d, ora, presa):
 
 def _fa_riga_dose(f, pid, d, ora, t_, ora_adesso, prefisso):
     k = _fa_chiave(t_, d, ora)
-    presa = k in f.get("registro", {})
+    reg = f.get("registro", {}).get(k)
+    presa = bool(reg)
     momento = datetime.fromisoformat(f"{d.isoformat()}T{ora}")
     if presa:
-        icona = "✅"
-    elif momento < ora_adesso:
-        icona = "⚠️" if d == ora_adesso.date() else "❌"
+        try:
+            dettaglio = datetime.fromisoformat(reg["quando"]).strftime(" il %d/%m alle %H:%M")
+        except Exception:
+            dettaglio = ""
+        stato, colore = f"✅ PRESA{dettaglio}", "#2e7d32"
+    elif momento <= ora_adesso:
+        stato, colore = ("⚠️ DA PRENDERE", "#e65100") if d == ora_adesso.date() else ("❌ NON REGISTRATA", "#b71c1c")
     else:
-        icona = "⏳"
+        stato, colore = "⏳ Più tardi", "#555"
     nome = _fa_nome_med(f, t_.get("med"), t_.get("nome_med", ""))
     q = t_.get("quantita", "")
-    c1, c2 = st.columns([3, 2], gap="small")
-    c1.markdown(f"{icona} **{ora}** · 💊 {html.escape(nome)}" + (f" · {html.escape(q)}" if q else ""))
-    if d <= ora_adesso.date():
-        if c2.button("↩ Annulla" if presa else "✔ Presa", key=f"fa_d_{prefisso}_{k}", width="stretch"):
-            try:
-                _fa_segna(f, pid, t_, d, ora, not presa)
-            except Exception as e:
-                st.error(f"Non sono riuscito a salvare: {e}")
-                return
-            st.rerun()
+    with st.container(border=True):
+        st.markdown(f"<span style='color:{colore};font-weight:800'>{stato}</span><br>"
+                    f"<b>{ora}</b> · 💊 <b>{html.escape(nome)}</b>" + (f" · {html.escape(q)}" if q else ""),
+                    unsafe_allow_html=True)
+        if d <= ora_adesso.date():
+            if st.button("↩ Annulla" if presa else "✔ Ho preso la medicina", key=f"fa_d_{prefisso}_{k}",
+                         type="secondary" if presa else "primary", width="stretch"):
+                try:
+                    _fa_segna(f, pid, t_, d, ora, not presa)
+                except Exception as e:
+                    st.error(f"Non sono riuscito a salvare: {e}")
+                    return
+                st.session_state["fa_msg"] = (
+                    "↩ Registrazione annullata." if presa else
+                    f"✅ Registrato: {nome} delle {ora}, segnata alle {adesso().strftime('%H:%M')}. "
+                    "Resta nello storico e nel report per il medico.")
+                st.rerun()
 
 
 @st.dialog("Programma di terapia")
@@ -517,9 +530,9 @@ def _fa_tab_terapie(f, pid, nomi, oggi_):
                   and datetime.fromisoformat(f"{oggi_.isoformat()}T{ora}") < ora_adesso]
     if in_ritardo:
         n_r = len(in_ritardo)
-        st.warning(f"⏰ Per {nomi[pid]} c'è {n_r} assunzione da registrare." if n_r == 1
-                   else f"⏰ Per {nomi[pid]} ci sono {n_r} assunzioni da registrare.")
-        st.caption("Tocca «✔ Presa» quando l'hai fatta.")
+        st.warning(f"⏰ {nomi[pid]}: {n_r} assunzione DA PRENDERE." if n_r == 1
+                   else f"⏰ {nomi[pid]}: {n_r} assunzioni DA PRENDERE.")
+        st.caption("Quando l'hai presa tocca «✔ Ho preso la medicina»: viene salvata da sola nello storico e nel report per il medico.")
     if not dosi:
         st.caption("Nessuna assunzione programmata per oggi.")
     for ora, t_ in dosi:
@@ -1225,7 +1238,7 @@ def _fa_blocco_avvisi():
                    "gli SMS richiedono anche un abbonamento a un servizio di invio, con un costo per messaggio. "
                    "I promemoria delle assunzioni partono ogni mezz'ora: l'avviso arriva nella mezz'ora che contiene "
                    "l'orario della terapia (per esempio quello delle 8:15 arriva tra le 8:00 e le 8:30) e non arriva "
-                   "se hai già toccato «✔ Presa». Sono un aiuto in più, non un allarme preciso.")
+                   "se hai già toccato «✔ Ho preso la medicina». Sono un aiuto in più, non un allarme preciso.")
     if ok:
         v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\s.\-]", "", v_sm)
         if v_sm and re.fullmatch(r"3\d{8,9}", v_sm):               # cellulare italiano scritto senza prefisso
@@ -1252,3 +1265,101 @@ def _fa_blocco_avvisi():
             return
         st.session_state["fa_msg"] = "✅ Impostazioni degli avvisi salvate." if scelti else "✅ Avvisi disattivati."
         st.rerun()
+
+
+# =====================================================================
+# REPORT PER IL MEDICO: assunzioni previste e registrate, da scaricare e stampare
+# =====================================================================
+def _fa_righe_report(f, pid, da, a, adesso_):
+    """Una riga per ogni assunzione prevista nel periodo (più quelle registrate fuori dal programma attuale)."""
+    registro = f.get("registro") or {}
+    righe, viste = [], set()
+    giorno = da
+    while giorno <= a:
+        for ora, t_ in _fa_dosi_giorno(f, pid, giorno):
+            k = _fa_chiave(t_, giorno, ora)
+            viste.add(k)
+            nome = _fa_nome_med(f, t_.get("med"), t_.get("nome_med", ""))
+            reg = registro.get(k)
+            if reg:
+                stato, nota = "Presa", reg.get("quando", "").replace("T", " ")
+            elif datetime.fromisoformat(f"{giorno.isoformat()}T{ora}") < adesso_:
+                stato, nota = "Non registrata", ""
+            else:
+                stato, nota = "Da fare", ""
+            righe.append({"data": giorno, "ora": ora, "medicinale": nome, "quantita": t_.get("quantita", ""),
+                          "stato": stato, "registrata": nota})
+        giorno += timedelta(days=1)
+    for k, r in registro.items():                       # registrate, ma il programma è stato poi cambiato o eliminato
+        d_ = _fa_data(r.get("d"))
+        if k not in viste and r.get("p", "p0") == pid and d_ and da <= d_ <= a:
+            righe.append({"data": d_, "ora": r.get("o", ""), "medicinale": r.get("nome", ""),
+                          "quantita": r.get("q", ""), "stato": "Presa", "registrata": r.get("quando", "").replace("T", " ")})
+    righe.sort(key=lambda x: (x["data"], x["ora"]))
+    return righe
+
+
+def _fa_html_report(f, pid, nomi, da, a, righe, riepilogo, oggi_):
+    e = html.escape
+    terapie = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid and t_.get("stato", "attiva") == "attiva"]
+    allergie = (f.get("allergie") or {}).get(pid, [])
+    celle = lambda riga: "".join(f"<td>{e(str(c))}</td>" for c in riga)
+    t_ter = "".join("<tr>" + celle([_fa_nome_med(f, t_.get("med"), t_.get("nome_med", "")), t_.get("quantita", ""),
+                                    ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", [])),
+                                    ", ".join(t_.get("orari", [])),
+                                    f"dal {data_it(t_['inizio'])}" + (f" al {data_it(t_['fine'])}" if t_.get("fine") else ""),
+                                    t_.get("note", "")]) + "</tr>" for t_ in terapie) or "<tr><td colspan='6'>Nessuna terapia attiva</td></tr>"
+    t_dosi = "".join("<tr>" + celle([data_it(r["data"].isoformat()), r["ora"], r["medicinale"], r["quantita"], r["stato"],
+                                     r["registrata"]]) + "</tr>" for r in righe) or "<tr><td colspan='6'>Nessuna assunzione nel periodo</td></tr>"
+    return f"""<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report terapie - {e(nomi[pid])}</title>
+<style>body{{font-family:Arial,sans-serif;margin:16px;color:#111}}h1{{font-size:1.3rem}}h2{{font-size:1.05rem;margin-top:22px}}
+table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{border:1px solid #999;padding:4px 6px;text-align:left}}th{{background:#eee}}
+.nota{{font-size:.8rem;color:#444;margin-top:18px}}.box{{background:#f3f3f3;padding:8px 12px;border-radius:8px}}</style></head><body>
+<h1>Report delle terapie – {e(nomi[pid])}</h1>
+<p>Periodo: dal {data_it(da.isoformat())} al {data_it(a.isoformat())} · Creato il {data_it(oggi_.isoformat())}</p>
+<div class="box"><b>Riepilogo:</b> {riepilogo}</div>
+<h2>Allergie e intolleranze dichiarate</h2><p>{e(", ".join(allergie)) if allergie else "Nessuna dichiarata"}</p>
+<h2>Terapie attive</h2><table><tr><th>Medicinale</th><th>Quantità</th><th>Giorni</th><th>Orari</th><th>Periodo</th><th>Note</th></tr>{t_ter}</table>
+<h2>Assunzioni</h2><table><tr><th>Data</th><th>Ora prevista</th><th>Medicinale</th><th>Quantità</th><th>Stato</th><th>Registrata il</th></tr>{t_dosi}</table>
+<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente. «Presa» significa che la persona ha toccato
+il pulsante nell'app: non è verificato da un medico o da un farmacista.</p></body></html>"""
+
+
+def _fa_report_medico(f, pid, nomi, oggi_):
+    with st.expander("📋 Report per il medico (assunzioni registrate)"):
+        c1, c2 = st.columns(2)
+        da = c1.date_input("Dal", value=oggi_ - timedelta(days=30), format="DD/MM/YYYY", key="fa_rep_da",
+                           min_value=date(2000, 1, 1), max_value=oggi_)
+        a = c2.date_input("Al", value=oggi_, format="DD/MM/YYYY", key="fa_rep_a",
+                          min_value=date(2000, 1, 1), max_value=oggi_)
+        if da > a:
+            st.error("La data iniziale non può essere dopo quella finale.")
+            return
+        if (a - da).days > 366:
+            st.error("Scegli un periodo di al massimo un anno.")
+            return
+        righe = _fa_righe_report(f, pid, da, a, adesso())
+        previste = [r for r in righe if r["stato"] != "Da fare"]
+        prese = sum(1 for r in previste if r["stato"] == "Presa")
+        non_reg = sum(1 for r in previste if r["stato"] == "Non registrata")
+        perc = f" ({round(100 * prese / len(previste))}%)" if previste else ""
+        riepilogo = f"{len(previste)} assunzioni previste · {prese} registrate come prese{perc} · {non_reg} non registrate"
+        st.markdown(f"**{html.escape(nomi[pid])}** · {riepilogo}")
+        st.caption("«Non registrata» vuol dire che nell'app non è stato toccato «✔ Ho preso la medicina»: può darsi che la dose sia stata "
+                   "presa e non segnata.")
+        if righe:
+            st.dataframe(pd.DataFrame([{"Data": data_it(r["data"].isoformat()), "Ora": r["ora"], "Medicinale": r["medicinale"],
+                                        "Quantità": r["quantita"], "Stato": r["stato"], "Registrata il": r["registrata"]}
+                                       for r in righe]), hide_index=True)
+        else:
+            st.caption("Nessuna assunzione nel periodo scelto.")
+        nome_file = f"report_{nomi[pid].replace(' ', '_')}_{da.isoformat()}_{a.isoformat()}"
+        csv = pd.DataFrame([{"Data": data_it(r["data"].isoformat()), "Ora": r["ora"], "Medicinale": r["medicinale"],
+                             "Quantità": r["quantita"], "Stato": r["stato"], "Registrata il": r["registrata"]}
+                            for r in righe]).to_csv(index=False, sep=";").encode("utf-8-sig")
+        b1, b2 = st.columns(2, gap="small")
+        b1.download_button("🖨️ Scarica da stampare", _fa_html_report(f, pid, nomi, da, a, righe, riepilogo, oggi_).encode("utf-8"),
+                           file_name=nome_file + ".html", mime="text/html", width="stretch")
+        b2.download_button("📊 Scarica per Excel", csv, file_name=nome_file + ".csv", mime="text/csv", width="stretch")
+        st.caption("Il file «da stampare» si apre nel browser: da lì puoi stamparlo o salvarlo in PDF e mostrarlo al medico.")
