@@ -124,11 +124,25 @@ def _fa_modulo_medicinale(pid, med_id=None):
     nomi = {p["id"]: p["nome"] for p in profili}
     # la foto sta in cima, come nella dispensa: fotocamera posteriore, sfondo tolto, righello e ritaglio
     st.markdown("**📷 Foto della confezione** (facoltativa)")
+    ck = "fa_" + (med_id or "nuovo")
     try:
-        foto_nuova = campo_foto("fa_" + (med_id or "nuovo"), m.get("foto", ""))
+        foto_nuova = campo_foto(ck, m.get("foto", ""))
     except NameError:                                  # manca foto_prodotto.py: si va avanti senza foto
         foto_nuova = ""
         st.caption("La foto non è disponibile in questo momento.")
+    # riga di controllo: dice se la foto è arrivata davvero all'app (serve a capire dove si blocca)
+    st.caption("🔧 Controllo foto → fotocamera: " + ("✔ ricevuta" if st.session_state.get("fotocam_" + ck) is not None else "— nessuna")
+               + " · galleria: " + ("✔ ricevuta" if st.session_state.get("fotogal_" + ck) is not None else "— nessuna"))
+    with st.expander("📎 Se la foto non compare, usa questo campo"):
+        alt = st.file_uploader("Scatta o scegli la foto", type=["jpg", "jpeg", "png", "webp"], key="fa_alt_" + ck)
+        if alt is not None and not foto_nuova:
+            with st.spinner("Sto preparando la foto…"):
+                try:
+                    foto_nuova = _foto_lavorata(alt.getvalue())          # sfondo tolto e raddrizzata, come nella dispensa
+                except Exception:
+                    foto_nuova = foto_a_data_uri(alt.getvalue(), 720)
+            st.image(base64.b64decode(foto_nuova.split(",", 1)[1]))
+            st.caption("✅ Foto pronta: sarà salvata con il medicinale.")
     with st.form("fa_form_med"):
         togli_foto = st.checkbox("Rimuovi la foto attuale") if m.get("foto") else False
         nome = st.text_input("Nome del medicinale *", value=m.get("nome", ""))
