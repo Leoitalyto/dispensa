@@ -105,9 +105,19 @@ def _fa_idx(lista, valore):
 
 
 # ---------------------------------------------------------------- finestre
-@st.dialog("Medicinale", width="large")
 def _fa_dialogo(pid, med_id=None):
+    """Apre il modulo del medicinale in una pagina intera, non in una finestra: se il telefono sospende il browser
+    mentre si scatta la foto, la pagina resta lì e la foto non si perde."""
+    st.session_state["fa_modulo_med"] = {"pid": pid, "med_id": med_id}
+    st.rerun()
+
+
+def _fa_modulo_medicinale(pid, med_id=None):
     _fa_assicura_fotocamera()
+    if st.button("← Annulla e torna ai medicinali", key="fa_modulo_annulla"):
+        st.session_state.pop("fa_modulo_med", None)
+        st.rerun()
+    st.subheader("✏️ Modifica medicinale" if med_id else "➕ Nuovo medicinale")
     f = _fa_dati()
     profili = _fa_profili(f)
     m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), {}) if med_id else {}
@@ -178,6 +188,7 @@ def _fa_dialogo(pid, med_id=None):
         trovate = _fa_conflitti(f, per, rec)
         st.session_state["fa_msg"] = ("⚠️ Medicinale salvato, ma attenzione: contiene «" + "», «".join(trovate) +
                                       "», segnato come allergia di questo profilo." if trovate else "✅ Medicinale salvato.")
+        st.session_state.pop("fa_modulo_med", None)
         st.rerun()
 
 
@@ -257,6 +268,7 @@ def _fa_card(m, data_oggi, conflitti=()):
 def schermata_farmacia():
     st.markdown(_FA_CSS, unsafe_allow_html=True)
     if st.button("← Torna alla dispensa", key="fa_indietro"):
+        st.session_state.pop("fa_modulo_med", None)
         st.session_state["farmacia_aperta"] = False
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
@@ -264,6 +276,9 @@ def schermata_farmacia():
     if st.session_state.get("fa_msg"):
         _msg = st.session_state.pop("fa_msg")
         (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
+    if st.session_state.get("fa_modulo_med"):
+        _fa_modulo_medicinale(**st.session_state["fa_modulo_med"])
+        return
 
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
         _fa_dialogo_farmacie()
