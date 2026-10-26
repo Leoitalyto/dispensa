@@ -101,22 +101,22 @@ def _fa_idx(lista, valore):
 
 
 # ---------------------------------------------------------------- finestre
-@st.dialog("Medicinale")
+@st.dialog("Medicinale", width="large")
 def _fa_dialogo(pid, med_id=None):
+    _fa_assicura_fotocamera()
     f = _fa_dati()
     profili = _fa_profili(f)
     m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), {}) if med_id else {}
     nomi = {p["id"]: p["nome"] for p in profili}
+    # la foto sta in cima, come nella dispensa: fotocamera posteriore, sfondo tolto, righello e ritaglio
+    st.markdown("**📷 Foto della confezione** (facoltativa)")
+    try:
+        foto_nuova = campo_foto("fa_" + (med_id or "nuovo"), m.get("foto", ""))
+    except NameError:                                  # manca foto_prodotto.py: si va avanti senza foto
+        foto_nuova = ""
+        st.caption("La foto non è disponibile in questo momento.")
     with st.form("fa_form_med"):
-        togli_foto = False
-        if m.get("foto"):
-            try:
-                st.image(base64.b64decode(m["foto"].split(",", 1)[1]), width=120)
-            except Exception:
-                pass
-            togli_foto = st.checkbox("Rimuovi la foto attuale")
-        foto_up = st.file_uploader("📷 Foto della confezione (facoltativa): scatta o scegli",
-                                   type=["jpg", "jpeg", "png", "webp"])
+        togli_foto = st.checkbox("Rimuovi la foto attuale") if m.get("foto") else False
         nome = st.text_input("Nome del medicinale *", value=m.get("nome", ""))
         marca = st.text_input("Marca commerciale", value=m.get("marca", ""))
         principio = st.text_input("Principio attivo", value=m.get("principio", ""))
@@ -139,10 +139,10 @@ def _fa_dialogo(pid, med_id=None):
             return
         foto = "" if togli_foto else m.get("foto", "")
         grande, da_cancellare = (None if togli_foto else m.get("foto_grande")), ([m["foto_grande"]["id"]] if togli_foto and m.get("foto_grande") else [])
-        if foto_up is not None:
+        if foto_nuova:
             try:
-                foto = foto_a_data_uri(foto_up.getvalue(), 400)
-                nuovo_rif = _fa_salva_files([foto_up])[0]
+                foto = _fa_miniatura(foto_nuova, 360)
+                nuovo_rif = _fa_salva_files([_FaFile("foto.webp", base64.b64decode(foto_nuova.split(",", 1)[1]))])[0]
             except ValueError as e:
                 st.error(str(e))
                 return
@@ -1626,3 +1626,41 @@ def _fa_blocco_personale():
             return
         st.session_state["fa_msg"] = "✅ Nome e cognome salvati."
         st.rerun()
+
+
+# =====================================================================
+# FOTO DEL MEDICINALE: stessa fotocamera e stesso editor della dispensa (foto_prodotto.py e fotocamera.py)
+# =====================================================================
+class _FaFile:
+    """Una foto già pronta, resa uguale a un file caricato (nome e contenuto)."""
+    def __init__(self, nome, dati):
+        self.name, self._dati = nome, dati
+
+    def getvalue(self):
+        return self._dati
+
+
+def _fa_miniatura(uri, lato=360):
+    """Versione piccola della foto (mantiene la trasparenza) da tenere nella scheda del medicinale."""
+    im = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
+    im.thumbnail((lato, lato), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=82, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _fa_assicura_fotocamera():
+    """La Farmacia si apre prima che la dispensa carichi fotocamera.py: lo carico qui, così i tasti
+    «Scatta la foto» e «Carica dal telefono» aprono la fotocamera posteriore come nella dispensa."""
+    if "_avvia_fotocamera_posteriore" in globals():
+        return
+    try:
+        cartella = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        cartella = "."
+    percorso = os.path.join(cartella, "fotocamera.py")
+    try:
+        with open(percorso, encoding="utf-8") as fh:
+            exec(compile(fh.read(), percorso, "exec"), globals())
+    except Exception:
+        pass
