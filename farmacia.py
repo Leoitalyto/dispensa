@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""FARMACIA - Fase 1 (profili, medicinali, scadenze) e Fase 2 (terapie, calendario settimanale, storico).
+"""FARMACIA - Fase 1 (profili, medicinali, scadenze), Fase 2 (terapie, calendario, storico), Fase 3 (visite, referti, vaccini).
 
 Questo file si carica PRIMA di parte3.py (vedi app_dispensa.py). Non modifica la dispensa:
 i medicinali sono salvati nella voce "farmacia" del file dati di ogni persona.
@@ -229,13 +229,10 @@ def schermata_farmacia():
                 st.error(f"Non sono riuscito a salvare: {e}")
         if len(profili) > 1:
             n_med = sum(1 for m in f.get("medicinali", []) if m.get("profilo") == pid)
-            conferma = st.checkbox(f"Elimina il profilo «{nomi[pid]}» e i suoi {n_med} medicinali", key="fa_conf_del")
+            conferma = st.checkbox(f"Elimina il profilo «{nomi[pid]}» con tutti i suoi dati ({n_med} medicinali, terapie, visite, documenti)", key="fa_conf_del")
             if st.button("Elimina profilo", disabled=not conferma):
-                def _del(f):
-                    f["profili"] = [p for p in f["profili"] if p["id"] != pid]
-                    f["medicinali"] = [m for m in f["medicinali"] if m.get("profilo") != pid]
                 try:
-                    _fa_salva(_del, "Farmacia: profilo eliminato")
+                    _fa_elimina_profilo(f, pid)
                     st.session_state.pop("fa_conf_del", None)
                     st.session_state["fa_msg"] = "🗑️ Profilo eliminato."
                     st.rerun()
@@ -254,7 +251,7 @@ def schermata_farmacia():
         f"<div class='fa-k scaduto'><span>Scaduti</span><b>{n('scaduto')}</b></div></div>",
         unsafe_allow_html=True)
 
-    tab_med, tab_ter = st.tabs(["💊 Medicinali", "📅 Terapie"])
+    tab_med, tab_ter, tab_vis, tab_vac = st.tabs(["💊 Medicinali", "📅 Terapie", "🩺 Visite", "💉 Vaccini"])
     with tab_med:
         if st.button("➕ Aggiungi medicinale", type="primary", key="fa_aggiungi", width="stretch"):
             _fa_dialogo(pid)
@@ -300,6 +297,11 @@ def schermata_farmacia():
 
     with tab_ter:
         _fa_tab_terapie(f, pid, nomi, oggi_)
+    with tab_vis:
+        _fa_tab_visite(f, pid, nomi, oggi_)
+    with tab_vac:
+        _fa_tab_vaccini(f, pid, nomi, oggi_)
+    _fa_esporta(f, pid, nomi)
 
     st.caption("ℹ️ Questa sezione serve solo a organizzare e ricordare i dati che inserisci tu. Non dà consigli medici e non "
                "cambia le terapie: per dosi e cure segui sempre le indicazioni del medico o del farmacista.")
@@ -538,3 +540,360 @@ def _fa_tab_terapie(f, pid, nomi, oggi_):
                          hide_index=True)
     st.caption("🔔 I promemoria per ora si vedono dentro l'app (avviso «da registrare»). Le notifiche sul telefono "
                "arriveranno in una fase successiva.")
+
+
+# =====================================================================
+# FASE 3 - VISITE, ESAMI, REFERTI E DOCUMENTO VACCINALE
+# =====================================================================
+import json as _json
+
+CATEGORIE_VISITE = [
+    "Medicina generale", "Cardiologia", "Dermatologia", "Oculistica", "Otorinolaringoiatria",
+    "Odontoiatria e ortodonzia", "Ortopedia e traumatologia", "Neurologia", "Endocrinologia e diabetologia",
+    "Gastroenterologia", "Urologia e nefrologia", "Ginecologia e ostetricia", "Pneumologia", "Oncologia",
+    "Ematologia", "Reumatologia", "Allergologia e immunologia", "Psichiatria e psicologia",
+    "Fisiatria e fisioterapia", "Chirurgia e visite preoperatorie", "Esami del sangue e analisi",
+    "Radiologia, ecografie, TAC e risonanze", "Elettrocardiogramma e esami cardiologici", "Endoscopie",
+    "Screening e controlli preventivi", "Vaccinazioni", "Pronto soccorso e ricoveri", "Certificazioni mediche",
+    "Altro"]
+TIPI_FILE = ["pdf", "jpg", "jpeg", "png", "webp"]
+MAX_PDF = 8 * 1024 * 1024
+MAX_IMMAGINE = int(2.5 * 1024 * 1024)
+
+
+def _fa_percorso_doc(did):
+    return f"documenti/{st.session_state['sess']['uid']}/{did}.json"
+
+
+def _fa_prepara_file(up):
+    """Controlla un file caricato. Le foto piccole restano originali; quelle molto grandi vengono ridotte."""
+    nome, dati = up.name, up.getvalue()
+    ext = nome.lower().rsplit(".", 1)[-1] if "." in nome else ""
+    if ext == "pdf":
+        if len(dati) > MAX_PDF:
+            raise ValueError(f"«{nome}» è troppo grande (massimo 8 MB per i PDF).")
+        return {"nome": nome, "mime": "application/pdf"}, dati
+    mime = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+    if len(dati) > MAX_IMMAGINE:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+        img.thumbnail((2600, 2600))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=88, optimize=True)
+        dati, mime = buf.getvalue(), "image/jpeg"
+    return {"nome": nome, "mime": mime}, dati
+
+
+def _fa_salva_files(caricati):
+    """Salva i file nell'archivio (uno per documento) e restituisce i riferimenti da mettere nella scheda."""
+    pronti = [_fa_prepara_file(u) for u in caricati]          # se uno non va bene, non si salva nulla
+    riferimenti = []
+    with st.spinner("Salvo i documenti…"):
+        for meta, dati in pronti:
+            did = uuid.uuid4().hex[:12]
+            corpo = {"nome": meta["nome"], "mime": meta["mime"], "b64": base64.b64encode(dati).decode()}
+            salva_file(_fa_percorso_doc(did), lambda d, c=corpo: d.update(c), "Farmacia: documento")
+            riferimenti.append({"id": did, "nome": meta["nome"], "mime": meta["mime"]})
+    return riferimenti
+
+
+def _fa_cancella_files(ids):
+    for did in ids:
+        try:
+            crea_archivio().elimina(_fa_percorso_doc(did), "Farmacia: documento eliminato")
+        except Exception:
+            pass
+    carica_dati.clear()
+
+
+def _fa_elimina_profilo(f, pid):
+    ids = [a["id"] for v in f.get("visite", []) if v.get("profilo", "p0") == pid for a in v.get("allegati", [])]
+    ids += [a["id"] for a in (f.get("vaccini_doc") or {}).get(pid, [])]
+
+    def _m(f):
+        f["profili"] = [p for p in f["profili"] if p["id"] != pid]
+        for chiave in ("medicinali", "terapie", "visite", "vaccinazioni"):
+            f[chiave] = [x for x in f.get(chiave, []) if x.get("profilo", "p0") != pid]
+        f["registro"] = {k: r for k, r in (f.get("registro") or {}).items() if r.get("p", "p0") != pid}
+        (f.get("vaccini_doc") or {}).pop(pid, None)
+    _fa_salva(_m, "Farmacia: profilo eliminato")
+    _fa_cancella_files(ids)
+
+
+def _fa_rimuovi_allegato(tipo, proprietario, did):
+    def _m(f):
+        if tipo == "visita":
+            for v in f.get("visite", []):
+                if v["id"] == proprietario:
+                    v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
+        else:
+            vd = f.setdefault("vaccini_doc", {})
+            vd[proprietario] = [a for a in vd.get(proprietario, []) if a["id"] != did]
+    _fa_salva(_m, "Farmacia: allegato eliminato")
+    _fa_cancella_files([did])
+
+
+@st.dialog("Documento", width="large")
+def _fa_dialogo_doc(allegato, tipo, proprietario):
+    d = carica_dati(crea_archivio(), _fa_percorso_doc(allegato["id"]))
+    if not d.get("b64"):
+        st.error("Non trovo questo documento.")
+        return
+    dati = base64.b64decode(d["b64"])
+    st.caption(allegato["nome"])
+    if d.get("mime", "").startswith("image/"):
+        st.image(dati)
+    else:
+        st.info("PDF: scaricalo per aprirlo.")
+    st.download_button("⬇ Scarica / apri il file", dati, file_name=allegato["nome"],
+                       mime=d.get("mime", "application/octet-stream"), width="stretch")
+    conferma = st.checkbox("Voglio eliminare questo documento", key="fa_del_doc_" + allegato["id"])
+    if st.button("🗑️ Elimina il documento", disabled=not conferma, key="fa_btn_del_doc_" + allegato["id"]):
+        try:
+            _fa_rimuovi_allegato(tipo, proprietario, allegato["id"])
+        except Exception as e:
+            st.error(f"Non sono riuscito a eliminarlo: {e}")
+            return
+        st.session_state["fa_msg"] = "🗑️ Documento eliminato."
+        st.rerun()
+
+
+def _fa_bottoni_allegati(allegati, tipo, proprietario):
+    for a in allegati:
+        icona = "📄" if a.get("mime") == "application/pdf" else "🖼️"
+        etichetta = a["nome"] if len(a["nome"]) <= 30 else a["nome"][:27] + "…"
+        if st.button(f"{icona} {etichetta}", key=f"fa_all_{tipo}_{a['id']}", width="stretch"):
+            _fa_dialogo_doc(a, tipo, proprietario)
+
+
+@st.dialog("Visita o esame")
+def _fa_dialogo_visita(pid, vis_id=None):
+    f = _fa_dati()
+    v = next((x for x in f.get("visite", []) if x["id"] == vis_id), {}) if vis_id else {}
+    categorie = CATEGORIE_VISITE[:-1] + (f.get("categorie_extra") or []) + [CATEGORIE_VISITE[-1]]
+    with st.form("fa_form_vis"):
+        c1, c2 = st.columns(2)
+        data_v = c1.date_input("Data", value=_fa_data(v.get("data")) or oggi(), format="DD/MM/YYYY",
+                               min_value=date(1950, 1, 1), max_value=date(2100, 12, 31))
+        ora_v = c2.text_input("Orario (facoltativo)", value=v.get("ora", ""), placeholder="es. 09:30")
+        cat = st.selectbox("Tipo di visita o esame", categorie, index=_fa_idx(categorie, v.get("categoria")))
+        nuova = st.text_input("Oppure crea una nuova categoria (lascia vuoto per usare quella scelta sopra)")
+        medico = st.text_input("Medico, specialista o struttura", value=v.get("medico", ""))
+        motivo = st.text_input("Motivo della visita o dell'esame", value=v.get("motivo", ""))
+        controlli = st.text_area("Indicazioni per i controlli successivi", value=v.get("controlli", ""))
+        prossimo = st.date_input("Data del prossimo appuntamento (facoltativa)", value=_fa_data(v.get("prossimo")),
+                                 format="DD/MM/YYYY", min_value=date(1950, 1, 1), max_value=date(2100, 12, 31))
+        note = st.text_area("Note personali", value=v.get("note", ""))
+        if v.get("allegati"):
+            st.caption(f"Documenti già allegati: {len(v['allegati'])} (si aprono ed eliminano dalla scheda).")
+        nuovi = st.file_uploader("Allega referti: scatta una foto o scegli PDF e immagini", type=TIPI_FILE,
+                                 accept_multiple_files=True)
+        inviato = st.form_submit_button("Salva", type="primary")
+    if inviato:
+        categoria = nuova.strip() or cat
+        try:
+            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+        except ValueError as e:
+            st.error(str(e))
+            return
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare i documenti: {e}")
+            return
+        rec = {"profilo": pid, "data": data_v.isoformat(), "ora": ora_v.strip(), "categoria": categoria,
+               "medico": medico.strip(), "motivo": motivo.strip(), "controlli": controlli.strip(),
+               "prossimo": prossimo.isoformat() if prossimo else None, "note": note.strip()}
+
+        def _scrivi(f):
+            f.setdefault("visite", [])
+            if nuova.strip() and categoria not in CATEGORIE_VISITE + (f.get("categorie_extra") or []):
+                f.setdefault("categorie_extra", []).append(categoria)
+            if vis_id:
+                for x in f["visite"]:
+                    if x["id"] == vis_id:
+                        x.update(rec)
+                        x["allegati"] = (x.get("allegati") or []) + riferimenti
+            else:
+                rec["id"] = uuid.uuid4().hex[:10]
+                rec["allegati"] = riferimenti
+                f["visite"].append(rec)
+        try:
+            _fa_salva(_scrivi, "Farmacia: visita")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Visita salvata."
+        st.rerun()
+
+
+@st.dialog("Vaccinazione")
+def _fa_dialogo_vaccinazione(pid, vac_id=None):
+    f = _fa_dati()
+    v = next((x for x in f.get("vaccinazioni", []) if x["id"] == vac_id), {}) if vac_id else {}
+    with st.form("fa_form_vac"):
+        nome = st.text_input("Vaccino o tipologia *", value=v.get("nome", ""), placeholder="es. Antitetanica")
+        data_v = st.date_input("Data della vaccinazione", value=_fa_data(v.get("data")) or oggi(),
+                               format="DD/MM/YYYY", min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
+        dose = st.text_input("Dose o richiamo (facoltativo)", value=v.get("dose", ""), placeholder="es. 2ª dose")
+        richiamo = st.date_input("Data del prossimo richiamo (facoltativa)", value=_fa_data(v.get("richiamo")),
+                                 format="DD/MM/YYYY", min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
+        note = st.text_area("Note (lotto, struttura, ecc.)", value=v.get("note", ""))
+        inviato = st.form_submit_button("Salva", type="primary")
+    if inviato:
+        if not nome.strip():
+            st.error("Scrivi il nome del vaccino.")
+            return
+        rec = {"profilo": pid, "nome": nome.strip(), "data": data_v.isoformat(), "dose": dose.strip(),
+               "richiamo": richiamo.isoformat() if richiamo else None, "note": note.strip()}
+
+        def _scrivi(f):
+            f.setdefault("vaccinazioni", [])
+            if vac_id:
+                for x in f["vaccinazioni"]:
+                    if x["id"] == vac_id:
+                        x.update(rec)
+            else:
+                rec["id"] = uuid.uuid4().hex[:10]
+                f["vaccinazioni"].append(rec)
+        try:
+            _fa_salva(_scrivi, "Farmacia: vaccinazione")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Vaccinazione salvata."
+        st.rerun()
+
+
+@st.dialog("Conferma eliminazione")
+def _fa_dialogo_elimina_voce(lista, rec_id, etichetta):
+    st.write(f"Vuoi eliminare **{etichetta}**?")
+    if lista == "visite":
+        st.caption("Verranno eliminati anche i documenti allegati a questa visita.")
+    c1, c2 = st.columns(2)
+    if c1.button("Sì, elimina", type="primary", width="stretch"):
+        f = _fa_dati()
+        rec = next((x for x in f.get(lista, []) if x["id"] == rec_id), {})
+        ids = [a["id"] for a in rec.get("allegati", [])]
+        try:
+            _fa_salva(lambda f: f.__setitem__(lista, [x for x in f.get(lista, []) if x["id"] != rec_id]),
+                      "Farmacia: eliminato")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        _fa_cancella_files(ids)
+        st.session_state["fa_msg"] = "🗑️ Eliminato."
+        st.rerun()
+    if c2.button("Annulla", width="stretch"):
+        st.rerun()
+
+
+def _fa_tab_visite(f, pid, nomi, oggi_):
+    visite = [v for v in f.get("visite", []) if v.get("profilo", "p0") == pid]
+    prossimi = sorted([v for v in visite if v.get("prossimo") and v["prossimo"] >= oggi_.isoformat()],
+                      key=lambda v: v["prossimo"])[:5]
+    if prossimi:
+        st.subheader("📅 Prossimi appuntamenti")
+        for v in prossimi:
+            st.markdown(f"• **{data_it(v['prossimo'])}** · {html.escape(v.get('categoria', ''))}"
+                        + (f" · {html.escape(v['medico'])}" if v.get("medico") else ""))
+    if st.button("➕ Aggiungi visita o esame", type="primary", key="fa_nuova_vis", width="stretch"):
+        _fa_dialogo_visita(pid)
+    c1, c2 = st.columns([3, 2])
+    cerca = c1.text_input("Cerca", placeholder="medico, motivo, note…", label_visibility="collapsed", key="fa_cerca_vis")
+    presenti = sorted({v.get("categoria", "") for v in visite if v.get("categoria")})
+    cat = c2.selectbox("Tipo", ["Tutti i tipi"] + presenti, label_visibility="collapsed", key="fa_cat_vis")
+    visibili = []
+    for v in sorted(visite, key=lambda v: (v.get("data", ""), v.get("ora", "")), reverse=True):
+        testo = " ".join(str(v.get(k, "")) for k in ("categoria", "medico", "motivo", "note", "controlli")).lower()
+        if cerca and cerca.lower() not in testo:
+            continue
+        if cat != "Tutti i tipi" and v.get("categoria") != cat:
+            continue
+        visibili.append(v)
+    if not visite:
+        st.info(f"Nessuna visita o esame per {nomi[pid]}. Tocca «Aggiungi visita o esame».")
+    elif not visibili:
+        st.info("Nessun risultato.")
+    e = html.escape
+    for v in visibili:
+        righe = f"<div class='nome'>🩺 {e(v.get('categoria', ''))}</div>"
+        righe += f"<div class='riga'>📅 {data_it(v['data'])}" + (f" · {e(v['ora'])}" if v.get("ora") else "") + "</div>"
+        for icona, chiave in (("👨‍⚕️", "medico"), ("❓", "motivo"), ("🔁", "controlli"), ("📝", "note")):
+            if v.get(chiave):
+                righe += f"<div class='riga'>{icona} {e(v[chiave])}</div>"
+        if v.get("prossimo"):
+            righe += f"<span class='scad'>📅 Prossimo: {data_it(v['prossimo'])}</span>"
+        with st.container(border=True):
+            st.markdown(f"<div class='fa-med' style='--c:#00897b'>{righe}</div>", unsafe_allow_html=True)
+            _fa_bottoni_allegati(v.get("allegati", []), "visita", v["id"])
+            b1, b2 = st.columns(2, gap="small")
+            if b1.button("Elimina", icon=":material/delete:", key="fa_elv_" + v["id"], width="stretch"):
+                _fa_dialogo_elimina_voce("visite", v["id"], f"{v.get('categoria', '')} del {data_it(v['data'])}")
+            if b2.button("Modifica", icon=":material/edit:", key="fa_mov_" + v["id"], width="stretch"):
+                _fa_dialogo_visita(pid, v["id"])
+
+
+def _fa_tab_vaccini(f, pid, nomi, oggi_):
+    st.subheader(f"📄 Documento vaccinale di {nomi[pid]}")
+    pagine = (f.get("vaccini_doc") or {}).get(pid, [])
+    with st.form("fa_form_vacdoc_" + pid, clear_on_submit=True):
+        nuovi = st.file_uploader("Fotografa il documento o scegli le pagine (foto o PDF)", type=TIPI_FILE,
+                                 accept_multiple_files=True, key="fa_up_vac_" + pid)
+        invio = st.form_submit_button("Salva le pagine")
+    if invio and nuovi:
+        try:
+            riferimenti = _fa_salva_files(nuovi)
+            _fa_salva(lambda f: f.setdefault("vaccini_doc", {}).setdefault(pid, []).extend(riferimenti),
+                      "Farmacia: documento vaccinale")
+        except ValueError as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+        else:
+            st.session_state["fa_msg"] = f"✅ {len(riferimenti)} pagina/e salvata/e."
+            st.rerun()
+    if pagine:
+        st.caption("Tocca una pagina per aprirla e ingrandirla. Le foto piccole restano come le hai scattate.")
+    for i, a in enumerate(pagine, 1):
+        icona = "📄" if a.get("mime") == "application/pdf" else "🖼️"
+        if st.button(f"{icona} Pagina {i} · {a['nome'][:26]}", key=f"fa_all_vacc_{a['id']}", width="stretch"):
+            _fa_dialogo_doc(a, "vaccino", pid)
+
+    st.subheader("💉 Vaccinazioni registrate")
+    if st.button("➕ Aggiungi vaccinazione", type="primary", key="fa_nuova_vac", width="stretch"):
+        _fa_dialogo_vaccinazione(pid)
+    vacc = sorted([v for v in f.get("vaccinazioni", []) if v.get("profilo", "p0") == pid],
+                  key=lambda v: v.get("data", ""), reverse=True)
+    if not vacc:
+        st.caption("Nessuna vaccinazione registrata.")
+    e = html.escape
+    for v in vacc:
+        righe = f"<div class='nome'>💉 {e(v['nome'])}</div><div class='riga'>📅 {data_it(v['data'])}"
+        righe += (f" · {e(v['dose'])}" if v.get("dose") else "") + "</div>"
+        colore = "#00897b"
+        if v.get("richiamo"):
+            stato, g = stato_scadenza(v["richiamo"], oggi_)
+            colore = COLORI[stato]
+            testo = (f"Richiamo in ritardo di {abs(g)} giorni" if g < 0 else "Richiamo oggi" if g == 0
+                     else f"Richiamo tra {g} giorni")
+            righe += f"<span class='scad'>{ICONE[stato]} {testo} · {data_it(v['richiamo'])}</span>"
+        if v.get("note"):
+            righe += f"<div class='riga'>📝 {e(v['note'])}</div>"
+        with st.container(border=True):
+            st.markdown(f"<div class='fa-med' style='--c:{colore}'>{righe}</div>", unsafe_allow_html=True)
+            b1, b2 = st.columns(2, gap="small")
+            if b1.button("Elimina", icon=":material/delete:", key="fa_elw_" + v["id"], width="stretch"):
+                _fa_dialogo_elimina_voce("vaccinazioni", v["id"], v["nome"])
+            if b2.button("Modifica", icon=":material/edit:", key="fa_mow_" + v["id"], width="stretch"):
+                _fa_dialogo_vaccinazione(pid, v["id"])
+
+
+def _fa_esporta(f, pid, nomi):
+    with st.expander("📦 Esporta i dati di questo profilo"):
+        chiavi = ("medicinali", "terapie", "visite", "vaccinazioni")
+        dati = {"profilo": nomi[pid]}
+        for k in chiavi:
+            dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
+        dati["registro_assunzioni"] = [r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid]
+        st.caption("Scarica un file con medicinali, terapie, visite e vaccinazioni (l'elenco, non le foto). "
+                   "I documenti si scaricano uno per uno dalla loro scheda.")
+        st.download_button("⬇ Scarica i dati (JSON)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
+                           file_name=f"farmacia_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
