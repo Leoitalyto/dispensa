@@ -226,7 +226,7 @@ def schermata_farmacia():
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
         _fa_dialogo_farmacie()
 
-    _fa_blocco_telegram()
+    _fa_blocco_avvisi()
 
     f = _fa_dati()
     profili = _fa_profili(f)
@@ -1181,38 +1181,66 @@ def _fa_dialogo_farmacie():
 
 
 # =====================================================================
-# NOTIFICHE TELEGRAM (le invia il programma automatico promemoria.py su GitHub)
+# AVVISI DI SCADENZA: Telegram, email e SMS a scelta (li invia il programma promemoria.py su GitHub)
 # =====================================================================
-def _fa_blocco_telegram():
+def _fa_blocco_avvisi():
     d = carica_dati(crea_archivio(), st.session_state["percorso"])
-    chat = str(d.get("telegram_chat_id") or "")
-    if chat:
-        st.markdown(f"<div style='background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;"
-                    f"color:#1b2b2b;font-weight:700'>🔔 Promemoria Telegram attivi · Chat ID: "
-                    f"<span style='font-size:1.15rem;letter-spacing:1px'>{html.escape(chat)}</span></div>",
+    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")
+    canali = d.get("avvisi_canali")
+    if canali is None:                                        # chi aveva già inserito solo il Chat ID
+        canali = ["telegram"] if chat else []
+    attivi = []
+    if "telegram" in canali and chat:
+        attivi.append(f"📱 Telegram {html.escape(chat)}")
+    if "email" in canali and mail:
+        attivi.append(f"✉️ Email {html.escape(mail)}")
+    if "sms" in canali and sms:
+        attivi.append(f"💬 SMS {html.escape(sms)}")
+    stile = ("background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;color:#1b2b2b;"
+             "font-weight:700")
+    if attivi:
+        st.markdown(f"<div style='{stile}'>🔔 Avvisi di scadenza attivi:<br>" + "<br>".join(attivi) + "</div>",
                     unsafe_allow_html=True)
     else:
-        st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;"
-                    "color:#1b2b2b;font-weight:700'>🔕 Promemoria Telegram non attivi</div>", unsafe_allow_html=True)
-    with st.expander("🔔 Cambia le impostazioni di Telegram"):
-        st.caption("Ogni mattina ricevi un messaggio quando un prodotto della dispensa o un medicinale sta per scadere "
-                   "(60, 30, 14, 7 giorni, 1 giorno e il giorno stesso) e ogni lunedì per quelli già scaduti.")
-        with st.form("fa_form_telegram"):
-            nuovo = st.text_input("Il tuo Chat ID di Telegram (solo numeri)", value=chat, placeholder="es. 123456789")
+        st.markdown(f"<div style='{stile}'>🔕 Nessun avviso di scadenza attivo</div>", unsafe_allow_html=True)
+    with st.expander("🔔 Scegli come ricevere gli avvisi"):
+        st.caption("Puoi attivare più canali insieme: gli avvisi arrivano su tutti quelli che spunti.")
+        with st.form("fa_form_avvisi"):
+            c_tg = st.checkbox("📱 Telegram (gratuito)", value="telegram" in canali)
+            v_tg = st.text_input("Chat ID di Telegram (solo numeri)", value=chat, placeholder="es. 123456789")
+            c_ml = st.checkbox("✉️ Email (gratuita)", value="email" in canali)
+            v_ml = st.text_input("Indirizzo email", value=mail, placeholder="nome@esempio.it")
+            c_sm = st.checkbox("💬 SMS (a pagamento)", value="sms" in canali)
+            v_sm = st.text_input("Numero di cellulare", value=sms, placeholder="es. 333 1234567")
             privacy = st.checkbox("Nei messaggi non scrivere i nomi dei medicinali (solo quanti sono)",
                                   value=bool(d.get("telegram_privacy")))
             ok = st.form_submit_button("Salva")
-        st.caption("Per l'attivazione serve preparare il bot Telegram su GitHub: te lo spiega l'amministratore. "
-                   "Senza Chat ID non arriva nessun messaggio. Lascia vuoto il campo per disattivare.")
+        st.caption("Gli avvisi arrivano quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso, e ogni lunedì "
+                   "per ciò che è già scaduto. Gli SMS sono brevi e non riportano mai i nomi dei medicinali. "
+                   "Perché i messaggi partano, l'amministratore deve aver attivato ogni canale su GitHub; "
+                   "gli SMS richiedono anche un abbonamento a un servizio di invio, con un costo per messaggio.")
     if ok:
-        nuovo = nuovo.strip()
-        if nuovo and not re.fullmatch(r"-?\d{5,15}", nuovo):
-            st.error("Il Chat ID è un numero (per esempio 123456789).")
+        v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\s.\-]", "", v_sm)
+        if v_sm and re.fullmatch(r"3\d{8,9}", v_sm):               # cellulare italiano scritto senza prefisso
+            v_sm = "+39" + v_sm
+        errore = ""
+        if v_tg and not re.fullmatch(r"-?\d{5,15}", v_tg):
+            errore = "Il Chat ID di Telegram è un numero (per esempio 123456789)."
+        elif v_ml and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", v_ml):
+            errore = "L'indirizzo email non sembra corretto."
+        elif v_sm and not re.fullmatch(r"\+\d{8,15}", v_sm):
+            errore = "Il numero deve essere un cellulare, per esempio 333 1234567 oppure +39 333 1234567."
+        elif (c_tg and not v_tg) or (c_ml and not v_ml) or (c_sm and not v_sm):
+            errore = "Hai spuntato un canale ma hai lasciato vuoto il suo campo."
+        if errore:
+            st.error(errore)
             return
+        scelti = [n for n, c in (("telegram", c_tg), ("email", c_ml), ("sms", c_sm)) if c]
         try:
-            salva(lambda d: d.update({"telegram_chat_id": nuovo, "telegram_privacy": bool(privacy)}), "Telegram")
+            salva(lambda d: d.update({"avvisi_canali": scelti, "telegram_chat_id": v_tg, "avviso_email": v_ml,
+                                      "avviso_sms": v_sm, "telegram_privacy": bool(privacy)}), "Avvisi")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
-        st.session_state["fa_msg"] = "✅ Impostazioni Telegram salvate." if nuovo else "✅ Promemoria Telegram disattivati."
+        st.session_state["fa_msg"] = "✅ Impostazioni degli avvisi salvate." if scelti else "✅ Avvisi disattivati."
         st.rerun()
