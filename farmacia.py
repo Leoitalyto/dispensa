@@ -1186,7 +1186,15 @@ def _fa_dialogo_farmacie():
 def _fa_blocco_telegram():
     d = carica_dati(crea_archivio(), st.session_state["percorso"])
     chat = str(d.get("telegram_chat_id") or "")
-    with st.expander("🔔 Promemoria su Telegram" + (" (attivi)" if chat else "")):
+    if chat:
+        st.markdown(f"<div style='background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;"
+                    f"color:#1b2b2b;font-weight:700'>🔔 Promemoria Telegram attivi · Chat ID: "
+                    f"<span style='font-size:1.15rem;letter-spacing:1px'>{html.escape(chat)}</span></div>",
+                    unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;"
+                    "color:#1b2b2b;font-weight:700'>🔕 Promemoria Telegram non attivi</div>", unsafe_allow_html=True)
+    with st.expander("🔔 Cambia le impostazioni di Telegram"):
         st.caption("Ogni mattina ricevi un messaggio quando un prodotto della dispensa o un medicinale sta per scadere "
                    "(60, 30, 14, 7 giorni, 1 giorno e il giorno stesso) e ogni lunedì per quelli già scaduti.")
         with st.form("fa_form_telegram"):
