@@ -130,9 +130,6 @@ def _fa_modulo_medicinale(pid, med_id=None):
     except NameError:                                  # manca foto_prodotto.py: si va avanti senza foto
         foto_nuova = ""
         st.caption("La foto non è disponibile in questo momento.")
-    # riga di controllo: dice se la foto è arrivata davvero all'app (serve a capire dove si blocca)
-    st.caption("🔧 Controllo foto → fotocamera: " + ("✔ ricevuta" if st.session_state.get("fotocam_" + ck) is not None else "— nessuna")
-               + " · galleria: " + ("✔ ricevuta" if st.session_state.get("fotogal_" + ck) is not None else "— nessuna"))
     with st.expander("📎 Se la foto non compare, usa questo campo"):
         alt = st.file_uploader("Scatta o scegli la foto", type=["jpg", "jpeg", "png", "webp"], key="fa_alt_" + ck)
         if alt is not None and not foto_nuova:
@@ -210,6 +207,7 @@ def _fa_modulo_medicinale(pid, med_id=None):
 def _fa_cancella_medicinali(ids):
     f = _fa_dati()
     foto = [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m["id"] in ids and m.get("foto_grande")]
+    foto += [a["id"] for m in f.get("medicinali", []) if m["id"] in ids for a in m.get("foglio", [])]
     _fa_salva(lambda f: f.__setitem__("medicinali", [x for x in f["medicinali"] if x["id"] not in ids]),
               "Farmacia: eliminato")
     _fa_cancella_files(foto)
@@ -283,6 +281,7 @@ def schermata_farmacia():
     st.markdown(_FA_CSS, unsafe_allow_html=True)
     if st.button("← Torna alla dispensa", key="fa_indietro"):
         st.session_state.pop("fa_modulo_med", None)
+        st.session_state.pop("fa_modulo_foglio", None)
         st.session_state["farmacia_aperta"] = False
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
@@ -292,6 +291,9 @@ def schermata_farmacia():
         (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
     if st.session_state.get("fa_modulo_med"):
         _fa_modulo_medicinale(**st.session_state["fa_modulo_med"])
+        return
+    if st.session_state.get("fa_modulo_foglio"):
+        _fa_modulo_foglio(**st.session_state["fa_modulo_foglio"])
         return
 
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
@@ -736,6 +738,7 @@ def _fa_elimina_profilo(f, pid):
     ids = [a["id"] for v in f.get("visite", []) if v.get("profilo", "p0") == pid for a in v.get("allegati", [])]
     ids += [a["id"] for a in (f.get("vaccini_doc") or {}).get(pid, [])]
     ids += [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid and m.get("foto_grande")]
+    ids += [a["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid for a in m.get("foglio", [])]
 
     def _m(f):
         f["profili"] = [p for p in f["profili"] if p["id"] != pid]
@@ -1517,6 +1520,12 @@ def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
         if sel and sel.get("foto") and st.button("🔍 Ingrandisci la foto della riga spuntata", key="fa_tab_foto_" + pid,
                                                  width="stretch"):
             _fa_dialogo_foto(sel)
+        if sel and st.button("📖 Foglio illustrativo della riga spuntata", key="fa_tab_fogl_" + pid, width="stretch"):
+            if sel.get("foglio") or sel.get("foglio_link"):
+                _fa_dialogo_foglio(sel)
+            else:
+                st.session_state["fa_modulo_foglio"] = {"pid": pid, "med_id": sel["id"]}
+                st.rerun()
         if len(spunte) > 1:
             st.caption("Spunta una sola riga da modificare.")
         return
@@ -1525,11 +1534,12 @@ def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
             st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
             if m.get("foto") and st.button("🔍 Ingrandisci la foto", key="fa_foto_" + m["id"], width="stretch"):
                 _fa_dialogo_foto(m)
-            _q = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
-            l1, l2 = st.columns(2, gap="small")
-            l1.link_button("📖 Foglio illustrativo", "https://www.google.com/search?q=" + _q, width="stretch")
-            l2.link_button("🏛️ Banca dati AIFA", "https://www.aifa.gov.it/riassunto-caratteristiche-e-foglio-illustrativo",
-                           width="stretch")
+            if m.get("foglio") or m.get("foglio_link"):
+                if st.button("📖 Apri il foglio illustrativo", key="fa_fogl_" + m["id"], type="primary", width="stretch"):
+                    _fa_dialogo_foglio(m)
+            elif st.button("📖 Aggiungi il foglio illustrativo", key="fa_fogl_" + m["id"], width="stretch"):
+                st.session_state["fa_modulo_foglio"] = {"pid": pid, "med_id": m["id"]}
+                st.rerun()
             b1, b2 = st.columns(2, gap="small")
             if b1.button("Elimina", icon=":material/delete:", key="fa_el_" + m["id"], width="stretch"):
                 _fa_dialogo_elimina(m["id"], m.get("nome", ""))
@@ -1759,3 +1769,109 @@ def _fa_calendario_mese(f, pid, oggi_):
         ora_adesso = adesso()
         for ora, t_ in _fa_dosi_giorno(f, pid, d_sel):
             _fa_riga_dose(f, pid, d_sel, ora, t_, ora_adesso, "m")
+
+
+# =====================================================================
+# FOGLIO ILLUSTRATIVO (BUGIARDINO) ALLEGATO AL MEDICINALE
+# =====================================================================
+def _fa_url_https(testo):
+    testo = (testo or "").strip()
+    if testo and not testo.lower().startswith(("http://", "https://")):
+        testo = "https://" + testo
+    return testo
+
+
+@st.dialog("Foglio illustrativo", width="large")
+def _fa_dialogo_foglio(m):
+    st.markdown(f"### 💊 {html.escape(m.get('nome', ''))}")
+    link = m.get("foglio_link")
+    if link:
+        st.link_button("🔗 Apri il foglio illustrativo online", link, width="stretch")
+    for a in m.get("foglio", []):
+        d = carica_dati(crea_archivio(), _fa_percorso_doc(a["id"]))
+        if not d.get("b64"):
+            st.warning(f"Non trovo il file «{a['nome']}».")
+            continue
+        dati = base64.b64decode(d["b64"])
+        if d.get("mime", "").startswith("image/"):
+            st.image(dati)
+        else:
+            st.download_button("📄 Apri il PDF: " + a["nome"], dati, file_name=a["nome"], mime="application/pdf",
+                               width="stretch", key="fa_fogl_dl_" + a["id"])
+    if st.button("✏️ Aggiungi o cambia il foglio illustrativo", key="fa_fogl_cambia_" + m["id"], width="stretch"):
+        st.session_state["fa_modulo_foglio"] = {"pid": m.get("profilo", "p0"), "med_id": m["id"]}
+        st.rerun()
+    st.caption("📖 Controindicazioni e avvertenze sono in questo documento: leggilo o chiedi al medico o al farmacista. "
+               "L'app non valuta se un medicinale va bene per una malattia.")
+
+
+def _fa_modulo_foglio(pid, med_id):
+    f = _fa_dati()
+    m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), None)
+    if not m:
+        st.session_state.pop("fa_modulo_foglio", None)
+        st.rerun()
+    if st.button("← Torna ai medicinali", key="fa_fogl_indietro"):
+        st.session_state.pop("fa_modulo_foglio", None)
+        st.rerun()
+    st.subheader(f"📖 Foglio illustrativo di {m.get('nome', '')}")
+
+    st.markdown("**1️⃣ Trova il foglio illustrativo**")
+    cerca = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
+    c1, c2 = st.columns(2, gap="small")
+    c1.link_button("🏛️ Cerca sul sito AIFA", "https://medicinali.aifa.gov.it/", width="stretch")
+    c2.link_button("🔎 Cerca con Google", "https://www.google.com/search?q=" + cerca, width="stretch")
+    st.caption(f"Sul sito AIFA scrivi «{m.get('nome', '')}» e scarica il foglio illustrativo.")
+
+    st.markdown("**2️⃣ Scaricalo, oppure fotografa il foglietto della scatola**")
+    st.markdown("**3️⃣ Caricalo qui**")
+    caricati = st.file_uploader("Scegli il PDF scaricato oppure scatta le foto delle pagine", key="fa_fogl_up_" + med_id,
+                                type=["pdf", "jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
+    link = st.text_input("Oppure incolla qui il link del foglio illustrativo", value=m.get("foglio_link", ""),
+                         key="fa_fogl_link_" + med_id, placeholder="https://…")
+
+    if m.get("foglio"):
+        st.markdown("**Già allegato:**")
+        for a in m["foglio"]:
+            r1, r2 = st.columns([3, 1], gap="small")
+            r1.markdown(("📄 " if a.get("mime") == "application/pdf" else "🖼️ ") + html.escape(a["nome"]))
+            if r2.button("🗑️", key="fa_fogl_del_" + a["id"], help="Elimina questo file"):
+                def _togli(f, did=a["id"]):
+                    for x in f["medicinali"]:
+                        if x["id"] == med_id:
+                            x["foglio"] = [y for y in x.get("foglio", []) if y["id"] != did]
+                try:
+                    _fa_salva(_togli, "Farmacia: foglio illustrativo")
+                    _fa_cancella_files([a["id"]])
+                except Exception as e:
+                    st.error(f"Non sono riuscito a eliminarlo: {e}")
+                else:
+                    st.rerun()
+
+    if st.button("💾 Salva il foglio illustrativo", type="primary", key="fa_fogl_salva", width="stretch"):
+        link = _fa_url_https(link)
+        if not caricati and link == (m.get("foglio_link") or ""):
+            st.warning("Scegli un file o incolla un link, poi tocca Salva.")
+            return
+        try:
+            nuovi = _fa_salva_files(caricati) if caricati else []
+        except ValueError as e:
+            st.error(str(e))
+            return
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare i file: {e}")
+            return
+
+        def _scrivi(f):
+            for x in f["medicinali"]:
+                if x["id"] == med_id:
+                    x["foglio"] = (x.get("foglio") or []) + nuovi
+                    x["foglio_link"] = link
+        try:
+            _fa_salva(_scrivi, "Farmacia: foglio illustrativo")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state.pop("fa_modulo_foglio", None)
+        st.session_state["fa_msg"] = f"✅ Foglio illustrativo di {m.get('nome', '')} salvato: ora lo apri dal pulsante «📖 Apri il foglio illustrativo»."
+        st.rerun()
