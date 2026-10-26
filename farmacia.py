@@ -265,6 +265,7 @@ def schermata_farmacia():
         _fa_dialogo_farmacie()
 
     _fa_blocco_avvisi()
+    _fa_blocco_personale()
 
     f = _fa_dati()
     profili = _fa_profili(f)
@@ -1499,3 +1500,129 @@ def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
                 _fa_dialogo_elimina(m["id"], m.get("nome", ""))
             if b2.button("Modifica", icon=":material/edit:", key="fa_mo_" + m["id"], width="stretch"):
                 _fa_dialogo(pid, m["id"])
+
+
+# =====================================================================
+# I MIEI DATI PERSONALI: nome e cognome + report completo di tutto ciò che è stato inserito
+# =====================================================================
+import copy as _copy
+
+
+def _fa_senza_immagini(x):
+    """Copia dei dati senza le foto incorporate (che renderebbero l'esportazione enorme)."""
+    if isinstance(x, dict):
+        return {k: _fa_senza_immagini(v) for k, v in x.items() if k not in ("foto", "immagine")}
+    if isinstance(x, list):
+        return [_fa_senza_immagini(v) for v in x]
+    return x
+
+
+def _fa_tabella_html(titolo, intestazioni, righe):
+    e = html.escape
+    if not righe:
+        return f"<h3>{e(titolo)}</h3><p class='vuoto'>Nessun dato inserito.</p>"
+    th = "".join(f"<th>{e(h)}</th>" for h in intestazioni)
+    tr = "".join("<tr>" + "".join(f"<td>{e(str(c))}</td>" for c in r) + "</tr>" for r in righe)
+    return f"<h3>{e(titolo)}</h3><table><tr>{th}</tr>{tr}</table>"
+
+
+def _fa_html_completo(d, oggi_):
+    e = html.escape
+    D = lambda iso: data_it(iso) if iso else ""
+    f = d.get("farmacia") or {}
+    anag = d.get("anagrafica") or {}
+    nome_completo = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x) or st.session_state["sess"]["nome"]
+    profili = f.get("profili") or [{"id": "p0", "nome": st.session_state["sess"]["nome"]}]
+    parti = []
+    for p in profili:
+        pid = p["id"]
+        allergie = (f.get("allergie") or {}).get(pid, [])
+        parti.append(f"<h2>👤 {e(p['nome'])}</h2><p>Gruppo sanguigno: <b>{e(p.get('gruppo') or 'non indicato')}</b><br>"
+                     f"Allergie e intolleranze dichiarate: <b>{e(', '.join(allergie)) if allergie else 'nessuna'}</b></p>")
+        meds = [m for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid]
+        parti.append(_fa_tabella_html("Medicinali", ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
+                                                      "Scadenza", "Acquisto", "Note"],
+                                      [[m.get("nome", ""), m.get("marca", ""), m.get("principio", ""), m.get("dosaggio", ""),
+                                        m.get("forma", ""), f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}",
+                                        D(m.get("scadenza")), D(m.get("acquisto")), m.get("note", "")] for m in meds]))
+        ter = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid]
+        parti.append(_fa_tabella_html("Terapie", ["Medicinale", "Quantità", "Giorni", "Orari", "Periodo", "Stato", "Note"],
+                                      [[_fa_nome_med(f, t_.get("med"), t_.get("nome_med", "")), t_.get("quantita", ""),
+                                        ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", [])), ", ".join(t_.get("orari", [])),
+                                        f"dal {D(t_.get('inizio'))}" + (f" al {D(t_['fine'])}" if t_.get("fine") else ""),
+                                        STATI_TER.get(t_.get("stato", "attiva"), ""), t_.get("note", "")] for t_ in ter]))
+        reg = sorted([r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid],
+                     key=lambda r: (r.get("d", ""), r.get("o", "")), reverse=True)
+        parti.append(_fa_tabella_html("Assunzioni registrate come prese", ["Data", "Ora prevista", "Medicinale", "Quantità", "Registrata il"],
+                                      [[D(r.get("d")), r.get("o", ""), r.get("nome", ""), r.get("q", ""),
+                                        (r.get("quando") or "").replace("T", " ")] for r in reg]))
+        vis = sorted([v for v in f.get("visite", []) if v.get("profilo", "p0") == pid],
+                     key=lambda v: v.get("data", ""), reverse=True)
+        parti.append(_fa_tabella_html("Visite, esami e referti", ["Data", "Tipo", "Medico o struttura", "Motivo",
+                                                                    "Controlli successivi", "Prossimo appuntamento", "Note", "Documenti allegati"],
+                                      [[D(v.get("data")) + (f" {v['ora']}" if v.get("ora") else ""), v.get("categoria", ""),
+                                        v.get("medico", ""), v.get("motivo", ""), v.get("controlli", ""), D(v.get("prossimo")),
+                                        v.get("note", ""), ", ".join(a["nome"] for a in v.get("allegati", []))] for v in vis]))
+        vac = sorted([v for v in f.get("vaccinazioni", []) if v.get("profilo", "p0") == pid],
+                     key=lambda v: v.get("data", ""), reverse=True)
+        parti.append(_fa_tabella_html("Vaccinazioni", ["Vaccino", "Data", "Dose o richiamo", "Prossimo richiamo", "Note"],
+                                      [[v.get("nome", ""), D(v.get("data")), v.get("dose", ""), D(v.get("richiamo")),
+                                        v.get("note", "")] for v in vac]))
+        pagine = (f.get("vaccini_doc") or {}).get(pid, [])
+        parti.append(f"<p>Documento vaccinale caricato: <b>{len(pagine)}</b> pagina/e" +
+                     (f" ({e(', '.join(a['nome'] for a in pagine))})" if pagine else "") + "</p>")
+    canali = d.get("avvisi_canali") or []
+    avvisi = [("Telegram", d.get("telegram_chat_id")), ("Email", d.get("avviso_email")), ("SMS", d.get("avviso_sms"))]
+    righe_avvisi = [[n, v or "", "attivo" if n.lower() in canali and v else "non attivo"] for n, v in avvisi]
+    gen = _fa_tabella_html("Avvisi di scadenza", ["Canale", "Contatto", "Stato"], righe_avvisi)
+    gen += (f"<p>Promemoria all'ora delle assunzioni: <b>{'sì' if d.get('avvisi_dosi') else 'no'}</b> · Nei messaggi non scrivere i "
+            f"nomi dei medicinali: <b>{'sì' if d.get('telegram_privacy') else 'no'}</b></p>")
+    al_d, al_n = d.get("allergie") or [], d.get("allergie_neonato") or []
+    gen += (f"<p>Allergie segnalate nella dispensa: <b>{e(', '.join(al_d)) if al_d else 'nessuna'}</b> · "
+            f"Allergie del neonato: <b>{e(', '.join(al_n)) if al_n else 'nessuna'}</b> · "
+            f"Prodotti nella dispensa: <b>{len(d.get('articoli', []))}</b></p>")
+    return f"""<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report completo - {e(nome_completo)}</title>
+<style>body{{font-family:Arial,sans-serif;margin:16px;color:#111}}h1{{font-size:1.4rem}}h2{{font-size:1.15rem;margin-top:28px;border-bottom:2px solid #b71c1c}}
+h3{{font-size:1rem;margin:16px 0 4px}}table{{border-collapse:collapse;width:100%;font-size:.8rem}}th,td{{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}}
+th{{background:#eee}}.vuoto{{color:#666;font-size:.85rem;margin:2px 0}}.nota{{font-size:.8rem;color:#444;margin-top:22px}}
+.box{{background:#f3f3f3;padding:8px 12px;border-radius:8px}}@media print{{h2{{page-break-before:auto}}}}</style></head><body>
+<h1>Report completo dei dati personali</h1>
+<div class="box"><b>{e(nome_completo)}</b><br>Creato il {data_it(oggi_.isoformat())} · Profili: {len(profili)}</div>
+{''.join(parti)}
+<h2>Impostazioni generali</h2>{gen}
+<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente: non è verificato da un medico o da un
+farmacista. Le foto e i PDF caricati non sono inclusi: si scaricano uno per uno dalla loro scheda. Contiene dati sanitari: conservalo
+con cura.</p></body></html>"""
+
+
+def _fa_blocco_personale():
+    d = carica_dati(crea_archivio(), st.session_state["percorso"])
+    anag = d.get("anagrafica") or {}
+    nome_completo = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x)
+    with st.expander("🧾 I miei dati personali e report completo" + (f" · {nome_completo}" if nome_completo else "")):
+        with st.form("fa_form_anagrafica"):
+            c1, c2 = st.columns(2)
+            nome = c1.text_input("Nome", value=anag.get("nome", ""))
+            cognome = c2.text_input("Cognome", value=anag.get("cognome", ""))
+            ok = st.form_submit_button("Salva nome e cognome")
+        st.caption("Qui trovi tutto ciò che hai inserito, in un unico documento: profili, gruppo sanguigno, allergie, medicinali, "
+                   "terapie, assunzioni, visite, vaccinazioni e impostazioni degli avvisi.")
+        oggi_ = oggi()
+        base = (nome_completo or st.session_state["sess"]["nome"]).replace(" ", "_")
+        b1, b2 = st.columns(2, gap="small")
+        b1.download_button("📄 Report completo (da stampare)", _fa_html_completo(d, oggi_).encode("utf-8"),
+                           file_name=f"report_completo_{base}_{oggi_.isoformat()}.html", mime="text/html", width="stretch")
+        b2.download_button("📦 Tutti i dati (file JSON)",
+                           _json.dumps(_fa_senza_immagini(d), ensure_ascii=False, indent=2).encode("utf-8"),
+                           file_name=f"dati_{base}_{oggi_.isoformat()}.json", mime="application/json", width="stretch")
+        st.caption("Il report si apre nel browser: da lì puoi stamparlo o salvarlo in PDF. Contiene dati sanitari: non "
+                   "condividerlo con chi non deve vederlo.")
+    if ok:
+        try:
+            salva(lambda d: d.__setitem__("anagrafica", {"nome": nome.strip(), "cognome": cognome.strip()}), "Anagrafica")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Nome e cognome salvati."
+        st.rerun()
