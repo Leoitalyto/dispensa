@@ -2032,8 +2032,9 @@ def _fa_riga_profilo(profili, pid, nome, gruppo):
         with c1:
             _fa_scheda_gruppo(nome, gruppo)
         with c2:
-            premuto = st.button("🩺" if not uri else etichetta, key="fa_dottore_btn", help="Apri la scheda del dottore")
-            premuto2 = st.button(etichetta + " ›", key="fa_dottore_btn2", help="Apri la scheda del dottore")
+            premuto = st.button("🩺" if not uri else etichetta, key="fa_dottore_btn", help="Apri la scheda del dottore",
+                                width="stretch")
+            premuto2 = st.button(etichetta + " ›", key="fa_dottore_btn2", help="Apri la scheda del dottore", width="stretch")
     if premuto or premuto2:
         st.session_state["fa_modulo_dottore"] = {"pid": pid}
         st.rerun()
@@ -2053,12 +2054,17 @@ def _fa_modulo_dottore(pid):
     mio_nome = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x) or profilo.get("nome", "")
     mia_email_pred = d.get("mia_email") or dati_utente.get("avviso_email") or ""
     e = html.escape
+    ha_dati = any(d.get(k) for k in ("nome", "telefono", "email", "indirizzo"))
+    chiave_mod = "fa_dott_modifica_" + pid
+    modifica = st.session_state.get(chiave_mod, not ha_dati)          # senza dati si apre subito in modifica
+    tipo_salvato = d.get("tipo")
+    femmina = tipo_salvato == "Dottoressa"
 
     if st.button("← Torna alla Farmacia", key="fa_dott_indietro"):
         st.session_state.pop("fa_modulo_dottore", None)
+        st.session_state.pop(chiave_mod, None)
         st.rerun()
-    tipo_salvato = d.get("tipo")
-    st.subheader(("👩‍⚕️ La mia dottoressa" if tipo_salvato == "Dottoressa" else "👨‍⚕️ Il mio dottore") + f" · {profilo.get('nome', '')}")
+    st.subheader(("👩‍⚕️ La mia dottoressa" if femmina else "👨‍⚕️ Il mio dottore") + f" · {profilo.get('nome', '')}")
     try:
         icone = _fa_icone_dottori()
     except Exception:
@@ -2066,55 +2072,89 @@ def _fa_modulo_dottore(pid):
     if tipo_salvato in icone:
         st.markdown(f"<div style='text-align:center'><img src='{icone[tipo_salvato]}' alt='' style='height:150px'></div>", unsafe_allow_html=True)
 
-    # ---- azioni rapide con i dati già salvati
-    if d.get("nome"):
-        st.markdown(f"### {e(d['nome'])}")
     giorno_oggi = GIORNI_SETT[oggi().weekday()]
-    orari_oggi = (d.get("orari") or {}).get(giorno_oggi) or {}
-    if orari_oggi.get("m") or orari_oggi.get("p"):
-        st.info(f"🕘 Oggi ({giorno_oggi}) riceve: " + " · ".join(x for x in (
-            f"mattina {orari_oggi['m']}" if orari_oggi.get("m") else "", f"pomeriggio {orari_oggi['p']}" if orari_oggi.get("p") else "") if x))
-    b1, b2 = st.columns(2, gap="small")
-    if _fa_tel(d.get("telefono")):
-        b1.link_button("📞 Chiama", "tel:" + _fa_tel(d["telefono"]), width="stretch")
-    if d.get("indirizzo"):
-        b2.link_button("🧭 Indicazioni", "https://www.google.com/maps/search/?api=1&query=" + _up.quote_plus(d["indirizzo"]), width="stretch")
+    if not modifica:
+        # ------------------------------------------------ SCHEDA (sola lettura)
+        if d.get("nome"):
+            st.markdown(f"### {e(d['nome'])}")
+        if st.button("✏️ Modifica i dati", key="fa_dott_modifica_btn", type="primary", width="stretch"):
+            st.session_state[chiave_mod] = True
+            st.rerun()
+        righe = []
+        if d.get("indirizzo"):
+            righe.append(f"📍 {e(d['indirizzo'])}")
+        if d.get("telefono"):
+            righe.append(f"📞 {e(d['telefono'])}")
+        if d.get("email"):
+            righe.append(f"✉️ {e(d['email'])}")
+        if righe:
+            st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:18px;padding:12px 14px;color:#1b2b2b;"
+                        "line-height:1.7;font-weight:600'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
+        orari_oggi = (d.get("orari") or {}).get(giorno_oggi) or {}
+        if orari_oggi.get("m") or orari_oggi.get("p"):
+            st.info(f"🕘 Oggi ({giorno_oggi}) riceve: " + " · ".join(x for x in (
+                f"mattina {orari_oggi['m']}" if orari_oggi.get("m") else "", f"pomeriggio {orari_oggi['p']}" if orari_oggi.get("p") else "") if x))
+        b1, b2 = st.columns(2, gap="small")
+        if _fa_tel(d.get("telefono")):
+            b1.link_button("📞 Chiama", "tel:" + _fa_tel(d["telefono"]), width="stretch")
+        if d.get("indirizzo"):
+            b2.link_button("🧭 Indicazioni", "https://www.google.com/maps/search/?api=1&query=" + _up.quote_plus(d["indirizzo"]), width="stretch")
 
-    # ---- messaggio per email: si apre la posta del telefono già compilata, con i miei dati per la risposta
-    if d.get("email"):
-        with st.expander("✉️ Scrivi un messaggio " + ("alla dottoressa" if tipo_salvato == "Dottoressa" else "al dottore"), expanded=False):
-            oggetto = st.text_input("Oggetto", value="Richiesta", key="fa_dott_ogg_" + pid)
-            testo = st.text_area("Messaggio", key="fa_dott_msg_" + pid, placeholder="Scrivi qui il tuo messaggio…")
-            firma = st.checkbox("Aggiungi in fondo il mio nome e la mia email per la risposta", value=True, key="fa_dott_firma_" + pid)
-            corpo = testo
-            if firma:
-                corpo += f"\n\n--\n{mio_nome}"
-                if profilo.get("nome") and profilo["nome"] != mio_nome:
-                    corpo += f"\nPaziente: {profilo['nome']}"
-                if mia_email_pred:
-                    corpo += f"\nPer rispondermi: {mia_email_pred}"
-            st.link_button("📧 Apri la posta e invia", f"mailto:{d['email']}?subject={_up.quote(oggetto)}&body={_up.quote(corpo)}",
-                           type="primary", width="stretch")
-            st.caption("Si apre la tua app di posta con il messaggio già pronto: tocca Invia. Il dottore risponde al tuo indirizzo.")
+        if d.get("email"):
+            with st.expander("✉️ Scrivi un messaggio " + ("alla dottoressa" if femmina else "al dottore")):
+                oggetto = st.text_input("Oggetto", value="Richiesta", key="fa_dott_ogg_" + pid)
+                testo = st.text_area("Messaggio", key="fa_dott_msg_" + pid, placeholder="Scrivi qui il tuo messaggio…")
+                firma = st.checkbox("Aggiungi in fondo il mio nome e la mia email per la risposta", value=True, key="fa_dott_firma_" + pid)
+                corpo = testo
+                if firma:
+                    corpo += f"\n\n--\n{mio_nome}"
+                    if profilo.get("nome") and profilo["nome"] != mio_nome:
+                        corpo += f"\nPaziente: {profilo['nome']}"
+                    if mia_email_pred:
+                        corpo += f"\nPer rispondermi: {mia_email_pred}"
+                st.link_button("📧 Apri la posta e invia", f"mailto:{d['email']}?subject={_up.quote(oggetto)}&body={_up.quote(corpo)}",
+                               type="primary", width="stretch")
+                st.caption("Si apre la tua app di posta con il messaggio già pronto: tocca Invia. Il medico risponde al tuo indirizzo.")
 
-    # ---- sostituto: contatti rapidi
-    sost = d.get("sostituto") or {}
-    if sost.get("nome") or sost.get("telefono") or sost.get("email"):
-        with st.expander("🔁 Sostituto: " + (sost.get("nome") or "dati salvati")):
-            if sost.get("indirizzo"):
-                st.write("📍 " + sost["indirizzo"])
-            s1, s2 = st.columns(2, gap="small")
-            if _fa_tel(sost.get("telefono")):
-                s1.link_button("📞 Chiama il sostituto", "tel:" + _fa_tel(sost["telefono"]), width="stretch")
-            if sost.get("email"):
-                s2.link_button("✉️ Scrivi al sostituto", "mailto:" + sost["email"], width="stretch")
-            if sost.get("note"):
-                st.caption("📝 " + sost["note"])
+        orari = d.get("orari") or {}
+        if any((orari.get(g) or {}).get("m") or (orari.get(g) or {}).get("p") for g in GIORNI_SETT):
+            st.markdown("**🕘 Orari settimanali**")
+            celle = ""
+            for g in GIORNI_SETT:
+                o = orari.get(g) or {}
+                evid = "background:#c8e6c9;font-weight:800;" if g == giorno_oggi else ""
+                celle += (f"<tr style='{evid}'><td style='padding:5px 8px'>{g}</td><td>{e(o.get('m') or '—')}</td>"
+                          f"<td>{e(o.get('p') or '—')}</td></tr>")
+            st.markdown("<table style='width:100%;border-collapse:collapse;font-size:.9rem;color:#1b2b2b;background:rgba(255,255,255,.78);"
+                        "border-radius:12px;overflow:hidden'><tr style='background:rgba(0,0,0,.06)'><th style='text-align:left;padding:5px 8px'>Giorno</th>"
+                        "<th style='text-align:left'>Mattina</th><th style='text-align:left'>Pomeriggio</th></tr>" + celle + "</table>",
+                        unsafe_allow_html=True)
 
-    st.divider()
-    st.markdown("**✏️ Dati del medico** (si modificano e si salvano qui)")
+        sost = d.get("sostituto") or {}
+        if sost.get("nome") or sost.get("telefono") or sost.get("email"):
+            with st.expander("🔁 Sostituto: " + (sost.get("nome") or "dati salvati")):
+                if sost.get("indirizzo"):
+                    st.write("📍 " + sost["indirizzo"])
+                s1, s2 = st.columns(2, gap="small")
+                if _fa_tel(sost.get("telefono")):
+                    s1.link_button("📞 Chiama il sostituto", "tel:" + _fa_tel(sost["telefono"]), width="stretch")
+                if sost.get("email"):
+                    s2.link_button("✉️ Scrivi al sostituto", "mailto:" + sost["email"], width="stretch")
+                if sost.get("note"):
+                    st.caption("📝 " + sost["note"])
+        if d.get("note"):
+            st.markdown("**📝 Note**")
+            st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:14px;padding:10px 12px;color:#1b2b2b'>"
+                        + e(d["note"]).replace("\n", "<br>") + "</div>", unsafe_allow_html=True)
+        return
+
+    # ------------------------------------------------ MODIFICA
+    if ha_dati and st.button("Annulla la modifica", key="fa_dott_annulla"):
+        st.session_state[chiave_mod] = False
+        st.rerun()
+    st.markdown("**✏️ Dati del medico**: compila e tocca **Salva** in fondo")
     with st.form("fa_form_dottore_" + pid):
-        tipo = st.radio("Scegli", ["Dottore", "Dottoressa"], horizontal=True, index=1 if tipo_salvato == "Dottoressa" else 0)
+        tipo = st.radio("Scegli", ["Dottore", "Dottoressa"], horizontal=True, index=1 if femmina else 0)
         nome = st.text_input("Nominativo (nome e cognome)", value=d.get("nome", ""), placeholder="es. Dott. Mario Rossi")
         indirizzo = st.text_input("Indirizzo dello studio", value=d.get("indirizzo", ""))
         telefono = st.text_input("Numero di telefono", value=d.get("telefono", ""))
@@ -2135,7 +2175,7 @@ def _fa_modulo_dottore(pid):
             s_ind = st.text_input("Indirizzo del sostituto", value=sv.get("indirizzo", ""))
             s_note = st.text_area("Note sul sostituto (giorni, orari…)", value=sv.get("note", ""))
         note = st.text_area("📝 Note", value=d.get("note", ""), placeholder="Qualsiasi cosa da ricordare su questo medico")
-        invio = st.form_submit_button("💾 Salva i dati del medico", type="primary")
+        invio = st.form_submit_button("💾 Salva i dati del medico", type="primary", width="stretch")
     if invio:
         if email.strip() and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", email.strip()):
             st.error("L'email del medico non sembra corretta.")
@@ -2157,5 +2197,6 @@ def _fa_modulo_dottore(pid):
         except Exception as ex:
             st.error(f"Non sono riuscito a salvare: {ex}")
             return
+        st.session_state[chiave_mod] = False
         st.session_state["fa_msg"] = "✅ Dati del medico salvati."
         st.rerun()
