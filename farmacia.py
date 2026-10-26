@@ -140,6 +140,7 @@ def _fa_modulo_medicinale(pid, med_id=None):
                     foto_nuova = foto_a_data_uri(alt.getvalue(), 720)
             st.image(base64.b64decode(foto_nuova.split(",", 1)[1]))
             st.caption("✅ Foto pronta: sarà salvata con il medicinale.")
+    scelta_arch = _fa_scegli_da_archivio(f, ck)
     with st.form("fa_form_med"):
         togli_foto = st.checkbox("Rimuovi la foto attuale") if m.get("foto") else False
         nome = st.text_input("Nome del medicinale *", value=m.get("nome", ""))
@@ -177,6 +178,24 @@ def _fa_modulo_medicinale(pid, med_id=None):
             if grande:
                 da_cancellare.append(grande["id"])
             grande = nuovo_rif
+        elif scelta_arch:                                   # foto già usata, presa dall'archivio
+            foto = scelta_arch["mini"]
+            try:
+                dd = carica_dati(crea_archivio(), _fa_percorso_doc(scelta_arch["grande"]["id"]))
+                if dd.get("b64"):
+                    foto = _fa_miniatura("data:image/webp;base64," + dd["b64"], 360)
+            except Exception:
+                pass
+            if grande and grande["id"] != scelta_arch["grande"]["id"]:
+                da_cancellare.append(grande["id"])
+            grande = scelta_arch["grande"]
+        nuova_voce = None
+        if foto_nuova:
+            try:
+                nuova_voce = {"id": uuid.uuid4().hex[:8], "nome": nome.strip(), "mini": _fa_miniatura(foto_nuova, 160),
+                              "grande": grande, "data": oggi().isoformat()}
+            except Exception:
+                nuova_voce = None
         rec = {"foto": foto, "foto_grande": grande, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
                "dosaggio": dosaggio.strip(), "forma": forma, "quantita": float(quantita), "unita": unita,
                "scadenza": scadenza.isoformat() if scadenza else None,
@@ -190,12 +209,19 @@ def _fa_modulo_medicinale(pid, med_id=None):
             else:
                 rec["id"] = uuid.uuid4().hex[:10]
                 f["medicinali"].append(rec)
+            if nuova_voce:                                   # la foto nuova entra nell'archivio, per le prossime volte
+                arch = f.setdefault("archivio_foto", [])
+                arch.insert(0, nuova_voce)
+                while len(arch) > 60:
+                    da_cancellare.append(arch.pop()["grande"]["id"])
         try:
             _fa_salva(_scrivi, "Farmacia: medicinale")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
-        _fa_cancella_files(da_cancellare)
+        usati = _fa_ids_foto_usati(_fa_dati())
+        _fa_cancella_files([i for i in da_cancellare if i not in usati])
+        st.session_state.pop("fa_arch_scelta_" + ck, None)
         trovate = _fa_conflitti(f, per, rec)
         st.session_state["fa_msg"] = ("⚠️ Medicinale salvato, ma attenzione: contiene «" + "», «".join(trovate) +
                                       "», segnato come allergia di questo profilo." if trovate else "✅ Medicinale salvato.")
@@ -210,7 +236,8 @@ def _fa_cancella_medicinali(ids):
     foto += [a["id"] for m in f.get("medicinali", []) if m["id"] in ids for a in m.get("foglio", [])]
     _fa_salva(lambda f: f.__setitem__("medicinali", [x for x in f["medicinali"] if x["id"] not in ids]),
               "Farmacia: eliminato")
-    _fa_cancella_files(foto)
+    usati = _fa_ids_foto_usati(_fa_dati())                  # le foto dell'archivio restano
+    _fa_cancella_files([i for i in foto if i not in usati])
 
 
 def _fa_dialogo_elimina(med_id, nome):
@@ -576,13 +603,18 @@ def _fa_dialogo_terapia(pid, ter_id=None):
 @st.dialog("Elimina programma")
 def _fa_dialogo_elimina_terapia(ter_id, nome):
     st.write(f"Vuoi eliminare il programma di **{nome}**?")
-    st.caption("Le assunzioni già registrate restano nello storico. Se vuoi solo fermarlo, "
+    st.caption("Di solito le assunzioni già registrate restano nello storico. Se vuoi solo fermarlo, "
                "è meglio mettere lo stato «Sospesa» o «Terminata».")
+    anche_storico = st.checkbox("Elimina anche le assunzioni già registrate di questo programma (per esempio se era solo una prova)",
+                                key="fa_del_ter_storico_" + ter_id)
     c1, c2 = st.columns(2)
     if c1.button("Sì, elimina", type="primary", width="stretch"):
+        def _m(f):
+            f["terapie"] = [x for x in f.get("terapie", []) if x["id"] != ter_id]
+            if anche_storico:
+                f["registro"] = {k: v for k, v in (f.get("registro") or {}).items() if v.get("t") != ter_id}
         try:
-            _fa_salva(lambda f: f.__setitem__("terapie", [x for x in f.get("terapie", []) if x["id"] != ter_id]),
-                      "Farmacia: terapia eliminata")
+            _fa_salva(_m, "Farmacia: terapia eliminata")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -748,7 +780,8 @@ def _fa_elimina_profilo(f, pid):
         (f.get("vaccini_doc") or {}).pop(pid, None)
         (f.get("allergie") or {}).pop(pid, None)
     _fa_salva(_m, "Farmacia: profilo eliminato")
-    _fa_cancella_files(ids)
+    usati = _fa_ids_foto_usati(_fa_dati())                  # le foto dell'archivio restano
+    _fa_cancella_files([i for i in ids if i not in usati])
 
 
 def _fa_rimuovi_allegato(tipo, proprietario, did):
@@ -1556,7 +1589,7 @@ import copy as _copy
 def _fa_senza_immagini(x):
     """Copia dei dati senza le foto incorporate (che renderebbero l'esportazione enorme)."""
     if isinstance(x, dict):
-        return {k: _fa_senza_immagini(v) for k, v in x.items() if k not in ("foto", "immagine")}
+        return {k: _fa_senza_immagini(v) for k, v in x.items() if k not in ("foto", "immagine", "mini")}
     if isinstance(x, list):
         return [_fa_senza_immagini(v) for v in x]
     return x
@@ -1875,3 +1908,57 @@ def _fa_modulo_foglio(pid, med_id):
         st.session_state.pop("fa_modulo_foglio", None)
         st.session_state["fa_msg"] = f"✅ Foglio illustrativo di {m.get('nome', '')} salvato: ora lo apri dal pulsante «📖 Apri il foglio illustrativo»."
         st.rerun()
+
+
+# =====================================================================
+# ARCHIVIO DELLE FOTO DEI MEDICINALI (per riusarle quando si ricompra lo stesso medicinale)
+# =====================================================================
+def _fa_ids_foto_usati(f):
+    """File delle foto grandi ancora in uso da un medicinale o dall'archivio."""
+    usati = {m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("foto_grande")}
+    usati |= {e["grande"]["id"] for e in f.get("archivio_foto", []) if e.get("grande")}
+    return usati
+
+
+def _fa_scegli_da_archivio(f, ck):
+    arch = f.get("archivio_foto") or []
+    chiave = "fa_arch_scelta_" + ck
+    with st.expander(f"🗂️ Scegli una foto già usata ({len(arch)})"):
+        if not arch:
+            st.caption("Qui compaiono le foto dei medicinali che salvi: se ricompri lo stesso medicinale, "
+                       "basta sceglierla e non devi rifare la foto.")
+        else:
+            miniature = "".join(
+                f"<div style='width:88px;text-align:center;font-size:.7rem'><img src='{html.escape(e['mini'], quote=True)}' alt='' "
+                f"style='height:84px;max-width:84px;object-fit:contain'><br>{html.escape(e['nome'][:16])}</div>" for e in arch)
+            st.markdown(f"<div style='display:flex;flex-wrap:wrap;gap:8px'>{miniature}</div>", unsafe_allow_html=True)
+            nomi = {e["id"]: f"{e['nome']} · {data_it(e['data'])}" for e in arch}
+            scelto = st.selectbox("Quale vuoi usare?", list(nomi), format_func=lambda i: nomi[i], key="fa_arch_sel_" + ck)
+            voce = next(e for e in arch if e["id"] == scelto)
+            c1, c2 = st.columns(2, gap="small")
+            if c1.button("✔ Usa questa foto", key="fa_arch_usa_" + ck, type="primary", width="stretch"):
+                st.session_state[chiave] = scelto
+                st.rerun()
+            if c2.button("🗑️ Togli dall'archivio", key="fa_arch_del_" + ck, width="stretch"):
+                try:
+                    _fa_salva(lambda f: f.__setitem__("archivio_foto", [e for e in f.get("archivio_foto", []) if e["id"] != scelto]),
+                              "Farmacia: archivio foto")
+                    if voce.get("grande") and voce["grande"]["id"] not in _fa_ids_foto_usati(_fa_dati()):
+                        _fa_cancella_files([voce["grande"]["id"]])
+                except Exception as e:
+                    st.error(f"Non sono riuscito a eliminarla: {e}")
+                else:
+                    if st.session_state.get(chiave) == scelto:
+                        st.session_state.pop(chiave, None)
+                    st.rerun()
+    voce_scelta = next((e for e in arch if e["id"] == st.session_state.get(chiave)), None)
+    if voce_scelta:
+        st.success(f"✅ Foto scelta dall'archivio: {voce_scelta['nome']}. Tocca Salva in fondo per usarla.")
+        try:
+            st.image(base64.b64decode(voce_scelta["mini"].split(",", 1)[1]), width=160)
+        except Exception:
+            pass
+        if st.button("↩ Non usare questa foto", key="fa_arch_no_" + ck):
+            st.session_state.pop(chiave, None)
+            st.rerun()
+    return voce_scelta
