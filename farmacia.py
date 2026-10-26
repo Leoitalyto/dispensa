@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""FARMACIA - Fase 1 (profili, medicinali, scadenze), Fase 2 (terapie, calendario, storico), Fase 3 (visite, referti, vaccini).
+"""FARMACIA - Fasi 1-3 (profili, medicinali, terapie, visite, vaccini) e ricerca delle farmacie aperte.
 
 Questo file si carica PRIMA di parte3.py (vedi app_dispensa.py). Non modifica la dispensa:
 i medicinali sono salvati nella voce "farmacia" del file dati di ogni persona.
@@ -222,6 +222,9 @@ def schermata_farmacia():
     if st.session_state.get("fa_msg"):
         _msg = st.session_state.pop("fa_msg")
         (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
+
+    if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
+        _fa_dialogo_farmacie()
 
     f = _fa_dati()
     profili = _fa_profili(f)
@@ -974,3 +977,202 @@ def _fa_blocco_allergie(f, pid, nomi, medicinali):
         else:
             st.session_state["fa_msg"] = "✅ Allergie salvate."
             st.rerun()
+
+
+# =====================================================================
+# TROVA UNA FARMACIA APERTA (dati di OpenStreetMap: mappa aperta, orari inseriti da volontari)
+# =====================================================================
+import math as _math
+
+_GG = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+_RE_ORA = re.compile(r"(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})")
+_SERVER_OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
+
+
+def _fa_oh_parse(oh):
+    """Legge gli orari nel formato di OpenStreetMap. Ritorna {0..6: [(inizio, fine)]} in minuti, oppure None
+    se non sono sicuro di averli capiti (meglio dire «non verificabile» che sbagliare)."""
+    oh = (oh or "").strip()
+    if not oh:
+        return None
+    if oh == "24/7":
+        return {g: [(0, 1440)] for g in range(7)}
+    orari = {g: [] for g in range(7)}
+    letto = False
+    for regola in [r.strip() for r in oh.split(";") if r.strip()]:
+        parte_giorni = re.split(r"\d{1,2}:\d{2}|\boff\b|\bclosed\b", regola, maxsplit=1, flags=re.I)[0].strip()
+        orari_regola = _RE_ORA.findall(regola)
+        spento = bool(re.search(r"\b(off|closed)\b", regola, re.I))
+        residuo = _RE_ORA.sub("", regola.replace(parte_giorni, "", 1))
+        residuo = re.sub(r"\b(off|closed)\b|[,\s]", "", residuo, flags=re.I)
+        if residuo or (not orari_regola and not spento):
+            return None
+        giorni, speciale = set(), False
+        for tok in [x for x in re.split(r"[,\s]+", parte_giorni) if x]:
+            m = re.fullmatch(r"(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?", tok)
+            if m:
+                a = _GG.index(m.group(1))
+                b = _GG.index(m.group(2)) if m.group(2) else a
+                i = a
+                giorni.add(i)
+                while i != b:
+                    i = (i + 1) % 7
+                    giorni.add(i)
+            elif tok in ("PH", "SH"):
+                speciale = True
+            else:
+                return None
+        if not giorni:
+            if speciale:
+                continue                      # regola solo per festivi: la ignoro (vedi avvertenza nell'app)
+            giorni = set(range(7))
+        letto = True
+        for g in giorni:
+            orari[g] = [] if spento else [(int(h1) * 60 + int(m1), int(h2) * 60 + int(m2))
+                                         for h1, m1, h2, m2 in orari_regola]
+    return orari if letto else None
+
+
+def _fa_fmt_minuti(x):
+    return f"{x // 60:02d}:{x % 60:02d}"
+
+
+def _fa_stato_apertura(oh, quando):
+    """('aperta' | 'chiusa' | 'ignoto', testo degli orari di oggi). Mai «aperta» se il dato non è chiaro."""
+    orari = _fa_oh_parse(oh)
+    if orari is None:
+        return "ignoto", ""
+    g, minuti = quando.weekday(), quando.hour * 60 + quando.minute
+    oggi_txt = ", ".join(f"{_fa_fmt_minuti(a)}–{_fa_fmt_minuti(b)}" for a, b in orari[g]) or "chiusa oggi"
+    for a, b in orari[g]:
+        if a <= minuti < (b if b > a else b + 1440):
+            return "aperta", oggi_txt
+    for a, b in orari[(g - 1) % 7]:
+        if b <= a and minuti < b:             # turno che finisce dopo la mezzanotte
+            return "aperta", oggi_txt
+    return "chiusa", oggi_txt
+
+
+def _fa_distanza_km(lat1, lon1, lat2, lon2):
+    r = 6371.0
+    p1, p2 = _math.radians(lat1), _math.radians(lat2)
+    dp, dl = p2 - p1, _math.radians(lon2 - lon1)
+    a = _math.sin(dp / 2) ** 2 + _math.cos(p1) * _math.cos(p2) * _math.sin(dl / 2) ** 2
+    return 2 * r * _math.asin(_math.sqrt(a))
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fa_geocodifica(testo):
+    t_ = testo.strip()
+    tentativi = [{"postalcode": t_, "country": "Italy"}, {"q": f"{t_}, Italia"}] if re.fullmatch(r"\d{5}", t_) \
+        else [{"q": f"{t_}, Italia"}]
+    for par in tentativi:
+        r = requests.get("https://nominatim.openstreetmap.org/search", headers=UA, timeout=15,
+                         params={**par, "format": "json", "limit": 1, "countrycodes": "it"})
+        r.raise_for_status()
+        j = r.json()
+        if j:
+            return float(j[0]["lat"]), float(j[0]["lon"]), j[0].get("display_name", "")
+    return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _fa_overpass(lat, lon, raggio):
+    query = f'[out:json][timeout:25];nwr["amenity"="pharmacy"](around:{raggio},{lat},{lon});out center tags 80;'
+    ultimo = None
+    for url in _SERVER_OVERPASS:
+        try:
+            r = requests.post(url, data={"data": query}, headers=UA, timeout=30)
+            r.raise_for_status()
+            return r.json().get("elements", [])
+        except Exception as e:
+            ultimo = e
+    raise ultimo
+
+
+def _fa_cerca_farmacie(lat, lon, quando):
+    elementi = []
+    for raggio in (3000, 8000, 15000):
+        elementi = _fa_overpass(lat, lon, raggio)
+        if elementi:
+            break
+    righe = []
+    for el in elementi:
+        tag = el.get("tags") or {}
+        la = el.get("lat") or (el.get("center") or {}).get("lat")
+        lo = el.get("lon") or (el.get("center") or {}).get("lon")
+        if la is None or lo is None:
+            continue
+        via = " ".join(x for x in (tag.get("addr:street"), tag.get("addr:housenumber")) if x)
+        citta = " ".join(x for x in (tag.get("addr:postcode"), tag.get("addr:city")) if x)
+        tel = (tag.get("phone") or tag.get("contact:phone") or "").split(";")[0].strip()
+        stato, oggi_txt = _fa_stato_apertura(tag.get("opening_hours"), quando)
+        righe.append({"nome": tag.get("name") or tag.get("operator") or "Farmacia",
+                      "indirizzo": ", ".join(x for x in (via, citta) if x), "tel": tel,
+                      "km": _fa_distanza_km(lat, lon, la, lo), "lat": la, "lon": lo,
+                      "stato": stato, "oggi": oggi_txt, "orari": tag.get("opening_hours", "")})
+    righe.sort(key=lambda r: r["km"])
+    return righe
+
+
+@st.dialog("Trova una farmacia aperta", width="large")
+def _fa_dialogo_farmacie():
+    with st.form("fa_form_farm"):
+        dove = st.text_input("CAP (consigliato) oppure nome della città o del comune",
+                             placeholder="es. 10121 oppure Torino")
+        cerca = st.form_submit_button("Cerca", type="primary")
+    if cerca:
+        if not dove.strip():
+            st.error("Scrivi un CAP o il nome di una città.")
+        else:
+            try:
+                with st.spinner("Cerco le farmacie…"):
+                    posto = _fa_geocodifica(dove)
+                    if not posto:
+                        st.session_state["fa_farm"] = {"dove": dove, "errore": "Non trovo questo CAP o questa città. "
+                                                       "Controlla come l'hai scritto."}
+                    else:
+                        quando = adesso()
+                        st.session_state["fa_farm"] = {"dove": dove, "luogo": posto[2], "quando": quando.isoformat(),
+                                                       "righe": _fa_cerca_farmacie(posto[0], posto[1], quando)}
+            except Exception:
+                st.session_state["fa_farm"] = {"dove": dove, "errore": "Non riesco a collegarmi al servizio delle "
+                                               "mappe in questo momento. Riprova tra poco."}
+    ris = st.session_state.get("fa_farm")
+    if not ris:
+        st.caption("Scrivi il CAP o la città e tocca Cerca.")
+    elif ris.get("errore"):
+        st.error(ris["errore"])
+    else:
+        solo_aperte = st.checkbox("Mostra solo quelle che risultano aperte adesso", key="fa_solo_aperte")
+        righe = [r for r in ris["righe"] if not solo_aperte or r["stato"] == "aperta"]
+        st.caption(f"Ricerca vicino a: {ris['luogo']} · alle {datetime.fromisoformat(ris['quando']).strftime('%H:%M del %d/%m/%Y')}")
+        if not ris["righe"]:
+            st.warning("Non ho trovato farmacie vicino a questo posto. Prova con un altro CAP o con il nome del comune.")
+        elif not righe:
+            st.info("Nessuna farmacia risulta aperta adesso secondo gli orari disponibili. Controlla anche quelle "
+                    "con orari non verificabili e quelle di turno.")
+        e = html.escape
+        for r in righe[:12]:
+            icona, testo = {"aperta": ("🟢", "Risulta aperta adesso"), "chiusa": ("🔴", "Risulta chiusa adesso"),
+                            "ignoto": ("⚪", "Orari non verificabili: chiama prima")}[r["stato"]]
+            with st.container(border=True):
+                riga = f"**{e(r['nome'])}** · {r['km']:.1f} km<br>"
+                riga += f"📍 {e(r['indirizzo'])}<br>" if r["indirizzo"] else ""
+                riga += f"{icona} {testo}" + (f" · oggi {e(r['oggi'])}" if r["oggi"] else "")
+                if r["tel"]:
+                    riga += f"<br>📞 {e(r['tel'])}"
+                st.markdown(riga, unsafe_allow_html=True)
+                c1, c2 = st.columns(2, gap="small")
+                c1.link_button("🧭 Portami lì", f"https://www.google.com/maps/dir/?api=1&destination={r['lat']},{r['lon']}",
+                               width="stretch")
+                numero = re.sub(r"[^\d+]", "", r["tel"])
+                if numero:
+                    c2.link_button("📞 Chiama", "tel:" + numero, width="stretch")
+        st.link_button("🌙 Cerca le farmacie di turno (notte e festivi)",
+                       "https://www.google.com/search?q=" + _up.quote_plus("farmacie di turno " + ris["dove"]),
+                       width="stretch")
+        st.caption("ℹ️ Posizioni e orari arrivano da OpenStreetMap, una mappa aperta aggiornata da volontari: possono "
+                   "essere incompleti o non aggiornati. Nei giorni festivi e di notte gli orari normali non valgono. "
+                   "L'app non può sapere quali farmacie sono di turno: usa il pulsante qui sopra o telefona per "
+                   "esserne sicuro.")
