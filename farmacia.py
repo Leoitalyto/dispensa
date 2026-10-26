@@ -1506,16 +1506,19 @@ def _fa_icone_gruppi():
 
 
 def _fa_scheda_gruppo(nome, gruppo):
-    stile = ("display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.78);border-radius:18px;"
-             "padding:8px 14px;margin:6px 0;color:#1b2b2b")
+    stile = ("display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.78);border-radius:18px;"
+             "padding:8px 10px;margin:0;color:#1b2b2b;min-width:0")
     if gruppo:
         try:
             uri = _fa_icone_gruppi().get(gruppo)
         except Exception:
             uri = None
-        goccia = (f"<img src='{uri}' alt='{html.escape(gruppo)}' style='height:84px'>" if uri else "<span style='font-size:2rem'>🩸</span>")
-        st.markdown(f"<div style='{stile}'>{goccia}<div><b style='font-size:1.1rem'>{html.escape(nome)}</b><br>"
-                    f"Gruppo sanguigno: <b style='font-size:1.3rem;color:#b71c1c'>{html.escape(gruppo)}</b></div></div>",
+        goccia = (f"<img src='{uri}' alt='{html.escape(gruppo)}' style='height:72px;flex:0 0 auto'>" if uri
+                  else "<span style='font-size:2rem'>🩸</span>")
+        st.markdown(f"<div style='{stile}'>{goccia}<div style='min-width:0;word-break:break-word'>"
+                    f"<b style='font-size:1rem;line-height:1.15'>{html.escape(nome)}</b><br>"
+                    f"<span style='font-size:.78rem'>Gruppo sanguigno</span><br>"
+                    f"<b style='font-size:1.5rem;color:#b71c1c;line-height:1.1'>{html.escape(gruppo)}</b></div></div>",
                     unsafe_allow_html=True)
     else:
         st.caption("🩸 Gruppo sanguigno non indicato: puoi sceglierlo in «Gestisci profili».")
@@ -1996,30 +1999,42 @@ def _fa_icone_dottori():
 
 
 def _fa_riga_profilo(profili, pid, nome, gruppo):
-    """Una sola striscia: a sinistra il gruppo sanguigno, a destra il pulsante «Il mio dottore» con la sua immagine."""
+    """Una sola striscia: a sinistra il gruppo sanguigno, a destra l'immagine del dottore, che è un pulsante."""
     dott = next((p.get("dottore") for p in profili if p["id"] == pid), None) or {}
     tipo = dott.get("tipo")
     try:
         uri = _fa_icone_dottori().get(tipo)
     except Exception:
         uri = None
+    sfondo = f"url({uri}) center/contain no-repeat," if uri else ""
+    st.markdown(
+        "<style>"
+        ".st-key-azioni_gruppo [data-testid='stHorizontalBlock']{align-items:center !important;gap:8px !important}"
+        ".st-key-azioni_gruppo [data-testid='stColumn']:first-child,.st-key-azioni_gruppo [data-testid='column']:first-child"
+        "{flex:1 1 0 !important;min-width:0 !important;width:auto !important}"
+        ".st-key-azioni_gruppo [data-testid='stColumn']:last-child,.st-key-azioni_gruppo [data-testid='column']:last-child"
+        "{flex:0 0 112px !important;width:112px !important;min-width:112px !important}"
+        ".st-key-fa_dottore_btn [data-testid='stButton'],.st-key-fa_dottore_btn2 [data-testid='stButton']{width:100%}"
+        ".st-key-fa_dottore_btn button{width:100%;height:auto;aspect-ratio:200/236;min-height:0;border-radius:22px;"
+        "border:2px solid rgba(255,255,255,.95);padding:0;font-size:2.6rem;color:transparent;"
+        f"background:{sfondo}rgba(255,255,255,.7);animation:fa-pulso 2.6s infinite}}"
+        ".st-key-fa_dottore_btn button p{font-size:0}"
+        "@keyframes fa-pulso{0%{box-shadow:0 0 0 0 rgba(13,148,136,.55)}70%{box-shadow:0 0 0 12px rgba(13,148,136,0)}"
+        "100%{box-shadow:0 0 0 0 rgba(13,148,136,0)}}"
+        ".st-key-fa_dottore_btn2 button{width:100%;min-height:34px;border-radius:999px;border:0;padding:3px 6px;"
+        "background:linear-gradient(135deg,#00a98f,#0288d1);box-shadow:0 3px 0 rgba(0,70,90,.3)}"
+        ".st-key-fa_dottore_btn2 button p{color:#fff !important;font-weight:800 !important;font-size:.72rem !important;"
+        "line-height:1.1;margin:0}"
+        "</style>", unsafe_allow_html=True)
+    etichetta = "La mia dottoressa" if tipo == "Dottoressa" else "Il mio dottore"
     with st.container(key="azioni_gruppo"):
         c1, c2 = st.columns([3, 1.5], gap="small")
         with c1:
             _fa_scheda_gruppo(nome, gruppo)
         with c2:
-            if uri:
-                st.markdown("<style>.st-key-fa_dottore_btn button{width:100%;height:124px;min-height:124px;border-radius:22px;"
-                            "border:2px solid rgba(255,255,255,.95);box-shadow:0 8px 20px rgba(0,60,50,.16);"
-                            f"background:url({uri}) center/contain no-repeat,rgba(255,255,255,.55);color:transparent}}"
-                            ".st-key-fa_dottore_btn button p{font-size:0}</style>", unsafe_allow_html=True)
-                premuto = st.button("Il mio dottore", key="fa_dottore_btn", help="Apri la scheda del dottore")
-            else:
-                premuto = st.button("🩺", key="fa_dottore_btn", help="Apri la scheda del dottore", width="stretch")
-            etichetta = "La mia dottoressa" if tipo == "Dottoressa" else "Il mio dottore"
-            st.markdown(f"<div style='text-align:center;font-weight:800;font-size:.8rem;color:#1b2b2b;margin-top:-6px'>{etichetta}</div>",
-                        unsafe_allow_html=True)
-    if premuto:
+            premuto = st.button("🩺" if not uri else etichetta, key="fa_dottore_btn", help="Apri la scheda del dottore")
+            premuto2 = st.button(etichetta + " ›", key="fa_dottore_btn2", help="Apri la scheda del dottore")
+    if premuto or premuto2:
         st.session_state["fa_modulo_dottore"] = {"pid": pid}
         st.rerun()
 
