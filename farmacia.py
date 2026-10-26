@@ -2124,10 +2124,13 @@ def _fa_modulo_dottore(pid):
         if righe:
             st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:18px;padding:12px 14px;color:#1b2b2b;"
                         "line-height:1.7;font-weight:600'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
-        orari_oggi = (d.get("orari") or {}).get(giorno_oggi) or {}
-        if orari_oggi.get("m") or orari_oggi.get("p"):
-            st.info(f"🕘 Oggi ({giorno_oggi}) riceve: " + " · ".join(x for x in (
-                f"mattina {orari_oggi['m']}" if orari_oggi.get("m") else "", f"pomeriggio {orari_oggi['p']}" if orari_oggi.get("p") else "") if x))
+        fasce_d = _fa_fasce_dottore(d)
+        oggi_f = [x for x in fasce_d if x["g"] == giorno_oggi]
+        if oggi_f:
+            st.info(f"🕘 Oggi ({giorno_oggi}) riceve: " + " · ".join(
+                f"{x['da']}–{x['a']}" + (f" ({x['nota']})" if x.get("nota") else "") for x in oggi_f))
+        elif fasce_d:
+            st.caption(f"Oggi ({giorno_oggi}) non è indicato nessun orario di ricevimento.")
         b1, b2 = st.columns(2, gap="small")
         if _fa_tel(d.get("telefono")):
             b1.link_button("📞 Chiama", "tel:" + _fa_tel(d["telefono"]), width="stretch")
@@ -2150,19 +2153,17 @@ def _fa_modulo_dottore(pid):
                                type="primary", width="stretch")
                 st.caption("Si apre la tua app di posta con il messaggio già pronto: tocca Invia. Il medico risponde al tuo indirizzo.")
 
-        orari = d.get("orari") or {}
-        if any((orari.get(g) or {}).get("m") or (orari.get(g) or {}).get("p") for g in GIORNI_SETT):
-            st.markdown("**🕘 Orari settimanali**")
+        if fasce_d:
+            st.markdown("**🕘 Orari di ricevimento**")
             celle = ""
-            for g in GIORNI_SETT:
-                o = orari.get(g) or {}
-                evid = "background:#c8e6c9;font-weight:800;" if g == giorno_oggi else ""
-                celle += (f"<tr style='{evid}'><td style='padding:5px 8px'>{g}</td><td>{e(o.get('m') or '—')}</td>"
-                          f"<td>{e(o.get('p') or '—')}</td></tr>")
+            for x in fasce_d:
+                evid = "background:#c8e6c9;font-weight:800;" if x["g"] == giorno_oggi else ""
+                celle += (f"<tr style='{evid}'><td style='padding:5px 8px'>{x['g']}</td><td>{e(x['da'])}</td>"
+                          f"<td>{e(x['a'])}</td><td>{e(x.get('nota') or '')}</td></tr>")
             st.markdown("<table style='width:100%;border-collapse:collapse;font-size:.9rem;color:#1b2b2b;background:rgba(255,255,255,.78);"
                         "border-radius:12px;overflow:hidden'><tr style='background:rgba(0,0,0,.06)'><th style='text-align:left;padding:5px 8px'>Giorno</th>"
-                        "<th style='text-align:left'>Mattina</th><th style='text-align:left'>Pomeriggio</th></tr>" + celle + "</table>",
-                        unsafe_allow_html=True)
+                        "<th style='text-align:left'>Dalle</th><th style='text-align:left'>Alle</th><th style='text-align:left'>Note</th></tr>"
+                        + celle + "</table>", unsafe_allow_html=True)
 
         sost = d.get("sostituto") or {}
         if sost.get("nome") or sost.get("telefono") or sost.get("email"):
@@ -2194,21 +2195,22 @@ def _fa_modulo_dottore(pid):
         telefono = st.text_input("Numero di telefono", value=d.get("telefono", ""))
         email = st.text_input("Email del medico", value=d.get("email", ""))
         mia_email = st.text_input("La mia email (a cui il medico può rispondere)", value=mia_email_pred)
-        st.markdown("**🕘 Orari settimanali dello studio**")
-        orari_s = d.get("orari") or {}
-        righe_t, extra = [], set()
-        for g in GIORNI_SETT:
-            o = orari_s.get(g) or {}
-            ma, mb = _fa_parse_fascia(o.get("m"))
-            pa, pb = _fa_parse_fascia(o.get("p"))
-            extra |= {x for x in (ma, mb, pa, pb) if x}
-            righe_t.append({"Giorno": g, "Mattina da": ma or "—", "Mattina a": mb or "—",
-                            "Pomeriggio da": pa or "—", "Pomeriggio a": pb or "—"})
-        opzioni = ["—"] + sorted(set(ORARI_STUDIO) | extra)
-        st.caption("Tocca una casella e scegli l'orario dal menu. «—» vuol dire chiuso.")
-        mod = st.data_editor(pd.DataFrame(righe_t), hide_index=True, disabled=["Giorno"], key="fa_dott_orari_" + pid, width="stretch",
-                             column_config={c: st.column_config.SelectboxColumn(c, options=opzioni, required=True, width="small")
-                                            for c in ("Mattina da", "Mattina a", "Pomeriggio da", "Pomeriggio a")})
+        st.markdown("**🕘 Orari di ricevimento**")
+        st.caption("Una riga per ogni orario: scegli il giorno, «Dalle» e «Alle» dal menu, e se vuoi una nota. "
+                   "Per un secondo orario nello stesso giorno aggiungi un'altra riga con il «+» in fondo alla tabella; "
+                   "per toglierne una, spunta la riga a sinistra e usa il cestino.")
+        fasce_att = _fa_fasce_dottore(d) or [{"g": g, "da": "", "a": "", "nota": ""} for g in GIORNI_SETT[:5]]
+        extra_t = {x for fs in fasce_att for x in (fs.get("da"), fs.get("a")) if x}
+        opzioni = ["—"] + sorted(set(ORARI_STUDIO) | extra_t)
+        note_pred = ["Accesso libero", "Su appuntamento", "Telefonico"]
+        opz_note = ["—"] + note_pred + sorted({fs.get("nota") for fs in fasce_att if fs.get("nota")} - set(note_pred))
+        df_f = pd.DataFrame([{"Giorno": fs["g"], "Dalle": fs.get("da") or "—", "Alle": fs.get("a") or "—",
+                              "Note": fs.get("nota") or "—"} for fs in fasce_att])
+        mod = st.data_editor(df_f, hide_index=True, num_rows="dynamic", key="fa_dott_fasce_" + pid, width="stretch",
+                             column_config={"Giorno": st.column_config.SelectboxColumn("Giorno", options=GIORNI_SETT, width="small"),
+                                            "Dalle": st.column_config.SelectboxColumn("Dalle", options=opzioni, width="small"),
+                                            "Alle": st.column_config.SelectboxColumn("Alle", options=opzioni, width="small"),
+                                            "Note": st.column_config.SelectboxColumn("Note", options=opz_note, width="medium")})
         with st.expander("🔁 Sostituto (se il medico è assente)"):
             sv = d.get("sostituto") or {}
             s_nome = st.text_input("Nominativo del sostituto", value=sv.get("nome", ""))
@@ -2222,24 +2224,30 @@ def _fa_modulo_dottore(pid):
         if email.strip() and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", email.strip()):
             st.error("L'email del medico non sembra corretta.")
             return
-        orari_nuovi, errori_o = {}, []
+        fasce_nuove, errori_o = [], []
         for _, r in mod.iterrows():
-            fasce = {}
-            for chiave_f, ca, cb in (("m", "Mattina da", "Mattina a"), ("p", "Pomeriggio da", "Pomeriggio a")):
-                da_ = "" if r[ca] in (None, "—") else str(r[ca])
-                a_ = "" if r[cb] in (None, "—") else str(r[cb])
-                if da_ and a_ and a_ <= da_:
-                    errori_o.append(f"{r['Giorno']}: la fine deve essere dopo l'inizio.")
-                elif bool(da_) != bool(a_):
-                    errori_o.append(f"{r['Giorno']}: scegli sia l'inizio sia la fine.")
-                fasce[chiave_f] = f"{da_}-{a_}" if da_ and a_ else ""
-            orari_nuovi[r["Giorno"]] = fasce
+            g_ = r.get("Giorno")
+            if g_ not in GIORNI_SETT:
+                continue
+            vuoto = lambda v: v is None or pd.isna(v) or str(v) in ("—", "")
+            da_ = "" if vuoto(r["Dalle"]) else str(r["Dalle"])
+            a_ = "" if vuoto(r["Alle"]) else str(r["Alle"])
+            nota_ = "" if vuoto(r["Note"]) else str(r["Note"])
+            if not da_ and not a_:
+                continue
+            if bool(da_) != bool(a_):
+                errori_o.append(f"{g_}: scegli sia «Dalle» sia «Alle».")
+            elif a_ <= da_:
+                errori_o.append(f"{g_}: «Alle» deve essere dopo «Dalle».")
+            else:
+                fasce_nuove.append({"g": g_, "da": da_, "a": a_, "nota": nota_})
         if errori_o:
             st.error("Controlla gli orari: " + " ".join(errori_o))
             return
+        fasce_nuove.sort(key=lambda x: (GIORNI_SETT.index(x["g"]), x["da"]))
         nuovo = {"tipo": tipo, "nome": nome.strip(), "indirizzo": indirizzo.strip(), "telefono": telefono.strip(),
                  "email": email.strip(), "mia_email": mia_email.strip(),
-                 "orari": orari_nuovi,
+                 "fasce": fasce_nuove,
                  "sostituto": {"nome": s_nome.strip(), "telefono": s_tel.strip(), "email": s_email.strip(),
                                "indirizzo": s_ind.strip(), "note": s_note.strip()},
                  "note": note.strip()}
@@ -2426,3 +2434,19 @@ def _fa_modulo_sanitario(pid):
                        file_name=f"scheda_sanitaria_{profilo.get('nome', '').replace(' ', '_')}_{oggi().isoformat()}.html",
                        mime="text/html", width="stretch")
     st.caption("Contiene dati sanitari: condividila solo con chi deve vederla.")
+
+
+
+def _fa_fasce_dottore(d):
+    """Orari di ricevimento come elenco di fasce [{g, da, a, nota}]. Capisce anche il vecchio formato mattina/pomeriggio."""
+    fasce = d.get("fasce")
+    if fasce is None:
+        fasce = []
+        for g in GIORNI_SETT:
+            o = (d.get("orari") or {}).get(g) or {}
+            for k in ("m", "p"):
+                da, a = _fa_parse_fascia(o.get(k))
+                if da and a:
+                    fasce.append({"g": g, "da": da, "a": a, "nota": ""})
+    return sorted([dict(x) for x in fasce if x.get("g") in GIORNI_SETT],
+                  key=lambda x: (GIORNI_SETT.index(x["g"]), x.get("da", "")))
