@@ -71,28 +71,6 @@ def _fa_icona_uri_cache(_data_file):
         return ""
 
 
-def icona_farmacia():
-    """Icona cliccabile (croce rossa) che apre la sezione Farmacia: pulsa piano, per far capire che si può toccare."""
-    uri = _fa_icona_uri()
-    if uri:
-        st.markdown(
-            f"<style>.st-key-fa_icona{{--fa-img:url({uri})}}"
-            ".st-key-fa_icona button,.st-key-fa_icona button:hover,.st-key-fa_icona button:focus,.st-key-fa_icona button:active"
-            "{background:var(--fa-img) center/contain no-repeat !important;border:0 !important;box-shadow:none !important;color:transparent}"
-            ".st-key-fa_icona button{width:116px;height:116px;min-height:116px;padding:0;border-radius:0;cursor:pointer;"
-            "animation:fa-battito 2.2s ease-in-out infinite}"
-            ".st-key-fa_icona button:active{transform:scale(.94);animation:none}"
-            ".st-key-fa_icona button p{font-size:0}"
-            "@keyframes fa-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
-            "50%{transform:scale(1.07);filter:drop-shadow(0 0 14px rgba(229,57,53,.9))}}</style>", unsafe_allow_html=True)
-        premuto = st.button("Farmacia", key="fa_icona", help="Apri la Farmacia")
-    else:                                             # se manca farmacia.webp resta un pulsante semplice
-        premuto = st.button("🏥 Farmacia", key="fa_icona")
-    if premuto:
-        st.session_state["farmacia_aperta"] = True
-        st.rerun()
-
-
 # ---------------------------------------------------------------- dati
 def _fa_dati():
     return carica_dati(crea_archivio(), st.session_state["percorso"]).get("farmacia") or {}
@@ -327,6 +305,9 @@ def _fa_card(m, data_oggi, conflitti=()):
 
 def schermata_farmacia():
     st.markdown(_FA_CSS, unsafe_allow_html=True)
+    if st.session_state.get("sezione_home") == "documenti":
+        schermata_documenti()
+        return
     if st.button("← Torna alla dispensa", key="fa_indietro"):
         st.session_state.pop("fa_modulo_med", None)
         st.session_state.pop("fa_modulo_foglio", None)
@@ -800,10 +781,11 @@ def _fa_elimina_profilo(f, pid):
     ids += [a["id"] for a in (f.get("vaccini_doc") or {}).get(pid, [])]
     ids += [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid and m.get("foto_grande")]
     ids += [a["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid for a in m.get("foglio", [])]
+    ids += [a["id"] for x in f.get("documenti", []) if x.get("profilo", "p0") == pid for a in x.get("allegati", [])]
 
     def _m(f):
         f["profili"] = [p for p in f["profili"] if p["id"] != pid]
-        for chiave in ("medicinali", "terapie", "visite", "vaccinazioni"):
+        for chiave in ("medicinali", "terapie", "visite", "vaccinazioni", "documenti"):
             f[chiave] = [x for x in f.get(chiave, []) if x.get("profilo", "p0") != pid]
         f["registro"] = {k: r for k, r in (f.get("registro") or {}).items() if r.get("p", "p0") != pid}
         (f.get("vaccini_doc") or {}).pop(pid, None)
@@ -817,6 +799,10 @@ def _fa_rimuovi_allegato(tipo, proprietario, did):
     def _m(f):
         if tipo == "visita":
             for v in f.get("visite", []):
+                if v["id"] == proprietario:
+                    v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
+        elif tipo == "documento":
+            for v in f.get("documenti", []):
                 if v["id"] == proprietario:
                     v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
         else:
@@ -959,8 +945,8 @@ def _fa_dialogo_vaccinazione(pid, vac_id=None):
 @st.dialog("Conferma eliminazione")
 def _fa_dialogo_elimina_voce(lista, rec_id, etichetta):
     st.write(f"Vuoi eliminare **{etichetta}**?")
-    if lista == "visite":
-        st.caption("Verranno eliminati anche i documenti allegati a questa visita.")
+    if lista in ("visite", "documenti"):
+        st.caption("Verranno eliminati anche i file allegati.")
     c1, c2 = st.columns(2)
     if c1.button("Sì, elimina", type="primary", width="stretch"):
         f = _fa_dati()
@@ -1086,6 +1072,7 @@ def _fa_esporta(f, pid, nomi):
         dati = {"profilo": nomi[pid],
                 "dottore": next((p.get("dottore") for p in f.get("profili", []) if p["id"] == pid), None),
                 "scheda_sanitaria": next((p.get("sanitario") for p in f.get("profili", []) if p["id"] == pid), None),
+                "documenti": [x for x in f.get("documenti", []) if x.get("profilo", "p0") == pid],
                 "gruppo_sanguigno": next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None)}
         for k in chiavi:
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
@@ -1675,6 +1662,10 @@ def _fa_html_completo(d, oggi_):
                                    ("Storia clinica di rilievo", "storia"), ("Familiarità", "famiglia"), ("Altre informazioni", "altro")):
             if san.get(chiave_s):
                 parti.append(f"<p><b>{titolo_s}:</b><br>{e(san[chiave_s]).replace(chr(10), '<br>')}</p>")
+        docs_p = sorted([x for x in f.get("documenti", []) if x.get("profilo", "p0") == pid], key=lambda x: x.get("scadenza") or "9999")
+        parti.append(_fa_tabella_html("Documenti", ["Tipo", "Numero", "Rilasciato da", "Rilascio", "Scadenza"],
+                                      [[x.get("tipo", ""), x.get("numero", ""), x.get("ente", ""), D(x.get("rilascio")),
+                                        "non scade" if x.get("senza_scadenza") else D(x.get("scadenza"))] for x in docs_p]))
         meds = [m for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid]
         parti.append(_fa_tabella_html("Medicinali", ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
                                                       "Scadenza", "Acquisto", "Note"],
@@ -2479,3 +2470,387 @@ def _fa_fasce_dottore(d):
                     fasce.append({"g": g, "da": da, "a": a, "nota": ""})
     return sorted([dict(x) for x in fasce if x.get("g") in GIORNI_SETT],
                   key=lambda x: (GIORNI_SETT.index(x["g"]), x.get("da", "")))
+
+
+# =====================================================================
+# I MIEI DOCUMENTI: catalogo dei documenti personali con avvisi di scadenza a 6 e a 3 mesi
+# =====================================================================
+CATALOGO_DOCUMENTI = {
+    "🪪 Identità": ["Carta d'identità", "Passaporto", "Patente di guida", "Codice fiscale", "Permesso di soggiorno",
+                    "Certificato di nascita", "Stato di famiglia", "Certificato di residenza", "Tessera elettorale"],
+    "🏥 Salute": ["Tessera sanitaria", "Esenzione ticket", "Certificato medico sportivo", "Certificato di invalidità",
+                  "Piano terapeutico", "Polizza sanitaria"],
+    "🚗 Veicoli": ["Libretto / carta di circolazione", "Assicurazione auto (RCA)", "Bollo auto", "Revisione del veicolo",
+                   "Assicurazione moto", "Patente nautica", "Contrassegno invalidi", "Telepass / abbonamento"],
+    "🏠 Casa": ["Contratto di affitto", "Atto di proprietà", "Assicurazione casa", "Attestato energetico (APE)",
+                "Libretto impianto / caldaia", "Visura catastale", "Contratto luce", "Contratto gas",
+                "Contratto internet / telefono", "Regolamento condominiale"],
+    "💼 Lavoro": ["Contratto di lavoro", "Tesserino professionale", "Abilitazione / patentino", "Attestato corso sicurezza",
+                  "Idoneità lavorativa", "Iscrizione all'albo"],
+    "🎓 Studio": ["Diploma", "Laurea", "Libretto universitario", "Certificazione linguistica", "Attestato di corso"],
+    "💳 Soldi e assicurazioni": ["Carta di credito / bancomat", "Carta prepagata", "Conto corrente", "Polizza vita",
+                                  "Polizza infortuni", "ISEE", "Dichiarazione dei redditi", "Pensione / INPS",
+                                  "Mutuo / finanziamento"],
+    "✈️ Viaggi": ["Visto", "Assicurazione viaggio", "Abbonamento trasporti", "Biglietto / prenotazione"],
+    "🐾 Animali": ["Libretto sanitario animale", "Microchip animale", "Assicurazione animale"],
+    "📄 Altro": ["Licenza di caccia o pesca", "Porto d'armi", "Tessera associazione / sport", "Abbonamento (palestra, ecc.)",
+                 "Garanzia / scontrino", "Testamento / documenti legali", "Altro"],
+}
+_DOC_COL = {"scaduto": "#4e342e", "urgente": "#d32f2f", "avviso": "#ef6c00", "ok": "#2e7d32", "nessuna": "#00897b"}
+_DOC_ICO = {"scaduto": "⚫", "urgente": "🚨", "avviso": "🟠", "ok": "🟢", "nessuna": "⚪"}
+
+
+def _doc_catalogo(f):
+    """Tipi di documento per categoria: quelli di serie (meno quelli nascosti) più quelli aggiunti dall'utente."""
+    nascosti = set(f.get("tipi_nascosti") or [])
+    cat = {c: [t for t in lst if t not in nascosti] for c, lst in CATALOGO_DOCUMENTI.items()}
+    for x in f.get("tipi_documento") or []:
+        cat.setdefault(x.get("cat") or "📄 Altro", [])
+        if x["nome"] not in cat[x.get("cat") or "📄 Altro"]:
+            cat[x.get("cat") or "📄 Altro"].append(x["nome"])
+    return {c: lst for c, lst in cat.items() if lst}
+
+
+def _doc_stato(scad_iso, oggi_):
+    """('scaduto' | 'urgente' entro 3 mesi | 'avviso' entro 6 mesi | 'ok' | 'nessuna', giorni mancanti)."""
+    d_ = _fa_data(scad_iso)
+    if not d_:
+        return "nessuna", None
+    giorni = (d_ - oggi_).days
+    if giorni < 0:
+        return "scaduto", giorni
+    if d_ <= aggiungi_mesi(oggi_, 3):
+        return "urgente", giorni
+    if d_ <= aggiungi_mesi(oggi_, 6):
+        return "avviso", giorni
+    return "ok", giorni
+
+
+def _doc_conteggi_home():
+    try:
+        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        docs = (d.get("farmacia") or {}).get("documenti", [])
+    except Exception:
+        return 0, 0
+    oggi_ = oggi()
+    stati = [_doc_stato(x.get("scadenza"), oggi_)[0] for x in docs if not x.get("senza_scadenza")]
+    return sum(1 for s in stati if s in ("urgente", "scaduto")), sum(1 for s in stati if s == "avviso")
+
+
+def _fa_file_uri(nome, mime="image/webp"):
+    return _fa_file_uri_cache(nome, mime, _fa_mtime(nome))
+
+
+@st.cache_resource
+def _fa_file_uri_cache(nome, mime, _data_file):
+    try:
+        cartella = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        cartella = "."
+    try:
+        with open(os.path.join(cartella, nome), "rb") as fh:
+            return f"data:{mime};base64," + base64.b64encode(fh.read()).decode()
+    except OSError:
+        return ""
+
+
+def _css_icona(chiave, uri, aspetto, animazione, durata):
+    return (f".st-key-{chiave}{{--img:url({uri})}}"
+            f".st-key-{chiave} button,.st-key-{chiave} button:hover,.st-key-{chiave} button:focus,.st-key-{chiave} button:active"
+            "{background:var(--img) center/contain no-repeat !important;border:0 !important;box-shadow:none !important;color:transparent}"
+            f".st-key-{chiave} button{{width:112px;height:auto;aspect-ratio:{aspetto};min-height:0;padding:0;border-radius:0;"
+            f"cursor:pointer;animation:{animazione} {durata}s ease-in-out infinite}}"
+            f".st-key-{chiave} button:active{{transform:scale(.94);animation:none}}"
+            f".st-key-{chiave} button p{{font-size:0}}")
+
+
+def icona_farmacia():
+    """Le due icone della Home, una accanto all'altra: Farmacia e I miei documenti. Pulsano piano per far capire che si toccano."""
+    uri = _fa_icona_uri()
+    uri_d = _fa_file_uri("documenti.webp")
+    urg, avv = _doc_conteggi_home()
+    css = ("<style>.st-key-azioni_icone [data-testid='stHorizontalBlock']{flex-direction:row !important;flex-wrap:nowrap !important;"
+           "gap:8px !important;align-items:flex-start !important}"
+           ".st-key-azioni_icone [data-testid='stColumn'],.st-key-azioni_icone [data-testid='column']"
+           "{flex:0 0 auto !important;width:auto !important;min-width:0 !important}"
+           "@keyframes fa-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
+           "50%{transform:scale(1.07);filter:drop-shadow(0 0 14px rgba(229,57,53,.9))}}"
+           "@keyframes doc-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
+           "50%{transform:scale(1.07);filter:drop-shadow(0 0 14px rgba(2,136,209,.95))}}"
+           "@keyframes doc-allarme{0%,100%{transform:scale(1);filter:drop-shadow(0 0 4px rgba(211,47,47,.6))}"
+           "50%{transform:scale(1.09);filter:drop-shadow(0 0 18px rgba(211,47,47,1))}}")
+    if uri:
+        css += _css_icona("fa_icona", uri, "1/1", "fa-battito", 2.2)
+    if uri_d:
+        css += _css_icona("doc_icona", uri_d, "360/345", "doc-allarme" if urg else "doc-battito", 1.2 if urg else 2.2)
+    css += "</style>"
+    st.markdown(css, unsafe_allow_html=True)
+    with st.container(key="azioni_icone"):
+        c1, c2 = st.columns(2, gap="small")
+        with c1:
+            premuto = st.button("Farmacia" if uri else "🏥 Farmacia", key="fa_icona", help="Apri la Farmacia")
+        with c2:
+            premuto_d = st.button("I miei documenti" if uri_d else "📁 I miei documenti", key="doc_icona",
+                                  help="Apri i miei documenti")
+            if urg or avv:
+                st.markdown(f"<div style='width:112px;text-align:center;font-weight:800;font-size:.72rem;"
+                            f"color:{'#b71c1c' if urg else '#e65100'}'>{'🚨' if urg else '⚠️'} {urg or avv} "
+                            f"{'da rinnovare' if urg else 'in scadenza'}</div>", unsafe_allow_html=True)
+    if premuto:
+        st.session_state.pop("sezione_home", None)
+        st.session_state["farmacia_aperta"] = True
+        st.rerun()
+    if premuto_d:
+        st.session_state["sezione_home"] = "documenti"
+        st.session_state["farmacia_aperta"] = True
+        st.rerun()
+
+
+def _doc_css():
+    st.markdown("<style>@keyframes doc-pulso{0%{box-shadow:0 0 0 0 rgba(211,47,47,.55)}70%{box-shadow:0 0 0 12px rgba(211,47,47,0)}"
+                "100%{box-shadow:0 0 0 0 rgba(211,47,47,0)}}"
+                ".doc-urg{animation:doc-pulso 1.6s infinite;background:#ffebee}"
+                ".doc-allarme-box{background:linear-gradient(135deg,#b71c1c,#e53935);color:#fff;border-radius:18px;padding:12px 16px;"
+                "margin:8px 0;font-weight:800;animation:doc-pulso 1.6s infinite}"
+                ".doc-hero{background:linear-gradient(135deg,#0277bd 0%,#039be5 55%,#26c6da 100%);color:#fff;padding:20px 24px;"
+                "border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}"
+                ".doc-hero h1{margin:0;font-size:1.8rem;color:#fff;padding:0}.doc-hero p{margin:4px 0 0;opacity:.92}</style>",
+                unsafe_allow_html=True)
+
+
+def _doc_card(x, oggi_, emoji):
+    e = html.escape
+    stato, g = _doc_stato(x.get("scadenza"), oggi_)
+    if x.get("senza_scadenza"):
+        stato = "nessuna"
+    righe = f"<div class='nome'>{emoji} {e(x.get('tipo', ''))}</div>"
+    if x.get("numero"):
+        righe += f"<div class='riga'>🔢 {e(x['numero'])}</div>"
+    if x.get("ente"):
+        righe += f"<div class='riga'>🏛️ {e(x['ente'])}</div>"
+    if x.get("rilascio"):
+        righe += f"<div class='riga'>📅 Rilasciato il {data_it(x['rilascio'])}</div>"
+    if x.get("senza_scadenza"):
+        righe += "<span class='scad'>♾️ Non scade</span>"
+    elif x.get("scadenza"):
+        testo = {"scaduto": f"SCADUTO da {abs(g or 0)} giorni", "urgente": f"URGENTE · scade tra {g} giorni (entro 3 mesi)",
+                 "avviso": f"Scade tra {g} giorni (entro 6 mesi)", "ok": f"Scade tra {g} giorni"}.get(stato, "")
+        righe += f"<span class='scad'>{_DOC_ICO[stato]} {e(testo)} · {data_it(x['scadenza'])}</span>"
+    if x.get("note"):
+        righe += f"<div class='riga'>📝 {e(x['note'])}</div>"
+    classe = "fa-med doc-urg" if stato == "urgente" else "fa-med"
+    return f"<div class='{classe}' style='--c:{_DOC_COL[stato]}'>{righe}</div>"
+
+
+def schermata_documenti():
+    st.markdown(_FA_CSS, unsafe_allow_html=True)
+    _doc_css()
+    if st.button("← Torna alla dispensa", key="doc_indietro"):
+        st.session_state.pop("sezione_home", None)
+        st.session_state.pop("doc_modulo", None)
+        st.session_state["farmacia_aperta"] = False
+        st.rerun()
+    st.markdown("<div class='doc-hero'><h1>📁 I miei documenti</h1><p>Scadenze sempre sotto controllo: ti avviso 6 e 3 mesi prima</p></div>",
+                unsafe_allow_html=True)
+    if st.session_state.get("fa_msg"):
+        _msg = st.session_state.pop("fa_msg")
+        (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
+    if st.session_state.get("doc_modulo"):
+        _doc_modulo(**st.session_state["doc_modulo"])
+        return
+
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    nomi = {p["id"]: p["nome"] for p in profili}
+    if st.session_state.get("fa_profilo") not in nomi:
+        st.session_state["fa_profilo"] = profili[0]["id"]
+    pid = st.selectbox("👤 Documenti di", list(nomi), format_func=lambda i: nomi[i], key="fa_profilo")
+    oggi_ = oggi()
+    docs = [x for x in f.get("documenti", []) if x.get("profilo", "p0") == pid]
+    stati = [(x, "nessuna" if x.get("senza_scadenza") else _doc_stato(x.get("scadenza"), oggi_)[0]) for x in docs]
+    n = lambda *s: sum(1 for _, st_ in stati if st_ in s)
+    st.markdown(
+        "<div class='fa-kpi'>"
+        f"<div class='fa-k'><span>Documenti</span><b>{len(stati)}</b></div>"
+        f"<div class='fa-k arancione'><span>Entro 6 mesi</span><b>{n('avviso')}</b></div>"
+        f"<div class='fa-k rosso'><span>Entro 3 mesi</span><b>{n('urgente')}</b></div>"
+        f"<div class='fa-k scaduto'><span>Scaduti</span><b>{n('scaduto')}</b></div></div>", unsafe_allow_html=True)
+
+    urgenti = [x for x, s_ in stati if s_ == "urgente"]
+    scaduti = [x for x, s_ in stati if s_ == "scaduto"]
+    avvisi = [x for x, s_ in stati if s_ == "avviso"]
+    if urgenti or scaduti:
+        elenco = ", ".join(html.escape(x.get("tipo", "")) + (f" ({data_it(x['scadenza'])})" if x.get("scadenza") else "")
+                           for x in urgenti + scaduti)
+        st.markdown(f"<div class='doc-allarme-box'>🚨 SECONDO AVVISO · SCADENZA VICINA O GIÀ PASSATA<br>"
+                    f"<span style='font-weight:600'>{elenco}</span></div>", unsafe_allow_html=True)
+        if not st.session_state.get("doc_toast_" + pid):
+            st.session_state["doc_toast_" + pid] = True
+            st.toast("🚨 Hai documenti da rinnovare con urgenza", icon="🚨")
+    if avvisi:
+        st.warning("🟠 **Primo avviso** · scadono entro 6 mesi: " + ", ".join(
+            f"{x.get('tipo', '')} ({data_it(x['scadenza'])})" for x in avvisi))
+
+    if st.button("➕ Aggiungi un documento", type="primary", key="doc_aggiungi", width="stretch"):
+        st.session_state["doc_modulo"] = {"pid": pid, "doc_id": None}
+        st.rerun()
+
+    cat = _doc_catalogo(f)
+    emoji_di = {t: c.split(" ")[0] for c, lst in cat.items() for t in lst}
+    c1, c2 = st.columns([3, 2])
+    cerca = c1.text_input("Cerca", placeholder="tipo, numero, ente, note…", label_visibility="collapsed", key="doc_cerca")
+    categorie = ["Tutte le categorie"] + list(cat)
+    filtro = c2.selectbox("Categoria", categorie, label_visibility="collapsed", key="doc_cat")
+    visibili = []
+    for x, s_ in stati:
+        testo = " ".join(str(x.get(k, "")) for k in ("tipo", "numero", "ente", "note")).lower()
+        if cerca and cerca.lower() not in testo:
+            continue
+        if filtro != "Tutte le categorie" and x.get("tipo") not in cat.get(filtro, []):
+            continue
+        visibili.append(x)
+    visibili.sort(key=lambda x: (x.get("senza_scadenza") or not x.get("scadenza"), x.get("scadenza") or "9999-12-31"))
+
+    if not docs:
+        st.info("Nessun documento per questo profilo. Tocca «Aggiungi un documento» per inserire il primo.")
+    elif not visibili:
+        st.info("Nessun documento corrisponde ai filtri.")
+    for x in visibili:
+        with st.container(border=True):
+            st.markdown(_doc_card(x, oggi_, emoji_di.get(x.get("tipo"), "📄")), unsafe_allow_html=True)
+            _fa_bottoni_allegati(x.get("allegati", []), "documento", x["id"])
+            b1, b2 = st.columns(2, gap="small")
+            if b1.button("Elimina", icon=":material/delete:", key="doc_el_" + x["id"], width="stretch"):
+                _fa_dialogo_elimina_voce("documenti", x["id"], x.get("tipo", "documento"))
+            if b2.button("Modifica", icon=":material/edit:", key="doc_mo_" + x["id"], width="stretch"):
+                st.session_state["doc_modulo"] = {"pid": pid, "doc_id": x["id"]}
+                st.rerun()
+    _doc_gestione_tipi(f)
+    st.caption("🔔 Gli avvisi su Telegram e per email (se li hai attivati) arrivano 6 mesi prima (primo avviso) e 3 mesi prima "
+               "(secondo avviso, più insistente). Contiene dati personali: non condividerli con chi non deve vederli.")
+
+
+def _doc_modulo(pid, doc_id=None):
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    nomi = {p["id"]: p["nome"] for p in profili}
+    x = next((d_ for d_ in f.get("documenti", []) if d_["id"] == doc_id), {}) if doc_id else {}
+    if st.button("← Annulla e torna ai documenti", key="doc_mod_annulla"):
+        st.session_state.pop("doc_modulo", None)
+        st.rerun()
+    st.subheader("✏️ Modifica documento" if doc_id else "➕ Nuovo documento")
+    cat = _doc_catalogo(f)
+    tutti = [t for lst in cat.values() for t in lst]
+    if x.get("tipo") and x["tipo"] not in tutti:
+        tutti.insert(0, x["tipo"])
+    emoji_di = {t: c.split(" ")[0] for c, lst in cat.items() for t in lst}
+
+    if x.get("allegati"):
+        st.markdown("**Già allegato:**")
+        for a in x["allegati"]:
+            r1, r2, r3 = st.columns([3, 1, 1], gap="small")
+            r1.markdown(("📄 " if a.get("mime") == "application/pdf" else "🖼️ ") + html.escape(a["nome"]))
+            if r2.button("Apri", key="doc_ap_" + a["id"]):
+                _fa_dialogo_doc(a, "documento", doc_id)
+            if r3.button("🗑️", key="doc_del_" + a["id"], help="Elimina questo file"):
+                try:
+                    _fa_rimuovi_allegato("documento", doc_id, a["id"])
+                except Exception as ex:
+                    st.error(f"Non sono riuscito a eliminarlo: {ex}")
+                else:
+                    st.rerun()
+
+    with st.form("doc_form_" + (doc_id or "nuovo")):
+        tipo = st.selectbox("Tipo di documento", tutti, index=_fa_idx(tutti, x.get("tipo")),
+                            format_func=lambda t: f"{emoji_di.get(t, '📄')} {t}")
+        nuovo_tipo = st.text_input("Non lo trovi? Scrivi qui il nuovo tipo", placeholder="es. Tessera della biblioteca")
+        cat_nuovo = st.selectbox("Categoria del nuovo tipo", list(CATALOGO_DOCUMENTI), index=len(CATALOGO_DOCUMENTI) - 1)
+        per = st.selectbox("Di chi è", list(nomi), format_func=lambda i: nomi[i], index=_fa_idx(list(nomi), x.get("profilo", pid)))
+        numero = st.text_input("Numero o identificativo", value=x.get("numero", ""))
+        ente = st.text_input("Rilasciato da", value=x.get("ente", ""))
+        rilascio = st.date_input("Data di rilascio (facoltativa)", value=_fa_data(x.get("rilascio")), format="DD/MM/YYYY",
+                                 min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
+        senza = st.checkbox("Questo documento non scade", value=bool(x.get("senza_scadenza")))
+        scadenza = st.date_input("Data di scadenza", value=_fa_data(x.get("scadenza")), format="DD/MM/YYYY",
+                                 min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
+        note = st.text_area("Note", value=x.get("note", ""))
+        nuovi = st.file_uploader("Foto o PDF del documento (fronte, retro, pagine): scatta o scegli", type=TIPI_FILE,
+                                 accept_multiple_files=True)
+        invio = st.form_submit_button("💾 Salva il documento", type="primary", width="stretch")
+    st.caption("L'avviso arriva 6 mesi prima della scadenza (primo avviso) e 3 mesi prima (secondo avviso, più insistente).")
+    if invio:
+        tipo_f = nuovo_tipo.strip() or tipo
+        try:
+            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+        except ValueError as ex:
+            st.error(str(ex))
+            return
+        except Exception as ex:
+            st.error(f"Non sono riuscito a salvare i file: {ex}")
+            return
+        rec = {"profilo": per, "tipo": tipo_f, "numero": numero.strip(), "ente": ente.strip(),
+               "rilascio": rilascio.isoformat() if rilascio else None, "senza_scadenza": bool(senza),
+               "scadenza": None if senza or not scadenza else scadenza.isoformat(), "note": note.strip()}
+
+        def _scrivi(f):
+            f.setdefault("documenti", [])
+            noti = {t for lst in _doc_catalogo(f).values() for t in lst} | set(CATALOGO_DOCUMENTI.get("📄 Altro", []))
+            if nuovo_tipo.strip() and tipo_f not in noti:
+                f.setdefault("tipi_documento", []).append({"nome": tipo_f, "cat": cat_nuovo})
+            if doc_id:
+                for d_ in f["documenti"]:
+                    if d_["id"] == doc_id:
+                        d_.update(rec)
+                        d_["allegati"] = (d_.get("allegati") or []) + riferimenti
+            else:
+                rec["id"] = uuid.uuid4().hex[:10]
+                rec["allegati"] = riferimenti
+                f["documenti"].append(rec)
+        try:
+            _fa_salva(_scrivi, "Documenti: salvataggio")
+        except Exception as ex:
+            st.error(f"Non sono riuscito a salvare: {ex}")
+            return
+        st.session_state.pop("doc_modulo", None)
+        stato_, _g = _doc_stato(rec["scadenza"], oggi())
+        st.session_state["fa_msg"] = ("⚠️ Documento salvato, ma attenzione: " + ("è già scaduto." if stato_ == "scaduto"
+                                      else "scade entro 3 mesi: rinnovalo presto.") if stato_ in ("scaduto", "urgente")
+                                      else "✅ Documento salvato.")
+        st.rerun()
+
+
+def _doc_gestione_tipi(f):
+    with st.expander("⚙️ Gestisci i tipi di documento"):
+        st.caption("Aggiungi i tuoi tipi, toglili o nascondi quelli che non usi.")
+        with st.form("doc_form_tipo", clear_on_submit=True):
+            nome = st.text_input("Nuovo tipo di documento", placeholder="es. Tessera della biblioteca")
+            categoria = st.selectbox("Categoria", list(CATALOGO_DOCUMENTI), index=len(CATALOGO_DOCUMENTI) - 1)
+            ok = st.form_submit_button("Aggiungi il tipo")
+        if ok and nome.strip():
+            try:
+                _fa_salva(lambda f: f.setdefault("tipi_documento", []).append({"nome": nome.strip(), "cat": categoria}),
+                          "Documenti: tipo")
+            except Exception as ex:
+                st.error(f"Non sono riuscito a salvare: {ex}")
+            else:
+                st.rerun()
+        for i, t_ in enumerate(f.get("tipi_documento") or []):
+            r1, r2 = st.columns([4, 1], gap="small")
+            r1.markdown(f"{t_.get('cat', '📄 Altro').split(' ')[0]} {html.escape(t_['nome'])}")
+            if r2.button("🗑️", key=f"doc_tipo_del_{i}", help="Togli questo tipo (i documenti già inseriti restano)"):
+                try:
+                    _fa_salva(lambda f, i=i: f["tipi_documento"].pop(i), "Documenti: tipo eliminato")
+                except Exception as ex:
+                    st.error(f"Non sono riuscito a salvare: {ex}")
+                else:
+                    st.rerun()
+        tutti_di_serie = [t for lst in CATALOGO_DOCUMENTI.values() for t in lst]
+        nascosti = st.multiselect("Nascondi i tipi che non usi", tutti_di_serie, default=[t for t in (f.get("tipi_nascosti") or []) if t in tutti_di_serie],
+                                  key="doc_nascosti")
+        if st.button("Salva i tipi nascosti", key="doc_salva_nascosti"):
+            try:
+                _fa_salva(lambda f: f.__setitem__("tipi_nascosti", list(nascosti)), "Documenti: tipi nascosti")
+            except Exception as ex:
+                st.error(f"Non sono riuscito a salvare: {ex}")
+            else:
+                st.rerun()

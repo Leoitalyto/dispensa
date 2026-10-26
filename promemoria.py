@@ -15,6 +15,7 @@ Chiavi segrete (GitHub -> Settings -> Secrets and variables -> Actions), ognuna 
   SMS:      TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM
 """
 import base64
+import calendar
 import glob
 import json
 import os
@@ -71,6 +72,25 @@ def voci_utente(d):
     return voci
 
 
+def meno_mesi(d, n):
+    """La data n mesi prima di d (il giorno si adatta se il mese è più corto)."""
+    m = d.month - 1 - n
+    anno, mese = d.year + m // 12, m % 12 + 1
+    return date(anno, mese, min(d.day, calendar.monthrange(anno, mese)[1]))
+
+
+def documenti_utente(d):
+    """Documenti con scadenza: (tipo, profilo, scadenza)."""
+    f = d.get("farmacia") or {}
+    profili = {p["id"]: p.get("nome", "") for p in f.get("profili", [])}
+    risultato = []
+    for x in f.get("documenti", []):
+        s = data_di(x.get("scadenza"))
+        if s and not x.get("senza_scadenza"):
+            risultato.append((x.get("tipo", "Documento"), profili.get(x.get("profilo", "p0"), ""), s))
+    return risultato
+
+
 def raccogli(d, oggi):
     in_soglia, scaduti = [], []
     for icona, nome, s, profilo in voci_utente(d):
@@ -79,10 +99,19 @@ def raccogli(d, oggi):
             in_soglia.append((g, icona, nome, s, profilo))
         elif g < 0 and oggi.weekday() == 0:          # i già scaduti: un promemoria ogni lunedì
             scaduti.append((g, icona, nome, s, profilo))
-    return sorted(in_soglia, key=lambda x: x[0]), sorted(scaduti, key=lambda x: x[0])
+    docs = []                                   # (livello, tipo, profilo, scadenza, giorni): 1 = sei mesi prima, 2 = tre mesi prima
+    for tipo, profilo, s in documenti_utente(d):
+        g = (s - oggi).days
+        if meno_mesi(s, 6) == oggi:
+            docs.append((1, tipo, profilo, s, g))
+        elif meno_mesi(s, 3) == oggi:
+            docs.append((2, tipo, profilo, s, g))
+        elif g < 0 and oggi.weekday() == 0:      # già scaduti: un promemoria ogni lunedì
+            scaduti.append((g, "📄", tipo, s, profilo))
+    return sorted(in_soglia, key=lambda x: x[0]), sorted(scaduti, key=lambda x: x[0]), docs
 
 
-def testo_lungo(d, oggi, in_soglia, scaduti):
+def testo_lungo(d, oggi, in_soglia, scaduti, docs=()):
     """Per Telegram ed email."""
     privacy = bool(d.get("telegram_privacy"))
     righe = [f"🔔 Promemoria scadenze del {oggi.strftime('%d/%m/%Y')}"]
@@ -100,12 +129,22 @@ def testo_lungo(d, oggi, in_soglia, scaduti):
         if med and privacy:
             righe.append(("• 💊 1 medicinale" if len(med) == 1 else f"• 💊 {len(med)} medicinali")
                          + ": apri la Farmacia per i dettagli")
+    secondi = [x for x in docs if x[0] == 2]
+    primi = [x for x in docs if x[0] == 1]
+    if secondi:                                  # secondo avviso: più insistente
+        righe.extend(["", "🚨🚨 DOCUMENTI – SECONDO AVVISO: SCADONO TRA 3 MESI 🚨🚨"])
+        righe.extend(f"• 🚨 {tipo.upper()}" + (f" ({profilo})" if profilo else "") + f" – SCADE IL {s.strftime('%d/%m/%Y')}: RINNOVALO SUBITO"
+                     for _, tipo, profilo, s, g in secondi)
+    if primi:
+        righe.extend(["", "📄 Documenti – primo avviso: scadono tra 6 mesi"])
+        righe.extend(f"• 📄 {tipo}" + (f" ({profilo})" if profilo else "") + f" – scade il {s.strftime('%d/%m/%Y')}"
+                     for _, tipo, profilo, s, g in primi)
     blocco("⚠️ In scadenza:", in_soglia)
     blocco("⚫ Già scaduti (da buttare o controllare):", scaduti)
     return "\n".join(righe)
 
 
-def testo_sms(oggi, in_soglia, scaduti):
+def testo_sms(oggi, in_soglia, scaduti, docs=()):
     """Per gli SMS: breve e senza nomi di medicinali (un SMS non è un canale riservato)."""
     def pl(n, uno, molti):
         return f"{n} {uno if n == 1 else molti}"
@@ -113,7 +152,13 @@ def testo_sms(oggi, in_soglia, scaduti):
     med = sum(1 for x in in_soglia if x[1] == "💊")
     parti = [x for x in (pl(prod, "prodotto", "prodotti") if prod else "",
                          pl(med, "medicinale", "medicinali") if med else "") if x]
-    testo = f"Dispensa {oggi.strftime('%d/%m')}: " + (" e ".join(parti) + " in scadenza" if parti else "nessuna scadenza vicina")
+    n_doc2 = sum(1 for x in docs if x[0] == 2)
+    n_doc1 = sum(1 for x in docs if x[0] == 1)
+    if n_doc2:
+        parti.append("URGENTE " + pl(n_doc2, "documento", "documenti") + " in scadenza tra 3 mesi")
+    if n_doc1:
+        parti.append(pl(n_doc1, "documento", "documenti") + " in scadenza tra 6 mesi")
+    testo = f"Dispensa {oggi.strftime('%d/%m')}: " + (" e ".join(parti) + (" in scadenza" if (prod or med) else "") if parti else "nessuna scadenza vicina")
     if scaduti:
         testo += f"; {pl(len(scaduti), 'già scaduto', 'già scaduti')}"
     return testo + ". Apri l'app per i dettagli."
@@ -272,21 +317,21 @@ def main():
                 elif canale == "email" and (d.get("avviso_email") or "").strip():
                     registra(uid, canale, invia_email(d["avviso_email"].strip(), "Promemoria terapia - La nostra dispensa", testo))
             continue
-        in_soglia, scaduti = raccogli(d, oggi)
-        if not PROVA and not in_soglia and not scaduti:
+        in_soglia, scaduti, docs = raccogli(d, oggi)
+        if not PROVA and not in_soglia and not scaduti and not docs:
             continue
         for canale in canali_di(d):
             if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
                 testo = "✅ Prova riuscita: da oggi ricevi qui i promemoria della dispensa e della Farmacia." if PROVA \
-                    else testo_lungo(d, oggi, in_soglia, scaduti)
+                    else testo_lungo(d, oggi, in_soglia, scaduti, docs)
                 esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
             elif canale == "email" and (d.get("avviso_email") or "").strip():
                 testo = "Prova riuscita: da oggi ricevi via email i promemoria della dispensa e della Farmacia." if PROVA \
-                    else testo_lungo(d, oggi, in_soglia, scaduti)
+                    else testo_lungo(d, oggi, in_soglia, scaduti, docs)
                 esito = invia_email(d["avviso_email"].strip(), "Promemoria scadenze - La nostra dispensa", testo)
             elif canale == "sms" and (d.get("avviso_sms") or "").strip():
                 testo = "Dispensa: prova riuscita, da oggi ricevi qui gli avvisi di scadenza." if PROVA \
-                    else testo_sms(oggi, in_soglia, scaduti)
+                    else testo_sms(oggi, in_soglia, scaduti, docs)
                 esito = invia_sms(d["avviso_sms"].strip(), testo)
             else:
                 continue
