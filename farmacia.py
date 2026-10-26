@@ -226,6 +226,8 @@ def schermata_farmacia():
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
         _fa_dialogo_farmacie()
 
+    _fa_blocco_telegram()
+
     f = _fa_dati()
     profili = _fa_profili(f)
     nomi = {p["id"]: p["nome"] for p in profili}
@@ -1176,3 +1178,33 @@ def _fa_dialogo_farmacie():
                    "essere incompleti o non aggiornati. Nei giorni festivi e di notte gli orari normali non valgono. "
                    "L'app non può sapere quali farmacie sono di turno: usa il pulsante qui sopra o telefona per "
                    "esserne sicuro.")
+
+
+# =====================================================================
+# NOTIFICHE TELEGRAM (le invia il programma automatico promemoria.py su GitHub)
+# =====================================================================
+def _fa_blocco_telegram():
+    d = carica_dati(crea_archivio(), st.session_state["percorso"])
+    chat = str(d.get("telegram_chat_id") or "")
+    with st.expander("🔔 Promemoria su Telegram" + (" (attivi)" if chat else "")):
+        st.caption("Ogni mattina ricevi un messaggio quando un prodotto della dispensa o un medicinale sta per scadere "
+                   "(60, 30, 14, 7 giorni, 1 giorno e il giorno stesso) e ogni lunedì per quelli già scaduti.")
+        with st.form("fa_form_telegram"):
+            nuovo = st.text_input("Il tuo Chat ID di Telegram (solo numeri)", value=chat, placeholder="es. 123456789")
+            privacy = st.checkbox("Nei messaggi non scrivere i nomi dei medicinali (solo quanti sono)",
+                                  value=bool(d.get("telegram_privacy")))
+            ok = st.form_submit_button("Salva")
+        st.caption("Per l'attivazione serve preparare il bot Telegram su GitHub: te lo spiega l'amministratore. "
+                   "Senza Chat ID non arriva nessun messaggio. Lascia vuoto il campo per disattivare.")
+    if ok:
+        nuovo = nuovo.strip()
+        if nuovo and not re.fullmatch(r"-?\d{5,15}", nuovo):
+            st.error("Il Chat ID è un numero (per esempio 123456789).")
+            return
+        try:
+            salva(lambda d: d.update({"telegram_chat_id": nuovo, "telegram_privacy": bool(privacy)}), "Telegram")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Impostazioni Telegram salvate." if nuovo else "✅ Promemoria Telegram disattivati."
+        st.rerun()
