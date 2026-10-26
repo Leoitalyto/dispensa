@@ -310,6 +310,7 @@ def schermata_farmacia():
         st.session_state.pop("fa_modulo_med", None)
         st.session_state.pop("fa_modulo_foglio", None)
         st.session_state.pop("fa_modulo_dottore", None)
+        st.session_state.pop("fa_modulo_sanitario", None)
         st.session_state["farmacia_aperta"] = False
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
@@ -325,6 +326,9 @@ def schermata_farmacia():
         return
     if st.session_state.get("fa_modulo_dottore"):
         _fa_modulo_dottore(**st.session_state["fa_modulo_dottore"])
+        return
+    if st.session_state.get("fa_modulo_sanitario"):
+        _fa_modulo_sanitario(**st.session_state["fa_modulo_sanitario"])
         return
 
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
@@ -1060,6 +1064,7 @@ def _fa_esporta(f, pid, nomi):
         chiavi = ("medicinali", "terapie", "visite", "vaccinazioni")
         dati = {"profilo": nomi[pid],
                 "dottore": next((p.get("dottore") for p in f.get("profili", []) if p["id"] == pid), None),
+                "scheda_sanitaria": next((p.get("sanitario") for p in f.get("profili", []) if p["id"] == pid), None),
                 "gruppo_sanguigno": next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None)}
         for k in chiavi:
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
@@ -1417,6 +1422,10 @@ def _fa_html_report(f, pid, nomi, da, a, righe, riepilogo, oggi_):
     e = html.escape
     terapie = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid and t_.get("stato", "attiva") == "attiva"]
     allergie = (f.get("allergie") or {}).get(pid, [])
+    san = next((p.get("sanitario") for p in f.get("profili", []) if p["id"] == pid), None) or {}
+    blocco_san = "".join(f"<h2>{tit}</h2><p>{e(san[k]).replace(chr(10), '<br>')}</p>"
+                         for tit, k in (("Patologie", "patologie"), ("Interventi subiti", "interventi"),
+                                        ("Storia clinica di rilievo", "storia")) if san.get(k))
     celle = lambda riga: "".join(f"<td>{e(str(c))}</td>" for c in riga)
     t_ter = "".join("<tr>" + celle([_fa_nome_med(f, t_.get("med"), t_.get("nome_med", "")), t_.get("quantita", ""),
                                     ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", [])),
@@ -1435,6 +1444,7 @@ table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{border:1px s
 <p>Gruppo sanguigno: <b>{e(next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None) or "non indicato")}</b></p>
 <div class="box"><b>Riepilogo:</b> {riepilogo}</div>
 <h2>Allergie e intolleranze dichiarate</h2><p>{e(", ".join(allergie)) if allergie else "Nessuna dichiarata"}</p>
+{blocco_san}
 <h2>Terapie attive</h2><table><tr><th>Medicinale</th><th>Quantità</th><th>Giorni</th><th>Orari</th><th>Periodo</th><th>Note</th></tr>{t_ter}</table>
 <h2>Assunzioni</h2><table><tr><th>Data</th><th>Ora prevista</th><th>Medicinale</th><th>Quantità</th><th>Stato</th><th>Registrata il</th></tr>{t_dosi}</table>
 <p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente. «Presa» significa che la persona ha toccato
@@ -1506,8 +1516,10 @@ def _fa_icone_gruppi():
 
 
 def _fa_scheda_gruppo(nome, gruppo):
-    stile = ("display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.78);border-radius:18px;"
-             "padding:8px 10px;margin:0;color:#1b2b2b;min-width:0")
+    stile = ("display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.82);border-radius:18px;"
+             "padding:8px 10px;margin:0;color:#1b2b2b;min-width:0;border:2px solid rgba(183,28,28,.35);"
+             "animation:fa-pulso-r 2.6s infinite")
+    freccia = "<div style='margin-left:auto;font-size:1.8rem;color:#b71c1c;font-weight:900;line-height:1'>›</div>"
     if gruppo:
         try:
             uri = _fa_icone_gruppi().get(gruppo)
@@ -1515,13 +1527,15 @@ def _fa_scheda_gruppo(nome, gruppo):
             uri = None
         goccia = (f"<img src='{uri}' alt='{html.escape(gruppo)}' style='height:72px;flex:0 0 auto'>" if uri
                   else "<span style='font-size:2rem'>🩸</span>")
-        st.markdown(f"<div style='{stile}'>{goccia}<div style='min-width:0;word-break:break-word'>"
-                    f"<b style='font-size:1rem;line-height:1.15'>{html.escape(nome)}</b><br>"
-                    f"<span style='font-size:.78rem'>Gruppo sanguigno</span><br>"
-                    f"<b style='font-size:1.5rem;color:#b71c1c;line-height:1.1'>{html.escape(gruppo)}</b></div></div>",
-                    unsafe_allow_html=True)
+        corpo = (f"<b style='font-size:1rem;line-height:1.15'>{html.escape(nome)}</b><br>"
+                 f"<span style='font-size:.78rem'>Gruppo sanguigno</span><br>"
+                 f"<b style='font-size:1.5rem;color:#b71c1c;line-height:1.1'>{html.escape(gruppo)}</b>")
     else:
-        st.caption("🩸 Gruppo sanguigno non indicato: puoi sceglierlo in «Gestisci profili».")
+        goccia = "<span style='font-size:2rem'>🩸</span>"
+        corpo = (f"<b style='font-size:1rem;line-height:1.15'>{html.escape(nome)}</b><br>"
+                 "<span style='font-size:.78rem'>Gruppo sanguigno non indicato</span>")
+    st.markdown(f"<div style='{stile}'>{goccia}<div style='min-width:0;word-break:break-word'>{corpo}</div>{freccia}</div>",
+                unsafe_allow_html=True)
 
 
 def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
@@ -1631,6 +1645,11 @@ def _fa_html_completo(d, oggi_):
                          + (f" · tel. {e(dott['telefono'])}" if dott.get("telefono") else "")
                          + (f" · {e(dott['email'])}" if dott.get("email") else "")
                          + (f" · {e(dott['indirizzo'])}" if dott.get("indirizzo") else "") + "</p>")
+        san = p.get("sanitario") or {}
+        for titolo_s, chiave_s in (("Patologie", "patologie"), ("Interventi subiti", "interventi"),
+                                   ("Storia clinica di rilievo", "storia"), ("Familiarità", "famiglia"), ("Altre informazioni", "altro")):
+            if san.get(chiave_s):
+                parti.append(f"<p><b>{titolo_s}:</b><br>{e(san[chiave_s]).replace(chr(10), '<br>')}</p>")
         meds = [m for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid]
         parti.append(_fa_tabella_html("Medicinali", ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
                                                       "Scadenza", "Acquisto", "Note"],
@@ -1999,7 +2018,7 @@ def _fa_icone_dottori():
 
 
 def _fa_riga_profilo(profili, pid, nome, gruppo):
-    """Una sola striscia: a sinistra il gruppo sanguigno, a destra l'immagine del dottore, che è un pulsante."""
+    """Una sola striscia: a sinistra il gruppo sanguigno (apre la scheda sanitaria), a destra l'immagine del dottore."""
     dott = next((p.get("dottore") for p in profili if p["id"] == pid), None) or {}
     tipo = dott.get("tipo")
     try:
@@ -2016,25 +2035,40 @@ def _fa_riga_profilo(profili, pid, nome, gruppo):
         "{flex:0 0 112px !important;width:112px !important;min-width:112px !important}"
         ".st-key-fa_dottore_btn [data-testid='stButton'],.st-key-fa_dottore_btn2 [data-testid='stButton']{width:100%}"
         ".st-key-fa_dottore_btn button{width:100%;height:auto;aspect-ratio:200/236;min-height:0;border-radius:22px;"
-        "border:2px solid rgba(255,255,255,.95);padding:0;font-size:2.6rem;color:transparent;"
+        "border:0;padding:0;font-size:2.6rem;color:transparent;"
         f"background:{sfondo}rgba(255,255,255,.7);animation:fa-pulso 2.6s infinite}}"
         ".st-key-fa_dottore_btn button p{font-size:0}"
         "@keyframes fa-pulso{0%{box-shadow:0 0 0 0 rgba(13,148,136,.55)}70%{box-shadow:0 0 0 12px rgba(13,148,136,0)}"
         "100%{box-shadow:0 0 0 0 rgba(13,148,136,0)}}"
-        ".st-key-fa_dottore_btn2 button{width:100%;min-height:34px;border-radius:999px;border:0;padding:3px 6px;"
-        "background:linear-gradient(135deg,#00a98f,#0288d1);box-shadow:0 3px 0 rgba(0,70,90,.3)}"
-        ".st-key-fa_dottore_btn2 button p{color:#fff !important;font-weight:800 !important;font-size:.72rem !important;"
-        "line-height:1.1;margin:0}"
+        "@keyframes fa-pulso-r{0%{box-shadow:0 0 0 0 rgba(198,40,40,.5)}70%{box-shadow:0 0 0 10px rgba(198,40,40,0)}"
+        "100%{box-shadow:0 0 0 0 rgba(198,40,40,0)}}"
+        ".st-key-fa_dottore_btn2 button,.st-key-fa_gruppo_btn2 button{width:100%;min-height:34px;border-radius:999px;border:0;padding:3px 6px}"
+        ".st-key-fa_dottore_btn2 button{background:linear-gradient(135deg,#00a98f,#0288d1);box-shadow:0 3px 0 rgba(0,70,90,.3)}"
+        ".st-key-fa_gruppo_btn2 button{background:linear-gradient(135deg,#c62828,#ef5350);box-shadow:0 3px 0 rgba(110,20,20,.35)}"
+        ".st-key-fa_dottore_btn2 button p,.st-key-fa_gruppo_btn2 button p{color:#fff !important;font-weight:800 !important;"
+        "font-size:.78rem !important;line-height:1.1;margin:0}"
+        ".st-key-fa_gruppo_btn2 [data-testid='stButton']{width:100%}"
+        ".st-key-fa_gruppo_box{position:relative}"
+        ".st-key-fa_gruppo_btn{position:absolute !important;top:0;left:0;right:0;bottom:0;width:100% !important;"
+        "height:100% !important;margin:0 !important;z-index:3}"
+        ".st-key-fa_gruppo_btn [data-testid='stButton']{width:100%;height:100%}"
+        ".st-key-fa_gruppo_btn button{width:100%;height:100%;min-height:0;opacity:0;cursor:pointer}"
         "</style>", unsafe_allow_html=True)
     etichetta = "La mia dottoressa" if tipo == "Dottoressa" else "Il mio dottore"
     with st.container(key="azioni_gruppo"):
         c1, c2 = st.columns([3, 1.5], gap="small")
         with c1:
-            _fa_scheda_gruppo(nome, gruppo)
+            with st.container(key="fa_gruppo_box"):
+                _fa_scheda_gruppo(nome, gruppo)
+                premuto_g = st.button("Apri la scheda sanitaria", key="fa_gruppo_btn", width="stretch")
+            premuto_g2 = st.button("📋 Scheda sanitaria ›", key="fa_gruppo_btn2", width="stretch")
         with c2:
             premuto = st.button("🩺" if not uri else etichetta, key="fa_dottore_btn", help="Apri la scheda del dottore",
                                 width="stretch")
             premuto2 = st.button(etichetta + " ›", key="fa_dottore_btn2", help="Apri la scheda del dottore", width="stretch")
+    if premuto_g or premuto_g2:
+        st.session_state["fa_modulo_sanitario"] = {"pid": pid}
+        st.rerun()
     if premuto or premuto2:
         st.session_state["fa_modulo_dottore"] = {"pid": pid}
         st.rerun()
@@ -2162,11 +2196,19 @@ def _fa_modulo_dottore(pid):
         mia_email = st.text_input("La mia email (a cui il medico può rispondere)", value=mia_email_pred)
         st.markdown("**🕘 Orari settimanali dello studio**")
         orari_s = d.get("orari") or {}
-        tabella = pd.DataFrame([{"Giorno": g, "Mattina": (orari_s.get(g) or {}).get("m", ""),
-                                 "Pomeriggio": (orari_s.get(g) or {}).get("p", "")} for g in GIORNI_SETT])
-        mod = st.data_editor(tabella, hide_index=True, disabled=["Giorno"], key="fa_dott_orari_" + pid, width="stretch",
-                             column_config={"Mattina": st.column_config.TextColumn("Mattina", help="es. 9:00-12:00"),
-                                            "Pomeriggio": st.column_config.TextColumn("Pomeriggio", help="es. 15:00-18:00")})
+        righe_t, extra = [], set()
+        for g in GIORNI_SETT:
+            o = orari_s.get(g) or {}
+            ma, mb = _fa_parse_fascia(o.get("m"))
+            pa, pb = _fa_parse_fascia(o.get("p"))
+            extra |= {x for x in (ma, mb, pa, pb) if x}
+            righe_t.append({"Giorno": g, "Mattina da": ma or "—", "Mattina a": mb or "—",
+                            "Pomeriggio da": pa or "—", "Pomeriggio a": pb or "—"})
+        opzioni = ["—"] + sorted(set(ORARI_STUDIO) | extra)
+        st.caption("Tocca una casella e scegli l'orario dal menu. «—» vuol dire chiuso.")
+        mod = st.data_editor(pd.DataFrame(righe_t), hide_index=True, disabled=["Giorno"], key="fa_dott_orari_" + pid, width="stretch",
+                             column_config={c: st.column_config.SelectboxColumn(c, options=opzioni, required=True, width="small")
+                                            for c in ("Mattina da", "Mattina a", "Pomeriggio da", "Pomeriggio a")})
         with st.expander("🔁 Sostituto (se il medico è assente)"):
             sv = d.get("sostituto") or {}
             s_nome = st.text_input("Nominativo del sostituto", value=sv.get("nome", ""))
@@ -2180,10 +2222,24 @@ def _fa_modulo_dottore(pid):
         if email.strip() and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", email.strip()):
             st.error("L'email del medico non sembra corretta.")
             return
+        orari_nuovi, errori_o = {}, []
+        for _, r in mod.iterrows():
+            fasce = {}
+            for chiave_f, ca, cb in (("m", "Mattina da", "Mattina a"), ("p", "Pomeriggio da", "Pomeriggio a")):
+                da_ = "" if r[ca] in (None, "—") else str(r[ca])
+                a_ = "" if r[cb] in (None, "—") else str(r[cb])
+                if da_ and a_ and a_ <= da_:
+                    errori_o.append(f"{r['Giorno']}: la fine deve essere dopo l'inizio.")
+                elif bool(da_) != bool(a_):
+                    errori_o.append(f"{r['Giorno']}: scegli sia l'inizio sia la fine.")
+                fasce[chiave_f] = f"{da_}-{a_}" if da_ and a_ else ""
+            orari_nuovi[r["Giorno"]] = fasce
+        if errori_o:
+            st.error("Controlla gli orari: " + " ".join(errori_o))
+            return
         nuovo = {"tipo": tipo, "nome": nome.strip(), "indirizzo": indirizzo.strip(), "telefono": telefono.strip(),
                  "email": email.strip(), "mia_email": mia_email.strip(),
-                 "orari": {r["Giorno"]: {"m": str(r["Mattina"] or "").strip(), "p": str(r["Pomeriggio"] or "").strip()}
-                           for _, r in mod.iterrows()},
+                 "orari": orari_nuovi,
                  "sostituto": {"nome": s_nome.strip(), "telefono": s_tel.strip(), "email": s_email.strip(),
                                "indirizzo": s_ind.strip(), "note": s_note.strip()},
                  "note": note.strip()}
@@ -2200,3 +2256,173 @@ def _fa_modulo_dottore(pid):
         st.session_state[chiave_mod] = False
         st.session_state["fa_msg"] = "✅ Dati del medico salvati."
         st.rerun()
+
+
+# =====================================================================
+# ORARI A TENDINA E SCHEDA SANITARIA
+# =====================================================================
+ORARI_STUDIO = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 15, 30, 45)]
+
+
+def _fa_parse_fascia(testo):
+    """Da «9:00-12:30» (o simili) a ('09:00', '12:30'); se non si capisce ('', '')."""
+    m = re.search(r"(\d{1,2})(?:[:.](\d{2}))?\s*[-–]\s*(\d{1,2})(?:[:.](\d{2}))?", testo or "")
+    if not m:
+        return "", ""
+    return f"{int(m.group(1)):02d}:{int(m.group(2) or 0):02d}", f"{int(m.group(3)):02d}:{int(m.group(4) or 0):02d}"
+
+
+def _fa_righe_html(testo, vuoto="— nessuna indicazione —"):
+    righe = [r.strip() for r in (testo or "").splitlines() if r.strip()]
+    if not righe:
+        return f"<span style='opacity:.6'>{vuoto}</span>"
+    return "<br>".join("• " + html.escape(r) for r in righe)
+
+
+def _fa_sezione(titolo, corpo_html):
+    st.markdown(f"<div style='background:rgba(255,255,255,.8);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b'>"
+                f"<b>{titolo}</b><div style='margin-top:4px;line-height:1.6'>{corpo_html}</div></div>", unsafe_allow_html=True)
+
+
+def _fa_html_sanitaria(f, pid, intestatario):
+    e = html.escape
+    D = lambda iso: data_it(iso) if iso else ""
+    profilo = next((p for p in _fa_profili(f) if p["id"] == pid), {})
+    san = profilo.get("sanitario") or {}
+    dott = profilo.get("dottore") or {}
+    allergie = (f.get("allergie") or {}).get(pid, [])
+    vacc = sorted([v for v in f.get("vaccinazioni", []) if v.get("profilo", "p0") == pid], key=lambda v: v.get("data", ""), reverse=True)
+    ter = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid and t_.get("stato", "attiva") == "attiva"]
+
+    def blocco(titolo, testo):
+        return f"<h2>{titolo}</h2><p>{e(testo).replace(chr(10), '<br>') if testo else '<i>nessuna indicazione</i>'}</p>"
+    vac_html = "".join(f"<li>{e(v['nome'])} – {D(v.get('data'))}" + (f" ({e(v['dose'])})" if v.get("dose") else "")
+                       + (f" – richiamo {D(v['richiamo'])}" if v.get("richiamo") else "") + "</li>" for v in vacc)
+    ter_html = "".join(f"<li>{e(_fa_nome_med(f, t_.get('med'), t_.get('nome_med', '')))} – {e(t_.get('quantita', ''))} – "
+                       f"{e(', '.join(t_.get('orari', [])))}</li>" for t_ in ter)
+    medico = ""
+    if dott.get("nome") or dott.get("telefono"):
+        medico = f"<p><b>Medico:</b> {e(dott.get('nome', ''))} {e(dott.get('telefono', ''))} {e(dott.get('email', ''))}</p>"
+    allergie_html = e(', '.join(allergie)) if allergie else '<i>nessuna dichiarata</i>'
+    vacc_blocco = ('<ul>' + vac_html + '</ul>') if vac_html else '<p><i>nessuna registrata</i></p>'
+    ter_blocco = ('<ul>' + ter_html + '</ul>') if ter_html else '<p><i>nessuna</i></p>'
+    return f"""<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scheda sanitaria - {e(profilo.get('nome', ''))}</title>
+<style>body{{font-family:Arial,sans-serif;margin:16px;color:#111}}h1{{font-size:1.4rem}}h2{{font-size:1.05rem;margin:16px 0 2px;border-bottom:1px solid #999}}
+.box{{background:#f3f3f3;padding:8px 12px;border-radius:8px}}.nota{{font-size:.8rem;color:#444;margin-top:22px}}</style></head><body>
+<h1>Scheda sanitaria – {e(profilo.get('nome', ''))}</h1>
+<div class="box"><b>Intestatario:</b> {e(intestatario)}<br><b>Gruppo sanguigno:</b> {e(profilo.get('gruppo') or 'non indicato')}<br>
+<b>Aggiornata il</b> {data_it(oggi().isoformat())}</div>{medico}
+<h2>Allergie e intolleranze ai farmaci</h2><p>{allergie_html}</p>
+{blocco('Patologie', san.get('patologie'))}{blocco('Interventi subiti', san.get('interventi'))}
+{blocco('Storia clinica di rilievo', san.get('storia'))}{blocco('Familiarità', san.get('famiglia'))}
+{blocco('Altre informazioni', san.get('altro'))}
+<h2>Vaccinazioni</h2>{vacc_blocco}
+<h2>Terapie in corso</h2>{ter_blocco}
+<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente: non è verificato da un medico.</p>
+</body></html>"""
+
+
+def _fa_modulo_sanitario(pid):
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    profilo = next((p for p in profili if p["id"] == pid), profili[0])
+    san = profilo.get("sanitario") or {}
+    dott = profilo.get("dottore") or {}
+    allergie = (f.get("allergie") or {}).get(pid, [])
+    dati_utente = carica_dati(crea_archivio(), st.session_state["percorso"])
+    anag = dati_utente.get("anagrafica") or {}
+    intestatario = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x) or profilo.get("nome", "")
+    chiave_mod = "fa_san_modifica_" + pid
+    modifica = st.session_state.get(chiave_mod, False)
+    e = html.escape
+
+    if st.button("← Torna alla Farmacia", key="fa_san_indietro"):
+        st.session_state.pop("fa_modulo_sanitario", None)
+        st.session_state.pop(chiave_mod, None)
+        st.rerun()
+    st.subheader(f"📋 Scheda sanitaria · {profilo.get('nome', '')}")
+
+    if modifica:
+        # ------------------------------------------------ MODIFICA
+        if st.button("Annulla la modifica", key="fa_san_annulla"):
+            st.session_state[chiave_mod] = False
+            st.rerun()
+        st.markdown("**✏️ Compila quello che ti serve** e tocca **Salva** in fondo. Tutto è facoltativo.")
+        with st.form("fa_form_san_" + pid):
+            patologie = st.text_area("🩺 Patologie (una per riga, con l'anno se vuoi)", value=san.get("patologie", ""),
+                                     placeholder="es. Ipertensione (dal 2015)\nDiabete tipo 2", height=110)
+            all_t = st.text_area("💊 Allergie e intolleranze ai farmaci (separate da virgola)", value=", ".join(allergie),
+                                 placeholder="es. penicillina, ibuprofene",
+                                 help="Sono le stesse del riquadro Allergie: l'app le usa per avvisarti sui medicinali.")
+            interventi = st.text_area("🏥 Interventi subiti (uno per riga: anno, intervento, dove)", value=san.get("interventi", ""),
+                                      placeholder="es. 2019 – Appendicectomia – Ospedale Molinette", height=110)
+            storia = st.text_area("📜 Storia clinica di rilievo", value=san.get("storia", ""),
+                                  placeholder="Ricoveri, malattie importanti, esami da ricordare…", height=130)
+            famiglia = st.text_area("👪 Malattie in famiglia (familiarità)", value=san.get("famiglia", ""), height=90)
+            altro = st.text_area("➕ Altre informazioni importanti", value=san.get("altro", ""),
+                                 placeholder="es. porta un pacemaker, donatore di organi, contatto di emergenza…", height=110)
+            invio = st.form_submit_button("💾 Salva la scheda sanitaria", type="primary", width="stretch")
+        if invio:
+            nuovo = {"patologie": patologie.strip(), "interventi": interventi.strip(), "storia": storia.strip(),
+                     "famiglia": famiglia.strip(), "altro": altro.strip()}
+            lista_all = [x.strip() for x in re.split(r"[,;\n]", all_t) if x.strip()]
+
+            def _scrivi(f):
+                for p in f["profili"]:
+                    if p["id"] == pid:
+                        p["sanitario"] = nuovo
+                f.setdefault("allergie", {})[pid] = lista_all
+            try:
+                _fa_salva(_scrivi, "Farmacia: scheda sanitaria")
+            except Exception as ex:
+                st.error(f"Non sono riuscito a salvare: {ex}")
+                return
+            st.session_state[chiave_mod] = False
+            st.session_state["fa_msg"] = "✅ Scheda sanitaria salvata."
+            st.rerun()
+        return
+
+    # ------------------------------------------------ SCHEDA (sola lettura)
+    gruppo = profilo.get("gruppo")
+    try:
+        uri = _fa_icone_gruppi().get(gruppo) if gruppo else None
+    except Exception:
+        uri = None
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.82);border-radius:18px;padding:10px 14px;color:#1b2b2b'>"
+        + (f"<img src='{uri}' alt='' style='height:90px'>" if uri else "<span style='font-size:2.4rem'>🩸</span>")
+        + f"<div><b style='font-size:1.15rem'>{e(intestatario)}</b><br>Gruppo sanguigno: "
+        + f"<b style='font-size:1.6rem;color:#b71c1c'>{e(gruppo or 'non indicato')}</b></div></div>", unsafe_allow_html=True)
+    if st.button("✏️ Modifica la scheda sanitaria", key="fa_san_modifica_btn", type="primary", width="stretch"):
+        st.session_state[chiave_mod] = True
+        st.rerun()
+    if dott.get("nome") or dott.get("telefono"):
+        _fa_sezione("👩‍⚕️ Medico curante" if dott.get("tipo") == "Dottoressa" else "👨‍⚕️ Medico curante",
+                    e(" · ".join(x for x in (dott.get("nome"), dott.get("telefono")) if x)))
+    _fa_sezione("💊 Allergie e intolleranze ai farmaci",
+                e(", ".join(allergie)) if allergie else "<span style='opacity:.6'>— nessuna dichiarata —</span>")
+    _fa_sezione("🩺 Patologie", _fa_righe_html(san.get("patologie")))
+    _fa_sezione("🏥 Interventi subiti", _fa_righe_html(san.get("interventi")))
+    _fa_sezione("📜 Storia clinica di rilievo",
+                e(san.get("storia", "")).replace("\n", "<br>") or "<span style='opacity:.6'>— nessuna indicazione —</span>")
+    if san.get("famiglia"):
+        _fa_sezione("👪 Malattie in famiglia", e(san["famiglia"]).replace("\n", "<br>"))
+    if san.get("altro"):
+        _fa_sezione("➕ Altre informazioni", e(san["altro"]).replace("\n", "<br>"))
+    vacc = sorted([v for v in f.get("vaccinazioni", []) if v.get("profilo", "p0") == pid], key=lambda v: v.get("data", ""), reverse=True)
+    righe_v = "<br>".join(f"• {e(v['nome'])} – {data_it(v['data'])}" + (f" ({e(v['dose'])})" if v.get("dose") else "")
+                          + (f" – richiamo {data_it(v['richiamo'])}" if v.get("richiamo") else "") for v in vacc)
+    pagine = len((f.get("vaccini_doc") or {}).get(pid, []))
+    _fa_sezione("💉 Vaccinazioni", (righe_v or "<span style='opacity:.6'>— nessuna registrata —</span>")
+                + (f"<br><small>📄 Documento vaccinale: {pagine} pagina/e</small>" if pagine else "")
+                + "<br><small>Si gestiscono nella scheda 💉 Vaccini.</small>")
+    ter = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid and t_.get("stato", "attiva") == "attiva"]
+    if ter:
+        _fa_sezione("📅 Terapie in corso", "<br>".join(
+            f"• {e(_fa_nome_med(f, t_.get('med'), t_.get('nome_med', '')))} – {e(t_.get('quantita', ''))} – {e(', '.join(t_.get('orari', [])))}"
+            for t_ in ter))
+    st.download_button("📄 Scarica la scheda (da stampare o inviare)", _fa_html_sanitaria(f, pid, intestatario).encode("utf-8"),
+                       file_name=f"scheda_sanitaria_{profilo.get('nome', '').replace(' ', '_')}_{oggi().isoformat()}.html",
+                       mime="text/html", width="stretch")
+    st.caption("Contiene dati sanitari: condividila solo con chi deve vederla.")
