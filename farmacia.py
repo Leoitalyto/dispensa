@@ -309,6 +309,7 @@ def schermata_farmacia():
     if st.button("← Torna alla dispensa", key="fa_indietro"):
         st.session_state.pop("fa_modulo_med", None)
         st.session_state.pop("fa_modulo_foglio", None)
+        st.session_state.pop("fa_modulo_dottore", None)
         st.session_state["farmacia_aperta"] = False
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
@@ -321,6 +322,9 @@ def schermata_farmacia():
         return
     if st.session_state.get("fa_modulo_foglio"):
         _fa_modulo_foglio(**st.session_state["fa_modulo_foglio"])
+        return
+    if st.session_state.get("fa_modulo_dottore"):
+        _fa_modulo_dottore(**st.session_state["fa_modulo_dottore"])
         return
 
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
@@ -338,7 +342,7 @@ def schermata_farmacia():
     pid = st.selectbox("👤 Profilo", list(nomi),
                        format_func=lambda i: nomi[i] + (f" · 🩸 {gruppi_p[i]}" if gruppi_p.get(i) else ""),
                        key="fa_profilo")
-    _fa_scheda_gruppo(nomi[pid], gruppi_p.get(pid))
+    _fa_riga_profilo(profili, pid, nomi[pid], gruppi_p.get(pid))
 
     with st.expander(f"👥 Gestisci profili ({len(profili)}/{MAX_PROFILI})"):
         with st.form("fa_nuovo_profilo", clear_on_submit=True):
@@ -1055,6 +1059,7 @@ def _fa_esporta(f, pid, nomi):
     with st.expander("📦 Esporta i dati di questo profilo"):
         chiavi = ("medicinali", "terapie", "visite", "vaccinazioni")
         dati = {"profilo": nomi[pid],
+                "dottore": next((p.get("dottore") for p in f.get("profili", []) if p["id"] == pid), None),
                 "gruppo_sanguigno": next((p.get("gruppo") for p in f.get("profili", []) if p["id"] == pid), None)}
         for k in chiavi:
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
@@ -1617,6 +1622,12 @@ def _fa_html_completo(d, oggi_):
         allergie = (f.get("allergie") or {}).get(pid, [])
         parti.append(f"<h2>👤 {e(p['nome'])}</h2><p>Gruppo sanguigno: <b>{e(p.get('gruppo') or 'non indicato')}</b><br>"
                      f"Allergie e intolleranze dichiarate: <b>{e(', '.join(allergie)) if allergie else 'nessuna'}</b></p>")
+        dott = p.get("dottore") or {}
+        if dott.get("nome") or dott.get("telefono") or dott.get("email"):
+            parti.append(f"<p><b>Il mio {e(dott.get('tipo', 'Dottore').lower())}:</b> {e(dott.get('nome', ''))}"
+                         + (f" · tel. {e(dott['telefono'])}" if dott.get("telefono") else "")
+                         + (f" · {e(dott['email'])}" if dott.get("email") else "")
+                         + (f" · {e(dott['indirizzo'])}" if dott.get("indirizzo") else "") + "</p>")
         meds = [m for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid]
         parti.append(_fa_tabella_html("Medicinali", ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
                                                       "Scadenza", "Acquisto", "Note"],
@@ -1962,3 +1973,174 @@ def _fa_scegli_da_archivio(f, ck):
             st.session_state.pop(chiave, None)
             st.rerun()
     return voce_scelta
+
+
+# =====================================================================
+# IL MIO DOTTORE: pulsante con l'immagine accanto al gruppo sanguigno e scheda con tutti i dati
+# =====================================================================
+@st.cache_resource
+def _fa_icone_dottori():
+    """Le due immagini (dottore e dottoressa) ritagliate da dottori.webp, in due metà."""
+    try:
+        cartella = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        cartella = "."
+    foglio = Image.open(os.path.join(cartella, "dottori.webp")).convert("RGBA")
+    w = foglio.width // 2
+    risultato = {}
+    for i, nome in enumerate(("Dottore", "Dottoressa")):
+        buf = io.BytesIO()
+        foglio.crop((i * w, 0, i * w + w, foglio.height)).save(buf, "WEBP", quality=88)
+        risultato[nome] = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    return risultato
+
+
+def _fa_riga_profilo(profili, pid, nome, gruppo):
+    """Una sola striscia: a sinistra il gruppo sanguigno, a destra il pulsante «Il mio dottore» con la sua immagine."""
+    dott = next((p.get("dottore") for p in profili if p["id"] == pid), None) or {}
+    tipo = dott.get("tipo")
+    try:
+        uri = _fa_icone_dottori().get(tipo)
+    except Exception:
+        uri = None
+    with st.container(key="azioni_gruppo"):
+        c1, c2 = st.columns([3, 1.5], gap="small")
+        with c1:
+            _fa_scheda_gruppo(nome, gruppo)
+        with c2:
+            if uri:
+                st.markdown("<style>.st-key-fa_dottore_btn button{width:100%;height:124px;min-height:124px;border-radius:22px;"
+                            "border:2px solid rgba(255,255,255,.95);box-shadow:0 8px 20px rgba(0,60,50,.16);"
+                            f"background:url({uri}) center/contain no-repeat,rgba(255,255,255,.55);color:transparent}}"
+                            ".st-key-fa_dottore_btn button p{font-size:0}</style>", unsafe_allow_html=True)
+                premuto = st.button("Il mio dottore", key="fa_dottore_btn", help="Apri la scheda del dottore")
+            else:
+                premuto = st.button("🩺", key="fa_dottore_btn", help="Apri la scheda del dottore", width="stretch")
+            etichetta = "La mia dottoressa" if tipo == "Dottoressa" else "Il mio dottore"
+            st.markdown(f"<div style='text-align:center;font-weight:800;font-size:.8rem;color:#1b2b2b;margin-top:-6px'>{etichetta}</div>",
+                        unsafe_allow_html=True)
+    if premuto:
+        st.session_state["fa_modulo_dottore"] = {"pid": pid}
+        st.rerun()
+
+
+def _fa_tel(numero):
+    return re.sub(r"[^\d+]", "", numero or "")
+
+
+def _fa_modulo_dottore(pid):
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    profilo = next((p for p in profili if p["id"] == pid), profili[0])
+    d = profilo.get("dottore") or {}
+    dati_utente = carica_dati(crea_archivio(), st.session_state["percorso"])
+    anag = dati_utente.get("anagrafica") or {}
+    mio_nome = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x) or profilo.get("nome", "")
+    mia_email_pred = d.get("mia_email") or dati_utente.get("avviso_email") or ""
+    e = html.escape
+
+    if st.button("← Torna alla Farmacia", key="fa_dott_indietro"):
+        st.session_state.pop("fa_modulo_dottore", None)
+        st.rerun()
+    tipo_salvato = d.get("tipo")
+    st.subheader(("👩‍⚕️ La mia dottoressa" if tipo_salvato == "Dottoressa" else "👨‍⚕️ Il mio dottore") + f" · {profilo.get('nome', '')}")
+    try:
+        icone = _fa_icone_dottori()
+    except Exception:
+        icone = {}
+    if tipo_salvato in icone:
+        st.markdown(f"<div style='text-align:center'><img src='{icone[tipo_salvato]}' alt='' style='height:150px'></div>", unsafe_allow_html=True)
+
+    # ---- azioni rapide con i dati già salvati
+    if d.get("nome"):
+        st.markdown(f"### {e(d['nome'])}")
+    giorno_oggi = GIORNI_SETT[oggi().weekday()]
+    orari_oggi = (d.get("orari") or {}).get(giorno_oggi) or {}
+    if orari_oggi.get("m") or orari_oggi.get("p"):
+        st.info(f"🕘 Oggi ({giorno_oggi}) riceve: " + " · ".join(x for x in (
+            f"mattina {orari_oggi['m']}" if orari_oggi.get("m") else "", f"pomeriggio {orari_oggi['p']}" if orari_oggi.get("p") else "") if x))
+    b1, b2 = st.columns(2, gap="small")
+    if _fa_tel(d.get("telefono")):
+        b1.link_button("📞 Chiama", "tel:" + _fa_tel(d["telefono"]), width="stretch")
+    if d.get("indirizzo"):
+        b2.link_button("🧭 Indicazioni", "https://www.google.com/maps/search/?api=1&query=" + _up.quote_plus(d["indirizzo"]), width="stretch")
+
+    # ---- messaggio per email: si apre la posta del telefono già compilata, con i miei dati per la risposta
+    if d.get("email"):
+        with st.expander("✉️ Scrivi un messaggio " + ("alla dottoressa" if tipo_salvato == "Dottoressa" else "al dottore"), expanded=False):
+            oggetto = st.text_input("Oggetto", value="Richiesta", key="fa_dott_ogg_" + pid)
+            testo = st.text_area("Messaggio", key="fa_dott_msg_" + pid, placeholder="Scrivi qui il tuo messaggio…")
+            firma = st.checkbox("Aggiungi in fondo il mio nome e la mia email per la risposta", value=True, key="fa_dott_firma_" + pid)
+            corpo = testo
+            if firma:
+                corpo += f"\n\n--\n{mio_nome}"
+                if profilo.get("nome") and profilo["nome"] != mio_nome:
+                    corpo += f"\nPaziente: {profilo['nome']}"
+                if mia_email_pred:
+                    corpo += f"\nPer rispondermi: {mia_email_pred}"
+            st.link_button("📧 Apri la posta e invia", f"mailto:{d['email']}?subject={_up.quote(oggetto)}&body={_up.quote(corpo)}",
+                           type="primary", width="stretch")
+            st.caption("Si apre la tua app di posta con il messaggio già pronto: tocca Invia. Il dottore risponde al tuo indirizzo.")
+
+    # ---- sostituto: contatti rapidi
+    sost = d.get("sostituto") or {}
+    if sost.get("nome") or sost.get("telefono") or sost.get("email"):
+        with st.expander("🔁 Sostituto: " + (sost.get("nome") or "dati salvati")):
+            if sost.get("indirizzo"):
+                st.write("📍 " + sost["indirizzo"])
+            s1, s2 = st.columns(2, gap="small")
+            if _fa_tel(sost.get("telefono")):
+                s1.link_button("📞 Chiama il sostituto", "tel:" + _fa_tel(sost["telefono"]), width="stretch")
+            if sost.get("email"):
+                s2.link_button("✉️ Scrivi al sostituto", "mailto:" + sost["email"], width="stretch")
+            if sost.get("note"):
+                st.caption("📝 " + sost["note"])
+
+    st.divider()
+    st.markdown("**✏️ Dati del medico** (si modificano e si salvano qui)")
+    with st.form("fa_form_dottore_" + pid):
+        tipo = st.radio("Scegli", ["Dottore", "Dottoressa"], horizontal=True, index=1 if tipo_salvato == "Dottoressa" else 0)
+        nome = st.text_input("Nominativo (nome e cognome)", value=d.get("nome", ""), placeholder="es. Dott. Mario Rossi")
+        indirizzo = st.text_input("Indirizzo dello studio", value=d.get("indirizzo", ""))
+        telefono = st.text_input("Numero di telefono", value=d.get("telefono", ""))
+        email = st.text_input("Email del medico", value=d.get("email", ""))
+        mia_email = st.text_input("La mia email (a cui il medico può rispondere)", value=mia_email_pred)
+        st.markdown("**🕘 Orari settimanali dello studio**")
+        orari_s = d.get("orari") or {}
+        tabella = pd.DataFrame([{"Giorno": g, "Mattina": (orari_s.get(g) or {}).get("m", ""),
+                                 "Pomeriggio": (orari_s.get(g) or {}).get("p", "")} for g in GIORNI_SETT])
+        mod = st.data_editor(tabella, hide_index=True, disabled=["Giorno"], key="fa_dott_orari_" + pid, width="stretch",
+                             column_config={"Mattina": st.column_config.TextColumn("Mattina", help="es. 9:00-12:00"),
+                                            "Pomeriggio": st.column_config.TextColumn("Pomeriggio", help="es. 15:00-18:00")})
+        with st.expander("🔁 Sostituto (se il medico è assente)"):
+            sv = d.get("sostituto") or {}
+            s_nome = st.text_input("Nominativo del sostituto", value=sv.get("nome", ""))
+            s_tel = st.text_input("Telefono del sostituto", value=sv.get("telefono", ""))
+            s_email = st.text_input("Email del sostituto", value=sv.get("email", ""))
+            s_ind = st.text_input("Indirizzo del sostituto", value=sv.get("indirizzo", ""))
+            s_note = st.text_area("Note sul sostituto (giorni, orari…)", value=sv.get("note", ""))
+        note = st.text_area("📝 Note", value=d.get("note", ""), placeholder="Qualsiasi cosa da ricordare su questo medico")
+        invio = st.form_submit_button("💾 Salva i dati del medico", type="primary")
+    if invio:
+        if email.strip() and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", email.strip()):
+            st.error("L'email del medico non sembra corretta.")
+            return
+        nuovo = {"tipo": tipo, "nome": nome.strip(), "indirizzo": indirizzo.strip(), "telefono": telefono.strip(),
+                 "email": email.strip(), "mia_email": mia_email.strip(),
+                 "orari": {r["Giorno"]: {"m": str(r["Mattina"] or "").strip(), "p": str(r["Pomeriggio"] or "").strip()}
+                           for _, r in mod.iterrows()},
+                 "sostituto": {"nome": s_nome.strip(), "telefono": s_tel.strip(), "email": s_email.strip(),
+                               "indirizzo": s_ind.strip(), "note": s_note.strip()},
+                 "note": note.strip()}
+
+        def _scrivi(f):
+            for p in f["profili"]:
+                if p["id"] == pid:
+                    p["dottore"] = nuovo
+        try:
+            _fa_salva(_scrivi, "Farmacia: dottore")
+        except Exception as ex:
+            st.error(f"Non sono riuscito a salvare: {ex}")
+            return
+        st.session_state["fa_msg"] = "✅ Dati del medico salvati."
+        st.rerun()
