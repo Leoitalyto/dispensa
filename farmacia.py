@@ -42,8 +42,24 @@ _FA_CSS = """<style>
 
 
 # ---------------------------------------------------------------- icona nella Home
-@st.cache_resource
+def _fa_mtime(nome):
+    """Data dell'ultima modifica di un file accanto all'app: serve a rileggere le immagini quando vengono sostituite."""
+    try:
+        cartella = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        cartella = "."
+    try:
+        return os.path.getmtime(os.path.join(cartella, nome))
+    except OSError:
+        return 0
+
+
 def _fa_icona_uri():
+    return _fa_icona_uri_cache(_fa_mtime("farmacia.webp"))
+
+
+@st.cache_resource
+def _fa_icona_uri_cache(_data_file):
     try:
         cartella = os.path.dirname(os.path.abspath(__file__))
     except NameError:
@@ -1502,8 +1518,12 @@ GRUPPI = ["A+", "B+", "AB+", "0+", "A-", "B-", "AB-", "0-"]
 _FA_FOTO_VUOTA = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
 
 
-@st.cache_resource
 def _fa_icone_gruppi():
+    return _fa_icone_gruppi_cache(_fa_mtime("gruppi.webp"))
+
+
+@st.cache_resource
+def _fa_icone_gruppi_cache(_data_file):
     """Ritaglia le otto gocce dall'immagine gruppi.webp (4 colonne x 2 righe) e le dà come immagini piccole."""
     try:
         cartella = os.path.dirname(os.path.abspath(__file__))
@@ -2005,8 +2025,12 @@ def _fa_scegli_da_archivio(f, ck):
 # =====================================================================
 # IL MIO DOTTORE: pulsante con l'immagine accanto al gruppo sanguigno e scheda con tutti i dati
 # =====================================================================
-@st.cache_resource
 def _fa_icone_dottori():
+    return _fa_icone_dottori_cache(_fa_mtime("dottori.webp"))
+
+
+@st.cache_resource
+def _fa_icone_dottori_cache(_data_file):
     """Le due immagini (dottore e dottoressa) ritagliate da dottori.webp, in due metà."""
     try:
         cartella = os.path.dirname(os.path.abspath(__file__))
