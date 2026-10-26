@@ -5,6 +5,7 @@
 Gira ogni mattina su GitHub Actions dentro il repository dei dati (dispensa-dati).
 Legge i file dispense/*.json e avvisa ogni persona con i canali che ha scelto nell'app.
 Uso:  python promemoria.py            -> invia i promemoria di oggi
+      python promemoria.py --dosi     -> promemoria delle assunzioni programmate (ogni mezz'ora)
       python promemoria.py --prova    -> invia solo un messaggio di prova su tutti i canali scelti
       python promemoria.py --dry      -> non invia nulla, mostra i messaggi a schermo
 
@@ -22,13 +23,14 @@ import ssl
 import sys
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 
 SOGLIE = (60, 30, 14, 7, 1, 0)          # giorni mancanti alla scadenza in cui arriva un messaggio
 DRY = "--dry" in sys.argv
 PROVA = "--prova" in sys.argv
+DOSI = "--dosi" in sys.argv
 E = os.environ.get
 
 
@@ -176,6 +178,59 @@ def invia_sms(numero, testo):
     return "ok"
 
 
+def adesso_roma():
+    """Ora attuale in Italia (PM_ORA serve solo per le prove)."""
+    if E("PM_ORA"):
+        return datetime.fromisoformat(E("PM_ORA"))
+    return datetime.now(ZoneInfo("Europe/Rome")).replace(tzinfo=None)
+
+
+def dosi_nella_fascia(d, adesso):
+    """Assunzioni previste nella mezz'ora corrente (00-29 o 30-59) e non ancora segnate come prese."""
+    ini = adesso.replace(minute=0 if adesso.minute < 30 else 30, second=0, microsecond=0)
+    fin = ini + timedelta(minutes=30)
+    f = d.get("farmacia") or {}
+    profili = {p["id"]: p.get("nome", "") for p in f.get("profili", [])}
+    nomi_med = {m["id"]: m.get("nome", "") for m in f.get("medicinali", [])}
+    registro = f.get("registro") or {}
+    giorno = ini.date()
+    risultato = []
+    for t in f.get("terapie", []):
+        if giorno.weekday() not in t.get("giorni", []):
+            continue
+        da, a = data_di(t.get("inizio")), data_di(t.get("fine"))
+        if (da and giorno < da) or (a and giorno > a):
+            continue
+        if t.get("stato") == "sospesa":
+            dal = data_di(t.get("stato_dal"))
+            if dal is None or giorno >= dal:
+                continue
+        for ora in t.get("orari", []):
+            try:
+                momento = datetime.fromisoformat(f"{giorno.isoformat()}T{ora}")
+            except ValueError:
+                continue
+            if not (ini <= momento < fin) or f"{t.get('id')}|{giorno.isoformat()}|{ora}" in registro:
+                continue
+            risultato.append((ora, nomi_med.get(t.get("med"), t.get("nome_med", "Medicinale")),
+                              profili.get(t.get("profilo", "p0"), ""), t.get("quantita", "")))
+    return sorted(risultato)
+
+
+def testo_dosi(d, dosi):
+    privacy = bool(d.get("telegram_privacy"))
+    righe = [f"⏰ Promemoria terapia – ore {dosi[0][0]}"]
+    for ora, nome, profilo, quantita in dosi:
+        extra = f" ({profilo})" if profilo else ""
+        if privacy:
+            righe.append(f"• 💊 Terapia{extra} delle {ora}")
+        else:
+            righe.append(f"• 💊 {nome}{extra}" + (f" – {quantita}" if quantita else "") + f" – ore {ora}")
+    righe.append("")
+    righe.append("Quando l'hai presa, tocca «✔ Presa» nella Farmacia dell'app.")
+    return "\n".join(righe)
+
+
 def canali_di(d):
     canali = d.get("avvisi_canali")
     if canali is None:                                    # chi ha solo il Chat ID di Telegram
@@ -184,13 +239,38 @@ def canali_di(d):
 
 
 def main():
-    oggi = datetime.now(ZoneInfo("Europe/Rome")).date()
+    adesso = adesso_roma()
+    oggi = adesso.date()
     bloccati = {u.get("id") for u in leggi("utenti.json").get("utenti", []) if not u.get("attivo", True)}
     ok = errori = saltati = 0
+
+    def registra(uid, canale, esito):
+        nonlocal ok, errori, saltati
+        print(f"[{uid}] {canale}: {esito}")
+        if esito == "ok":
+            ok += 1
+        elif esito.startswith("saltato"):
+            saltati += 1
+        else:
+            errori += 1
+
     for percorso in sorted(glob.glob("dispense/*.json")):
         uid = os.path.splitext(os.path.basename(percorso))[0]
         d = leggi(percorso)
         if uid in bloccati:
+            continue
+        if DOSI and not PROVA:                           # promemoria delle assunzioni: solo Telegram ed email
+            if not d.get("avvisi_dosi"):
+                continue
+            dosi = dosi_nella_fascia(d, adesso)
+            if not dosi:
+                continue
+            testo = testo_dosi(d, dosi)
+            for canale in canali_di(d):
+                if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                    registra(uid, canale, invia_telegram(str(d["telegram_chat_id"]).strip(), testo))
+                elif canale == "email" and (d.get("avviso_email") or "").strip():
+                    registra(uid, canale, invia_email(d["avviso_email"].strip(), "Promemoria terapia - La nostra dispensa", testo))
             continue
         in_soglia, scaduti = raccogli(d, oggi)
         if not PROVA and not in_soglia and not scaduti:
@@ -210,13 +290,7 @@ def main():
                 esito = invia_sms(d["avviso_sms"].strip(), testo)
             else:
                 continue
-            print(f"[{uid}] {canale}: {esito}")
-            if esito == "ok":
-                ok += 1
-            elif esito.startswith("saltato"):
-                saltati += 1
-            else:
-                errori += 1
+            registra(uid, canale, esito)
     print(f"Messaggi inviati: {ok}, saltati: {saltati}, errori: {errori}")
     return 1 if errori or (PROVA and saltati) else 0
 

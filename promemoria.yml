@@ -2,11 +2,16 @@ name: Promemoria scadenze
 
 on:
   schedule:
-    - cron: "0 6 * * *"        # ogni mattina alle 6:00 UTC (7:00 o 8:00 in Italia)
+    - cron: "0 6 * * *"          # ogni mattina: scadenze (7:00 o 8:00 in Italia)
+    - cron: "10,40 4-21 * * *"   # ogni mezz'ora di giorno: promemoria delle assunzioni
   workflow_dispatch:
     inputs:
       prova:
         description: "Invia solo un messaggio di prova"
+        type: boolean
+        default: false
+      dosi:
+        description: "Controlla subito le assunzioni di questa mezz'ora"
         type: boolean
         default: false
 
@@ -29,4 +34,4 @@ jobs:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
           TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
-        run: python promemoria.py ${{ inputs.prova && '--prova' || '' }}
+        run: python promemoria.py ${{ inputs.prova && '--prova' || (inputs.dosi && '--dosi' || (github.event.schedule == '10,40 4-21 * * *' && '--dosi' || '--scadenze')) }}

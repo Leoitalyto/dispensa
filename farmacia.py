@@ -1196,6 +1196,8 @@ def _fa_blocco_avvisi():
         attivi.append(f"✉️ Email {html.escape(mail)}")
     if "sms" in canali and sms:
         attivi.append(f"💬 SMS {html.escape(sms)}")
+    if attivi and d.get("avvisi_dosi") and ("telegram" in canali or "email" in canali):
+        attivi.append("⏰ Promemoria delle assunzioni attivi")
     stile = ("background:rgba(255,255,255,.78);border-radius:16px;padding:8px 14px;margin:6px 0;color:#1b2b2b;"
              "font-weight:700")
     if attivi:
@@ -1214,11 +1216,16 @@ def _fa_blocco_avvisi():
             v_sm = st.text_input("Numero di cellulare", value=sms, placeholder="es. 333 1234567")
             privacy = st.checkbox("Nei messaggi non scrivere i nomi dei medicinali (solo quanti sono)",
                                   value=bool(d.get("telegram_privacy")))
+            dosi = st.checkbox("⏰ Avvisami anche all'ora delle assunzioni programmate (solo Telegram ed email)",
+                               value=bool(d.get("avvisi_dosi")))
             ok = st.form_submit_button("Salva")
         st.caption("Gli avvisi arrivano quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso, e ogni lunedì "
                    "per ciò che è già scaduto. Gli SMS sono brevi e non riportano mai i nomi dei medicinali. "
                    "Perché i messaggi partano, l'amministratore deve aver attivato ogni canale su GitHub; "
-                   "gli SMS richiedono anche un abbonamento a un servizio di invio, con un costo per messaggio.")
+                   "gli SMS richiedono anche un abbonamento a un servizio di invio, con un costo per messaggio. "
+                   "I promemoria delle assunzioni partono ogni mezz'ora: l'avviso arriva nella mezz'ora che contiene "
+                   "l'orario della terapia (per esempio quello delle 8:15 arriva tra le 8:00 e le 8:30) e non arriva "
+                   "se hai già toccato «✔ Presa». Sono un aiuto in più, non un allarme preciso.")
     if ok:
         v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\s.\-]", "", v_sm)
         if v_sm and re.fullmatch(r"3\d{8,9}", v_sm):               # cellulare italiano scritto senza prefisso
@@ -1238,7 +1245,8 @@ def _fa_blocco_avvisi():
         scelti = [n for n, c in (("telegram", c_tg), ("email", c_ml), ("sms", c_sm)) if c]
         try:
             salva(lambda d: d.update({"avvisi_canali": scelti, "telegram_chat_id": v_tg, "avviso_email": v_ml,
-                                      "avviso_sms": v_sm, "telegram_privacy": bool(privacy)}), "Avvisi")
+                                      "avviso_sms": v_sm, "telegram_privacy": bool(privacy),
+                                      "avvisi_dosi": bool(dosi)}), "Avvisi")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
