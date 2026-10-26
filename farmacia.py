@@ -6,6 +6,7 @@ i medicinali sono salvati nella voce "farmacia" del file dati di ogni persona.
 Serve solo a organizzare i dati inseriti dall'utente: non dà indicazioni mediche.
 """
 from datetime import timedelta
+import urllib.parse as _up
 
 MAX_PROFILI = 12
 FORME_MED = ["compresse", "capsule", "gocce", "sciroppo", "fiale", "bustine", "crema / pomata",
@@ -107,6 +108,15 @@ def _fa_dialogo(pid, med_id=None):
     m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), {}) if med_id else {}
     nomi = {p["id"]: p["nome"] for p in profili}
     with st.form("fa_form_med"):
+        togli_foto = False
+        if m.get("foto"):
+            try:
+                st.image(base64.b64decode(m["foto"].split(",", 1)[1]), width=120)
+            except Exception:
+                pass
+            togli_foto = st.checkbox("Rimuovi la foto attuale")
+        foto_up = st.file_uploader("📷 Foto della confezione (facoltativa): scatta o scegli",
+                                   type=["jpg", "jpeg", "png", "webp"])
         nome = st.text_input("Nome del medicinale *", value=m.get("nome", ""))
         marca = st.text_input("Marca commerciale", value=m.get("marca", ""))
         principio = st.text_input("Principio attivo", value=m.get("principio", ""))
@@ -127,7 +137,14 @@ def _fa_dialogo(pid, med_id=None):
         if not nome.strip():
             st.error("Scrivi il nome del medicinale.")
             return
-        rec = {"nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
+        foto = "" if togli_foto else m.get("foto", "")
+        if foto_up is not None:
+            try:
+                foto = foto_a_data_uri(foto_up.getvalue(), 400)
+            except Exception:
+                st.error("Non riesco a leggere la foto: prova con un'altra.")
+                return
+        rec = {"foto": foto, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
                "dosaggio": dosaggio.strip(), "forma": forma, "quantita": float(quantita), "unita": unita,
                "scadenza": scadenza.isoformat() if scadenza else None,
                "acquisto": acquisto.isoformat() if acquisto else None, "profilo": per, "note": note.strip()}
@@ -145,7 +162,9 @@ def _fa_dialogo(pid, med_id=None):
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
-        st.session_state["fa_msg"] = "✅ Medicinale salvato."
+        trovate = _fa_conflitti(f, per, rec)
+        st.session_state["fa_msg"] = ("⚠️ Medicinale salvato, ma attenzione: contiene «" + "», «".join(trovate) +
+                                      "», segnato come allergia di questo profilo." if trovate else "✅ Medicinale salvato.")
         st.rerun()
 
 
@@ -167,7 +186,7 @@ def _fa_dialogo_elimina(med_id, nome):
 
 
 # ---------------------------------------------------------------- schermata
-def _fa_card(m, data_oggi):
+def _fa_card(m, data_oggi, conflitti=()):
     stato, giorni = stato_scadenza(m.get("scadenza"), data_oggi)
     e = html.escape
     riga1 = " · ".join(x for x in (m.get("marca"), m.get("principio"), m.get("dosaggio"), m.get("forma")) if x)
@@ -179,7 +198,15 @@ def _fa_card(m, data_oggi):
         extra += f"<div class='riga'>🛍️ Acquistato il {data_it(m['acquisto'])}</div>"
     if m.get("note"):
         extra += f"<div class='riga'>📝 {e(m['note'])}</div>"
-    return (f"<div class='fa-med' style='--c:{COLORI[stato]}'><div class='nome'>💊 {e(m.get('nome', ''))}</div>"
+    foto = ""
+    if m.get("foto") and src_sicuro(m["foto"]):
+        foto = (f"<img src='{e(m['foto'], quote=True)}' alt='' style='float:right;max-width:84px;max-height:84px;"
+                "border-radius:12px;margin-left:8px'>")
+    for c in conflitti:
+        extra = (f"<div class='riga' style='color:#b71c1c;font-weight:800'>🚨 Attenzione: «{e(c)}» è segnato come "
+                 f"allergia di questo profilo</div>") + extra
+    sfondo = ";background:#ffebee" if conflitti else ""
+    return (f"<div class='fa-med' style='--c:{COLORI[stato]}{sfondo}'>{foto}<div class='nome'>💊 {e(m.get('nome', ''))}</div>"
             f"<div class='riga'>{e(riga1)}</div>"
             f"<div class='riga'>📦 {fmt_num(float(m.get('quantita') or 0))} {e(m.get('unita', ''))}</div>"
             f"<span class='scad'>{e(scad)}</span>{extra}</div>")
@@ -193,7 +220,8 @@ def schermata_farmacia():
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
                 unsafe_allow_html=True)
     if st.session_state.get("fa_msg"):
-        st.success(st.session_state.pop("fa_msg"))
+        _msg = st.session_state.pop("fa_msg")
+        (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
 
     f = _fa_dati()
     profili = _fa_profili(f)
@@ -253,6 +281,7 @@ def schermata_farmacia():
 
     tab_med, tab_ter, tab_vis, tab_vac = st.tabs(["💊 Medicinali", "📅 Terapie", "🩺 Visite", "💉 Vaccini"])
     with tab_med:
+        _fa_blocco_allergie(f, pid, nomi, del_profilo)
         if st.button("➕ Aggiungi medicinale", type="primary", key="fa_aggiungi", width="stretch"):
             _fa_dialogo(pid)
 
@@ -288,12 +317,21 @@ def schermata_farmacia():
             st.info("Nessun medicinale corrisponde ai filtri.")
         for m in visibili:
             with st.container(border=True):
-                st.markdown(_fa_card(m, oggi_), unsafe_allow_html=True)
+                st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
+                _q = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
+                l1, l2 = st.columns(2, gap="small")
+                l1.link_button("📖 Foglio illustrativo", "https://www.google.com/search?q=" + _q, width="stretch")
+                l2.link_button("🏛️ Banca dati AIFA", "https://www.aifa.gov.it/riassunto-caratteristiche-e-foglio-illustrativo",
+                               width="stretch")
                 b1, b2 = st.columns(2, gap="small")
                 if b1.button("Elimina", icon=":material/delete:", key="fa_el_" + m["id"], width="stretch"):
                     _fa_dialogo_elimina(m["id"], m.get("nome", ""))
                 if b2.button("Modifica", icon=":material/edit:", key="fa_mo_" + m["id"], width="stretch"):
                     _fa_dialogo(pid, m["id"])
+
+        if visibili:
+            st.caption("📖 Controindicazioni e avvertenze sono nel foglio illustrativo ufficiale: leggilo o chiedi al "
+                       "medico o al farmacista. L'app non valuta se un medicinale va bene per una malattia.")
 
     with tab_ter:
         _fa_tab_terapie(f, pid, nomi, oggi_)
@@ -615,6 +653,7 @@ def _fa_elimina_profilo(f, pid):
             f[chiave] = [x for x in f.get(chiave, []) if x.get("profilo", "p0") != pid]
         f["registro"] = {k: r for k, r in (f.get("registro") or {}).items() if r.get("p", "p0") != pid}
         (f.get("vaccini_doc") or {}).pop(pid, None)
+        (f.get("allergie") or {}).pop(pid, None)
     _fa_salva(_m, "Farmacia: profilo eliminato")
     _fa_cancella_files(ids)
 
@@ -892,8 +931,46 @@ def _fa_esporta(f, pid, nomi):
         dati = {"profilo": nomi[pid]}
         for k in chiavi:
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
+        dati["allergie_dichiarate"] = (f.get("allergie") or {}).get(pid, [])
         dati["registro_assunzioni"] = [r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid]
         st.caption("Scarica un file con medicinali, terapie, visite e vaccinazioni (l'elenco, non le foto). "
                    "I documenti si scaricano uno per uno dalla loro scheda.")
         st.download_button("⬇ Scarica i dati (JSON)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
                            file_name=f"farmacia_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
+
+
+# =====================================================================
+# ALLERGIE DICHIARATE DALL'UTENTE (confronto con nome, marca e principio attivo)
+# =====================================================================
+def _fa_termini_allergie(f, pid):
+    return [x.strip().lower() for x in (f.get("allergie") or {}).get(pid, []) if len(x.strip()) >= 3]
+
+
+def _fa_conflitti(f, pid, m):
+    testo = " ".join(str(m.get(k, "")) for k in ("nome", "marca", "principio")).lower()
+    return [t_ for t_ in _fa_termini_allergie(f, pid) if t_ in testo]
+
+
+def _fa_blocco_allergie(f, pid, nomi, medicinali):
+    termini = (f.get("allergie") or {}).get(pid, [])
+    nomi_conflitto = [m.get("nome", "") for m in medicinali if _fa_conflitti(f, pid, m)]
+    if nomi_conflitto:
+        st.error(f"🚨 Attenzione: per {nomi[pid]} questi medicinali contengono sostanze segnate come allergia: "
+                 + ", ".join(nomi_conflitto) + ".")
+    with st.expander(f"⚠️ Allergie e intolleranze di {nomi[pid]}" + (f" ({len(termini)})" if termini else "")):
+        with st.form("fa_form_allergie_" + pid):
+            testo = st.text_area("Scrivi le sostanze o i principi attivi, separati da virgola",
+                                 value=", ".join(termini), placeholder="es. amoxicillina, ibuprofene, lattosio")
+            ok = st.form_submit_button("Salva")
+        st.caption("L'app confronta solo le parole che scrivi con nome, marca e principio attivo dei medicinali. "
+                   "Se c'è un'allergia a una famiglia di farmaci, scrivi anche i nomi dei singoli principi attivi. "
+                   "Non sostituisce il parere del medico o del farmacista.")
+    if ok:
+        lista = [x.strip() for x in re.split(r"[,;\n]", testo) if x.strip()]
+        try:
+            _fa_salva(lambda f: f.setdefault("allergie", {}).__setitem__(pid, lista), "Farmacia: allergie")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+        else:
+            st.session_state["fa_msg"] = "✅ Allergie salvate."
+            st.rerun()
