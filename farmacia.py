@@ -56,14 +56,19 @@ def _fa_icona_uri():
 
 
 def icona_farmacia():
-    """Icona cliccabile (croce rossa) che apre la sezione Farmacia."""
+    """Icona cliccabile (croce rossa) che apre la sezione Farmacia: pulsa piano, per far capire che si può toccare."""
     uri = _fa_icona_uri()
     if uri:
         st.markdown(
-            "<style>.st-key-fa_icona button{width:112px;height:112px;min-height:112px;border-radius:26px;"
-            "border:2px solid rgba(255,255,255,.95);box-shadow:0 8px 22px rgba(0,0,0,.18);"
-            f"background:url({uri}) center/82% no-repeat,rgba(255,255,255,.55);color:transparent}}"
-            ".st-key-fa_icona button p{font-size:0}</style>", unsafe_allow_html=True)
+            f"<style>.st-key-fa_icona{{--fa-img:url({uri})}}"
+            ".st-key-fa_icona button,.st-key-fa_icona button:hover,.st-key-fa_icona button:focus,.st-key-fa_icona button:active"
+            "{background:var(--fa-img) center/contain no-repeat !important;border:0 !important;box-shadow:none !important;color:transparent}"
+            ".st-key-fa_icona button{width:116px;height:116px;min-height:116px;padding:0;border-radius:0;cursor:pointer;"
+            "animation:fa-battito 2.2s ease-in-out infinite}"
+            ".st-key-fa_icona button:active{transform:scale(.94);animation:none}"
+            ".st-key-fa_icona button p{font-size:0}"
+            "@keyframes fa-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
+            "50%{transform:scale(1.07);filter:drop-shadow(0 0 14px rgba(229,57,53,.9))}}</style>", unsafe_allow_html=True)
         premuto = st.button("Farmacia", key="fa_icona", help="Apri la Farmacia")
     else:                                             # se manca farmacia.webp resta un pulsante semplice
         premuto = st.button("🏥 Farmacia", key="fa_icona")
