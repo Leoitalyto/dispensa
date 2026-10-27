@@ -179,6 +179,22 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
          """- Tocca il riquadro del **gruppo sanguigno** per aprire la **scheda sanitaria**: patologie, allergie ai farmaci, interventi, storia clinica e vaccinazioni.
 - Accanto trovi **Il mio dottore**: scegli dottore o dottoressa, poi scrivi nome, indirizzo, telefono, email, gli **orari** (una riga per giorno: dalle, alle, note), il **sostituto** e le note.""",
          "scheda sanitaria dottore medico di base patologie interventi storia clinica orari telefono email sostituto"),
+        ("🪪 Tessera sanitaria e fascicolo sanitario",
+         """In alto, accanto alla dottoressa, c'è il badge azzurro **Tessera sanitaria · Fascicolo sanitario** (pulsa piano per farsi notare). Toccalo.
+
+**La tessera**
+1. Tocca **👁️ Mostra fronte e retro della tessera**: la vedi in grande.
+2. La tessera si prende da **I miei documenti**. Se non l'hai ancora inserita compare un avviso con il pulsante **📁 Vai a I miei documenti**: scegli **Tessera sanitaria** e fai la foto di fronte e retro. L'avviso sparisce da solo appena l'hai inserita.
+
+**I collegamenti online** (uno per il fascicolo sanitario elettronico, uno per le vaccinazioni, uno per le spese sanitarie detraibili)
+1. Apri la pagina nel browser e **copia l'indirizzo** dalla barra in alto.
+2. Torna qui, **incollalo** nella casella giusta.
+3. Tocca **💾 Salva**.
+4. Da quel momento compare un pulsante **🔗**: toccandolo si apre direttamente la pagina.
+5. Per cambiare il link tocca **✏️ Modifica**; per toglierlo tocca **🗑️ Togli il link**.
+
+I collegamenti sono separati per ogni profilo della famiglia.""",
+         "tessera sanitaria fascicolo sanitario elettronico fse link collegamento indirizzo vaccinazioni online spese sanitarie detraibili fronte retro badge azzurro 730 detrazioni"),
         ("🔎 Trova una farmacia aperta",
          """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: l'app cerca le farmacie aperte vicino a te.""",
          "farmacia aperta trovare cercare vicino turno notte"),

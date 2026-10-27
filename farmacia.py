@@ -313,6 +313,7 @@ def schermata_farmacia():
         st.session_state.pop("fa_modulo_foglio", None)
         st.session_state.pop("fa_modulo_dottore", None)
         st.session_state.pop("fa_modulo_sanitario", None)
+        st.session_state.pop("fa_modulo_tessera", None)
         st.session_state["farmacia_aperta"] = False
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
@@ -331,6 +332,9 @@ def schermata_farmacia():
         return
     if st.session_state.get("fa_modulo_sanitario"):
         _fa_modulo_sanitario(**st.session_state["fa_modulo_sanitario"])
+        return
+    if st.session_state.get("fa_modulo_tessera"):
+        _fa_modulo_tessera(**st.session_state["fa_modulo_tessera"])
         return
 
     _fa_info("farmacia")
@@ -2039,8 +2043,28 @@ def _fa_icone_dottori_cache(_data_file):
     return risultato
 
 
+def _fa_scheda_gruppo_quadrata(nome, gruppo):
+    """Il badge del gruppo sanguigno in formato quadrato stondato (goccia, gruppo e nome), che pulsa."""
+    stile = ("aspect-ratio:200/236;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;"
+             "background:rgba(255,255,255,.82);border-radius:22px;padding:4px;margin:0;color:#1b2b2b;min-width:0;"
+             "overflow:hidden;border:2px solid rgba(183,28,28,.35);animation:fa-pulso-r 2.6s infinite")
+    uri = None
+    if gruppo:
+        try:
+            uri = _fa_icone_gruppi().get(gruppo)
+        except Exception:
+            uri = None
+    goccia = (f"<img src='{uri}' alt='{html.escape(gruppo)}' style='height:56px;flex:0 0 auto'>" if uri
+              else "<span style='font-size:2.2rem;line-height:1'>🩸</span>")
+    testo = (f"<b style='font-size:1.3rem;color:#b71c1c;line-height:1'>{html.escape(gruppo)}</b>" if gruppo
+             else "<span style='font-size:.7rem;text-align:center;line-height:1.1'>Gruppo non indicato</span>")
+    st.markdown(f"<div style='{stile}'>{goccia}{testo}"
+                f"<span style='font-size:.66rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"
+                f"{html.escape(nome)}</span></div>", unsafe_allow_html=True)
+
+
 def _fa_riga_profilo(profili, pid, nome, gruppo):
-    """Una sola striscia: a sinistra il gruppo sanguigno (apre la scheda sanitaria), a destra l'immagine del dottore."""
+    """Una sola striscia con tre badge: gruppo sanguigno (apre la scheda sanitaria), dottore e tessera sanitaria."""
     dott = next((p.get("dottore") for p in profili if p["id"] == pid), None) or {}
     tipo = dott.get("tipo")
     try:
@@ -2048,27 +2072,34 @@ def _fa_riga_profilo(profili, pid, nome, gruppo):
     except Exception:
         uri = None
     sfondo = f"url({uri}) center/contain no-repeat," if uri else ""
+    uri_ts = _fa_file_uri("tessera.webp")
+    sfondo_ts = f"url({uri_ts}) center/90% auto no-repeat," if uri_ts else ""
     st.markdown(
         "<style>"
-        ".st-key-azioni_gruppo [data-testid='stHorizontalBlock']{align-items:center !important;gap:8px !important}"
-        ".st-key-azioni_gruppo [data-testid='stColumn']:first-child,.st-key-azioni_gruppo [data-testid='column']:first-child"
+        ".st-key-azioni_gruppo [data-testid='stHorizontalBlock']{align-items:flex-start !important;gap:8px !important}"
+        ".st-key-azioni_gruppo [data-testid='stColumn'],.st-key-azioni_gruppo [data-testid='column']"
         "{flex:1 1 0 !important;min-width:0 !important;width:auto !important}"
-        ".st-key-azioni_gruppo [data-testid='stColumn']:last-child,.st-key-azioni_gruppo [data-testid='column']:last-child"
-        "{flex:0 0 112px !important;width:112px !important;min-width:112px !important}"
-        ".st-key-fa_dottore_btn [data-testid='stButton'],.st-key-fa_dottore_btn2 [data-testid='stButton']{width:100%}"
-        ".st-key-fa_dottore_btn button{width:100%;height:auto;aspect-ratio:200/236;min-height:0;border-radius:22px;"
-        "border:0;padding:0;font-size:2.6rem;color:transparent;"
-        f"background:{sfondo}rgba(255,255,255,.7);animation:fa-pulso 2.6s infinite}}"
-        ".st-key-fa_dottore_btn button p{font-size:0}"
+        ".st-key-fa_dottore_btn [data-testid='stButton'],.st-key-fa_dottore_btn2 [data-testid='stButton'],"
+        ".st-key-fa_ts_btn [data-testid='stButton'],.st-key-fa_ts_btn2 [data-testid='stButton']{width:100%}"
+        ".st-key-fa_dottore_btn button,.st-key-fa_ts_btn button{width:100%;height:auto;aspect-ratio:200/236;min-height:0;"
+        "border-radius:22px;border:0;padding:0;font-size:2.6rem;color:transparent}"
+        f".st-key-fa_dottore_btn button{{background:{sfondo}rgba(255,255,255,.7);animation:fa-pulso 2.6s infinite}}"
+        f".st-key-fa_ts_btn button{{background:{sfondo_ts}linear-gradient(160deg,#eaf4ff,#bfdcff);animation:fa-pulso-b 2.2s infinite}}"
+        ".st-key-fa_dottore_btn button p,.st-key-fa_ts_btn button p{font-size:0}"
         "@keyframes fa-pulso{0%{box-shadow:0 0 0 0 rgba(13,148,136,.55)}70%{box-shadow:0 0 0 12px rgba(13,148,136,0)}"
         "100%{box-shadow:0 0 0 0 rgba(13,148,136,0)}}"
         "@keyframes fa-pulso-r{0%{box-shadow:0 0 0 0 rgba(198,40,40,.5)}70%{box-shadow:0 0 0 10px rgba(198,40,40,0)}"
         "100%{box-shadow:0 0 0 0 rgba(198,40,40,0)}}"
-        ".st-key-fa_dottore_btn2 button,.st-key-fa_gruppo_btn2 button{width:100%;min-height:34px;border-radius:999px;border:0;padding:3px 6px}"
+        "@keyframes fa-pulso-b{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(21,101,192,.6)}"
+        "45%{transform:scale(1.045)}70%{box-shadow:0 0 0 12px rgba(21,101,192,0)}"
+        "100%{transform:scale(1);box-shadow:0 0 0 0 rgba(21,101,192,0)}}"
+        ".st-key-fa_dottore_btn2 button,.st-key-fa_gruppo_btn2 button,.st-key-fa_ts_btn2 button"
+        "{width:100%;min-height:34px;border-radius:18px;border:0;padding:3px 6px}"
         ".st-key-fa_dottore_btn2 button{background:linear-gradient(135deg,#00a98f,#0288d1);box-shadow:0 3px 0 rgba(0,70,90,.3)}"
         ".st-key-fa_gruppo_btn2 button{background:linear-gradient(135deg,#c62828,#ef5350);box-shadow:0 3px 0 rgba(110,20,20,.35)}"
-        ".st-key-fa_dottore_btn2 button p,.st-key-fa_gruppo_btn2 button p{color:#fff !important;font-weight:800 !important;"
-        "font-size:.78rem !important;line-height:1.1;margin:0}"
+        ".st-key-fa_ts_btn2 button{background:linear-gradient(135deg,#1565c0,#42a5f5);box-shadow:0 3px 0 rgba(10,50,110,.35)}"
+        ".st-key-fa_dottore_btn2 button p,.st-key-fa_gruppo_btn2 button p,.st-key-fa_ts_btn2 button p{color:#fff !important;"
+        "font-weight:800 !important;font-size:.74rem !important;line-height:1.1;margin:0}"
         ".st-key-fa_gruppo_btn2 [data-testid='stButton']{width:100%}"
         ".st-key-fa_gruppo_box{position:relative}"
         ".st-key-fa_gruppo_btn{position:absolute !important;top:0;left:0;right:0;bottom:0;width:100% !important;"
@@ -2078,21 +2109,29 @@ def _fa_riga_profilo(profili, pid, nome, gruppo):
         "</style>", unsafe_allow_html=True)
     etichetta = "La mia dottoressa" if tipo == "Dottoressa" else "Il mio dottore"
     with st.container(key="azioni_gruppo"):
-        c1, c2 = st.columns([3, 1.5], gap="small")
+        c1, c2, c3 = st.columns(3, gap="small")
         with c1:
             with st.container(key="fa_gruppo_box"):
-                _fa_scheda_gruppo(nome, gruppo)
+                _fa_scheda_gruppo_quadrata(nome, gruppo)
                 premuto_g = st.button("Apri la scheda sanitaria", key="fa_gruppo_btn", width="stretch")
             premuto_g2 = st.button("📋 Scheda sanitaria ›", key="fa_gruppo_btn2", width="stretch")
         with c2:
             premuto = st.button("🩺" if not uri else etichetta, key="fa_dottore_btn", help="Apri la scheda del dottore",
                                 width="stretch")
             premuto2 = st.button(etichetta + " ›", key="fa_dottore_btn2", help="Apri la scheda del dottore", width="stretch")
+        with c3:
+            premuto_t = st.button("🪪" if not uri_ts else "Tessera sanitaria", key="fa_ts_btn",
+                                  help="Tessera sanitaria e fascicolo sanitario", width="stretch")
+            premuto_t2 = st.button("Tessera sanitaria · Fascicolo sanitario ›", key="fa_ts_btn2",
+                                   help="Tessera sanitaria e fascicolo sanitario", width="stretch")
     if premuto_g or premuto_g2:
         st.session_state["fa_modulo_sanitario"] = {"pid": pid}
         st.rerun()
     if premuto or premuto2:
         st.session_state["fa_modulo_dottore"] = {"pid": pid}
+        st.rerun()
+    if premuto_t or premuto_t2:
+        st.session_state["fa_modulo_tessera"] = {"pid": pid}
         st.rerun()
 
 
@@ -3035,3 +3074,155 @@ def campo_foto_doc(chiave, titolo):
         st.session_state[f"{chiave}_scartata"] = ident_f
         st.rerun()
     return nuova
+
+
+# =====================================================================
+# TESSERA SANITARIA E FASCICOLO SANITARIO (badge accanto alla dottoressa)
+# =====================================================================
+def _fa_tessera_del_profilo(f, pid):
+    """Il documento «Tessera sanitaria» di questo profilo (se già inserito nei documenti) e i suoi file."""
+    for x in f.get("documenti", []):
+        if x.get("profilo", "p0") == pid and (x.get("tipo") or "").strip().lower() == "tessera sanitaria":
+            return x, list(x.get("allegati") or [])
+    return None, []
+
+
+def _fa_url_valido(testo):
+    """Ritorna il link sistemato (con https:// davanti se manca), '' se è vuoto, None se non sembra un indirizzo."""
+    t_ = (testo or "").strip()
+    if not t_:
+        return ""
+    if not re.match(r"^https?://", t_, re.I):
+        t_ = "https://" + t_
+    if not re.fullmatch(r"https?://[^\s/]+\.[^\s/]{2,}(/\S*)?", t_, re.I):
+        return None
+    return t_
+
+
+def _fa_salva_link(pid, chiave, url):
+    def _m(f):
+        for p in f["profili"]:
+            if p["id"] == pid:
+                link = dict(p.get("link_sanitari") or {})
+                if url:
+                    link[chiave] = url
+                else:
+                    link.pop(chiave, None)
+                p["link_sanitari"] = link
+    _fa_salva(_m, "Farmacia: collegamenti sanitari")
+
+
+@st.dialog("🪪 La mia tessera sanitaria", width="large")
+def _fa_dialogo_tessera(pid):
+    f = _fa_dati()
+    _x, allegati = _fa_tessera_del_profilo(f, pid)
+    immagini = [a for a in allegati if str(a.get("mime", "")).startswith("image/")]
+    fronte = next((a for a in immagini if a["nome"].lower().startswith("fronte")), None) or (immagini[0] if immagini else None)
+    retro = next((a for a in immagini if a["nome"].lower().startswith("retro")), None)
+    if retro is None:
+        altre = [a for a in immagini if a is not fronte]
+        retro = altre[0] if altre else None
+    for titolo, a in (("📄 Fronte", fronte), ("📄 Retro", retro)):
+        st.markdown(f"**{titolo}**")
+        if not a:
+            st.caption("Non c'è ancora: puoi aggiungerla dalla scheda del documento, in I miei documenti.")
+            continue
+        d = carica_dati(crea_archivio(), _fa_percorso_doc(a["id"]))
+        if d.get("b64"):
+            st.image(base64.b64decode(d["b64"]))
+        else:
+            st.error("Non trovo questa immagine.")
+    for a in allegati:                                            # eventuali PDF
+        if not str(a.get("mime", "")).startswith("image/"):
+            d = carica_dati(crea_archivio(), _fa_percorso_doc(a["id"]))
+            if d.get("b64"):
+                st.download_button("⬇ " + a["nome"], base64.b64decode(d["b64"]), file_name=a["nome"],
+                                   mime=d.get("mime", "application/pdf"), key="fa_ts_pdf_" + a["id"], width="stretch")
+
+
+def _fa_modulo_tessera(pid):
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    profilo = next((p for p in profili if p["id"] == pid), profili[0])
+    link = profilo.get("link_sanitari") or {}
+
+    if st.button("← Torna alla Farmacia", key="fa_ts_indietro"):
+        st.session_state.pop("fa_modulo_tessera", None)
+        st.rerun()
+    st.subheader(f"🪪 Tessera sanitaria e fascicolo · {profilo.get('nome', '')}")
+
+    # ------------------------------------------------ la tessera, presa dai documenti
+    st.markdown("### 🪪 La mia tessera sanitaria")
+    doc, allegati = _fa_tessera_del_profilo(f, pid)
+    if allegati:
+        if st.button("👁️ Mostra fronte e retro della tessera", type="primary", key="fa_ts_mostra", width="stretch"):
+            _fa_dialogo_tessera(pid)
+    else:
+        if doc:
+            st.warning("📌 Hai inserito il documento «Tessera sanitaria» ma senza foto. Aprilo in I miei documenti, "
+                       "tocca Modifica e aggiungi la foto del **fronte** e del **retro**.")
+        else:
+            st.warning("📌 Non hai ancora inserito la tessera sanitaria. Vai in **I miei documenti**, tocca "
+                       "**➕ Aggiungi un documento**, scegli **Tessera sanitaria** e fai la foto del fronte e del retro. "
+                       "Questo avviso sparisce da solo appena l'hai inserita.")
+        if st.button("📁 Vai a I miei documenti", key="fa_ts_vai_doc", width="stretch"):
+            st.session_state.pop("fa_modulo_tessera", None)
+            st.session_state["fa_profilo"] = pid
+            st.session_state["sezione_home"] = "documenti"
+            st.rerun()
+
+    # ------------------------------------------------ i collegamenti online
+    st.markdown("### 🔗 I miei collegamenti online")
+    st.caption("Incolla l'indirizzo (link) della pagina e tocca **Salva**. Da quel momento basta toccare il pulsante per "
+               "aprirla. Puoi cambiarlo o toglierlo quando vuoi.")
+    with st.expander("❓ Come copio il link di una pagina?"):
+        st.markdown("1. Apri la pagina nel browser (per esempio dal sito della tua Regione).\n"
+                    "2. Tocca la **barra dell'indirizzo** in alto: il testo si seleziona tutto.\n"
+                    "3. Tocca **Copia**.\n"
+                    "4. Torna qui, tocca il campo e scegli **Incolla**.\n"
+                    "5. Tocca **💾 Salva**.")
+    campi = (("fse", "📂 Il mio fascicolo sanitario elettronico", "🔗 Apri il mio fascicolo sanitario"),
+             ("vaccini", "💉 Le mie vaccinazioni online", "🔗 Apri le mie vaccinazioni"),
+             ("spese", "🧾 Le mie spese sanitarie detraibili", "🔗 Apri le mie spese sanitarie"))
+    for chiave, titolo, pulsante in campi:
+        url = (link.get(chiave) or "").strip()
+        k_mod = f"fa_ts_mod_{chiave}_{pid}"
+        st.markdown(f"**{titolo}**")
+        if url and not st.session_state.get(k_mod):
+            c1, c2 = st.columns([3, 1.4], gap="small")
+            c1.link_button(pulsante, url, type="primary", width="stretch")
+            if c2.button("✏️ Modifica", key=f"fa_ts_btnmod_{chiave}_{pid}", width="stretch"):
+                st.session_state[k_mod] = True
+                st.rerun()
+            continue
+        with st.form(f"fa_ts_form_{chiave}_{pid}"):
+            nuovo = st.text_input(titolo, value=url, placeholder="incolla qui il link, per esempio https://…",
+                                  label_visibility="collapsed")
+            b1, b2 = st.columns(2)
+            salva_b = b1.form_submit_button("💾 Salva", type="primary", width="stretch")
+            togli_b = b2.form_submit_button("🗑️ Togli il link" if url else "Annulla", width="stretch")
+        if salva_b:
+            valido = _fa_url_valido(nuovo)
+            if valido is None:
+                st.error("Il link non sembra corretto: copialo per intero dalla barra dell'indirizzo (di solito comincia con https://).")
+            elif not valido:
+                st.error("Il campo è vuoto: incolla il link e tocca Salva.")
+            else:
+                try:
+                    _fa_salva_link(pid, chiave, valido)
+                except Exception as ex:
+                    st.error(f"Non sono riuscito a salvare: {ex}")
+                else:
+                    st.session_state.pop(k_mod, None)
+                    st.session_state["fa_msg"] = "✅ Collegamento salvato."
+                    st.rerun()
+        elif togli_b:
+            if url:
+                try:
+                    _fa_salva_link(pid, chiave, "")
+                except Exception as ex:
+                    st.error(f"Non sono riuscito a toglierlo: {ex}")
+                    continue
+                st.session_state["fa_msg"] = "🗑️ Collegamento tolto."
+            st.session_state.pop(k_mod, None)
+            st.rerun()
