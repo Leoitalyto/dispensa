@@ -18,6 +18,7 @@ UTILITA = [
         "nome": "Velocity Music",
         "link": "https://velocitymusic.uk/",
         "play": "play.webp",
+        "play_tondo": True,
         "targa": "velocity.webp",
         "bugiardino": """**Velocity Music** è un lettore e gestore musicale che consente di accedere gratuitamente all'intera libreria di YouTube tramite un'interfaccia moderna, intuitiva e completamente personalizzabile. Tra i suoi punti di forza spiccano l'assenza totale di pubblicità e la mancanza di costi o abbonamenti.
 
@@ -30,6 +31,55 @@ Il progetto è ancora in fase di sviluppo, ma è già utilizzabile gratuitamente
 - Interfaccia semplice, completa e personalizzabile
 - Accesso immediato anche senza registrazione
 - Progetto in continua evoluzione e aggiornamento""",
+    },
+    {
+        "id": "wimbi",
+        "nome": "Wimbi",
+        "link": "https://wimbi.app/it/",
+        "play": "wimbi_papero.webp",
+        "play_tondo": False,
+        "targa": "wimbi.webp",
+        "bugiardino": """#### Cerca, tocca, ascolta.
+Scrivi una canzone o un artista, tocca un risultato e parte. Il tutorial è tutto qui.
+- Cerca per canzone o artista
+- Un tocco e si parte
+- Niente registrazione, niente attese
+
+#### Playlist per tutti i gusti.
+Palestra, concentrazione, viaggi lunghi, domenica mattina, quella canzone in loop: crea una playlist per ogni umore e tienile tutte sul tuo dispositivo.
+- Creane quante vuoi
+- Riordina i brani come preferisci
+- Importa playlist da altre app musicali
+- Salvate sul tuo dispositivo
+- Sincronizzazione su tutti i tuoi dispositivi *(in arrivo)*
+
+#### La musica non si ferma.
+Blocca lo schermo, apri un'altra app, metti il telefono in tasca. Wimbi continua a suonare.
+- Suona a schermo spento
+- Controlli sulla schermata di blocco
+- Va d'accordo con chiamate e altre app
+
+#### Sempre qualcosa di nuovo da indossare.
+Wimbi ha tantissimi temi e ne aggiungiamo sempre di nuovi. Scegli quello che si adatta al tuo umore, o lascia che i colori seguano la copertina.
+- Tanti temi tra cui scegliere
+- Nuovi temi aggiunti di continuo
+- Colori che seguono la copertina
+
+#### 17 lingue
+Wimbi segue la lingua del tuo telefono e puoi cambiarla quando vuoi nelle Impostazioni.
+English (Inglese) · Italiano · Español (Spagnolo) · Français (Francese) · Deutsch (Tedesco) · Português, Portugal (Portoghese) · Português, Brasil (Portoghese del Brasile) · Русский (Russo) · Türkçe (Turco) · हिन्दी (Hindi) · Bahasa Indonesia (Indonesiano) · 日本語 (Giapponese) · 한국어 (Coreano) · ไทย (Thailandese) · Tiếng Việt (Vietnamita) · 简体中文 (Cinese semplificato) · 繁體中文 (Cinese tradizionale)
+
+#### Nessun account richiesto. E resterà così.
+Puoi usare Wimbi senza account, oggi e in futuro. La tua libreria resta sul tuo dispositivo.
+- Nessuna registrazione per iniziare
+- Playlist salvate sul tuo dispositivo
+- Usare Wimbi senza account sarà sempre possibile
+
+#### Schermo spento. Musica accesa.
+Wimbi è fatta per non darti fastidio, mentre cammini, lavori o guidi.
+- Controlli da schermata di blocco e widget
+- Riprende dopo chiamate e interruzioni
+- Cambi brano fluidi""",
     },
 ]
 
@@ -83,7 +133,7 @@ def _ut_blocco(u):
         css += (f".st-key-ut_play_{k} [data-testid='stLinkButton']{{display:flex;justify-content:center}}"
                 f".st-key-ut_play_{k} a{{background:url('{play}') center/contain no-repeat !important;border:0 !important;"
                 "box-shadow:none !important;color:transparent !important;width:min(190px,52vw) !important;height:auto !important;"
-                "aspect-ratio:1/1;min-height:0 !important;padding:0 !important;border-radius:50% !important;"
+                "aspect-ratio:1/1;min-height:0 !important;padding:0 !important;" + ('border-radius:50% !important;' if u.get("play_tondo", True) else "border-radius:0 !important;") +
                 "animation:ut-batte 2s ease-in-out infinite}"
                 f".st-key-ut_play_{k} a:active{{transform:scale(.93);animation:none}}"
                 f".st-key-ut_play_{k} a p{{font-size:0 !important}}")

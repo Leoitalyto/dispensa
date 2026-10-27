@@ -233,7 +233,7 @@ Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
 
 Sotto il pulsante c'è il **nome** dell'app: toccandolo si apre il **bugiardino**, cioè una spiegazione semplice di cosa fa e dei suoi vantaggi.
 
-Per ora c'è **Velocity Music**; altre utilità si aggiungeranno qui.""",
+Per ora ci sono **Velocity Music** (il play azzurro) e **Wimbi** (il papero con le cuffie); altre utilità si aggiungeranno qui.""",
          "utilità utilita pagina app pulsanti avviare raccolta siti cos'è a cosa serve"),
         ("▶️ Come avviare un'app",
          """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Farmacia e I miei documenti).
@@ -246,6 +246,12 @@ Per ora c'è **Velocity Music**; altre utilità si aggiungeranno qui.""",
 3. Dentro c'è anche il pulsante **🎵 Avvia** per aprire l'app.
 4. Per chiudere la finestra tocca la **X** in alto.""",
          "bugiardino spiegazione targa nome leggere descrizione vantaggi informazioni"),
+        ("🦆 Wimbi",
+         """Wimbi è un'app musicale: **scrivi una canzone o un artista, tocchi un risultato e parte**. Non serve registrarsi, le playlist restano sul tuo dispositivo, la musica **continua a suonare a schermo spento** e l'app è disponibile in **17 lingue**.
+
+Tocca il **papero con le cuffie** per avviarla, oppure la scritta verde **Wimbi** per leggere il bugiardino completo.
+Indirizzo: https://wimbi.app/it/""",
+         "wimbi papero cuffie musica canzoni artista playlist schermo spento lingue senza account"),
         ("🎵 Velocity Music",
          """È un lettore e gestore musicale che permette di ascoltare **gratuitamente** la libreria di YouTube, **senza pubblicità** e **senza abbonamenti**. Si può usare **come ospite**, senza creare un account. Il progetto è ancora in sviluppo ma già utilizzabile.
 
@@ -454,6 +460,7 @@ div.hero::after{width:180px !important;height:158px !important;top:-10px !import
 # Elenco delle novità: (data ISO, simbolo, titolo, DOVE SI TROVA). Si aggiunge una riga per ogni novità: il banner
 # mostra solo quelle degli ultimi 14 giorni, poi scompaiono da sole.
 _NOVITA = [
+    ("2026-10-27", "🦆", "Nuova utilità: Wimbi", "Home → Utilità → il papero con le cuffie; tocca la scritta verde per il bugiardino"),
     ("2026-10-27", "🧰", "Nuova pagina «Utilità»", "Home → terza icona azzurra «Utilità», accanto a Farmacia e I miei documenti"),
     ("2026-10-27", "ℹ️", "Guida in ogni pagina", "Pulsante rosso «Clicca per informazioni» in alto, con spiegazioni e ricerca"),
     ("2026-10-27", "🪪", "Tessera sanitaria e fascicolo", "Farmacia → badge azzurro accanto alla dottoressa"),
@@ -481,7 +488,7 @@ def banner_novita():
     try:
         from datetime import date as _d
         oggi_ = oggi() if "oggi" in globals() else _d.today()
-        recenti = [n for n in _NOVITA if (oggi_ - _d.fromisoformat(n[0])).days <= 14][:4]
+        recenti = [n for n in _NOVITA if (oggi_ - _d.fromisoformat(n[0])).days <= 14][:5]
     except Exception:
         return
     if not recenti:
