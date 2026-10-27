@@ -358,15 +358,13 @@ def pulsante_info(sezione):
             "50%{transform:scale(1.02);filter:drop-shadow(0 0 14px rgba(229,57,53,.85))}}"
             f".st-key-{chiave} button{{background:url('{uri}') center/100% 100% no-repeat !important;"
             "border:0 !important;box-shadow:none !important;color:transparent !important;"
-            "width:100% !important;max-width:640px !important;height:auto !important;aspect-ratio:760/225;min-height:0 !important;"
-            "padding:0 !important;border-radius:0 !important;cursor:pointer;animation:ginfo-batte 2.4s ease-in-out infinite}}"
-            f".st-key-{chiave}{{width:100% !important}}"
-            f".st-key-{chiave} [data-testid='stButton']{{display:flex !important;justify-content:center !important;width:100% !important}}"
+            "display:block !important;width:100% !important;max-width:640px !important;margin:0 auto !important;height:auto !important;aspect-ratio:760/225;min-height:0 !important;"
+            "padding:0 !important;border-radius:0 !important;cursor:pointer;animation:ginfo-batte 2.4s ease-in-out infinite}"
             f".st-key-{chiave} button:active{{transform:scale(.95);animation:none}}"
             f".st-key-{chiave} button p{{font-size:0 !important}}"
             "</style>", unsafe_allow_html=True)
     with st.container(key=chiave):
         premuto = st.button("Informazioni" if uri else "ℹ️ Informazioni e guida", key=f"ginfo_btn_{sezione}",
-                            help="Tocca per leggere come si usa questa sezione")
+                            help="Tocca per leggere come si usa questa sezione", width="stretch")
     if premuto:
         _dialogo_info(sezione)
