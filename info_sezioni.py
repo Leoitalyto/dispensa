@@ -347,10 +347,24 @@ def _dialogo_info(sezione):
             st.markdown(corpo)
 
 
+# Banner «La nostra dispensa» più grande (si applica solo nella Dispensa, sopra il pulsante Informazioni)
+_CSS_BANNER_GRANDE = """<style>
+div.hero{height:158px !important;min-height:158px !important;padding:0 0 0 14px !important;gap:12px !important;border-radius:34px !important}
+div.hero .hero-ico{width:58px !important;height:58px !important}
+div.hero .hero-ico svg{width:32px !important;height:32px !important}
+div.hero .hero-testi{max-width:150px !important;gap:6px !important}
+div.hero h1{font-size:25px !important;line-height:1.08 !important;white-space:normal !important}
+div.hero p{font-size:13px !important;line-height:1.3 !important;max-width:150px !important}
+div.hero::after{width:180px !important;height:158px !important;top:-10px !important;right:-4px !important}
+</style>"""
+
+
 def pulsante_info(sezione):
     """Mostra il pulsante con l'immagine «Informazioni»; toccandolo si apre la guida di quella sezione."""
     uri = _info_uri()
     chiave = f"ginfo_{sezione}"
+    if sezione == "dispensa":
+        st.markdown(_CSS_BANNER_GRANDE, unsafe_allow_html=True)
     if uri:
         st.markdown(
             "<style>"
