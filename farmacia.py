@@ -333,6 +333,7 @@ def schermata_farmacia():
         _fa_modulo_sanitario(**st.session_state["fa_modulo_sanitario"])
         return
 
+    _fa_info("farmacia")
     if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
         _fa_dialogo_farmacie()
 
@@ -2659,6 +2660,7 @@ def schermata_documenti():
         _doc_modulo(**st.session_state["doc_modulo"])
         return
 
+    _fa_info("documenti")
     f = _fa_dati()
     profili = _fa_profili(f)
     nomi = {p["id"]: p["nome"] for p in profili}
@@ -2738,6 +2740,7 @@ def _doc_modulo(pid, doc_id=None):
     if st.button("← Annulla e torna ai documenti", key="doc_mod_annulla"):
         st.session_state.pop("doc_modulo", None)
         st.rerun()
+    _fa_assicura_fotocamera()
     st.subheader("✏️ Modifica documento" if doc_id else "➕ Nuovo documento")
     cat = _doc_catalogo(f)
     tutti = [t for lst in cat.values() for t in lst]
@@ -2760,6 +2763,17 @@ def _doc_modulo(pid, doc_id=None):
                 else:
                     st.rerun()
 
+    # le foto stanno FUORI dal modulo (come nei medicinali): fotocamera posteriore, sfondo tolto, raddrizzatura e ritocco a mano
+    st.markdown("**📷 Foto del documento** (facoltativa)")
+    st.caption("Fai la foto del **fronte** e, se serve, del **retro**: scatta oppure carica dal telefono. "
+               "Poi raddrizza e taglia a mano se vuoi, e in fondo tocca **Salva il documento**.")
+    chiave_d = "doc_" + (doc_id or "nuovo")
+    foto_fronte = foto_retro = ""
+    try:
+        foto_fronte = campo_foto_doc(chiave_d + "_fronte", "📄 Fronte")
+        foto_retro = campo_foto_doc(chiave_d + "_retro", "📄 Retro")
+    except NameError:                                  # manca foto_prodotto.py: resta il campo «Altri file»
+        st.caption("La foto con ritocco non è disponibile in questo momento: usa il campo «Altri file» qui sotto.")
     with st.form("doc_form_" + (doc_id or "nuovo")):
         tipo = st.selectbox("Tipo di documento", tutti, index=_fa_idx(tutti, x.get("tipo")),
                             format_func=lambda t: f"{emoji_di.get(t, '📄')} {t}")
@@ -2774,14 +2788,18 @@ def _doc_modulo(pid, doc_id=None):
         scadenza = st.date_input("Data di scadenza", value=_fa_data(x.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
         note = st.text_area("Note", value=x.get("note", ""))
-        nuovi = st.file_uploader("Foto o PDF del documento (fronte, retro, pagine): scatta o scegli", type=TIPI_FILE,
+        nuovi = st.file_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
                                  accept_multiple_files=True)
         invio = st.form_submit_button("💾 Salva il documento", type="primary", width="stretch")
     st.caption("L'avviso arriva 6 mesi prima della scadenza (primo avviso) e 3 mesi prima (secondo avviso, più insistente).")
     if invio:
         tipo_f = nuovo_tipo.strip() or tipo
+        nome_base = _re_doc.sub(r"[^\w\- ]+", "", tipo_f).strip() or "Documento"
+        da_salvare = [_FaFile(f"{lato_d} - {nome_base}.webp", base64.b64decode(foto_d.split(",", 1)[1]))
+                      for foto_d, lato_d in ((foto_fronte, "Fronte"), (foto_retro, "Retro")) if foto_d]
+        da_salvare += list(nuovi or [])
         try:
-            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+            riferimenti = _fa_salva_files(da_salvare) if da_salvare else []
         except ValueError as ex:
             st.error(str(ex))
             return
@@ -2854,3 +2872,156 @@ def _doc_gestione_tipi(f):
                 st.error(f"Non sono riuscito a salvare: {ex}")
             else:
                 st.rerun()
+
+
+# =====================================================================
+# DOCUMENTI: FOTO DEL FRONTE E DEL RETRO (come nella dispensa: fotocamera posteriore o caricamento,
+# sfondo tolto, raddrizzatura automatica e righello + cornice per ritoccare a mano)
+# =====================================================================
+import re as _re_doc
+import hashlib as _hl_doc
+
+_VERSIONE_FOTO_DOC = 1
+
+
+def _fa_info(sezione):
+    """Pulsante «Informazioni» con la guida a tendina (info_sezioni.py). Se il file manca, il pulsante non compare e il resto funziona."""
+    if "pulsante_info" in globals():
+        try:
+            pulsante_info(sezione)
+        except Exception:
+            pass
+
+
+def _doc_senza_scontorno(dati, lato=1600):
+    """La foto intera, solo girata come l'ha scattata il telefono e ridotta: per quando il ritaglio automatico sbaglia."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGBA")
+    img.thumbnail((lato, lato), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, "WEBP", quality=88, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _doc_scontorna(dati, lato=2000):
+    """Come «scontorna_e_addrizza» della dispensa, ma con la foto più grande: nei documenti si devono leggere le scritte piccole.
+    Da una foto (bytes) a un WebP trasparente, ritagliato sul documento e addrizzato. Ritorna 'data:image/webp;base64,...'."""
+    import cv2
+    import numpy as np
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+    img.thumbnail((2200, 2200), Image.LANCZOS)
+    rgb = np.array(img)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    h, w = bgr.shape[:2]
+    mask = _maschera_ai(rgb)
+    if mask is None:                                                         # riserva: metodo senza modello
+        scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
+        piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
+        mp = _maschera_prodotto(piccola)
+        if mp is not None:
+            mask = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
+            mask = cv2.GaussianBlur(mask, (0, 0), 1.6)
+            mask = np.clip((mask.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
+    if mask is None:
+        rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
+    else:
+        rgba = np.dstack([rgb, mask])
+        ang = _angolo_totale(rgb, mask)
+        if ang:
+            diag = int(np.hypot(h, w)) + 4
+            M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
+            M[0, 2] += (diag - w) / 2
+            M[1, 2] += (diag - h) / 2
+            rgba = cv2.warpAffine(rgba, M, (diag, diag), flags=cv2.INTER_CUBIC, borderValue=(0, 0, 0, 0))
+        ys, xs = np.where(rgba[:, :, 3] > 40)
+        if len(xs):
+            marg = int(0.02 * max(xs.max() - xs.min(), ys.max() - ys.min()))
+            y0, y1 = max(0, ys.min() - marg), min(rgba.shape[0], ys.max() + marg + 1)
+            x0, x1 = max(0, xs.min() - marg), min(rgba.shape[1], xs.max() + marg + 1)
+            rgba = rgba[y0:y1, x0:x1]
+    out = Image.fromarray(rgba, "RGBA")
+    out.thumbnail((lato, lato), Image.LANCZOS)
+    buf = io.BytesIO()
+    out.save(buf, "WEBP", quality=86, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _doc_lavorata(dati, tieni_sfondo=False):
+    """Scontorna e addrizza una sola volta per ogni foto (la scelta resta in memoria durante la sessione)."""
+    mem = st.session_state.setdefault("_doc_lavorate", {})
+    chiave = (hash(dati), bool(tieni_sfondo), _VERSIONE_FOTO_DOC)
+    if chiave not in mem:
+        if len(mem) >= 4:
+            mem.pop(next(iter(mem)))
+        try:
+            mem[chiave] = _doc_senza_scontorno(dati) if tieni_sfondo else _doc_scontorna(dati)
+        except Exception:
+            mem[chiave] = _doc_senza_scontorno(dati)          # se qualcosa va storto resta la foto intera
+    return mem[chiave]
+
+
+def campo_foto_doc(chiave, titolo):
+    """Un punto foto per il FRONTE o il RETRO di un documento: a sinistra «Scatta la foto» (fotocamera posteriore),
+    a destra «Carica dal telefono». Ritorna la foto pronta ('data:image/webp;base64,...') oppure '' se non c'è."""
+    st.markdown(f"**{titolo}**")
+    with st.container(key="azioni_foto_" + chiave):
+        c_cam, c_gal = st.columns(2, gap="small")
+        premuto_cam = c_cam.button("📷 " + t("Scatta la foto"), key=f"scatta_{chiave}", width="stretch")
+        premuto_gal = c_gal.button("📁 " + t("Carica dal telefono"), key=f"galleria_{chiave}", width="stretch")
+    with st.container(key="nascosti_" + chiave):
+        foto_cam = st.file_uploader("camera", type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}")
+        foto_gal = st.file_uploader("galleria", type=["jpg", "jpeg", "png", "webp"], key=f"fotogal_{chiave}")
+    if premuto_cam:
+        st.session_state[f"{chiave}_fall_cam"] = True
+    if premuto_gal:
+        st.session_state[f"{chiave}_fall_gal"] = True
+    fall_cam = st.camera_input(f"Scatta la foto: {titolo}", key=f"camfall_{chiave}") if st.session_state.get(f"{chiave}_fall_cam") else None
+    fall_gal = st.file_uploader(t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"], key=f"galfall_{chiave}") if st.session_state.get(f"{chiave}_fall_gal") else None
+
+    # tra le possibili foto vale l'ultima arrivata
+    viste = st.session_state.setdefault(f"{chiave}_viste", {})
+    ultima = st.session_state.get(f"{chiave}_ultima")
+    candidati = {"cam": foto_cam, "gal": foto_gal, "fcam": fall_cam, "fgal": fall_gal}
+    for nome, fl in candidati.items():
+        if fl is None:
+            viste.pop(nome, None)
+            continue
+        ident = getattr(fl, "file_id", None) or f"{fl.name}{fl.size}"
+        if viste.get(nome) != ident:
+            viste[nome] = ident
+            ultima = nome
+    st.session_state[f"{chiave}_ultima"] = ultima
+    file = candidati.get(ultima) or next((fl for fl in candidati.values() if fl is not None), None)
+
+    if file is None:
+        st.session_state.pop(f"{chiave}_scartata", None)
+        st.caption("Ancora nessuna foto: tocca uno dei due pulsanti.")
+        return ""
+    ident_f = f"{chiave}_{getattr(file, 'file_id', None) or file.name + str(file.size)}"
+    if st.session_state.get(f"{chiave}_scartata") == ident_f:
+        st.caption("Foto tolta. Tocca uno dei due pulsanti per sceglierne un'altra.")
+        return ""
+    tieni = st.checkbox("Tieni anche lo sfondo (se il documento viene tagliato male)", key=f"docsf_{ident_f}")
+    with st.spinner("Sto togliendo lo sfondo e raddrizzando il documento…"):
+        automatica = _doc_lavorata(file.getvalue(), tieni)
+    # editor come quello del telefono: righello per raddrizzare e cornice per tagliare
+    sigla = _hl_doc.md5((ident_f + str(tieni)).encode()).hexdigest()[:10]
+    etichetta = f"ritocco{sigla}"
+    with st.container(key="nascosti_rit_" + sigla):
+        params = st.text_input(etichetta, key=f"rit_{sigla}", label_visibility="collapsed")
+    _mostra_editor(_editor_html(automatica, etichetta))
+    nuova = _ritocco_params(automatica, params)
+    with st.expander("🛠️ " + t("Controlli di riserva"), expanded=False):
+        grado = st.slider("↻ " + t("Gira (gradi): positivo = senso antiorario"), -30.0, 30.0, 0.0, 0.5, key=f"rot_{sigla}")
+        c1, c2 = st.columns(2)
+        sopra = c1.slider("⬆️ " + t("Taglia sopra (%)"), 0, 40, 0, key=f"ts_{sigla}")
+        sotto = c2.slider("⬇️ " + t("Taglia sotto (%)"), 0, 40, 0, key=f"tb_{sigla}")
+        sinistra = c1.slider("⬅️ " + t("Taglia a sinistra (%)"), 0, 40, 0, key=f"tl_{sigla}")
+        destra = c2.slider("➡️ " + t("Taglia a destra (%)"), 0, 40, 0, key=f"tr_{sigla}")
+    if grado or sopra or sotto or sinistra or destra:
+        nuova = _ritocco(nuova, grado, sopra, sotto, sinistra, destra)
+    st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
+    st.caption(f"✅ {titolo}: foto pronta. Sarà salvata quando tocchi «Salva il documento».")
+    if st.button("🗑️ Togli questa foto", key=f"docscarta_{chiave}"):
+        st.session_state[f"{chiave}_scartata"] = ident_f
+        st.rerun()
+    return nuova
