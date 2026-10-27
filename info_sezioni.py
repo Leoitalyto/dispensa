@@ -16,6 +16,32 @@ _NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🏥 Farmacia", "docu
 # ---------------------------------------------------------------------
 # I TESTI DELLE GUIDE: (titolo, spiegazione, parole utili per la ricerca)
 # ---------------------------------------------------------------------
+# Nome (ed eventuale link) del bot Telegram dell'app: scrivi qui il link vero, per esempio "https://t.me/NomeDelTuoBot"
+_BOT_NOME = "Dispensa Leo"
+_BOT_LINK = ""
+
+_BOT_RIGA = (f"**{_BOT_NOME}**" if not _BOT_LINK else f"**{_BOT_NOME}** (tocca [questo link]({_BOT_LINK}))")
+
+_TESTO_TELEGRAM = f"""**Cosa serve:** l'app Telegram sul telefono e due minuti di tempo. Telegram è gratuito.
+
+1. **Installa Telegram** dal Play Store (Android) o dall'App Store (iPhone) e crea il tuo account: ti chiede il numero di cellulare.
+2. **Apri il bot dell'app.** Dentro Telegram tocca la lente 🔍 in alto e cerca {_BOT_RIGA}.
+3. Tocca **Avvia** (oppure scrivi `/start`). **Questo passaggio è importante:** se non lo fai, il bot non può scriverti.
+4. **Scopri il tuo numero (Chat ID).** Cerca il bot **@userinfobot**, aprilo e tocca **Avvia**: ti risponde con il tuo **Id**, un numero (per esempio `123456789`). Tienilo premuto per copiarlo. È un bot gratuito che ti dice solo quel numero.
+5. **Torna in questa pagina.** Apri **🔔 Scegli come ricevere gli avvisi**, spunta **📱 Telegram**, incolla il numero nel campo **Chat ID** (solo numeri) e tocca **Salva**.
+6. **Fatto.** Gli avvisi arrivano da quel bot, a partire dal prossimo invio automatico (di solito la mattina dopo).
+
+**Se non arriva nulla:** controlla di aver toccato *Avvia* nel bot (passo 3) e che il numero sia giusto, senza spazi né lettere."""
+
+_TESTO_EMAIL = """**Per l'email è semplicissimo: basta il tuo indirizzo.** Non servono password né altre impostazioni.
+
+1. Apri **🔔 Scegli come ricevere gli avvisi**.
+2. Spunta **✉️ Email**.
+3. Scrivi il **tuo indirizzo email** nel campo (per esempio `nome@gmail.com`) e controlla che sia giusto.
+4. Tocca **Salva**.
+
+I messaggi partono dall'indirizzo email dell'app. **La prima volta guarda anche in Spam o Promozioni** e, se lo trovi lì, segnalo come «Non è spam»: da quel momento arriverà nella posta normale."""
+
 _GUIDE = {
     "dispensa": [
         ("🚀 A cosa serve e come si comincia",
@@ -157,13 +183,19 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
          """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: l'app cerca le farmacie aperte vicino a te.""",
          "farmacia aperta trovare cercare vicino turno notte"),
         ("🔔 Avvisi su Telegram, email e SMS",
-         """1. Apri **🔔 Scegli come ricevere gli avvisi**.
-2. Spunta i canali che vuoi (puoi sceglierne più di uno): **Telegram** (gratuito, serve il tuo **Chat ID**), **Email** (gratuita) o **SMS** (a pagamento).
-3. Se vuoi, spunta anche l'avviso **all'ora delle assunzioni**.
-4. Tocca **Salva**.
+         """Gli avvisi ti ricordano le scadenze (a 60, 30, 14 e 7 giorni, 1 giorno e il giorno stesso) e, se vuoi, l'ora delle terapie. Scegli **uno o più canali**.
 
-Gli avvisi di scadenza arrivano a 60, 30, 14 e 7 giorni, 1 giorno e il giorno stesso.""",
-         "avvisi notifiche telegram chat id email sms promemoria messaggio ricevere"),
+### 📱 Telegram, passo per passo
+""" + _TESTO_TELEGRAM + """
+
+### ✉️ Email
+""" + _TESTO_EMAIL + """
+
+### 💬 SMS
+Sono a pagamento e di solito non sono attivi: chiedi all'amministratore.
+
+Facoltativo: spunta **«Nei messaggi non scrivere i nomi dei medicinali»** se vuoi più privacy.""",
+         "avvisi notifiche telegram chat id bot avvia start userinfobot email sms promemoria messaggio ricevere attivare numero id gmail spam posta"),
         ("🧾 Report completo e dati",
          """In **🧾 I miei dati personali e report completo** scrivi nome e cognome e scarichi un **report da stampare** con tutto quello che hai inserito. Il file **JSON** contiene gli stessi dati per una copia di sicurezza.
 Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
@@ -290,6 +322,15 @@ def cerca_nella_guida(domanda, massimo=4, preferita=None):
         titolo, corpo, _ = _GUIDE[sezione][i]
         risultati.append((sezione, i, titolo, corpo))
     return risultati
+
+
+def guida_avvisi():
+    """Spiegazione passo per passo di Telegram ed email, da mostrare dentro «Scegli come ricevere gli avvisi»."""
+    t_tg, t_ml = st.tabs(["📱 Come attivo Telegram", "✉️ Come attivo l'email"])
+    with t_tg:
+        st.markdown(_TESTO_TELEGRAM)
+    with t_ml:
+        st.markdown(_TESTO_EMAIL)
 
 
 # ---------------------------------------------------------------------

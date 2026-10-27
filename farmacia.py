@@ -1348,6 +1348,7 @@ def _fa_blocco_avvisi():
         st.markdown(f"<div style='{stile}'>🔕 Nessun avviso di scadenza attivo</div>", unsafe_allow_html=True)
     with st.expander("🔔 Scegli come ricevere gli avvisi"):
         st.caption("Puoi attivare più canali insieme: gli avvisi arrivano su tutti quelli che spunti.")
+        _fa_guida_avvisi()
         with st.form("fa_form_avvisi"):
             c_tg = st.checkbox("📱 Telegram (gratuito)", value="telegram" in canali)
             v_tg = st.text_input("Chat ID di Telegram (solo numeri)", value=chat, placeholder="es. 123456789")
@@ -2882,6 +2883,15 @@ import re as _re_doc
 import hashlib as _hl_doc
 
 _VERSIONE_FOTO_DOC = 1
+
+
+def _fa_guida_avvisi():
+    """Spiegazione passo per passo di Telegram ed email (info_sezioni.py). Se il file manca, non compare e il resto funziona."""
+    if "guida_avvisi" in globals():
+        try:
+            guida_avvisi()
+        except Exception:
+            pass
 
 
 def _fa_info(sezione):
