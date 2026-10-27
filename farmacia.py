@@ -2816,18 +2816,24 @@ def _doc_modulo(pid, doc_id=None):
         foto_retro = campo_foto_doc(chiave_d + "_retro", "📄 Retro")
     except NameError:                                  # manca foto_prodotto.py: resta il campo «Altri file»
         st.caption("La foto con ritocco non è disponibile in questo momento: usa il campo «Altri file» qui sotto.")
+    pre = {}
+    if foto_fronte or foto_retro:                       # dalla foto si ricavano tipo, numero, ente e date da proporre nei campi
+        try:
+            pre = _doc_precompila(chiave_d, foto_fronte, foto_retro, tutti)
+        except Exception as ex:
+            st.warning(f"La lettura automatica non è riuscita ({type(ex).__name__}): compila i campi a mano.")
     with st.form("doc_form_" + (doc_id or "nuovo")):
-        tipo = st.selectbox("Tipo di documento", tutti, index=_fa_idx(tutti, x.get("tipo")),
+        tipo = st.selectbox("Tipo di documento", tutti, index=_fa_idx(tutti, pre.get("tipo") or x.get("tipo")),
                             format_func=lambda t: f"{emoji_di.get(t, '📄')} {t}")
         nuovo_tipo = st.text_input("Non lo trovi? Scrivi qui il nuovo tipo", placeholder="es. Tessera della biblioteca")
         cat_nuovo = st.selectbox("Categoria del nuovo tipo", list(CATALOGO_DOCUMENTI), index=len(CATALOGO_DOCUMENTI) - 1)
         per = st.selectbox("Di chi è", list(nomi), format_func=lambda i: nomi[i], index=_fa_idx(list(nomi), x.get("profilo", pid)))
-        numero = st.text_input("Numero o identificativo", value=x.get("numero", ""))
-        ente = st.text_input("Rilasciato da", value=x.get("ente", ""))
-        rilascio = st.date_input("Data di rilascio (facoltativa)", value=_fa_data(x.get("rilascio")), format="DD/MM/YYYY",
+        numero = st.text_input("Numero o identificativo", value=pre.get("numero") or x.get("numero", ""))
+        ente = st.text_input("Rilasciato da", value=pre.get("ente") or x.get("ente", ""))
+        rilascio = st.date_input("Data di rilascio (facoltativa)", value=_fa_data(pre.get("rilascio") or x.get("rilascio")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
         senza = st.checkbox("Questo documento non scade", value=bool(x.get("senza_scadenza")))
-        scadenza = st.date_input("Data di scadenza", value=_fa_data(x.get("scadenza")), format="DD/MM/YYYY",
+        scadenza = st.date_input("Data di scadenza", value=_fa_data(pre.get("scadenza") or x.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
         note = st.text_area("Note", value=x.get("note", ""))
         nuovi = st.file_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
@@ -2953,30 +2959,34 @@ def _doc_senza_scontorno(dati, lato=1600):
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def _doc_scontorna(dati, lato=2000):
-    """Come «scontorna_e_addrizza» della dispensa, ma con la foto più grande: nei documenti si devono leggere le scritte piccole.
+def _doc_scontorna(dati, lato=1600):
+    """Come «scontorna_e_addrizza» della dispensa, ma l'immagine resta più grande (nei documenti si leggono scritte piccole).
+    Maschera e angolo si calcolano su una copia ridotta (veloce), la rotazione e il ritaglio sull'immagine grande.
     Da una foto (bytes) a un WebP trasparente, ritagliato sul documento e addrizzato. Ritorna 'data:image/webp;base64,...'."""
     import cv2
     import numpy as np
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
-    img.thumbnail((2200, 2200), Image.LANCZOS)
+    img.thumbnail((1800, 1800), Image.LANCZOS)
     rgb = np.array(img)
-    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    h, w = bgr.shape[:2]
-    mask = _maschera_ai(rgb)
-    if mask is None:                                                         # riserva: metodo senza modello
-        scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
-        piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
-        mp = _maschera_prodotto(piccola)
+    h, w = rgb.shape[:2]
+    sc = 1000.0 / max(h, w) if max(h, w) > 1000 else 1.0
+    piccola = cv2.resize(rgb, (max(1, int(w * sc)), max(1, int(h * sc))), interpolation=cv2.INTER_AREA) if sc < 1 else rgb
+    mask_p = _maschera_ai(piccola)
+    if mask_p is None:                                                       # riserva: metodo senza modello
+        bgr_p = cv2.cvtColor(piccola, cv2.COLOR_RGB2BGR)
+        sc2 = 360.0 / max(bgr_p.shape[:2]) if max(bgr_p.shape[:2]) > 360 else 1.0
+        mini = cv2.resize(bgr_p, (max(1, int(bgr_p.shape[1] * sc2)), max(1, int(bgr_p.shape[0] * sc2))), interpolation=cv2.INTER_AREA)
+        mp = _maschera_prodotto(mini)
         if mp is not None:
-            mask = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
-            mask = cv2.GaussianBlur(mask, (0, 0), 1.6)
-            mask = np.clip((mask.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
-    if mask is None:
+            mask_p = cv2.resize(mp, (piccola.shape[1], piccola.shape[0]), interpolation=cv2.INTER_LINEAR)
+            mask_p = cv2.GaussianBlur(mask_p, (0, 0), 1.6)
+            mask_p = np.clip((mask_p.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
+    if mask_p is None:
         rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
     else:
+        mask = cv2.resize(mask_p, (w, h), interpolation=cv2.INTER_CUBIC) if sc < 1 else mask_p
         rgba = np.dstack([rgb, mask])
-        ang = _angolo_totale(rgb, mask)
+        ang = _angolo_totale(piccola, mask_p)
         if ang:
             diag = int(np.hypot(h, w)) + 4
             M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
@@ -3051,25 +3061,30 @@ def campo_foto_doc(chiave, titolo):
     if st.session_state.get(f"{chiave}_scartata") == ident_f:
         st.caption("Foto tolta. Tocca uno dei due pulsanti per sceglierne un'altra.")
         return ""
+    st.caption(f"📥 Foto ricevuta: {file.name} ({file.size // 1024} KB)")
     tieni = st.checkbox("Tieni anche lo sfondo (se il documento viene tagliato male)", key=f"docsf_{ident_f}")
-    with st.spinner("Sto togliendo lo sfondo e raddrizzando il documento…"):
+    with st.spinner("Sto togliendo lo sfondo e raddrizzando il documento… (può richiedere qualche secondo)"):
         automatica = _doc_lavorata(file.getvalue(), tieni)
     # editor come quello del telefono: righello per raddrizzare e cornice per tagliare
-    sigla = _hl_doc.md5((ident_f + str(tieni)).encode()).hexdigest()[:10]
-    etichetta = f"ritocco{sigla}"
-    with st.container(key="nascosti_rit_" + sigla):
-        params = st.text_input(etichetta, key=f"rit_{sigla}", label_visibility="collapsed")
-    _mostra_editor(_editor_html(automatica, etichetta))
-    nuova = _ritocco_params(automatica, params)
-    with st.expander("🛠️ " + t("Controlli di riserva"), expanded=False):
-        grado = st.slider("↻ " + t("Gira (gradi): positivo = senso antiorario"), -30.0, 30.0, 0.0, 0.5, key=f"rot_{sigla}")
-        c1, c2 = st.columns(2)
-        sopra = c1.slider("⬆️ " + t("Taglia sopra (%)"), 0, 40, 0, key=f"ts_{sigla}")
-        sotto = c2.slider("⬇️ " + t("Taglia sotto (%)"), 0, 40, 0, key=f"tb_{sigla}")
-        sinistra = c1.slider("⬅️ " + t("Taglia a sinistra (%)"), 0, 40, 0, key=f"tl_{sigla}")
-        destra = c2.slider("➡️ " + t("Taglia a destra (%)"), 0, 40, 0, key=f"tr_{sigla}")
-    if grado or sopra or sotto or sinistra or destra:
-        nuova = _ritocco(nuova, grado, sopra, sotto, sinistra, destra)
+    nuova = automatica
+    try:
+        sigla = _hl_doc.md5((ident_f + str(tieni)).encode()).hexdigest()[:10]
+        etichetta = f"ritocco{sigla}"
+        with st.container(key="nascosti_rit_" + sigla):
+            params = st.text_input(etichetta, key=f"rit_{sigla}", label_visibility="collapsed")
+        _mostra_editor(_editor_html(automatica, etichetta))
+        nuova = _ritocco_params(automatica, params)
+        with st.expander("🛠️ " + t("Controlli di riserva"), expanded=False):
+            grado = st.slider("↻ " + t("Gira (gradi): positivo = senso antiorario"), -30.0, 30.0, 0.0, 0.5, key=f"rot_{sigla}")
+            c1, c2 = st.columns(2)
+            sopra = c1.slider("⬆️ " + t("Taglia sopra (%)"), 0, 40, 0, key=f"ts_{sigla}")
+            sotto = c2.slider("⬇️ " + t("Taglia sotto (%)"), 0, 40, 0, key=f"tb_{sigla}")
+            sinistra = c1.slider("⬅️ " + t("Taglia a sinistra (%)"), 0, 40, 0, key=f"tl_{sigla}")
+            destra = c2.slider("➡️ " + t("Taglia a destra (%)"), 0, 40, 0, key=f"tr_{sigla}")
+        if grado or sopra or sotto or sinistra or destra:
+            nuova = _ritocco(nuova, grado, sopra, sotto, sinistra, destra)
+    except Exception as ex:                                      # l'editor non deve mai impedire di salvare la foto
+        st.warning(f"L'editor di ritocco non è partito ({type(ex).__name__}); salvo la foto già sistemata in automatico.")
     st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
     st.caption(f"✅ {titolo}: foto pronta. Sarà salvata quando tocchi «Salva il documento».")
     if st.button("🗑️ Togli questa foto", key=f"docscarta_{chiave}"):
@@ -3228,3 +3243,242 @@ def _fa_modulo_tessera(pid):
                 st.session_state["fa_msg"] = "🗑️ Collegamento tolto."
             st.session_state.pop(k_mod, None)
             st.rerun()
+
+
+# =====================================================================
+# DOCUMENTI: LETTURA AUTOMATICA (OCR con Tesseract) E COMPILAZIONE DEI CAMPI
+# Serve il file packages.txt nel repository (tesseract-ocr e tesseract-ocr-ita). Se manca, la lettura non parte
+# e l'app funziona come prima: i campi si compilano a mano. I campi letti restano sempre modificabili.
+# =====================================================================
+import shutil as _sh_doc
+import subprocess as _sp_doc
+import tempfile as _tmp_doc
+import unicodedata as _ud_doc
+
+_MESI_DOC = {"GEN": 1, "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAG": 5, "MAY": 5, "GIU": 6, "JUN": 6, "LUG": 7, "JUL": 7,
+             "AGO": 8, "AUG": 8, "SET": 9, "SEP": 9, "OTT": 10, "OCT": 10, "NOV": 11, "DIC": 12, "DEC": 12}
+
+
+@st.cache_resource(show_spinner=False)
+def _doc_ocr_lingue():
+    """Le lingue di Tesseract da usare ('ita+eng', 'eng') oppure '' se Tesseract non c'è."""
+    if not _sh_doc.which("tesseract"):
+        return ""
+    try:
+        r = _sp_doc.run(["tesseract", "--list-langs"], capture_output=True, text=True, timeout=15)
+        elenco = set((r.stdout or "").split())
+    except Exception:
+        return ""
+    if "ita" in elenco and "eng" in elenco:
+        return "ita+eng"
+    return "ita" if "ita" in elenco else ("eng" if "eng" in elenco else "")
+
+
+def _doc_ocr_testo(uri):
+    """Il testo letto da una foto (data URI). Due letture con impostazioni diverse, poi unite. '' se non disponibile."""
+    lingue = _doc_ocr_lingue()
+    if not lingue or not uri:
+        return ""
+    cache = st.session_state.setdefault("_doc_ocr_cache", {})
+    chiave = hash(uri)
+    if chiave in cache:
+        return cache[chiave]
+    img = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
+    fondo = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    fondo.alpha_composite(img)
+    g = ImageOps.autocontrast(fondo.convert("L"), cutoff=1)
+    if max(g.size) < 1800:
+        g = g.resize((g.width * 2, g.height * 2), Image.LANCZOS)
+    testi = []
+    with _tmp_doc.TemporaryDirectory() as cartella:
+        percorso = os.path.join(cartella, "doc.png")
+        g.save(percorso)
+        for psm in ("6", "11"):
+            try:
+                r = _sp_doc.run(["tesseract", percorso, "stdout", "-l", lingue, "--psm", psm],
+                                capture_output=True, text=True, timeout=45)
+                testi.append(r.stdout or "")
+            except Exception:
+                pass
+    testo = "\n".join(testi)
+    if len(cache) >= 6:
+        cache.pop(next(iter(cache)))
+    cache[chiave] = testo
+    return testo
+
+
+def _doc_norm(testo):
+    t_ = _ud_doc.normalize("NFD", str(testo).upper())
+    t_ = "".join(c for c in t_ if _ud_doc.category(c) != "Mn")
+    return t_.replace("’", "'").replace("`", "'").replace("´", "'")
+
+
+def _doc_date_trovate(t_):
+    """[(posizione, data)] di tutte le date nel testo normalizzato: 31/12/2030, 31.12.2030, 31 12 2030, 31 DIC/DEC 2030."""
+    trovate = []
+    for m in re.finditer(r"(?<!\d)(\d{1,2})\s?[./\-]\s?(\d{1,2})\s?[./\-]\s?(\d{4})(?!\d)", t_):
+        try:
+            trovate.append((m.start(), date(int(m.group(3)), int(m.group(2)), int(m.group(1)))))
+        except ValueError:
+            pass
+    for m in re.finditer(r"(?<!\d)(\d{1,2})\s*([A-Z]{3})[A-Z]*(?:\s*/\s*[A-Z]+)?\s*(\d{4})(?!\d)", t_):
+        mese = _MESI_DOC.get(m.group(2))
+        if mese:
+            try:
+                trovate.append((m.start(), date(int(m.group(3)), mese, int(m.group(1)))))
+            except ValueError:
+                pass
+    return sorted(x for x in trovate if 1900 <= x[1].year <= 2100)
+
+
+def _doc_etichetta_data(t_, pos):
+    """Che cos'è la data che comincia in 'pos'? La parola chiave più vicina scritta subito prima: 'scad', 'ril' o 'nasc'."""
+    prima = t_[max(0, pos - 45):pos]
+    classi = {"scad": r"SCAD|EXPIR|VALID|FINO\s+AL|\b4\s?B\b",
+              "ril": r"RILASC|EMISS|EMESS|ISSUE|\b4\s?A\b",
+              "nasc": r"NAT[OA]\b|NASCITA|BIRTH"}
+    migliore, fine = None, -1
+    for nome, rx in classi.items():
+        for m in re.finditer(rx, prima):
+            if m.end() > fine:
+                migliore, fine = nome, m.end()
+    return migliore
+
+
+def _doc_riconosci_tipo(t_, validi):
+    regole = (
+        (r"PATENTE\s+(DI\s+)?GUIDA|DRIVING\s+LICEN|PATENTE\s+DI\s+GUIDA", "Patente di guida"),
+        (r"PASSAPORTO|PASSPORT", "Passaporto"),
+        (r"TESSERA\s+SANITARIA|CARTA\s+NAZIONALE\s+DEI\s+SERVIZI", "Tessera sanitaria"),
+        (r"CARTA\s+(D\s?['I]?\s?|DI\s+)IDENTIT", "Carta d'identità"),
+        (r"PERMESSO\s+DI\s+SOGGIORNO", "Permesso di soggiorno"),
+        (r"LIBRETTO\s+DI\s+CIRCOLAZIONE|CARTA\s+DI\s+CIRCOLAZIONE|CERTIFICATO\s+DI\s+PROPRIETA|CARTA\s+DI\s+CIRCOL", "Libretto / carta di circolazione"),
+        (r"TESSERA\s+ELETTORALE", "Tessera elettorale"),
+        (r"PORTO\s+D\s?['I]?\s?ARMI", "Porto d'armi"),
+        (r"CODICE\s+FISCALE", "Codice fiscale"),
+    )
+    for rx, tipo in regole:
+        if re.search(rx, t_) and tipo in validi:
+            return tipo
+    return None
+
+
+def _doc_analizza(testo, validi):
+    """Dal testo letto ricava: tipo, numero, ente, rilascio, scadenza (date in formato ISO). Solo ciò che trova."""
+    t_ = _doc_norm(testo)
+    esito = {}
+    tipo = _doc_riconosci_tipo(t_, validi)
+    if tipo:
+        esito["tipo"] = tipo
+    # --- date
+    date_t = _doc_date_trovate(t_)
+    scad = ril = None
+    non_nasc = []
+    for pos, d_ in date_t:
+        et = _doc_etichetta_data(t_, pos)
+        if et == "scad":
+            scad = max(scad, d_) if scad else d_
+        elif et == "ril":
+            ril = d_ if not ril else max(ril, d_)
+        elif et != "nasc":
+            non_nasc.append(d_)
+    oggi_ = oggi()
+    if not scad and non_nasc:
+        candidata = max(non_nasc)
+        if candidata >= date(oggi_.year - 1, oggi_.month, 1) or len(set(non_nasc)) >= 2:
+            if not ril or candidata > ril:
+                scad = candidata
+    if scad and not ril:
+        possibili = [d_ for d_ in non_nasc if d_ < scad and (scad - d_).days <= 366 * 16]
+        if possibili:
+            ril = max(possibili)
+    if scad and (scad.year < 1950):
+        scad = None
+    if scad:
+        esito["scadenza"] = scad.isoformat()
+    if ril and (not scad or ril < scad):
+        esito["rilascio"] = ril.isoformat()
+    # --- numero
+    compatto = re.sub(r"[ \t]+", " ", t_)
+    numero = None
+    cf = re.search(r"\b[A-Z]{6}\s?\d{2}\s?[A-EHLMPR-T]\s?\d{2}\s?[A-Z]\s?\d{3}\s?[A-Z]\b", compatto)
+    if tipo == "Patente di guida":
+        m = re.search(r"\b[A-Z]{1,2}\s?\d{7}\s?[A-Z]\b", compatto)
+        numero = m.group(0) if m else None
+    elif tipo == "Carta d'identità":
+        m = re.search(r"\bC[A-Z]\s?\d{5}\s?[A-Z]{2}\b", compatto) or re.search(r"\b[A-Z]{2}\s?\d{7}\b", compatto)
+        numero = m.group(0) if m else None
+    elif tipo == "Passaporto":
+        m = re.search(r"\b[A-Z]{2}\s?\d{7}\b", compatto)
+        numero = m.group(0) if m else None
+    elif tipo == "Tessera sanitaria":
+        m = re.search(r"\b80\s?380\s?\d{15}\b", compatto) or re.search(r"\b\d{20}\b", compatto)
+        numero = m.group(0) if m else (cf.group(0) if cf else None)
+    elif tipo == "Codice fiscale":
+        numero = cf.group(0) if cf else None
+    if not numero:
+        m = re.search(r"(?:\bN\.?\s?|\bNR\.?\s?|N°\s?|\bNUMERO\s+|\bNUMBER\s+)[:.]?\s*([A-Z0-9]{6,16})\b", compatto)
+        if m and re.search(r"\d", m.group(1)):
+            numero = m.group(1)
+    if numero:
+        esito["numero"] = re.sub(r"\s+", "", numero) if tipo != "Tessera sanitaria" else re.sub(r"\s+", "", numero)
+    # --- ente che ha rilasciato
+    ente = None
+    m = re.search(r"COMUNE\s+DI\s+([A-Z' ]{3,28})", t_)
+    if m:
+        ente = "Comune di " + m.group(1).strip().title()
+    elif re.search(r"MIT\s?[-–]?\s?UCO|MOTORIZZAZIONE", t_):
+        ente = "Motorizzazione civile (MIT-UCO)"
+    else:
+        m = re.search(r"(QUESTURA|PREFETTURA)\s+DI\s+([A-Z' ]{3,28})", t_)
+        if m:
+            ente = f"{m.group(1).title()} di {m.group(2).strip().title()}"
+        elif re.search(r"MINISTERO\s+DELL'?\s?INTERNO", t_):
+            ente = "Ministero dell'Interno"
+        elif re.search(r"MINISTERO\s+DELL'?\s?ECONOMIA", t_):
+            ente = "Ministero dell'Economia e delle Finanze"
+        elif re.search(r"AGENZIA\s+DELLE\s+ENTRATE", t_):
+            ente = "Agenzia delle Entrate"
+    if ente:
+        esito["ente"] = ente
+    return esito
+
+
+def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
+    """Legge le foto (fronte e retro), mostra cosa ha capito e ritorna i valori da proporre nei campi del modulo."""
+    lingue = _doc_ocr_lingue()
+    st.markdown("**🔎 Lettura automatica del documento**")
+    if not lingue:
+        st.info("La lettura automatica non è ancora attiva (manca il file packages.txt nel repository, vedi le istruzioni). "
+                "Intanto compila i campi qui sotto a mano.")
+        return {}
+    with st.spinner("Sto leggendo il documento… (qualche secondo)"):
+        testo = ""
+        for uri in (foto_fronte, foto_retro):
+            if uri:
+                try:
+                    testo += "\n" + _doc_ocr_testo(uri)
+                except Exception:
+                    pass
+    esito = _doc_analizza(testo, validi) if testo.strip() else {}
+    if not esito:
+        st.warning("Non sono riuscito a leggere i dati da questa foto (prova con più luce e il documento ben dritto, "
+                   "oppure compila a mano). La foto resta salvata.")
+    else:
+        righe = []
+        if esito.get("tipo"):
+            righe.append(f"**Tipo:** {esito['tipo']}")
+        if esito.get("numero"):
+            righe.append(f"**Numero:** {esito['numero']}")
+        if esito.get("ente"):
+            righe.append(f"**Rilasciato da:** {esito['ente']}")
+        if esito.get("rilascio"):
+            righe.append(f"**Rilascio:** {data_it(esito['rilascio'])}")
+        if esito.get("scadenza"):
+            righe.append(f"**Scadenza:** {data_it(esito['scadenza'])}")
+        st.success("✅ Ho letto questi dati e li ho scritti nei campi qui sotto. **Controllali e correggi se serve:**\n\n"
+                   + "  \n".join(righe))
+    if testo.strip():
+        with st.expander("📝 Testo letto dalla foto"):
+            st.text(testo.strip()[:3000])
+    return esito
