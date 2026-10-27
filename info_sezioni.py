@@ -358,7 +358,7 @@ def pulsante_info(sezione):
             "50%{transform:scale(1.04);filter:drop-shadow(0 0 14px rgba(229,57,53,.85))}}"
             f".st-key-{chiave} button{{background:url('{uri}') center/contain no-repeat !important;"
             "border:0 !important;box-shadow:none !important;color:transparent !important;"
-            "width:min(250px,68vw) !important;height:auto !important;aspect-ratio:760/537;min-height:0 !important;"
+            "width:min(300px,82vw) !important;height:auto !important;aspect-ratio:760/270;min-height:0 !important;"
             "padding:0 !important;border-radius:0 !important;cursor:pointer;animation:ginfo-batte 2.4s ease-in-out infinite}}"
             f".st-key-{chiave} button:active{{transform:scale(.95);animation:none}}"
             f".st-key-{chiave} button p{{font-size:0 !important}}"
