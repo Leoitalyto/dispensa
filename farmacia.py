@@ -2835,7 +2835,7 @@ def _doc_modulo(pid, doc_id=None):
         senza = st.checkbox("Questo documento non scade", value=bool(x.get("senza_scadenza")))
         scadenza = st.date_input("Data di scadenza", value=_fa_data(pre.get("scadenza") or x.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
-        note = st.text_area("Note", value=x.get("note", ""))
+        note = st.text_area("Note", value=x.get("note") or pre.get("note", ""))
         nuovi = st.file_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
                                  accept_multiple_files=True)
         invio = st.form_submit_button("💾 Salva il documento", type="primary", width="stretch")
@@ -3038,10 +3038,16 @@ def campo_foto_doc(chiave, titolo):
     fall_cam = st.camera_input(f"Scatta la foto: {titolo}", key=f"camfall_{chiave}") if st.session_state.get(f"{chiave}_fall_cam") else None
     fall_gal = st.file_uploader(t("Carica dal telefono"), type=["jpg", "jpeg", "png", "webp"], key=f"galfall_{chiave}") if st.session_state.get(f"{chiave}_fall_gal") else None
 
+    # via di riserva sempre visibile: il normale campo di Streamlit (offre «Fotocamera» o «File» del telefono)
+    with st.expander("🛟 La foto non arriva? Prova da qui"):
+        st.caption("Tocca il campo qui sotto e scegli **Fotocamera** per scattare, oppure una foto già presente nel telefono.")
+        foto_soc = st.file_uploader("Scegli o scatta la foto", type=["jpg", "jpeg", "png", "webp"],
+                                    key=f"docsoc_{chiave}", label_visibility="collapsed")
+
     # tra le possibili foto vale l'ultima arrivata
     viste = st.session_state.setdefault(f"{chiave}_viste", {})
     ultima = st.session_state.get(f"{chiave}_ultima")
-    candidati = {"cam": foto_cam, "gal": foto_gal, "fcam": fall_cam, "fgal": fall_gal}
+    candidati = {"cam": foto_cam, "gal": foto_gal, "fcam": fall_cam, "fgal": fall_gal, "soc": foto_soc}
     for nome, fl in candidati.items():
         if fl is None:
             viste.pop(nome, None)
@@ -3254,6 +3260,7 @@ import shutil as _sh_doc
 import subprocess as _sp_doc
 import tempfile as _tmp_doc
 import unicodedata as _ud_doc
+import time as _tempo_doc
 
 _MESI_DOC = {"GEN": 1, "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAG": 5, "MAY": 5, "GIU": 6, "JUN": 6, "LUG": 7, "JUL": 7,
              "AGO": 8, "AUG": 8, "SET": 9, "SEP": 9, "OTT": 10, "OCT": 10, "NOV": 11, "DIC": 12, "DEC": 12}
@@ -3274,32 +3281,57 @@ def _doc_ocr_lingue():
     return "ita" if "ita" in elenco else ("eng" if "eng" in elenco else "")
 
 
-def _doc_ocr_testo(uri):
-    """Il testo letto da una foto (data URI). Due letture con impostazioni diverse, poi unite. '' se non disponibile."""
-    lingue = _doc_ocr_lingue()
-    if not lingue or not uri:
+def _doc_tesseract(img, psm):
+    with _tmp_doc.TemporaryDirectory() as cartella:
+        percorso = os.path.join(cartella, "doc.png")
+        img.save(percorso)
+        r = _sp_doc.run(["tesseract", percorso, "stdout", "-l", _doc_ocr_lingue(), "--psm", psm],
+                        capture_output=True, text=True, timeout=45)
+    return r.stdout or ""
+
+
+def _doc_varianti_ocr(uri):
+    """Le immagini da leggere, dalla più promettente: soglia adattiva ingrandita, colore, grigio.
+    Sulle carte con fondo a righe (tessere, patenti) il testo si legge meglio dopo la soglia adattiva."""
+    import cv2
+    import numpy as np
+    img = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
+    fondo = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    fondo.alpha_composite(img)
+    rgb = fondo.convert("RGB")
+    grigio = np.array(rgb.convert("L"))
+    soglia = cv2.adaptiveThreshold(cv2.medianBlur(grigio, 3), 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 12)
+    s = Image.fromarray(soglia)
+    if s.width < 1800:
+        s = s.resize((s.width * 2, s.height * 2), Image.LANCZOS)
+    yield s, "6"
+    yield rgb, "11"
+    yield s, "11"
+    yield Image.fromarray(grigio), "6"
+
+
+def _doc_ocr_testo(uri, validi=None):
+    """Il testo letto da una foto (data URI). Prova più varianti dell'immagine e si ferma appena capisce tipo, numero e scadenza.
+    '' se Tesseract non c'è."""
+    if not _doc_ocr_lingue() or not uri:
         return ""
     cache = st.session_state.setdefault("_doc_ocr_cache", {})
     chiave = hash(uri)
     if chiave in cache:
         return cache[chiave]
-    img = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).convert("RGBA")
-    fondo = Image.new("RGBA", img.size, (255, 255, 255, 255))
-    fondo.alpha_composite(img)
-    g = ImageOps.autocontrast(fondo.convert("L"), cutoff=1)
-    if max(g.size) < 1800:
-        g = g.resize((g.width * 2, g.height * 2), Image.LANCZOS)
+    inizio = _tempo_doc.time()
     testi = []
-    with _tmp_doc.TemporaryDirectory() as cartella:
-        percorso = os.path.join(cartella, "doc.png")
-        g.save(percorso)
-        for psm in ("6", "11"):
-            try:
-                r = _sp_doc.run(["tesseract", percorso, "stdout", "-l", lingue, "--psm", psm],
-                                capture_output=True, text=True, timeout=45)
-                testi.append(r.stdout or "")
-            except Exception:
-                pass
+    for immagine, psm in _doc_varianti_ocr(uri):
+        if testi and _tempo_doc.time() - inizio > 50:
+            break
+        try:
+            testi.append(_doc_tesseract(immagine, psm))
+        except Exception:
+            continue
+        if validi is not None:
+            trovato = _doc_analizza("\n".join(testi), validi)
+            if trovato.get("tipo") and trovato.get("numero") and trovato.get("scadenza"):
+                break
     testo = "\n".join(testi)
     if len(cache) >= 6:
         cache.pop(next(iter(cache)))
@@ -3315,6 +3347,8 @@ def _doc_norm(testo):
 
 def _doc_date_trovate(t_):
     """[(posizione, data)] di tutte le date nel testo normalizzato: 31/12/2030, 31.12.2030, 31 12 2030, 31 DIC/DEC 2030."""
+    t_ = re.sub(r"(?<![A-Z0-9])[0-9OIL|]{2}\s?[./\-]\s?[0-9OIL|]{2}\s?[./\-]\s?[0-9OIL|]{4}(?![A-Z0-9])",
+                lambda m: m.group(0).replace("O", "0").replace("I", "1").replace("L", "1").replace("|", "1"), t_)
     trovate = []
     for m in re.finditer(r"(?<!\d)(\d{1,2})\s?[./\-]\s?(\d{1,2})\s?[./\-]\s?(\d{4})(?!\d)", t_):
         try:
@@ -3349,7 +3383,7 @@ def _doc_riconosci_tipo(t_, validi):
     regole = (
         (r"PATENTE\s+(DI\s+)?GUIDA|DRIVING\s+LICEN|PATENTE\s+DI\s+GUIDA", "Patente di guida"),
         (r"PASSAPORTO|PASSPORT", "Passaporto"),
-        (r"TESSERA\s+SANITARIA|CARTA\s+NAZIONALE\s+DEI\s+SERVIZI", "Tessera sanitaria"),
+        (r"TESSERA\s+SANITARIA|CARTA\s+NAZIONALE\s+DEI\s+SERVIZI|TESSERA\s+EUROPEA|MALATTIA|SSN\s?-?\s?MIN|MIN(ISTERO)?\s+SALUTE|DELLA\s+TESSERA", "Tessera sanitaria"),
         (r"CARTA\s+(D\s?['I]?\s?|DI\s+)IDENTIT", "Carta d'identità"),
         (r"PERMESSO\s+DI\s+SOGGIORNO", "Permesso di soggiorno"),
         (r"LIBRETTO\s+DI\s+CIRCOLAZIONE|CARTA\s+DI\s+CIRCOLAZIONE|CERTIFICATO\s+DI\s+PROPRIETA|CARTA\s+DI\s+CIRCOL", "Libretto / carta di circolazione"),
@@ -3363,6 +3397,41 @@ def _doc_riconosci_tipo(t_, validi):
     return None
 
 
+_CF_DISPARI = [1, 0, 5, 7, 9, 13, 15, 17, 19, 21, 2, 4, 18, 20, 11, 3, 6, 8, 12, 14, 16, 10, 22, 25, 24, 23]
+
+
+def _doc_cf_valido(cf):
+    if not re.fullmatch(r"[A-Z]{6}\d{2}[A-EHLMPR-T]\d{2}[A-Z]\d{3}[A-Z]", cf):
+        return False
+    somma = 0
+    for i, c in enumerate(cf[:15]):
+        v = int(c) if c.isdigit() else ord(c) - 65
+        somma += _CF_DISPARI[v] if i % 2 == 0 else v
+    return chr(65 + somma % 26) == cf[15]
+
+
+def _doc_trova_cf(testo):
+    """Un codice fiscale (anche se l'OCR l'ha spezzato con spazi) il cui carattere di controllo è corretto, oppure None."""
+    senza_spazi = re.sub(r"[^A-Z0-9]", "", testo)
+    for i in range(len(senza_spazi) - 15):
+        cand = senza_spazi[i:i + 16]
+        if _doc_cf_valido(cand):
+            class _R:
+                def group(self, _n=0, _c=cand):
+                    return _c
+            return _R()
+    return None
+
+
+def _doc_numero_tessera(testo):
+    """Il numero della tessera sanitaria: 20 cifre che cominciano per 8038 (l'OCR a volte le separa con spazi)."""
+    for m in re.finditer(r"(?<!\d)(?:\d[ ]?){19}\d(?!\d)", testo):
+        cifre = re.sub(r"\s", "", m.group(0))
+        if cifre.startswith("8038"):
+            return cifre
+    return None
+
+
 def _doc_analizza(testo, validi):
     """Dal testo letto ricava: tipo, numero, ente, rilascio, scadenza (date in formato ISO). Solo ciò che trova."""
     t_ = _doc_norm(testo)
@@ -3372,28 +3441,38 @@ def _doc_analizza(testo, validi):
         esito["tipo"] = tipo
     # --- date
     date_t = _doc_date_trovate(t_)
-    scad = ril = None
-    non_nasc = []
+    scad_l, ril_l, non_nasc = [], [], []
     for pos, d_ in date_t:
         et = _doc_etichetta_data(t_, pos)
         if et == "scad":
-            scad = max(scad, d_) if scad else d_
+            scad_l.append(d_)
         elif et == "ril":
-            ril = d_ if not ril else max(ril, d_)
+            ril_l.append(d_)
         elif et != "nasc":
             non_nasc.append(d_)
     oggi_ = oggi()
+
+    def _moda(lst):                                            # la data scritta più volte; a parità la più recente
+        conta = {}
+        for d_ in lst:
+            conta[d_] = conta.get(d_, 0) + 1
+        top = max(conta.values())
+        return max(d_ for d_, n in conta.items() if n == top)
+    scad = _moda(scad_l) if scad_l else None
+    ril = _moda(ril_l) if ril_l else None
     if not scad and non_nasc:
-        candidata = max(non_nasc)
-        if candidata >= date(oggi_.year - 1, oggi_.month, 1) or len(set(non_nasc)) >= 2:
-            if not ril or candidata > ril:
-                scad = candidata
+        futuri = [d_ for d_ in non_nasc if d_ >= date(oggi_.year - 1, oggi_.month, 1)]
+        candidata = _moda(futuri) if futuri else (max(non_nasc) if len(set(non_nasc)) >= 2 else None)
+        if candidata and (not ril or candidata > ril):
+            scad = candidata
     if scad and not ril:
         possibili = [d_ for d_ in non_nasc if d_ < scad and (scad - d_).days <= 366 * 16]
         if possibili:
-            ril = max(possibili)
-    if scad and (scad.year < 1950):
+            ril = _moda(possibili)
+    if scad and not (1990 <= scad.year <= oggi_.year + 25):
         scad = None
+    if ril and not (1950 <= ril.year <= oggi_.year + 1):
+        ril = None
     if scad:
         esito["scadenza"] = scad.isoformat()
     if ril and (not scad or ril < scad):
@@ -3401,7 +3480,7 @@ def _doc_analizza(testo, validi):
     # --- numero
     compatto = re.sub(r"[ \t]+", " ", t_)
     numero = None
-    cf = re.search(r"\b[A-Z]{6}\s?\d{2}\s?[A-EHLMPR-T]\s?\d{2}\s?[A-Z]\s?\d{3}\s?[A-Z]\b", compatto)
+    cf = _doc_trova_cf(t_)
     if tipo == "Patente di guida":
         m = re.search(r"\b[A-Z]{1,2}\s?\d{7}\s?[A-Z]\b", compatto)
         numero = m.group(0) if m else None
@@ -3412,11 +3491,14 @@ def _doc_analizza(testo, validi):
         m = re.search(r"\b[A-Z]{2}\s?\d{7}\b", compatto)
         numero = m.group(0) if m else None
     elif tipo == "Tessera sanitaria":
-        m = re.search(r"\b80\s?380\s?\d{15}\b", compatto) or re.search(r"\b\d{20}\b", compatto)
-        numero = m.group(0) if m else (cf.group(0) if cf else None)
+        numero = _doc_numero_tessera(compatto)
     elif tipo == "Codice fiscale":
         numero = cf.group(0) if cf else None
-    if not numero:
+    if not tipo and "Tessera sanitaria" in validi and _doc_numero_tessera(compatto):
+        tipo = "Tessera sanitaria"                                    # il numero di 20 cifre che comincia per 8038 è solo delle tessere
+        esito["tipo"] = tipo
+        numero = _doc_numero_tessera(compatto)
+    if not numero and tipo != "Tessera sanitaria":
         m = re.search(r"(?:\bN\.?\s?|\bNR\.?\s?|N°\s?|\bNUMERO\s+|\bNUMBER\s+)[:.]?\s*([A-Z0-9]{6,16})\b", compatto)
         if m and re.search(r"\d", m.group(1)):
             numero = m.group(1)
@@ -3441,6 +3523,8 @@ def _doc_analizza(testo, validi):
             ente = "Agenzia delle Entrate"
     if ente:
         esito["ente"] = ente
+    if cf:
+        esito["cf"] = cf.group(0)
     return esito
 
 
@@ -3457,10 +3541,14 @@ def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
         for uri in (foto_fronte, foto_retro):
             if uri:
                 try:
-                    testo += "\n" + _doc_ocr_testo(uri)
+                    testo += "\n" + _doc_ocr_testo(uri, validi)
                 except Exception:
                     pass
     esito = _doc_analizza(testo, validi) if testo.strip() else {}
+    if esito and not esito.get("numero") and esito.get("cf"):          # ripiego: senza numero della tessera, il codice fiscale
+        esito["numero"] = esito["cf"]
+    if esito.get("cf") and esito.get("numero") != esito["cf"]:          # il codice fiscale letto finisce nelle note
+        esito["note"] = f"Codice fiscale: {esito['cf']}"
     if not esito:
         st.warning("Non sono riuscito a leggere i dati da questa foto (prova con più luce e il documento ben dritto, "
                    "oppure compila a mano). La foto resta salvata.")
@@ -3476,9 +3564,11 @@ def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
             righe.append(f"**Rilascio:** {data_it(esito['rilascio'])}")
         if esito.get("scadenza"):
             righe.append(f"**Scadenza:** {data_it(esito['scadenza'])}")
+        if esito.get("note"):
+            righe.append(f"**Note:** {esito['note']}")
         st.success("✅ Ho letto questi dati e li ho scritti nei campi qui sotto. **Controllali e correggi se serve:**\n\n"
                    + "  \n".join(righe))
     if testo.strip():
-        with st.expander("📝 Testo letto dalla foto"):
+        with st.expander("📝 Testo letto dalla foto", expanded=not esito):
             st.text(testo.strip()[:3000])
     return esito
