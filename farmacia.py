@@ -305,6 +305,9 @@ def _fa_card(m, data_oggi, conflitti=()):
 
 def schermata_farmacia():
     st.markdown(_FA_CSS, unsafe_allow_html=True)
+    if st.session_state.get("sezione_home") == "utilita" and "schermata_utilita" in globals():
+        schermata_utilita()
+        return
     if st.session_state.get("sezione_home") == "documenti":
         schermata_documenti()
         return
@@ -2597,11 +2600,11 @@ def _fa_file_uri_cache(nome, mime, _data_file):
         return ""
 
 
-def _css_icona(chiave, uri, aspetto, animazione, durata):
+def _css_icona(chiave, uri, aspetto, animazione, durata, larghezza=100):
     return (f".st-key-{chiave}{{--img:url({uri})}}"
             f".st-key-{chiave} button,.st-key-{chiave} button:hover,.st-key-{chiave} button:focus,.st-key-{chiave} button:active"
             "{background:var(--img) center/contain no-repeat !important;border:0 !important;box-shadow:none !important;color:transparent}"
-            f".st-key-{chiave} button{{width:112px;height:auto;aspect-ratio:{aspetto};min-height:0;padding:0;border-radius:0;"
+            f".st-key-{chiave} button{{width:{larghezza}px;height:auto;aspect-ratio:{aspetto};min-height:0;padding:0;border-radius:0;"
             f"cursor:pointer;animation:{animazione} {durata}s ease-in-out infinite}}"
             f".st-key-{chiave} button:active{{transform:scale(.94);animation:none}}"
             f".st-key-{chiave} button p{{font-size:0}}")
@@ -2612,7 +2615,7 @@ def icona_farmacia():
     uri = _fa_icona_uri()
     uri_d = _fa_file_uri("documenti.webp")
     urg, avv = _doc_conteggi_home()
-    css = ("<style>.st-key-azioni_icone [data-testid='stHorizontalBlock']{flex-direction:row !important;flex-wrap:nowrap !important;"
+    css = ("<style>.st-key-azioni_icone [data-testid='stHorizontalBlock']{flex-direction:row !important;flex-wrap:wrap !important;"
            "gap:8px !important;align-items:flex-start !important}"
            ".st-key-azioni_icone [data-testid='stColumn'],.st-key-azioni_icone [data-testid='column']"
            "{flex:0 0 auto !important;width:auto !important;min-width:0 !important}"
@@ -2626,10 +2629,19 @@ def icona_farmacia():
         css += _css_icona("fa_icona", uri, "1/1", "fa-battito", 2.2)
     if uri_d:
         css += _css_icona("doc_icona", uri_d, "360/345", "doc-allarme" if urg else "doc-battito", 1.2 if urg else 2.2)
+    uri_u = _fa_file_uri("utilita.webp") if "schermata_utilita" in globals() else ""
+    if uri_u:
+        css += ("@keyframes ut-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
+                "50%{transform:scale(1.07);filter:drop-shadow(0 0 14px rgba(0,188,212,.95))}}")
+        css += _css_icona("ut_icona", uri_u, "360/345", "ut-battito", 2.2)
     css += "</style>"
     st.markdown(css, unsafe_allow_html=True)
     with st.container(key="azioni_icone"):
-        c1, c2 = st.columns(2, gap="small")
+        c1, c2, c3 = st.columns(3, gap="small")
+        premuto_u = False
+        with c3:
+            if uri_u:
+                premuto_u = st.button("Utilità", key="ut_icona", help="Apri le Utilità")
         with c1:
             premuto = st.button("Farmacia" if uri else "🏥 Farmacia", key="fa_icona", help="Apri la Farmacia")
         with c2:
@@ -2639,6 +2651,10 @@ def icona_farmacia():
                 st.markdown(f"<div style='width:112px;text-align:center;font-weight:800;font-size:.72rem;"
                             f"color:{'#b71c1c' if urg else '#e65100'}'>{'🚨' if urg else '⚠️'} {urg or avv} "
                             f"{'da rinnovare' if urg else 'in scadenza'}</div>", unsafe_allow_html=True)
+    if premuto_u:
+        st.session_state["sezione_home"] = "utilita"
+        st.session_state["farmacia_aperta"] = True
+        st.rerun()
     if premuto:
         st.session_state.pop("sezione_home", None)
         st.session_state["farmacia_aperta"] = True

@@ -1,4 +1,4 @@
-# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, posto.py, account.py, foto_prodotto.py, modifica.py, bugiardino.py, guida.py, lingue*.py, parte3.py, parte4.py, avvisi.py, voce.py, fotocamera.py, farmacia.py, info_sezioni.py) come se fosse un unico file.
+# Carica l'app (parte1.py, parte2.py, aggiunte.py, categorie.py, interattivi.py, hero_foto.py, stile.py, spesa.py, elimina.py, stile2.py, posto.py, account.py, foto_prodotto.py, modifica.py, bugiardino.py, guida.py, lingue*.py, parte3.py, parte4.py, avvisi.py, voce.py, fotocamera.py, farmacia.py, info_sezioni.py, utilita.py) come se fosse un unico file.
 import glob
 import os
 
@@ -18,7 +18,8 @@ _AGGANCI = {
         # pulsante «Informazioni» (guida a tendina) sotto l'intestazione della dispensa
         ("# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n",
          "# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n"
-         'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'),
+         'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'
+         'if "banner_novita" in globals():\n    banner_novita()\n'),
     ],
 }
 
@@ -38,7 +39,7 @@ def _carica(percorso):
     exec(compile(_testo, percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py"):
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "utilita.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)

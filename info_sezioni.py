@@ -11,7 +11,8 @@ import unicodedata
 
 import streamlit as st
 
-_NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🏥 Farmacia", "documenti": "📁 I miei documenti"}
+_NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🏥 Farmacia", "documenti": "📁 I miei documenti",
+                  "utilita": "🧰 Utilità"}
 
 # ---------------------------------------------------------------------
 # I TESTI DELLE GUIDE: (titolo, spiegazione, parole utili per la ricerca)
@@ -105,6 +106,14 @@ Se hai attivato **Telegram** o l'**email**, l'avviso arriva anche lì.""",
 
 In **Tabella** si spunta la casella 🗑️ della riga e poi si tocca **Elimina le righe spuntate** oppure **Modifica la riga spuntata** (per modificare spunta una riga sola).""",
          "elimina cancellare cestino modifica modificare cambiare correggere info tabella schede vista"),
+        ("🧭 Le icone Farmacia, I miei documenti e Utilità",
+         """Nella Home, accanto ai comandi di ricerca, trovi **tre icone che pulsano**:
+- **🏥 Farmacia**: medicinali, terapie, visite, tessera sanitaria.
+- **📁 I miei documenti**: carta d'identità, patente, tessera sanitaria con le scadenze.
+- **🧰 Utilità**: app e siti utili, come Velocity Music.
+
+Toccane una per aprirla; per tornare tocca **← Torna alla dispensa**. In ogni pagina, in alto, c'è il pulsante rosso **Clicca per informazioni** con la guida.""",
+         "icone farmacia documenti utilità home pagine navigare menu dove trovo"),
         ("🔎 Cercare e filtrare i prodotti",
          """In cima alla Dispensa ci sono tre comandi:
 1. **🔎 Cerca**: scrivi il nome o la marca.
@@ -216,6 +225,32 @@ Facoltativo: spunta **«Nei messaggi non scrivere i nomi dei medicinali»** se v
          """In **🧾 I miei dati personali e report completo** scrivi nome e cognome e scarichi un **report da stampare** con tutto quello che hai inserito. Il file **JSON** contiene gli stessi dati per una copia di sicurezza.
 Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
          "report completo stampare esportare scaricare dati personali copia pdf json"),
+    ],
+
+    "utilita": [
+        ("🧰 A cosa serve la pagina Utilità",
+         """Raccoglie **app e siti utili** in un solo posto. Ognuno ha un grande **pulsante che pulsa**: toccalo e si avvia.
+
+Sotto il pulsante c'è il **nome** dell'app: toccandolo si apre il **bugiardino**, cioè una spiegazione semplice di cosa fa e dei suoi vantaggi.
+
+Per ora c'è **Velocity Music**; altre utilità si aggiungeranno qui.""",
+         "utilità utilita pagina app pulsanti avviare raccolta siti cos'è a cosa serve"),
+        ("▶️ Come avviare un'app",
+         """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Farmacia e I miei documenti).
+2. Tocca il **grande pulsante** con il simbolo ▶️: l'app si apre in una nuova scheda del browser.
+3. Per tornare qui, chiudi quella scheda o torna indietro.""",
+         "avviare aprire avvio play pulsante app link velocity music musica"),
+        ("📖 Come leggere il bugiardino",
+         """1. Sotto il pulsante c'è la **targa con il nome** dell'app.
+2. **Toccala**: si apre una finestra con la spiegazione (cos'è, vantaggi, indirizzo).
+3. Dentro c'è anche il pulsante **🎵 Avvia** per aprire l'app.
+4. Per chiudere la finestra tocca la **X** in alto.""",
+         "bugiardino spiegazione targa nome leggere descrizione vantaggi informazioni"),
+        ("🎵 Velocity Music",
+         """È un lettore e gestore musicale che permette di ascoltare **gratuitamente** la libreria di YouTube, **senza pubblicità** e **senza abbonamenti**. Si può usare **come ospite**, senza creare un account. Il progetto è ancora in sviluppo ma già utilizzabile.
+
+Indirizzo: https://velocitymusic.uk/""",
+         "velocity music musica youtube gratis pubblicità lettore canzoni ascoltare radio"),
     ],
 
     "documenti": [
@@ -414,6 +449,47 @@ div.hero h1{font-size:25px !important;line-height:1.08 !important;white-space:no
 div.hero p{font-size:13px !important;line-height:1.3 !important;max-width:150px !important}
 div.hero::after{width:180px !important;height:158px !important;top:-10px !important;right:-4px !important}
 </style>"""
+
+
+# Elenco delle novità: (data ISO, simbolo, titolo, DOVE SI TROVA). Si aggiunge una riga per ogni novità: il banner
+# mostra solo quelle degli ultimi 14 giorni, poi scompaiono da sole.
+_NOVITA = [
+    ("2026-10-27", "🧰", "Nuova pagina «Utilità»", "Home → terza icona azzurra «Utilità», accanto a Farmacia e I miei documenti"),
+    ("2026-10-27", "ℹ️", "Guida in ogni pagina", "Pulsante rosso «Clicca per informazioni» in alto, con spiegazioni e ricerca"),
+    ("2026-10-27", "🪪", "Tessera sanitaria e fascicolo", "Farmacia → badge azzurro accanto alla dottoressa"),
+    ("2026-10-27", "📷", "Documenti: foto e lettura automatica", "I miei documenti → «Aggiungi un documento»"),
+]
+
+_CSS_NOVITA = """<style>
+@keyframes nov-vai{0%{opacity:0;transform:translate(-50%,-14px)}5%{opacity:1;transform:translate(-50%,0)}
+88%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-8px);visibility:hidden}}
+.nov-banner{position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:99999;width:min(94vw,520px);
+background:rgba(255,255,255,.97);border-radius:22px;padding:12px 16px 10px;box-shadow:0 12px 34px rgba(0,0,0,.28);
+border:2px solid #26a69a;color:#16302b;pointer-events:none;opacity:0;animation:nov-vai 14s ease forwards}
+.nov-banner .nov-t{font-weight:900;font-size:1.02rem;margin-bottom:6px;color:#00796b}
+.nov-banner .nov-r{font-size:.86rem;line-height:1.25;margin:5px 0}
+.nov-banner .nov-r span{opacity:.78;font-size:.8rem}
+</style>"""
+
+
+def banner_novita():
+    """All'apertura dell'app mostra per pochi secondi le novità recenti e dove trovarle; poi scompare da solo.
+    È solo da leggere (non si tocca) e compare una volta per ogni nuova apertura."""
+    if st.session_state.get("_novita_mostrate"):
+        return
+    st.session_state["_novita_mostrate"] = True
+    try:
+        from datetime import date as _d
+        oggi_ = oggi() if "oggi" in globals() else _d.today()
+        recenti = [n for n in _NOVITA if (oggi_ - _d.fromisoformat(n[0])).days <= 14][:4]
+    except Exception:
+        return
+    if not recenti:
+        return
+    righe = "".join(f"<div class='nov-r'><b>{n[1]} {html.escape(n[2])}</b><br><span>📍 {html.escape(n[3])}</span></div>"
+                    for n in recenti)
+    st.markdown(_CSS_NOVITA + f"<div class='nov-banner'><div class='nov-t'>🆕 Novità nell'app</div>{righe}</div>",
+                unsafe_allow_html=True)
 
 
 def pulsante_info(sezione):
