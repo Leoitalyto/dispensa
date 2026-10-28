@@ -16,27 +16,7 @@ import streamlit as st
 
 _VERSIONE_ASSISTENTE = "1"
 
-# Cosa dice l'assistente quando si tocca «Spiegami questa pagina»
-_PAGINE = {
-    "dispensa": ("Sei nella Dispensa",
-                 "Qui vedi tutti i prodotti che hai in casa, con il colore della scadenza: verde se manca più di due mesi, "
-                 "arancione entro due mesi, rosso entro un mese e scuro se è già scaduto. Per aggiungere un prodotto tocca "
-                 "Aggiungi, nella barra in basso. Le tre icone che pulsano ti portano in Farmacia, in I miei documenti e nelle Utilità. "
-                 "Chiedimi pure quello che vuoi sapere."),
-    "farmacia": ("Sei nella Farmacia",
-                 "Qui trovi i medicinali con le scadenze, le terapie e il calendario, le visite, i vaccini, la scheda sanitaria e la "
-                 "scheda del dottore. In alto ci sono tre badge: il gruppo sanguigno, la dottoressa e la tessera sanitaria, con i "
-                 "collegamenti al fascicolo sanitario, alle vaccinazioni e alle spese detraibili."),
-    "documenti": ("Sei in I miei documenti",
-                  "Qui tieni carta d'identità, patente, tessera sanitaria e gli altri documenti. Tocca Aggiungi un documento, "
-                  "fai la foto del fronte e del retro, e l'app prova a leggere tipo, numero e scadenza. Ti avvisa sei mesi e "
-                  "tre mesi prima della scadenza, così non ti dimentichi i rinnovi."),
-    "utilita": ("Sei nelle Utilità",
-                "Qui trovi app e siti utili. Tocca il grande pulsante di un'app per avviarla, e tocca il suo nome per leggere il "
-                "bugiardino, cioè una spiegazione di cosa fa."),
-}
-
-# Il giro guidato: (titolo, testo)
+# Il giro guidato in italiano (le altre lingue stanno in guida_xx.py, codici tour1..tour8)
 _TOUR = [
     ("Benvenuto!", "Ciao, sono il tuo assistente. Ti faccio un giro veloce dell'app. Con i pulsanti Avanti e Indietro vai al tuo ritmo, "
                    "e puoi fermarmi quando vuoi."),
@@ -57,6 +37,18 @@ _TOUR = [
                                        "E io sono qui: toccami quando vuoi, anche con il microfono. Se non ti servo, mi disattivi dal pannello, "
                                        "e mi riattivi dal pulsante rosso. Buon lavoro!"),
 ]
+
+# A quale voce della guida corrisponde ogni pagina / sottopagina: è il testo che l'assistente ha già pronto quando lo apri
+_CTX_GUIDA = {
+    "dispensa": "d_inizio", "dispensa:aggiungi": "d_aggiungere", "dispensa:gestisci": "d_gestisci", "dispensa:utenti": "d_account",
+    "dispensa:spesa": "d_spesa", "dispensa:messaggi": "d_account", "dispensa:info": "d_icone",
+    "farmacia": "f_cosa", "farmacia:medicinali": "f_medicinale", "farmacia:terapie": "f_terapie", "farmacia:visite": "f_visite",
+    "farmacia:vaccini": "f_vaccini", "farmacia:sanitaria": "f_scheda", "farmacia:dottore": "f_scheda", "farmacia:tessera": "f_tessera",
+    "farmacia:medicinale": "f_medicinale", "documenti": "x_cosa", "documenti:nuovo": "x_aggiungere", "utilita": "u_cosa",
+}
+# L'ordine delle schede in basso (per sapere quale è aperta): Dispensa (con «Utenti» solo per l'amministratore) e Farmacia
+_TAB_CTX = {"dispensa": ["dispensa", "aggiungi", "gestisci", "utenti", "spesa", "messaggi", "info"],
+            "farmacia": ["farmacia", "terapie", "visite", "vaccini"]}
 
 
 def _cartella_as():
@@ -92,9 +84,10 @@ _JS_ASSISTENTE = r"""
   var D = CFG, SS = w.speechSynthesis, SR = w.SpeechRecognition || w.webkitSpeechRecognition;
   function leggi(k, def) { try { var v = w.localStorage.getItem(k); return v === null ? def : v; } catch (e) { return def; } }
   function scrivi(k, v) { try { w.localStorage.setItem(k, v); } catch (e) {} }
+  function T(k) { return (D.ui && D.ui[k]) || ''; }
   var attivo = leggi('asst_attivo', '1') === '1', voceOn = leggi('asst_voce', '1') === '1';
   var ultimoCmd = (D.cmd && D.cmd.id) || '';
-  var corrente = null, tourIdx = -1, tourAttivo = false, riconoscimento = null, aperto = false;
+  var tourIdx = -1, riconoscimento = null, aperto = false, ctxCorrente = D.ctx;
 
   /* ---------- aspetto ---------- */
   var st = doc.createElement('style');
@@ -116,6 +109,7 @@ _JS_ASSISTENTE = r"""
     '.asst-robot.ascolta img{filter:drop-shadow(0 0 10px rgba(229,72,77,.9))}' +
     '.asst-bolla{flex:1;min-width:0;background:#eef6ff;border:2px solid #1950b4;border-radius:18px 18px 18px 4px;padding:9px 12px;' +
       'max-height:34vh;overflow:auto;font-size:14.5px;line-height:1.35}' +
+    '#asst-pan[dir=rtl] .asst-bolla{border-radius:18px 18px 4px 18px}' +
     '.asst-titolo{font-weight:900;color:#1950b4;margin-bottom:3px;font-size:15px}.asst-testo b{font-weight:800}' +
     '.asst-x{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:0;background:#e9eef2;font-size:16px;cursor:pointer;color:#14302b}' +
     '.asst-azioni{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0 6px}' +
@@ -136,26 +130,25 @@ _JS_ASSISTENTE = r"""
       'border-radius:16px;font-size:13.5px;z-index:100001;display:none;text-align:center}';
   doc.head.appendChild(st);
 
-  var btn = doc.createElement('button'); btn.id = 'asst-btn'; btn.setAttribute('aria-label', 'Assistente digitale');
+  var btn = doc.createElement('button'); btn.id = 'asst-btn';
   btn.innerHTML = D.img.testa ? '<img alt="" src="' + D.img.testa + '">' : '<span style="font-size:34px">🤖</span>';
-  var pan = doc.createElement('div'); pan.id = 'asst-pan'; pan.setAttribute('role', 'dialog'); pan.setAttribute('aria-label', 'Assistente digitale');
+  var pan = doc.createElement('div'); pan.id = 'asst-pan'; pan.setAttribute('role', 'dialog');
   pan.innerHTML =
     '<div class="asst-top"><div class="asst-robot">' + (D.img.intero ? '<img alt="" src="' + D.img.intero + '">' : '<span style="font-size:60px">🤖</span>') + '</div>' +
     '<div class="asst-bolla"><div class="asst-titolo"></div><div class="asst-testo"></div></div>' +
-    '<button class="asst-x" aria-label="Chiudi">✕</button></div>' +
+    '<button class="asst-x" aria-label="X">✕</button></div>' +
     '<div class="asst-azioni">' +
-      '<button class="asst-b" data-az="pagina">📖 Spiegami questa pagina</button>' +
-      '<button class="asst-b giallo" data-az="giro">🧭 Giro guidato dell\'app</button>' +
-      '<button class="asst-b verde" data-az="novita">🆕 Cosa c\'è di nuovo</button>' +
-      '<button class="asst-b rosso" data-az="mic">🎤 Fai una domanda</button></div>' +
-    '<div class="asst-tour"><button class="asst-b grigio" data-az="indietro">◀ Indietro</button><span></span>' +
-      '<button class="asst-b" data-az="avanti">Avanti ▶</button><button class="asst-b grigio" data-az="fine">Fine</button></div>' +
-    '<div class="asst-chiedi"><input type="text" placeholder="Scrivi qui la tua domanda…" aria-label="Domanda">' +
-      '<button class="asst-b" data-az="chiedi">Chiedi</button></div>' +
+      '<button class="asst-b" data-az="pagina" data-ui="a_rileggi"></button>' +
+      '<button class="asst-b giallo" data-az="giro" data-ui="a_giro"></button>' +
+      '<button class="asst-b verde" data-az="novita" data-ui="a_novita"></button>' +
+      '<button class="asst-b rosso" data-az="mic" data-ui="a_mic"></button></div>' +
+    '<div class="asst-tour"><button class="asst-b grigio" data-az="indietro" data-ui="a_indietro"></button><span></span>' +
+      '<button class="asst-b" data-az="avanti" data-ui="a_avanti"></button><button class="asst-b grigio" data-az="fine" data-ui="a_fine"></button></div>' +
+    '<div class="asst-chiedi"><input type="text"><button class="asst-b" data-az="chiedi" data-ui="a_chiedi"></button></div>' +
     '<div class="asst-sugg"></div>' +
     '<div class="asst-pie"><button class="asst-b grigio" data-az="voce"></button>' +
-      '<button class="asst-b grigio" data-az="silenzio">⏹ Silenzio</button>' +
-      '<button class="asst-b grigio" data-az="off">⛔ Disattiva assistente</button></div>';
+      '<button class="asst-b grigio" data-az="silenzio" data-ui="a_silenzio"></button>' +
+      '<button class="asst-b grigio" data-az="off" data-ui="a_off"></button></div>';
   var toast = doc.createElement('div'); toast.id = 'asst-toast';
   doc.body.appendChild(btn); doc.body.appendChild(pan); doc.body.appendChild(toast);
   function $(s) { return pan.querySelector(s); }
@@ -163,6 +156,12 @@ _JS_ASSISTENTE = r"""
       elSugg = $('.asst-sugg'), elInput = $('.asst-chiedi input'), btnMic = pan.querySelector('[data-az="mic"]'), btnVoce = pan.querySelector('[data-az="voce"]');
   if (!SR) btnMic.style.display = 'none';
   if (!SS) { btnVoce.style.display = 'none'; pan.querySelector('[data-az="silenzio"]').style.display = 'none'; }
+  function aggiornaVoceBtn() { btnVoce.textContent = voceOn ? T('a_voce_on') : T('a_voce_off'); }
+  function applicaUI() {
+    [].forEach.call(pan.querySelectorAll('[data-ui]'), function (b) { b.textContent = T(b.getAttribute('data-ui')); });
+    elInput.placeholder = T('a_ph'); btn.setAttribute('aria-label', T('a_aria')); pan.setAttribute('aria-label', T('a_aria'));
+    pan.setAttribute('dir', D.rtl ? 'rtl' : 'ltr'); toast.setAttribute('dir', D.rtl ? 'rtl' : 'ltr'); aggiornaVoceBtn();
+  }
 
   /* ---------- testi e voce ---------- */
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -176,11 +175,12 @@ _JS_ASSISTENTE = r"""
       .replace(/https?:\/\/\S+/g, '').replace(/[«»]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\n+/g, '. ').replace(/\s+/g, ' ').replace(/\.\s*\./g, '.').trim();
   }
   function scegliVoce() {
-    var vs = (SS && SS.getVoices && SS.getVoices()) || [], it = vs.filter(function (v) { return /^it/i.test(v.lang); });
-    return it.filter(function (v) { return /google|natural|neural|premium/i.test(v.name); })[0] || it[0] || null;
+    var pre = (D.lang || 'it-IT').slice(0, 2).toLowerCase(), rx = new RegExp('^' + pre, 'i');
+    var vs = (SS && SS.getVoices && SS.getVoices()) || [], ok = vs.filter(function (v) { return rx.test(v.lang); });
+    return ok.filter(function (v) { return /google|natural|neural|premium/i.test(v.name); })[0] || ok[0] || null;
   }
   function spezza(testo) {
-    var frasi = testo.split(/(?<=[.!?;:])\s+/), out = [], cur = '';
+    var frasi = testo.split(/(?<=[.!?;:،؛؟])\s+/), out = [], cur = '';
     frasi.forEach(function (f) {
       if ((cur + ' ' + f).length > 190 && cur) { out.push(cur); cur = f; } else { cur = cur ? cur + ' ' + f : f; }
     });
@@ -195,26 +195,31 @@ _JS_ASSISTENTE = r"""
     if (!pezzi.length) return;
     function dici() {
       if (i >= pezzi.length) { elRobot.classList.remove('parla'); if (alFine) alFine(); return; }
-      var u = new w.SpeechSynthesisUtterance(pezzi[i++]); u.lang = 'it-IT'; u.rate = 1; u.pitch = 1.05;
+      var u = new w.SpeechSynthesisUtterance(pezzi[i++]); u.lang = D.lang || 'it-IT'; u.rate = 1; u.pitch = 1.05;
       if (voce) u.voice = voce;
       u.onend = dici; u.onerror = function () { elRobot.classList.remove('parla'); };
       elRobot.classList.add('parla'); SS.speak(u);
     }
     dici();
   }
-  function mostra(titolo, testo, voceTesto, alFine) {
+  function mostra(titolo, testo, voceTesto, parlare, alFine) {
     elTitolo.textContent = titolo || ''; elTesto.innerHTML = mdHtml(testo); $('.asst-bolla').scrollTop = 0;
-    parla((titolo ? titolo + (/[.!?:]$/.test(titolo) ? ' ' : '. ') : '') + (voceTesto || testo), alFine);
+    if (parlare === false) return;
+    parla((titolo ? titolo + (/[.!?:؟]$/.test(titolo) ? ' ' : '. ') : '') + (voceTesto || testo), alFine);
   }
   function avviso(m) { toast.textContent = m; toast.style.display = 'block'; w.setTimeout(function () { toast.style.display = 'none'; }, 5200); }
 
-  /* ---------- ricerca nella guida (come quella scritta) ---------- */
-  var STOP = {}; ('il lo la i gli le un uno una di a da in con su per tra fra e o ma che chi cui come dove quando cosa quale quali mi ti si ci vi non ' +
-    'del dello della dei degli delle al allo alla ai agli alle dal dallo dalla dai dagli dalle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle ' +
-    'è sono ho hai ha posso puoi fare faccio fa devo voglio vorrei se questo questa quello quella mio mia miei mie tuo tua app dell all anche più poi può modo').split(' ').forEach(function (p) { STOP[p] = 1; });
-  function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' '); }
+  /* ---------- ricerca nella guida (nella lingua scelta) ---------- */
+  function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' '); }
   function stem(p) { return p.length > 4 ? p.replace(/[aeiou]+$/, '') : p; }
-  function parole(s) { var o = {}; norm(s).split(' ').forEach(function (p) { if (p.length >= 3 && !STOP[p]) o[stem(p)] = 1; }); return Object.keys(o); }
+  var stopSet = null;
+  function parole(s) {
+    if (!stopSet) { stopSet = {}; (D.stop || []).forEach(function (x) { stopSet[norm(x).trim()] = 1; }); }
+    var min = /^ar/i.test(D.lang || '') ? 2 : 3, o = {};
+    var ar = /^ar/i.test(D.lang || '');
+    norm(s).split(' ').forEach(function (p) { if (p.length >= min && !stopSet[p]) o[stem(ar && p.length > 4 ? p.replace(/^(وال|بال|كال|لل|ال)/, '') : p)] = 1; });
+    return Object.keys(o);
+  }
   function combacia(q, ins) { for (var i = 0; i < ins.length; i++) { var x = ins[i]; if (x.indexOf(q) === 0 || (x.length >= 4 && q.indexOf(x) === 0)) return true; } return false; }
   var indice = null;
   function costruisci() { indice = D.guida.map(function (g) { return {g: g, t: parole(g.t), k: parole(g.k), b: parole(g.b)}; }); }
@@ -233,81 +238,105 @@ _JS_ASSISTENTE = r"""
     if (!ris.length) return [];
     var top = ris[0].p; return ris.filter(function (r) { return r.p * 2 >= top; }).slice(0, 4).map(function (r) { return r.g; });
   }
-  function argomento(g) {
-    tourAttivo = false; elTour.style.display = 'none';
-    var corto = perVoce(g.b); if (corto.length > 900) corto = corto.slice(0, 900).replace(/[^.]*$/, '') || corto.slice(0, 900);
-    mostra(g.t, g.b, corto);
-    chips([]);
+  function argomento(g, parlare) {
+    elTour.style.display = 'none'; tourIdx = -1;
+    var corto = perVoce(g.b); if (corto.length > 900) corto = corto.slice(0, 900).replace(/[^.!?؟]*$/, '') || corto.slice(0, 900);
+    mostra(g.t, g.b, corto, parlare);
   }
-  function chips(lista, titolo) {
+  function chips(lista) {
     elSugg.innerHTML = '';
     lista.forEach(function (g) {
-      var b = doc.createElement('button'); b.textContent = g.t; b.addEventListener('click', function () { argomento(g); }); elSugg.appendChild(b);
+      var b = doc.createElement('button'); b.textContent = g.t; b.addEventListener('click', function () { argomento(g); chips([]); }); elSugg.appendChild(b);
     });
   }
-  function argomentiSezione() { return D.guida.filter(function (g) { return g.s === D.sezione; }).slice(0, 8); }
+  function voceGuida(id) { for (var i = 0; i < D.guida.length; i++) if (D.guida[i].id === id) return D.guida[i]; return null; }
+  function argomentiSezione(escludi) { return D.guida.filter(function (g) { return g.s === D.sezione && g.id !== escludi; }).slice(0, 8); }
 
-  /* ---------- azioni ---------- */
-  function paginaCorrente() {
-    tourAttivo = false; elTour.style.display = 'none';
-    var p = D.pagine[D.sezione] || D.pagine.dispensa;
-    mostra(p[0], p[1] + '\n\nTocca un argomento qui sotto per saperne di più.');
-    chips(argomentiSezione());
+  /* ---------- la pagina in cui sei: il testo è già pronto ---------- */
+  function ctxAttuale() {
+    var base = D.ctx || D.sezione; if (base.indexOf(':') >= 0) return base;
+    var lista = D.tabs && D.tabs[D.sezione]; if (!lista) return base;
+    var attesi = D.sezione === 'dispensa' ? [6, 7] : [lista.length];
+    var liste = doc.querySelectorAll('[data-baseweb="tab-list"]');
+    for (var k = 0; k < liste.length; k++) {
+      var tabs = liste[k].querySelectorAll('[role="tab"]'), n = tabs.length;
+      if (attesi.indexOf(n) < 0) continue;
+      var idx = -1; for (var i = 0; i < n; i++) if (tabs[i].getAttribute('aria-selected') === 'true') idx = i;
+      if (idx <= 0) return base;
+      var nomi = lista.slice(); if (D.sezione === 'dispensa' && n === 6) nomi.splice(3, 1);
+      return nomi[idx] ? D.sezione + ':' + nomi[idx] : base;
+    }
+    return base;
+  }
+  function guidaCtx() {
+    var c = ctxAttuale(), id = D.ctxmap[c] || D.ctxmap[D.sezione] || D.ctxmap.dispensa;
+    return voceGuida(id);
+  }
+  function paginaCorrente(parlare) {
+    var g = guidaCtx(); if (!g) return;
+    elTour.style.display = 'none'; tourIdx = -1;
+    var corto = perVoce(g.b); if (corto.length > 900) corto = corto.slice(0, 900).replace(/[^.!?؟]*$/, '') || corto.slice(0, 900);
+    mostra(g.t, g.b + '\n\n' + T('a_vedi'), corto, parlare);
+    chips(argomentiSezione(g.id));
   }
   function novita() {
-    tourAttivo = false; elTour.style.display = 'none'; chips([]);
-    if (!D.novita.length) { mostra('Novità', 'Per ora non ci sono novità recenti. Ti avviso io quando ne arrivano!'); return; }
+    elTour.style.display = 'none'; tourIdx = -1; chips([]);
+    if (!D.novita.length) { mostra(T('a_nov_none_t'), T('a_nov_none_x')); return; }
     var testo = D.novita.map(function (n) { return '**' + n.i + ' ' + n.t + '**\n📍 ' + n.d; }).join('\n\n');
-    var voceT = 'Ecco le novità. ' + D.novita.map(function (n) { return n.t + '. La trovi così: ' + n.d + '.'; }).join(' ');
-    mostra('Cosa c\'è di nuovo', testo, voceT);
+    var voceT = T('a_nov_voce') + ' ' + D.novita.map(function (n) { return n.t + '. ' + T('a_nov_trovi') + ' ' + n.d + '.'; }).join(' ');
+    mostra(T('a_nov_t'), testo, voceT);
   }
   function tourVai(i) {
-    tourIdx = Math.max(0, Math.min(D.tour.length - 1, i)); tourAttivo = true; chips([]);
+    tourIdx = Math.max(0, Math.min(D.tour.length - 1, i)); chips([]);
     elTour.style.display = 'grid'; elTour.querySelector('span').textContent = (tourIdx + 1) + ' / ' + D.tour.length;
     var s = D.tour[tourIdx]; mostra(s[0], s[1]);
   }
-  function tourFine() { tourAttivo = false; elTour.style.display = 'none'; ferma(); mostra('Fine del giro', 'Ecco fatto! Se ti serve altro, chiedimi.'); chips(argomentiSezione()); }
+  function tourFine() { elTour.style.display = 'none'; tourIdx = -1; ferma(); mostra(T('a_fine_t'), T('a_fine_x')); chips(argomentiSezione()); }
   function ascolta() {
-    if (!SR) { mostra('Microfono', 'Su questo telefono non riesco ad ascoltarti: scrivi la domanda qui sotto.'); return; }
+    if (!SR) { mostra(T('a_mic_t'), T('a_mic_no')); return; }
     if (riconoscimento) { try { riconoscimento.stop(); } catch (e) {} return; }
     ferma();
-    var r = new SR(); riconoscimento = r; r.lang = 'it-IT'; r.interimResults = false; r.maxAlternatives = 1;
-    btnMic.classList.add('ascolta'); elRobot.classList.add('ascolta'); btnMic.textContent = '⏹ Sto ascoltando…';
-    mostra('Ti ascolto', 'Parla ora: per esempio «come aggiungo una foto al documento?»', ' ');
+    var r = new SR(); riconoscimento = r; r.lang = D.lang || 'it-IT'; r.interimResults = false; r.maxAlternatives = 1;
+    btnMic.classList.add('ascolta'); elRobot.classList.add('ascolta'); btnMic.textContent = T('a_ascolto_btn');
+    mostra(T('a_ascolto_t'), T('a_ascolto_x'), ' ', false);
     var detto = false;
-    function fine() { riconoscimento = null; btnMic.classList.remove('ascolta'); elRobot.classList.remove('ascolta'); btnMic.textContent = '🎤 Fai una domanda'; }
+    function fine() { riconoscimento = null; btnMic.classList.remove('ascolta'); elRobot.classList.remove('ascolta'); btnMic.textContent = T('a_mic'); }
     r.onresult = function (e) { detto = true; var t = e.results[0][0].transcript; fine(); elInput.value = t; chiedi(t); };
     r.onerror = function (e) {
       fine(); detto = true;
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') mostra('Microfono', 'Consenti l\'uso del microfono al browser per parlare con me.', ' ');
-      else if (e.error === 'no-speech') mostra('Non ho sentito niente', 'Riprova: tocca il microfono e parla.', ' ');
-      else mostra('Microfono', 'Non riesco a usare la voce ora: scrivi la domanda qui sotto.', ' ');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') mostra(T('a_mic_t'), T('a_mic_perm'), ' ', false);
+      else if (e.error === 'no-speech') mostra(T('a_nulla_t'), T('a_nulla_x'), ' ', false);
+      else mostra(T('a_mic_t'), T('a_mic_err'), ' ', false);
     };
-    r.onend = function () { if (!detto) { fine(); mostra('Non ho sentito niente', 'Riprova: tocca il microfono e parla.', ' '); } else { fine(); } };
+    r.onend = function () { if (!detto) { fine(); mostra(T('a_nulla_t'), T('a_nulla_x'), ' ', false); } else { fine(); } };
     try { r.start(); } catch (e) { fine(); }
   }
+  function haParola(n, lista) { return String(lista || '').split(' ').some(function (x) { x = norm(x).trim(); return x && n.indexOf(x) >= 0; }); }
   function chiedi(testo) {
-    testo = (testo || '').trim(); if (!testo) { mostra('Dimmi pure', 'Scrivi o dì cosa vuoi sapere.', ' '); return; }
+    testo = (testo || '').trim(); if (!testo) { mostra(T('a_dimmi_t'), T('a_dimmi_x'), ' ', false); return; }
     var n = norm(testo);
-    if (/\b(silenzio|zitto|basta|smetti)\b/.test(n)) { ferma(); return; }
-    if (/(disattiv|spegn).*(assistent|te)|non voglio.*assistent/.test(n)) { mostra('Vuoi che mi disattivi?', 'Tocca il pulsante «⛔ Disattiva assistente» qui sotto. Mi riattivi dal pulsante rosso «Clicca per informazioni».'); chips([]); return; }
-    if (/(novit|nuovo|nuove|aggiornament)/.test(n)) { novita(); return; }
-    if (/(giro|tutorial|spiegami l app|come si usa l app|guida completa|inizia)/.test(n)) { tourVai(0); return; }
-    if (/^(ciao|salve|buongiorno|buonasera|aiuto|help)\b/.test(n)) { paginaCorrente(); return; }
+    if (haParola(n, T('i_off')) && haParola(n, T('i_ass'))) { mostra(T('a_off_t'), T('a_off_x')); chips([]); return; }
+    if (haParola(n, T('i_silenzio'))) { ferma(); return; }
+    if (haParola(n, T('i_novita'))) { novita(); return; }
+    if (haParola(n, T('i_giro'))) { tourVai(0); return; }
+    if (n.trim().split(' ').length <= 3 && haParola(n, T('i_saluto'))) { paginaCorrente(true); return; }
     var ris = cerca(testo);
-    if (!ris.length) { mostra('Non ho trovato la risposta', 'Prova con altre parole (per esempio una sola: foto, scadenza, password) oppure scegli un argomento qui sotto.', 'Non ho trovato la risposta. Prova con altre parole, oppure scegli un argomento qui sotto.'); chips(argomentiSezione()); return; }
+    if (!ris.length) { mostra(T('a_trov_t'), T('a_trov_x')); chips(argomentiSezione()); return; }
     argomento(ris[0]); chips(ris.slice(1));
   }
-  function aggiornaVoceBtn() { btnVoce.textContent = voceOn ? '🔊 Voce: attiva' : '🔇 Voce: spenta'; }
   function apri() {
     if (!attivo) return; aperto = true; pan.style.display = 'block'; btn.style.display = 'none';
-    if (!corrente) { corrente = 1; mostra('Ciao, sono il tuo assistente!', 'Ti aiuto a capire come si usa l\'app. Scegli cosa vuoi: spiegarti questa pagina, farti fare un giro dell\'app, dirti le novità, oppure fammi una domanda a voce o scrivendo.', 'Ti aiuto a capire come si usa l\'app. Scegli cosa vuoi che ti spieghi.'); chips(argomentiSezione()); }
+    ctxCorrente = ctxAttuale(); paginaCorrente(true);          /* subito la spiegazione della pagina in cui sei */
   }
   function chiudi() { aperto = false; pan.style.display = 'none'; ferma(); if (riconoscimento) { try { riconoscimento.abort(); } catch (e) {} } if (attivo) btn.style.display = 'block'; }
   function imposta(on) {
     attivo = on; scrivi('asst_attivo', on ? '1' : '0');
-    if (!on) { chiudi(); btn.style.display = 'none'; avviso('Assistente disattivato. Lo riattivi da «Clicca per informazioni».'); }
-    else { btn.style.display = aperto ? 'none' : 'block'; avviso('Assistente attivo: tocca il robottino.'); }
+    if (!on) { chiudi(); btn.style.display = 'none'; avviso(T('a_toast_off')); }
+    else { btn.style.display = aperto ? 'none' : 'block'; avviso(T('a_toast_on')); }
+  }
+  function controllaCtx() {
+    var c = ctxAttuale(); if (c === ctxCorrente) return; ctxCorrente = c;
+    if (aperto && tourIdx < 0) paginaCorrente(false);          /* se il pannello è aperto, aggiorna il testo (senza parlare) */
   }
 
   btn.addEventListener('click', apri);
@@ -315,7 +344,7 @@ _JS_ASSISTENTE = r"""
     var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
     if (b.classList.contains('asst-x')) { chiudi(); return; }
     var az = b.getAttribute('data-az'); if (!az) return;
-    if (az === 'pagina') paginaCorrente(); else if (az === 'giro') tourVai(0); else if (az === 'novita') novita(); else if (az === 'mic') ascolta();
+    if (az === 'pagina') paginaCorrente(true); else if (az === 'giro') tourVai(0); else if (az === 'novita') novita(); else if (az === 'mic') ascolta();
     else if (az === 'avanti') { if (tourIdx >= D.tour.length - 1) tourFine(); else tourVai(tourIdx + 1); }
     else if (az === 'indietro') tourVai(tourIdx - 1); else if (az === 'fine') tourFine();
     else if (az === 'chiedi') chiedi(elInput.value);
@@ -324,17 +353,29 @@ _JS_ASSISTENTE = r"""
   });
   elInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); chiedi(elInput.value); } });
   doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && aperto) chiudi(); });
-  if (SS && SS.addEventListener) SS.addEventListener('voiceschanged', function () {});
-  aggiornaVoceBtn();
+  doc.addEventListener('click', function (e) { if (e.target && e.target.closest && e.target.closest('[role="tab"]')) w.setTimeout(controllaCtx, 350); }, true);
+  try {
+    var attesa = null;
+    new w.MutationObserver(function () { if (attesa) return; attesa = w.setTimeout(function () { attesa = null; controllaCtx(); }, 400); })
+      .observe(doc.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected']});
+  } catch (e) {}
+  applicaUI();
   btn.style.display = attivo ? 'block' : 'none';
 
   w.__assistente = {
     versione: D.versione,
     aggiorna: function (c) {
-      if (c.sezione) D.sezione = c.sezione;
+      var cambiaUI = false;
+      ['ui', 'tour', 'lang', 'rtl', 'ctxmap', 'tabs', 'img'].forEach(function (k) { if (c[k] !== undefined) { D[k] = c[k]; cambiaUI = true; } });
+      if (c.stop) { D.stop = c.stop; stopSet = null; indice = null; }
       if (c.guida) { D.guida = c.guida; indice = null; }
       if (c.novita) D.novita = c.novita;
+      if (c.sezione) D.sezione = c.sezione;
+      if (c.ctx) D.ctx = c.ctx;
+      if (cambiaUI) applicaUI();
       if (c.cmd && c.cmd.id && c.cmd.id !== ultimoCmd) { ultimoCmd = c.cmd.id; if (c.cmd.az === 'on') imposta(true); else if (c.cmd.az === 'off') imposta(false); }
+      ctxCorrente = ctxAttuale();
+      if (aperto && tourIdx < 0) paginaCorrente(false);
     },
     apri: apri, chiudi: chiudi
   };
@@ -364,38 +405,58 @@ def _inietta(codice):
 
 
 def _novita_recenti():
+    """Le novità degli ultimi 14 giorni, nella lingua scelta (i codici nov1, nov2… seguono l'ordine di _NOVITA)."""
     try:
         from datetime import date as _d
         oggi_ = oggi() if "oggi" in globals() else _d.today()
-        return [{"i": n[1], "t": n[2], "d": n[3]} for n in _NOVITA if (oggi_ - _d.fromisoformat(n[0])).days <= 14][:6]
+        tr = GUIDA_TR.get(_lg(), {}) if _lg() != "it" else {}
+        out = []
+        for k, n in enumerate(_NOVITA, start=1):
+            if (oggi_ - _d.fromisoformat(n[0])).days <= 14:
+                x = tr.get(f"nov{k}")
+                out.append({"i": n[1], "t": x[0] if x else n[2], "d": x[1] if x else n[3]})
+        return out[:6]
     except Exception:
         return []
 
 
-def _config_assistente(sezione, completo, cmd):
-    cfg = {"sezione": sezione, "novita": _novita_recenti()}
+def _config_assistente(contesto, completo, cmd):
+    sezione = contesto.split(":")[0]
+    cfg = {"ctx": contesto, "sezione": sezione, "novita": _novita_recenti()}
     if cmd:
         cfg["cmd"] = {"id": str(__import__("time").time()), "az": cmd}
     if completo:
+        lg = _lg()
+        tr = GUIDA_TR.get(lg, {}) if lg != "it" else {}
         cfg["versione"] = _VERSIONE_ASSISTENTE
-        cfg["guida"] = [{"s": sez, "t": titolo, "b": corpo, "k": chiavi}
-                        for sez, voci in _GUIDE.items() for (titolo, corpo, chiavi) in voci]
-        cfg["pagine"] = {k: list(v) for k, v in _PAGINE.items()}
-        cfg["tour"] = [list(x) for x in _TOUR]
+        cfg["lang"] = LINGUE_BCP47.get(lg, "it-IT")
+        cfg["rtl"] = lg == "ar" or ("LINGUE_DA_DESTRA" in globals() and lg in LINGUE_DA_DESTRA)
+        cfg["stop"] = list(_STOP_LANG.get(lg, _STOP_LANG["it"]))
+        cfg["ui"] = {k: _u(k) for k in UI_IT if k.startswith(("a_", "i_"))}
+        cfg["guida"] = [{"id": v["id"], "s": v["sez"], "t": v["titolo"], "b": v["corpo"], "k": v["chiavi"]} for v in tutte_voci()]
+        cfg["ctxmap"] = dict(_CTX_GUIDA)
+        cfg["tabs"] = {k: list(v) for k, v in _TAB_CTX.items()}
+        tour = []
+        for k, (t_it, x_it) in enumerate(_TOUR, start=1):
+            x = tr.get(f"tour{k}")
+            tour.append([x[0], x[1]] if x else [t_it, x_it])
+        cfg["tour"] = tour
         cfg["img"] = {"intero": _as_uri("assistente.webp"), "testa": _as_uri("assistente_testa.webp")}
     return cfg
 
 
-def assistente(sezione):
-    """Mostra (o aggiorna) il robottino assistente. Va chiamato dalle pagine principali; invia lo script completo solo la prima
-    volta, poi solo la pagina in cui ci si trova e gli eventuali comandi (Attiva / Disattiva)."""
+def assistente(contesto):
+    """Mostra (o aggiorna) il robottino assistente e gli dice in quale pagina ci si trova (es. «farmacia», «farmacia:tessera»).
+    Lo script completo parte la prima volta (e quando cambia la lingua); poi si manda solo la pagina e gli eventuali comandi."""
     cmd = st.session_state.pop("_asst_cmd", None)
-    completo = not st.session_state.get("_asst_inviato")
-    if not completo and st.session_state.get("_asst_sezione") == sezione and not cmd:
+    lg = _lg()
+    completo = (not st.session_state.get("_asst_inviato")) or st.session_state.get("_asst_lang") != lg
+    if not completo and st.session_state.get("_asst_ctx") == contesto and not cmd:
         return
     st.session_state["_asst_inviato"] = True
-    st.session_state["_asst_sezione"] = sezione
-    cfg = _config_assistente(sezione, completo, cmd)
+    st.session_state["_asst_lang"] = lg
+    st.session_state["_asst_ctx"] = contesto
+    cfg = _config_assistente(contesto, completo, cmd)
     if completo:
         codice = _JS_ASSISTENTE.replace("__CONFIG__", json.dumps(cfg, ensure_ascii=False))
     else:

@@ -112,6 +112,7 @@ def _fa_dialogo(pid, med_id=None):
 
 
 def _fa_modulo_medicinale(pid, med_id=None):
+    _fa_ctx("farmacia:medicinale")
     _fa_assicura_fotocamera()
     if st.button("← Annulla e torna ai medicinali", key="fa_modulo_annulla"):
         st.session_state.pop("fa_modulo_med", None)
@@ -1897,6 +1898,7 @@ def _fa_dialogo_foglio(m):
 
 
 def _fa_modulo_foglio(pid, med_id):
+    _fa_ctx("farmacia:medicinale")
     f = _fa_dati()
     m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), None)
     if not m:
@@ -2145,6 +2147,7 @@ def _fa_tel(numero):
 
 
 def _fa_modulo_dottore(pid):
+    _fa_ctx("farmacia:dottore")
     f = _fa_dati()
     profili = _fa_profili(f)
     profilo = next((p for p in profili if p["id"] == pid), profili[0])
@@ -2398,6 +2401,7 @@ def _fa_html_sanitaria(f, pid, intestatario):
 
 
 def _fa_modulo_sanitario(pid):
+    _fa_ctx("farmacia:sanitaria")
     f = _fa_dati()
     profili = _fa_profili(f)
     profilo = next((p for p in profili if p["id"] == pid), profili[0])
@@ -2791,6 +2795,7 @@ def schermata_documenti():
 
 
 def _doc_modulo(pid, doc_id=None):
+    _fa_ctx("documenti:nuovo")
     f = _fa_dati()
     profili = _fa_profili(f)
     nomi = {p["id"]: p["nome"] for p in profili}
@@ -2953,6 +2958,15 @@ def _fa_guida_avvisi():
     if "guida_avvisi" in globals():
         try:
             guida_avvisi()
+        except Exception:
+            pass
+
+
+def _fa_ctx(contesto):
+    """Dice all'assistente digitale in quale sottopagina ci si trova (assistente.py); se manca, non succede nulla."""
+    if "assistente" in globals():
+        try:
+            assistente(contesto)
         except Exception:
             pass
 
@@ -3180,6 +3194,7 @@ def _fa_dialogo_tessera(pid):
 
 
 def _fa_modulo_tessera(pid):
+    _fa_ctx("farmacia:tessera")
     f = _fa_dati()
     profili = _fa_profili(f)
     profilo = next((p for p in profili if p["id"] == pid), profili[0])

@@ -325,16 +325,108 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nell
     ],
 }
 
-_STOP = set("""il lo la i gli le un uno una di a da in con su per tra fra e o ma che chi cui come dove quando cosa quale quali mi ti si ci
-vi non del dello della dei degli delle al allo alla ai agli alle dal dallo dalla dai dagli dalle nel nello nella nei negli nelle sul sullo
-sulla sui sugli sulle è sono ho hai ha posso puoi fare faccio fa devo voglio vorrei se questo questa quello quella mio mia miei mie tuo tua
-app dell all dal sul nell anche più poi può possibile modo vuole voglio""".split())
+# Codici stabili delle voci (nell'ordine di _GUIDE): servono per collegare le traduzioni. Chi aggiunge una voce italiana
+# aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
+_ID_GUIDA = {
+    "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report".split(),
+    "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
+    "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
+}
+
+GUIDA_TR = {}      # lingua -> {codice: (titolo, spiegazione, parole utili alla ricerca)}  (riempito da guida_xx.py)
+UI_TR = {}         # lingua -> {chiave: testo}                                              (riempito da guida_xx.py)
+
+UI_IT = {
+    "dlg_titolo": "📖 Guida e informazioni",
+    "dlg_hint": "Tocca un argomento per aprirlo. Oppure scrivi qui sotto cosa vuoi sapere.",
+    "dlg_cerca_label": "🔎 Cosa vuoi sapere?",
+    "dlg_cerca_ph": "es. come faccio la foto al retro del documento",
+    "dlg_trovato": "**Ecco cosa ho trovato:**",
+    "dlg_nulla": "Non ho trovato una risposta con queste parole. Prova a scriverlo in modo diverso (per esempio una sola parola: "
+                 "*foto*, *scadenza*, *password*) oppure scrivi un suggerimento nella scheda Messaggi.",
+    "dlg_tutti": "Tutti gli argomenti",
+    "dlg_nota_it": "ℹ️ Le schermate di questa sezione per ora sono in italiano: i nomi dei pulsanti sono scritti come li vedi sullo schermo.",
+    "dlg_asst": "**🤖 Assistente digitale** (il robottino che parla e ti aiuta)",
+    "dlg_on": "✅ Attiva", "dlg_off": "⛔ Disattiva",
+    "info_help": "Tocca per leggere come si usa questa sezione", "info_fallback": "ℹ️ Informazioni e guida",
+    "sez_dispensa": "🏠 Dispensa", "sez_farmacia": "🏥 Farmacia", "sez_documenti": "📁 I miei documenti", "sez_utilita": "🧰 Utilità",
+    # --- assistente digitale
+    "a_aria": "Assistente digitale", "a_rileggi": "📖 Spiegami questa pagina", "a_giro": "🧭 Giro guidato dell'app",
+    "a_novita": "🆕 Cosa c'è di nuovo", "a_mic": "🎤 Fai una domanda", "a_indietro": "◀ Indietro", "a_avanti": "Avanti ▶", "a_fine": "Fine",
+    "a_ph": "Scrivi qui la tua domanda…", "a_chiedi": "Chiedi", "a_voce_on": "🔊 Voce: attiva", "a_voce_off": "🔇 Voce: spenta",
+    "a_silenzio": "⏹ Silenzio", "a_off": "⛔ Disattiva assistente", "a_ascolto_btn": "⏹ Sto ascoltando…",
+    "a_ascolto_t": "Ti ascolto", "a_ascolto_x": "Parla ora: per esempio «come aggiungo una foto al documento?»",
+    "a_mic_t": "Microfono", "a_mic_no": "Su questo telefono non riesco ad ascoltarti: scrivi la domanda qui sotto.",
+    "a_mic_perm": "Consenti l'uso del microfono al browser per parlare con me.",
+    "a_mic_err": "Non riesco a usare la voce ora: scrivi la domanda qui sotto.",
+    "a_nulla_t": "Non ho sentito niente", "a_nulla_x": "Riprova: tocca il microfono e parla.",
+    "a_dimmi_t": "Dimmi pure", "a_dimmi_x": "Scrivi o dì cosa vuoi sapere.",
+    "a_off_t": "Vuoi che mi disattivi?",
+    "a_off_x": "Tocca il pulsante «⛔ Disattiva assistente» qui sotto. Mi riattivi dal pulsante rosso «Clicca per informazioni».",
+    "a_trov_t": "Non ho trovato la risposta",
+    "a_trov_x": "Prova con altre parole (per esempio una sola: foto, scadenza, password) oppure scegli un argomento qui sotto.",
+    "a_nov_none_t": "Novità", "a_nov_none_x": "Per ora non ci sono novità recenti. Ti avviso io quando ne arrivano!",
+    "a_nov_voce": "Ecco le novità.", "a_nov_trovi": "La trovi così:", "a_nov_t": "Cosa c'è di nuovo",
+    "a_fine_t": "Fine del giro", "a_fine_x": "Ecco fatto! Se ti serve altro, chiedimi.",
+    "a_toast_off": "Assistente disattivato. Lo riattivi da «Clicca per informazioni».", "a_toast_on": "Assistente attivo: tocca il robottino.",
+    "a_vedi": "Tocca un argomento qui sotto per saperne di più.",
+    # parole che l'assistente riconosce nelle domande (separate da spazio)
+    "i_silenzio": "silenzio zitto basta smetti", "i_off": "disattiv spegn", "i_ass": "assistent robot",
+    "i_novita": "novit nuovo nuove aggiornament", "i_giro": "giro tutorial guida inizia", "i_saluto": "ciao salve buongiorno buonasera aiuto",
+}
+LINGUE_BCP47 = {"it": "it-IT", "en": "en-GB", "es": "es-ES", "fr": "fr-FR", "de": "de-DE", "ro": "ro-RO", "ar": "ar-SA"}
+
+_STOP_LANG = {
+    "it": "il lo la i gli le un uno una di a da in con su per tra fra e o ma che chi cui come dove quando cosa quale quali mi ti si ci vi non "
+          "del dello della dei degli delle al allo alla ai agli alle dal dallo dalla dai dagli dalle nel nello nella nei negli nelle sul sullo "
+          "sulla sui sugli sulle è sono ho hai ha posso puoi fare faccio fa devo voglio vorrei se questo questa quello quella mio mia miei mie "
+          "tuo tua app dell all anche più poi può possibile modo vuole".split(),
+    "en": "the a an of to in on for and or is are how do does i can my me what where when with from this that it be you your app".split(),
+    "es": "el la los las un una unos unas de del al a en con por para y o que como donde cuando cual mi mis tu tus se es son puedo "
+          "puedes quiero hacer lo le app".split(),
+    "fr": "le la les un une des de du au aux en et ou que qui comment ou quand quel quelle mon ma mes ton ta tes je peux puis veux "
+          "faire est sont dans sur pour avec app".split(),
+    "de": "der die das ein eine einen dem den des und oder wie wo wann was welche mein meine dein deine ich kann kannst will "
+          "machen ist sind in auf fur mit von zu app".split(),
+    "ro": "un o niste de la in pe cu si sau ca cum unde cand ce care meu mea tau mele pot poti vreau fac este sunt din pentru app".split(),
+    "ar": "في من على إلى عن مع هل ما كيف أين متى هذا هذه أن أنا أريد يمكن لي".split(),
+}
+
+
+def _lg():
+    """La lingua scelta all'ingresso (it, en, es, fr, de, ro, ar)."""
+    try:
+        return lingua()
+    except Exception:
+        return "it"
+
+
+def _u(chiave):
+    """Un testo dell'interfaccia della guida / dell'assistente nella lingua scelta (se manca la traduzione, in italiano)."""
+    return UI_TR.get(_lg(), {}).get(chiave) or UI_IT.get(chiave, chiave)
+
+
+def voci_guida(sezione):
+    """Le voci della guida di una sezione nella lingua scelta: lista di dict {id, sez, titolo, corpo, chiavi}."""
+    lg = _lg()
+    tr = GUIDA_TR.get(lg, {}) if lg != "it" else {}
+    out = []
+    for codice, (titolo, corpo, chiavi) in zip(_ID_GUIDA.get(sezione, []), _GUIDE.get(sezione, [])):
+        x = tr.get(codice)
+        out.append({"id": codice, "sez": sezione, "titolo": x[0] if x else titolo, "corpo": x[1] if x else corpo,
+                    "chiavi": ((x[2] + " " + chiavi) if x and len(x) > 2 else chiavi)})
+    return out
+
+
+def tutte_voci():
+    return [v for sez in _GUIDE for v in voci_guida(sez)]
 
 
 def _norm(testo):
     testo = unicodedata.normalize("NFD", str(testo).lower())
-    testo = "".join(c for c in testo if unicodedata.category(c) != "Mn")
-    return re.sub(r"[^a-z0-9]+", " ", testo)
+    testo = "".join(c for c in testo if not unicodedata.category(c).startswith("M"))
+    return re.sub(r"[\W_]+", " ", testo)
 
 
 def _stem(parola):
@@ -342,32 +434,31 @@ def _stem(parola):
 
 
 def _parole(testo):
-    return {_stem(p) for p in _norm(testo).split() if len(p) >= 3 and p not in _STOP}
+    stop = set(_STOP_LANG.get(_lg(), _STOP_LANG["it"]))
+    minimo = 2 if _lg() == "ar" else 3
+    ar = _lg() == "ar"
+    return {_stem(re.sub(r"^(وال|بال|كال|لل|ال)", "", p) if ar and len(p) > 4 else p)
+            for p in _norm(testo).split() if len(p) >= minimo and p not in stop}
 
 
 def _combacia(q, insieme):
     return any(w.startswith(q) or (len(w) >= 4 and q.startswith(w)) for w in insieme)
 
 
-_INDICE = {}
-
-
 def _indice():
-    if not _INDICE:
-        for sezione, voci in _GUIDE.items():
-            for i, (titolo, corpo, chiavi) in enumerate(voci):
-                _INDICE[(sezione, i)] = (_parole(titolo), _parole(chiavi), _parole(corpo))
-    return _INDICE
+    """L'indice di ricerca nella lingua scelta (si ricostruisce a ogni esecuzione: la lingua può cambiare)."""
+    return {(v["sez"], v["id"]): (v, _parole(v["titolo"]), _parole(v["chiavi"]), _parole(v["corpo"])) for v in tutte_voci()}
 
 
 def cerca_nella_guida(domanda, massimo=4, preferita=None):
-    """Le voci della guida più adatte alla domanda: lista di (sezione, indice, titolo, spiegazione).
+    """Le voci della guida più adatte alla domanda: lista di (sezione, codice, titolo, spiegazione).
     Le voci della sezione in cui ci si trova (preferita) passano davanti a parità di risultato."""
     stems = [q for q in _parole(domanda) if q]
     if not stems:
         return []
+    indice = _indice()
     punteggi = []
-    for (sezione, i), (p_tit, p_chi, p_cor) in _indice().items():
+    for chiave, (v, p_tit, p_chi, p_cor) in indice.items():
         punti = 0
         trovate = 0
         for q in stems:
@@ -381,22 +472,32 @@ def cerca_nella_guida(domanda, massimo=4, preferita=None):
                 continue
             trovate += 1
         if punti:
-            punteggi.append((punti + trovate + (1 if sezione == preferita else 0), sezione, i))
-    punteggi.sort(key=lambda x: (-x[0], x[1], x[2]))
+            punteggi.append((punti + trovate + (1 if chiave[0] == preferita else 0), chiave))
+    punteggi.sort(key=lambda x: (-x[0], x[1]))
     if not punteggi:
         return []
     migliore = punteggi[0][0]
     risultati = []
-    for punti, sezione, i in punteggi[:massimo]:
+    for punti, chiave in punteggi[:massimo]:
         if punti * 2 < migliore:
             continue
-        titolo, corpo, _ = _GUIDE[sezione][i]
-        risultati.append((sezione, i, titolo, corpo))
+        v = indice[chiave][0]
+        risultati.append((v["sez"], v["id"], v["titolo"], v["corpo"]))
     return risultati
 
 
 def guida_avvisi():
-    """Spiegazione passo per passo di Telegram ed email, da mostrare dentro «Scegli come ricevere gli avvisi»."""
+    """Spiegazione passo per passo di Telegram ed email, da mostrare dentro «Scegli come ricevere gli avvisi» (nella lingua scelta)."""
+    voce = next((v for v in voci_guida("farmacia") if v["id"] == "f_avvisi"), None)
+    parti = (voce["corpo"].split("\n### ") if voce else [])
+    if len(parti) >= 3:
+        nomi = [p.split("\n", 1)[0].strip() for p in parti[1:3]]
+        t_tg, t_ml = st.tabs(nomi)
+        with t_tg:
+            st.markdown(parti[1].split("\n", 1)[1])
+        with t_ml:
+            st.markdown(parti[2].split("\n", 1)[1])
+        return
     t_tg, t_ml = st.tabs(["📱 Come attivo Telegram", "✉️ Come attivo l'email"])
     with t_tg:
         st.markdown(_TESTO_TELEGRAM)
@@ -431,43 +532,44 @@ def _info_uri():
     return _info_uri_cache(data)
 
 
-@st.dialog("📖 Guida e informazioni", width="large")
+@st.dialog(UI_IT["dlg_titolo"], width="large")
 def _dialogo_info(sezione):
-    st.markdown(f"### {_NOMI_SEZIONI.get(sezione, sezione)}")
-    st.caption("Tocca un argomento per aprirlo. Oppure scrivi qui sotto cosa vuoi sapere.")
-    domanda = st.text_input("🔎 Cosa vuoi sapere?", key=f"guida_cerca_{sezione}",
-                            placeholder="es. come faccio la foto al retro del documento",
+    if "LINGUE_DA_DESTRA" in globals() and _lg() in LINGUE_DA_DESTRA or _lg() == "ar":
+        st.markdown("<style>[data-testid='stDialog'] [data-testid='stVerticalBlock']{direction:rtl;text-align:right}</style>",
+                    unsafe_allow_html=True)
+    nome = _u("sez_" + sezione)
+    st.markdown(f"### {nome}")
+    st.caption(_u("dlg_hint"))
+    if _lg() != "it" and sezione in ("farmacia", "documenti", "utilita"):
+        st.info(_u("dlg_nota_it"))
+    domanda = st.text_input(_u("dlg_cerca_label"), key=f"guida_cerca_{sezione}", placeholder=_u("dlg_cerca_ph"),
                             label_visibility="collapsed")
     if domanda.strip():
         risultati = cerca_nella_guida(domanda, preferita=sezione)
         if not risultati:
-            st.warning("Non ho trovato una risposta con queste parole. Prova a scriverlo in modo diverso "
-                       "(per esempio una sola parola: *foto*, *scadenza*, *password*) oppure scrivi un suggerimento "
-                       "nella scheda Messaggi.")
+            st.warning(_u("dlg_nulla"))
         else:
-            st.markdown("**Ecco cosa ho trovato:**")
+            st.markdown(_u("dlg_trovato"))
             for sez, _i, titolo, corpo in risultati:
                 with st.container(border=True):
-                    nome_sez = _NOMI_SEZIONI.get(sez, sez)
-                    st.markdown(f"**{titolo}**  \n<span style='opacity:.7'>{html.escape(nome_sez)}</span>",
+                    st.markdown(f"**{titolo}**  \n<span style='opacity:.7'>{html.escape(_u('sez_' + sez))}</span>",
                                 unsafe_allow_html=True)
                     st.markdown(corpo)
         st.divider()
     if "assistente" in globals():
         with st.container(border=True):
-            st.markdown("**🤖 Assistente digitale** (il robottino che parla e ti aiuta)")
+            st.markdown(_u("dlg_asst"))
             c_on, c_off = st.columns(2)
-            if c_on.button("✅ Attiva", key=f"asst_on_{sezione}", width="stretch"):
+            if c_on.button(_u("dlg_on"), key=f"asst_on_{sezione}", width="stretch"):
                 st.session_state["_asst_cmd"] = "on"
                 st.rerun()
-            if c_off.button("⛔ Disattiva", key=f"asst_off_{sezione}", width="stretch"):
+            if c_off.button(_u("dlg_off"), key=f"asst_off_{sezione}", width="stretch"):
                 st.session_state["_asst_cmd"] = "off"
                 st.rerun()
-    st.markdown(f"**Tutti gli argomenti · {_NOMI_SEZIONI.get(sezione, sezione)}**")
-
-    for titolo, corpo, _chiavi in _GUIDE.get(sezione, []):
-        with st.expander(titolo):
-            st.markdown(corpo)
+    st.markdown(f"**{_u('dlg_tutti')} · {nome}**")
+    for v in voci_guida(sezione):
+        with st.expander(v["titolo"]):
+            st.markdown(v["corpo"])
 
 
 # Banner «La nostra dispensa» più grande (si applica solo nella Dispensa, sopra il pulsante Informazioni)
@@ -517,7 +619,7 @@ def pulsante_info(sezione):
             f".st-key-{chiave} button p{{font-size:0 !important}}"
             "</style>", unsafe_allow_html=True)
     with st.container(key=chiave):
-        premuto = st.button("Informazioni" if uri else "ℹ️ Informazioni e guida", key=f"ginfo_btn_{sezione}",
-                            help="Tocca per leggere come si usa questa sezione", width="stretch")
+        premuto = st.button("Informazioni" if uri else _u("info_fallback"), key=f"ginfo_btn_{sezione}",
+                            help=_u("info_help"), width="stretch")
     if premuto:
         _dialogo_info(sezione)
