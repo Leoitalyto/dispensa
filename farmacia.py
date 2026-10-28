@@ -122,6 +122,18 @@ def _fa_modulo_medicinale(pid, med_id=None):
     profili = _fa_profili(f)
     m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), {}) if med_id else {}
     nomi = {p["id"]: p["nome"] for p in profili}
+    if not med_id and "fam_catalogo_medicinali" in globals():
+        # i medicinali già in casa (dei profili e della famiglia): si sceglie e si ricopiano nome, principio attivo, dosaggio e forma
+        try:
+            casa = fam_catalogo_medicinali(f, pid)
+        except Exception:
+            casa = []
+        if casa:
+            etichette_casa = ["— scrivo un medicinale nuovo —"] + [c[0] for c in casa]
+            scelta_casa = st.selectbox("📦 Già in casa: scegli un medicinale per non riscriverlo", etichette_casa, key="fa_casa_" + str(pid))
+            if scelta_casa != etichette_casa[0]:
+                m = dict(casa[etichette_casa.index(scelta_casa) - 1][1])
+                st.caption("Ho copiato nome, principio attivo, dosaggio e forma: controlla, aggiungi scadenza e quantità, poi salva.")
     # la foto sta in cima, come nella dispensa: fotocamera posteriore, sfondo tolto, righello e ritaglio
     st.markdown("**📷 Foto della confezione** (facoltativa)")
     ck = "fa_" + (med_id or "nuovo")
@@ -312,6 +324,9 @@ def schermata_farmacia():
     if st.session_state.get("sezione_home") == "documenti":
         schermata_documenti()
         return
+    if st.session_state.get("fa_famiglia") and "schermata_famiglia" in globals():
+        schermata_famiglia()
+        return
     if st.button("← Torna alla dispensa", key="fa_indietro"):
         st.session_state.pop("fa_modulo_med", None)
         st.session_state.pop("fa_modulo_foglio", None)
@@ -322,6 +337,10 @@ def schermata_farmacia():
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
                 unsafe_allow_html=True)
+    if "fam_pulsante_capo" in globals():
+        fam_pulsante_capo()
+    if "fam_avviso_membro" in globals():
+        fam_avviso_membro()
     if st.session_state.get("fa_msg"):
         _msg = st.session_state.pop("fa_msg")
         (st.warning if _msg.startswith("⚠️") else st.success)(_msg)
@@ -1661,6 +1680,107 @@ def _fa_scheda_gruppo(nome, gruppo):
                 unsafe_allow_html=True)
 
 
+def _fa_med_dettaglio_corpo(med_id, pid):
+    f = _fa_dati()
+    m = next((x for x in f.get("medicinali", []) if x["id"] == med_id), None)
+    if not m:
+        st.error("Non trovo più questo medicinale.")
+        return
+    oggi_ = oggi()
+    st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
+
+    # --- tutti i dati del medicinale
+    nomi = {p_["id"]: p_["nome"] for p_ in _fa_profili(f)}
+    stato, giorni = stato_scadenza(m.get("scadenza"), oggi_)
+    quantita = f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}".strip()
+    dati = [("Nome", m.get("nome")), ("Marca", m.get("marca")), ("Principio attivo", m.get("principio")), ("Dosaggio", m.get("dosaggio")),
+            ("Forma", m.get("forma")), ("Quantità", quantita), ("Scadenza", data_it(m["scadenza"]) if m.get("scadenza") else None),
+            ("Stato", f"{ICONE[stato]} {testo_giorni(stato, giorni)}" if m.get("scadenza") else None),
+            ("Data di acquisto", data_it(m["acquisto"]) if m.get("acquisto") else None),
+            ("Per chi è", nomi.get(m.get("profilo", pid))), ("Note", m.get("note")),
+            ("Foglio illustrativo", "disponibile" if (m.get("foglio") or m.get("foglio_link")) else "non ancora aggiunto")]
+    righe = "".join(f"<tr><td style='padding:4px 10px 4px 0;opacity:.7;white-space:nowrap;vertical-align:top'>{html.escape(k)}</td>"
+                    f"<td style='padding:4px 0'><b>{html.escape(str(v))}</b></td></tr>" for k, v in dati if v)
+    st.markdown(f"<table style='border-collapse:collapse;width:100%'>{righe}</table>", unsafe_allow_html=True)
+
+    # --- terapie collegate a questo medicinale
+    ter = [t_ for t_ in f.get("terapie", []) if t_.get("med") == med_id]
+    if ter:
+        st.markdown("**🗓️ Terapie con questo medicinale**")
+        for t_ in ter:
+            gg = ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", []) if 0 <= g < len(GIORNI_SETT)) or "tutti i giorni"
+            st.markdown(f"• {STATI_TER.get(t_.get('stato', 'attiva'), '')} · {gg} · " + (", ".join(t_.get("orari", [])) or "senza orari"))
+
+    # --- foto grande e foglio illustrativo (bugiardino): un tasto per vederli
+    if m.get("foto"):
+        k_f = f"fa_visfoto_{med_id}"
+        vis_f = st.session_state.get(k_f, False)
+        st.button("🙈 Nascondi la foto grande" if vis_f else "🔍 Mostra la foto grande", key=f"fa_btnfoto_{med_id}", width="stretch",
+                  on_click=_doc_alterna, args=(k_f,))
+        if vis_f:
+            g = m.get("foto_grande")
+            dati_f = None
+            if g:
+                d = carica_dati(crea_archivio(), _fa_percorso_doc(g["id"]))
+                if d.get("b64"):
+                    dati_f = base64.b64decode(d["b64"])
+            if dati_f is None and m.get("foto") and "," in m["foto"]:
+                dati_f = base64.b64decode(m["foto"].split(",", 1)[1])
+            if dati_f:
+                st.image(dati_f)
+    ha_foglio = bool(m.get("foglio") or m.get("foglio_link"))
+    if ha_foglio:
+        k_g = f"fa_visfogl_{med_id}"
+        vis_g = st.session_state.get(k_g, False)
+        st.button("🙈 Nascondi il foglio illustrativo" if vis_g else "📖 Apri il foglio illustrativo (bugiardino)", key=f"fa_btnfogl_{med_id}",
+                  type="primary", width="stretch", on_click=_doc_alterna, args=(k_g,))
+        if vis_g:
+            if m.get("foglio_link"):
+                st.link_button("🔗 Apri il foglio illustrativo online", m["foglio_link"], width="stretch")
+            for a_ in m.get("foglio", []):
+                d = carica_dati(crea_archivio(), _fa_percorso_doc(a_["id"]))
+                if not d.get("b64"):
+                    st.warning(f"Non trovo il file «{a_['nome']}».")
+                    continue
+                dati_a = base64.b64decode(d["b64"])
+                if d.get("mime", "").startswith("image/"):
+                    st.image(dati_a)
+                else:
+                    st.download_button("📄 Apri il PDF: " + a_["nome"], dati_a, file_name=a_["nome"], mime="application/pdf",
+                                       width="stretch", key="fa_dettfogl_dl_" + a_["id"])
+    if st.button("✏️ Cambia il foglio illustrativo" if ha_foglio else "➕ Aggiungi il foglio illustrativo", key=f"fa_fogl_dett_{med_id}", width="stretch"):
+        st.session_state["fa_modulo_foglio"] = {"pid": m.get("profilo", pid), "med_id": med_id}
+        st.rerun()
+    st.caption("📖 Controindicazioni e avvertenze sono nel foglio illustrativo ufficiale: leggilo o chiedi al medico o al farmacista. "
+               "L'app non valuta se un medicinale va bene per una malattia.")
+
+    # --- modifica ed eliminazione
+    st.divider()
+    if st.session_state.get(f"fa_conf_{med_id}"):
+        st.warning(f"Vuoi eliminare **{m.get('nome', 'questo medicinale')}**?")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("Sì, elimina", type="primary", key=f"fa_si_{med_id}", width="stretch"):
+            try:
+                _fa_cancella_medicinali([med_id])
+            except Exception as e:
+                st.error(f"Non sono riuscito a eliminarlo: {e}")
+            else:
+                st.session_state.pop(f"fa_conf_{med_id}", None)
+                st.session_state["fa_msg"] = "🗑️ Medicinale eliminato."
+                st.rerun()
+        s2.button("Annulla", key=f"fa_no_{med_id}", width="stretch", on_click=_doc_imposta, args=(f"fa_conf_{med_id}", None))
+    else:
+        b1, b2 = st.columns(2, gap="small")
+        if b1.button("✏️ Modifica", key=f"fa_dmo_{med_id}", width="stretch"):
+            _fa_dialogo(pid, med_id)
+        b2.button("🗑️ Elimina", key=f"fa_del_{med_id}", width="stretch", on_click=_doc_imposta, args=(f"fa_conf_{med_id}", True))
+
+
+def _fa_med_dettaglio(med_id, pid):
+    """Apre il dettaglio completo del medicinale: dati, foto, foglio illustrativo (bugiardino), modifica ed eliminazione."""
+    st.dialog("💊 Medicinale", width="large")(lambda: _fa_med_dettaglio_corpo(med_id, pid))()
+
+
 def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
     if vista == "Tabella":
         sfondi = {"rosso": "background-color:#ffcdd2", "arancione": "background-color:#ffe0b2",
@@ -1707,22 +1827,19 @@ def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
         if len(spunte) > 1:
             st.caption("Spunta una sola riga da modificare.")
         return
+    st.markdown("""<style>
+[class*="st-key-fa_box_"]{position:relative}
+[class*="st-key-fa_apri_"]{position:absolute !important;top:0;left:0;right:0;bottom:0;z-index:3;margin:0 !important}
+[class*="st-key-fa_apri_"] [data-testid="stButton"],[class*="st-key-fa_apri_"] button{width:100%;height:100%;min-height:0}
+[class*="st-key-fa_apri_"] button{opacity:0;cursor:pointer}
+.fa-apri{margin-top:8px;font-size:.8rem;font-weight:700;opacity:.65;text-align:center;clear:both}
+</style>""", unsafe_allow_html=True)
     for m in visibili:
-        with st.container(border=True):
-            st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m)), unsafe_allow_html=True)
-            if m.get("foto") and st.button("🔍 Ingrandisci la foto", key="fa_foto_" + m["id"], width="stretch"):
-                _fa_dialogo_foto(m)
-            if m.get("foglio") or m.get("foglio_link"):
-                if st.button("📖 Apri il foglio illustrativo", key="fa_fogl_" + m["id"], type="primary", width="stretch"):
-                    _fa_dialogo_foglio(m)
-            elif st.button("📖 Aggiungi il foglio illustrativo", key="fa_fogl_" + m["id"], width="stretch"):
-                st.session_state["fa_modulo_foglio"] = {"pid": pid, "med_id": m["id"]}
-                st.rerun()
-            b1, b2 = st.columns(2, gap="small")
-            if b1.button("Elimina", icon=":material/delete:", key="fa_el_" + m["id"], width="stretch"):
-                _fa_dialogo_elimina(m["id"], m.get("nome", ""))
-            if b2.button("Modifica", icon=":material/edit:", key="fa_mo_" + m["id"], width="stretch"):
-                _fa_dialogo(pid, m["id"])
+        with st.container(border=True, key="fa_box_" + m["id"]):
+            st.markdown(_fa_card(m, oggi_, _fa_conflitti(f, pid, m))
+                        + "<div class='fa-apri'>👆 Tocca per aprire: foglio illustrativo, dettagli, modifica</div>", unsafe_allow_html=True)
+            if st.button("Apri", key="fa_apri_" + m["id"], width="stretch"):               # il pulsante copre tutta la scheda (invisibile)
+                _fa_med_dettaglio(m["id"], pid)
 
 
 # =====================================================================

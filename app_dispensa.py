@@ -24,6 +24,25 @@ _AGGANCI = {
          "# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n"
          'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'),
     ],
+    "parte4.py": [
+        # scheda Utenti: l'interruttore «Parte della famiglia» e la spiegazione
+        ('        st.caption(t("Al primo accesso la persona può scegliere una password sua."))\n',
+         '        st.caption(t("Al primo accesso la persona può scegliere una password sua."))\n'
+         '        st.caption("👨‍👩‍👧 " + t("Con «Parte della famiglia» vedi la Farmacia di quella persona nel Controllo famiglia: lei lo vede scritto nella sua Farmacia."))\n'),
+        ('                if u.get("deve_cambiare"):\n                    st.caption("🔑 " + t("Non ha ancora scelto una sua password."))\n',
+         '                if u.get("deve_cambiare"):\n                    st.caption("🔑 " + t("Non ha ancora scelto una sua password."))\n'
+         '                _in_fam = st.toggle("👨‍👩‍👧 " + t("Parte della famiglia"), value=bool(u.get("famiglia")), key=f"fam_{u[\'id\']}")\n'
+         '                if _in_fam != bool(u.get("famiglia")):\n'
+         '                    def _imposta_fam(d, uid=u["id"], val=_in_fam):\n'
+         '                        for x in d.get("utenti", []):\n'
+         '                            if x["id"] == uid:\n'
+         '                                x["famiglia"] = val\n'
+         '                    try:\n'
+         '                        salva_file("utenti.json", _imposta_fam, f"Famiglia: {u[\'nome\']}")\n'
+         '                        st.rerun()\n'
+         '                    except Exception as e:\n'
+         '                        st.error(t("Non sono riuscito a salvare: {e}", e=e))\n'),
+    ],
 }
 
 
@@ -42,7 +61,7 @@ def _carica(percorso):
     exec(compile(_testo, percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "utilita.py", "assistente.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "utilita.py", "assistente.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
