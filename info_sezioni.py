@@ -394,7 +394,7 @@ _STOP_LANG = {
 }
 
 
-def _lg():
+def _lingua_guida():
     """La lingua scelta all'ingresso (it, en, es, fr, de, ro, ar)."""
     try:
         return lingua()
@@ -404,12 +404,12 @@ def _lg():
 
 def _u(chiave):
     """Un testo dell'interfaccia della guida / dell'assistente nella lingua scelta (se manca la traduzione, in italiano)."""
-    return UI_TR.get(_lg(), {}).get(chiave) or UI_IT.get(chiave, chiave)
+    return UI_TR.get(_lingua_guida(), {}).get(chiave) or UI_IT.get(chiave, chiave)
 
 
 def voci_guida(sezione):
     """Le voci della guida di una sezione nella lingua scelta: lista di dict {id, sez, titolo, corpo, chiavi}."""
-    lg = _lg()
+    lg = _lingua_guida()
     tr = GUIDA_TR.get(lg, {}) if lg != "it" else {}
     out = []
     for codice, (titolo, corpo, chiavi) in zip(_ID_GUIDA.get(sezione, []), _GUIDE.get(sezione, [])):
@@ -433,10 +433,10 @@ def _stem(parola):
     return re.sub(r"[aeiou]+$", "", parola) if len(parola) > 4 else parola
 
 
-def _parole(testo):
-    stop = set(_STOP_LANG.get(_lg(), _STOP_LANG["it"]))
-    minimo = 2 if _lg() == "ar" else 3
-    ar = _lg() == "ar"
+def _parole_guida(testo):
+    stop = set(_STOP_LANG.get(_lingua_guida(), _STOP_LANG["it"]))
+    minimo = 2 if _lingua_guida() == "ar" else 3
+    ar = _lingua_guida() == "ar"
     return {_stem(re.sub(r"^(وال|بال|كال|لل|ال)", "", p) if ar and len(p) > 4 else p)
             for p in _norm(testo).split() if len(p) >= minimo and p not in stop}
 
@@ -447,13 +447,13 @@ def _combacia(q, insieme):
 
 def _indice():
     """L'indice di ricerca nella lingua scelta (si ricostruisce a ogni esecuzione: la lingua può cambiare)."""
-    return {(v["sez"], v["id"]): (v, _parole(v["titolo"]), _parole(v["chiavi"]), _parole(v["corpo"])) for v in tutte_voci()}
+    return {(v["sez"], v["id"]): (v, _parole_guida(v["titolo"]), _parole_guida(v["chiavi"]), _parole_guida(v["corpo"])) for v in tutte_voci()}
 
 
 def cerca_nella_guida(domanda, massimo=4, preferita=None):
     """Le voci della guida più adatte alla domanda: lista di (sezione, codice, titolo, spiegazione).
     Le voci della sezione in cui ci si trova (preferita) passano davanti a parità di risultato."""
-    stems = [q for q in _parole(domanda) if q]
+    stems = [q for q in _parole_guida(domanda) if q]
     if not stems:
         return []
     indice = _indice()
@@ -534,13 +534,13 @@ def _info_uri():
 
 @st.dialog(UI_IT["dlg_titolo"], width="large")
 def _dialogo_info(sezione):
-    if "LINGUE_DA_DESTRA" in globals() and _lg() in LINGUE_DA_DESTRA or _lg() == "ar":
+    if "LINGUE_DA_DESTRA" in globals() and _lingua_guida() in LINGUE_DA_DESTRA or _lingua_guida() == "ar":
         st.markdown("<style>[data-testid='stDialog'] [data-testid='stVerticalBlock']{direction:rtl;text-align:right}</style>",
                     unsafe_allow_html=True)
     nome = _u("sez_" + sezione)
     st.markdown(f"### {nome}")
     st.caption(_u("dlg_hint"))
-    if _lg() != "it" and sezione in ("farmacia", "documenti", "utilita"):
+    if _lingua_guida() != "it" and sezione in ("farmacia", "documenti", "utilita"):
         st.info(_u("dlg_nota_it"))
     domanda = st.text_input(_u("dlg_cerca_label"), key=f"guida_cerca_{sezione}", placeholder=_u("dlg_cerca_ph"),
                             label_visibility="collapsed")

@@ -409,7 +409,7 @@ def _novita_recenti():
     try:
         from datetime import date as _d
         oggi_ = oggi() if "oggi" in globals() else _d.today()
-        tr = GUIDA_TR.get(_lg(), {}) if _lg() != "it" else {}
+        tr = GUIDA_TR.get(_lingua_guida(), {}) if _lingua_guida() != "it" else {}
         out = []
         for k, n in enumerate(_NOVITA, start=1):
             if (oggi_ - _d.fromisoformat(n[0])).days <= 14:
@@ -426,7 +426,7 @@ def _config_assistente(contesto, completo, cmd):
     if cmd:
         cfg["cmd"] = {"id": str(__import__("time").time()), "az": cmd}
     if completo:
-        lg = _lg()
+        lg = _lingua_guida()
         tr = GUIDA_TR.get(lg, {}) if lg != "it" else {}
         cfg["versione"] = _VERSIONE_ASSISTENTE
         cfg["lang"] = LINGUE_BCP47.get(lg, "it-IT")
@@ -449,7 +449,7 @@ def assistente(contesto):
     """Mostra (o aggiorna) il robottino assistente e gli dice in quale pagina ci si trova (es. «farmacia», «farmacia:tessera»).
     Lo script completo parte la prima volta (e quando cambia la lingua); poi si manda solo la pagina e gli eventuali comandi."""
     cmd = st.session_state.pop("_asst_cmd", None)
-    lg = _lg()
+    lg = _lingua_guida()
     completo = (not st.session_state.get("_asst_inviato")) or st.session_state.get("_asst_lang") != lg
     if not completo and st.session_state.get("_asst_ctx") == contesto and not cmd:
         return
