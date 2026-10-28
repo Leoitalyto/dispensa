@@ -94,7 +94,7 @@ Tap one to open it; to come back tap **← Back to pantry**. On every page, at t
     "d_spesa": ("🛒 Shopping list and flyers",
         """- When a product **runs out** it goes by itself to the **🛒 Shopping** tab.
 - In the Shopping tab you can tap **I used one** to subtract a unit.
-- On the product card, to the right of the quantity, there is the link to the **flyers** of supermarkets, hypermarkets and discount stores: choose the **city**, look at the offers and tap the button to put the product in the **shopping list**, with the shop name.""",
+- On the product card, to the right of the quantity, there is the link to the **flyers** of supermarkets, hypermarkets and discount stores: choose the **country** (it starts from the one of your language) and write the **city**, look at the offers and tap the button to put the product in the **shopping list**, with the shop name.""",
         "shopping list buy flyers offers supermarket used finished city shop"),
     "d_gestisci": ("✏️ Manage many products at once",
         """The **✏️ Manage** tab is for changing **quantity, expiry dates and notes** of many products in one go, without opening them one by one.""",
@@ -174,7 +174,7 @@ You can reuse a photo already saved from the **photo archive**. You can attach t
 The links are separate for each family profile.""",
         "health card tessera sanitaria electronic health file fse link address vaccinations online deductible medical expenses front back badge"),
     "f_aperta": ("🔎 Find an open pharmacy",
-        """Tap the big button **🔎 Trova una farmacia aperta** at the top: the app looks for pharmacies open near you.""",
+        """Tap the big button at the top (**Find an open pharmacy**): choose the **country** (it starts from the one of your language) and write **any city or postcode**. The app looks for pharmacies open near that place.""",
         "pharmacy open find search nearby night"),
     "f_avvisi": ("🔔 Alerts on Telegram, email and SMS",
         """Alerts remind you of expiry dates (at 60, 30, 14 and 7 days, 1 day and the day itself) and, if you want, of the time of your therapies. Choose **one or more channels**.

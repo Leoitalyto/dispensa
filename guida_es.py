@@ -94,7 +94,7 @@ Toca uno para abrirlo; para volver toca **← Volver a la despensa**. En cada p�
     "d_spesa": ("🛒 Lista de la compra y folletos",
         """- Cuando un producto **se acaba** va solo a la pestaña **🛒 Compra**.
 - En la pestaña Compra puedes tocar **He consumido uno** para restar una unidad.
-- En la ficha del producto, a la derecha de la cantidad, está el enlace a los **folletos** de supermercados, hipermercados y descuentos: elige la **ciudad**, mira las ofertas y toca el botón para poner el producto en la **lista de la compra**, con el nombre de la tienda.""",
+- En la ficha del producto, a la derecha de la cantidad, está el enlace a los **folletos** de supermercados, hipermercados y descuentos: elige el **país** (parte del de tu idioma) y escribe la **ciudad**, mira las ofertas y toca el botón para poner el producto en la **lista de la compra**, con el nombre de la tienda.""",
         "compra lista de la compra comprar folletos ofertas supermercado consumido acabado ciudad tienda"),
     "d_gestisci": ("✏️ Gestionar muchos productos a la vez",
         """La pestaña **✏️ Gestionar** sirve para cambiar de una vez **cantidad, caducidades y notas** de muchos productos, sin abrirlos uno por uno.""",
@@ -174,7 +174,7 @@ Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicam
 Los enlaces están separados para cada perfil de la familia.""",
         "tarjeta sanitaria tessera expediente sanitario electronico fse enlace link direccion vacunas en linea gastos deducibles anverso reverso insignia"),
     "f_aperta": ("🔎 Encuentra una farmacia abierta",
-        """Toca el botón grande **🔎 Trova una farmacia aperta** de arriba: la app busca las farmacias abiertas cerca de ti.""",
+        """Toca el botón grande de arriba (**Encuentra una farmacia abierta**): elige el **país** (parte del de tu idioma) y escribe **cualquier ciudad o código postal**. La app busca las farmacias abiertas cerca de ese lugar.""",
         "farmacia abierta encontrar buscar cerca guardia noche"),
     "f_avvisi": ("🔔 Avisos por Telegram, correo y SMS",
         """Los avisos te recuerdan las caducidades (a 60, 30, 14 y 7 días, 1 día y el mismo día) y, si quieres, la hora de las terapias. Elige **uno o más canales**.

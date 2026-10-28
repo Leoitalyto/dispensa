@@ -94,7 +94,7 @@ Atinge una ca s-o deschizi; ca să te întorci atinge **← Înapoi la cămară*
     "d_spesa": ("🛒 Lista de cumpărături și pliante",
         """- Când un produs **se termină** merge singur în fila **🛒 Cumpărături**.
 - În fila Cumpărături poți atinge **Am consumat unul** ca să scazi o bucată.
-- Pe fișa produsului, în dreapta cantității, este legătura către **pliantele** supermarketurilor, hipermarketurilor și discounterilor: alege **orașul**, uită-te la oferte și atinge butonul ca să pui produsul în **lista de cumpărături**, cu numele magazinului.""",
+- Pe fișa produsului, în dreapta cantității, este legătura către **pliantele** supermarketurilor, hipermarketurilor și discounterilor: alege **țara** (pornește de la cea a limbii tale) și scrie **orașul**, uită-te la oferte și atinge butonul ca să pui produsul în **lista de cumpărături**, cu numele magazinului.""",
         "cumparaturi lista de cumparaturi cumpara pliante oferte supermarket consumat terminat oras magazin"),
     "d_gestisci": ("✏️ Gestionezi mai multe produse deodată",
         """Fila **✏️ Gestionează** servește ca să schimbi dintr-o dată **cantitatea, expirările și notele** mai multor produse, fără să le deschizi pe rând.""",
@@ -174,7 +174,7 @@ Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medic
 Legăturile sunt separate pentru fiecare profil al familiei.""",
         "card de sanatate tessera sanitaria dosar medical electronic fse link adresa vaccinari online cheltuieli medicale deductibile fata spate insigna"),
     "f_aperta": ("🔎 Găsește o farmacie deschisă",
-        """Atinge butonul mare **🔎 Trova una farmacia aperta** de sus: aplicația caută farmaciile deschise în apropierea ta.""",
+        """Atinge butonul mare de sus (**Găsește o farmacie deschisă**): alege **țara** (pornește de la cea a limbii tale) și scrie **orice oraș sau cod poștal**. Aplicația caută farmaciile deschise lângă acel loc.""",
         "farmacie deschisa gaseste cauta aproape garda noapte"),
     "f_avvisi": ("🔔 Notificări pe Telegram, e-mail și SMS",
         """Notificările îți amintesc expirările (la 60, 30, 14 și 7 zile, 1 zi și chiar în ziua respectivă) și, dacă vrei, ora tratamentelor. Alege **unul sau mai multe canale**.

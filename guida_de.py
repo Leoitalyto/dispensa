@@ -94,7 +94,7 @@ Tippe eines an, um es zu öffnen; zum Zurückgehen tippe **← Zurück zum Vorra
     "d_spesa": ("🛒 Einkaufsliste und Prospekte",
         """- Wenn ein Produkt **aufgebraucht** ist, kommt es von allein in den Reiter **🛒 Einkauf**.
 - Im Reiter Einkauf kannst du **Ich habe eins verbraucht** antippen, um ein Stück abzuziehen.
-- Auf der Produktkarte, rechts von der Menge, ist der Link zu den **Prospekten** von Supermärkten, Hypermärkten und Discountern: wähle die **Stadt**, sieh dir die Angebote an und tippe auf den Knopf, um das Produkt auf die **Einkaufsliste** zu setzen, mit dem Namen des Geschäfts.""",
+- Auf der Produktkarte, rechts von der Menge, ist der Link zu den **Prospekten** von Supermärkten, Hypermärkten und Discountern: wähle das **Land** (es beginnt mit dem deiner Sprache) und schreibe die **Stadt**, sieh dir die Angebote an und tippe auf den Knopf, um das Produkt auf die **Einkaufsliste** zu setzen, mit dem Namen des Geschäfts.""",
         "einkauf einkaufsliste kaufen prospekte angebote supermarkt verbraucht aufgebraucht stadt geschaft"),
     "d_gestisci": ("✏️ Viele Produkte auf einmal verwalten",
         """Der Reiter **✏️ Verwalten** dient dazu, **Menge, Ablaufdaten und Notizen** vieler Produkte auf einmal zu ändern, ohne sie einzeln zu öffnen.""",
@@ -174,7 +174,7 @@ Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden.
 Die Links sind für jedes Familienprofil getrennt.""",
         "gesundheitskarte tessera sanitaria gesundheitsakte elektronisch fse link adresse impfungen online absetzbar gesundheitskosten vorderseite ruckseite abzeichen"),
     "f_aperta": ("🔎 Eine geöffnete Apotheke finden",
-        """Tippe oben auf den großen Knopf **🔎 Trova una farmacia aperta**: die App sucht geöffnete Apotheken in deiner Nähe.""",
+        """Tippe oben auf den großen Knopf (**Geöffnete Apotheke finden**): wähle das **Land** (es beginnt mit dem deiner Sprache) und schreibe **eine beliebige Stadt oder Postleitzahl**. Die App sucht geöffnete Apotheken in der Nähe dieses Ortes.""",
         "apotheke geoffnet finden suchen nahe notdienst nacht"),
     "f_avvisi": ("🔔 Benachrichtigungen per Telegram, E-Mail und SMS",
         """Die Benachrichtigungen erinnern dich an die Ablaufdaten (bei 60, 30, 14 und 7 Tagen, 1 Tag und am Tag selbst) und, wenn du willst, an die Uhrzeit der Therapien. Wähle **einen oder mehrere Kanäle**.

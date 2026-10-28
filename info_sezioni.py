@@ -137,7 +137,7 @@ Toccane una per aprirla; per tornare tocca **← Torna alla dispensa**. In ogni 
         ("🛒 Lista della spesa e volantini",
          """- Quando un prodotto **finisce** va da solo nella scheda **🛒 Spesa**.
 - Nella scheda Spesa puoi toccare **Ne ho consumato uno** per scalare un'unità.
-- Sulla scheda del prodotto, a destra della quantità, c'è il collegamento ai **volantini** di supermercati, ipermercati e discount: scegli la **città**, guarda le offerte e tocca il pulsante per mettere il prodotto nella **lista della spesa**, con il nome del negozio.""",
+- Sulla scheda del prodotto, a destra della quantità, c'è il collegamento ai **volantini** di supermercati, ipermercati e discount: scegli il **Paese** (parte da quello della tua lingua) e scrivi la **città**, guarda le offerte e tocca il pulsante per mettere il prodotto nella **lista della spesa**, con il nome del negozio.""",
          "spesa lista della spesa comprare volantini offerte supermercato consumato finito città negozio"),
         ("✏️ Gestisci tanti prodotti in una volta",
          """La scheda **✏️ Gestisci** serve per cambiare in un colpo solo **quantità, scadenze e note** di tanti prodotti, senza aprirli uno per uno.""",
@@ -219,7 +219,7 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
 I collegamenti sono separati per ogni profilo della famiglia.""",
          "tessera sanitaria fascicolo sanitario elettronico fse link collegamento indirizzo vaccinazioni online spese sanitarie detraibili fronte retro badge azzurro 730 detrazioni"),
         ("🔎 Trova una farmacia aperta",
-         """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: l'app cerca le farmacie aperte vicino a te.""",
+         """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: scegli il **Paese** (parte da quello della tua lingua) e scrivi **qualunque città o codice postale**. L'app cerca le farmacie aperte vicino a quel posto.""",
          "farmacia aperta trovare cercare vicino turno notte"),
         ("🔔 Avvisi su Telegram, email e SMS",
          """Gli avvisi ti ricordano le scadenze (a 60, 30, 14 e 7 giorni, 1 giorno e il giorno stesso) e, se vuoi, l'ora delle terapie. Scegli **uno o più canali**.

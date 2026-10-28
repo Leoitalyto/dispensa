@@ -342,7 +342,7 @@ def schermata_farmacia():
         return
 
     _fa_info("farmacia")
-    if st.button("🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
+    if st.button(rp_t("f_btn") if "rp_t" in globals() else "🔎 Trova una farmacia aperta", key="fa_trova", type="primary", width="stretch"):
         _fa_dialogo_farmacie()
 
     _fa_blocco_avvisi()
@@ -1213,13 +1213,10 @@ def _fa_distanza_km(lat1, lon1, lat2, lon2):
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def _fa_geocodifica(testo):
-    t_ = testo.strip()
-    tentativi = [{"postalcode": t_, "country": "Italy"}, {"q": f"{t_}, Italia"}] if re.fullmatch(r"\d{5}", t_) \
-        else [{"q": f"{t_}, Italia"}]
-    for par in tentativi:
-        r = requests.get("https://nominatim.openstreetmap.org/search", headers=UA, timeout=15,
-                         params={**par, "format": "json", "limit": 1, "countrycodes": "it"})
+def _fa_geocodifica(testo, cc="IT"):
+    """Trova il posto (città, comune o codice postale) nel Paese scelto con OpenStreetMap (Nominatim)."""
+    for par in rp_geocodifica_parametri(testo, cc):
+        r = requests.get("https://nominatim.openstreetmap.org/search", headers=UA, timeout=15, params=par)
         r.raise_for_status()
         j = r.json()
         if j:
@@ -1266,67 +1263,65 @@ def _fa_cerca_farmacie(lat, lon, quando):
     return righe
 
 
-@st.dialog("Trova una farmacia aperta", width="large")
-def _fa_dialogo_farmacie():
+def _fa_dialogo_farmacie_corpo():
+    cc = rp_selettore()                                   # parte dal Paese della lingua scelta; si può cambiare
+    P = PAESI[cc]
     with st.form("fa_form_farm"):
-        dove = st.text_input("CAP (consigliato) oppure nome della città o del comune",
-                             placeholder="es. 10121 oppure Torino")
-        cerca = st.form_submit_button("Cerca", type="primary")
+        dove = st.text_input(rp_t("dove"), value=P["citta"], key=f"rp_f_dove_{cc}", placeholder=rp_t("dove_ph", citta=P["citta"]))
+        cerca = st.form_submit_button(rp_t("cerca"), type="primary")
     if cerca:
         if not dove.strip():
-            st.error("Scrivi un CAP o il nome di una città.")
+            st.error(rp_t("err_vuoto"))
         else:
             try:
-                with st.spinner("Cerco le farmacie…"):
-                    posto = _fa_geocodifica(dove)
+                with st.spinner("…"):
+                    posto = _fa_geocodifica(dove, cc)
                     if not posto:
-                        st.session_state["fa_farm"] = {"dove": dove, "errore": "Non trovo questo CAP o questa città. "
-                                                       "Controlla come l'hai scritto."}
+                        st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t("err_non_trovo", paese=P["nome"])}
                     else:
-                        quando = adesso()
-                        st.session_state["fa_farm"] = {"dove": dove, "luogo": posto[2], "quando": quando.isoformat(),
+                        quando = rp_ora_locale(cc)         # l'ora del Paese scelto, per capire se è aperta
+                        st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "luogo": posto[2], "quando": quando.isoformat(),
                                                        "righe": _fa_cerca_farmacie(posto[0], posto[1], quando)}
             except Exception:
-                st.session_state["fa_farm"] = {"dove": dove, "errore": "Non riesco a collegarmi al servizio delle "
-                                               "mappe in questo momento. Riprova tra poco."}
+                st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t("err_rete")}
     ris = st.session_state.get("fa_farm")
     if not ris:
-        st.caption("Scrivi il CAP o la città e tocca Cerca.")
+        st.caption(rp_t("scrivi"))
     elif ris.get("errore"):
         st.error(ris["errore"])
     else:
-        solo_aperte = st.checkbox("Mostra solo quelle che risultano aperte adesso", key="fa_solo_aperte")
+        solo_aperte = st.checkbox(rp_t("solo_aperte"), key="fa_solo_aperte")
         righe = [r for r in ris["righe"] if not solo_aperte or r["stato"] == "aperta"]
-        st.caption(f"Ricerca vicino a: {ris['luogo']} · alle {datetime.fromisoformat(ris['quando']).strftime('%H:%M del %d/%m/%Y')}")
+        q_ = datetime.fromisoformat(ris["quando"])
+        st.caption(rp_t("vicino", luogo=ris["luogo"], ora=q_.strftime("%H:%M"), data=q_.strftime("%d/%m/%Y")))
         if not ris["righe"]:
-            st.warning("Non ho trovato farmacie vicino a questo posto. Prova con un altro CAP o con il nome del comune.")
+            st.warning(rp_t("nessuna"))
         elif not righe:
-            st.info("Nessuna farmacia risulta aperta adesso secondo gli orari disponibili. Controlla anche quelle "
-                    "con orari non verificabili e quelle di turno.")
+            st.info(rp_t("nessuna_aperta"))
         e = html.escape
         for r in righe[:12]:
-            icona, testo = {"aperta": ("🟢", "Risulta aperta adesso"), "chiusa": ("🔴", "Risulta chiusa adesso"),
-                            "ignoto": ("⚪", "Orari non verificabili: chiama prima")}[r["stato"]]
+            icona, testo = {"aperta": ("🟢", rp_t("aperta")), "chiusa": ("🔴", rp_t("chiusa")), "ignoto": ("⚪", rp_t("ignoto"))}[r["stato"]]
             with st.container(border=True):
                 riga = f"**{e(r['nome'])}** · {r['km']:.1f} km<br>"
                 riga += f"📍 {e(r['indirizzo'])}<br>" if r["indirizzo"] else ""
-                riga += f"{icona} {testo}" + (f" · oggi {e(r['oggi'])}" if r["oggi"] else "")
+                oggi_t = rp_t("chiusa_oggi") if r["oggi"] == "chiusa oggi" else r["oggi"]
+                riga += f"{icona} {testo}" + (" · " + rp_t("oggi", orari=e(oggi_t)) if r["oggi"] else "")
                 if r["tel"]:
                     riga += f"<br>📞 {e(r['tel'])}"
                 st.markdown(riga, unsafe_allow_html=True)
                 c1, c2 = st.columns(2, gap="small")
-                c1.link_button("🧭 Portami lì", f"https://www.google.com/maps/dir/?api=1&destination={r['lat']},{r['lon']}",
+                c1.link_button(rp_t("portami"), f"https://www.google.com/maps/dir/?api=1&destination={r['lat']},{r['lon']}",
                                width="stretch")
                 numero = re.sub(r"[^\d+]", "", r["tel"])
                 if numero:
-                    c2.link_button("📞 Chiama", "tel:" + numero, width="stretch")
-        st.link_button("🌙 Cerca le farmacie di turno (notte e festivi)",
-                       "https://www.google.com/search?q=" + _up.quote_plus("farmacie di turno " + ris["dove"]),
-                       width="stretch")
-        st.caption("ℹ️ Posizioni e orari arrivano da OpenStreetMap, una mappa aperta aggiornata da volontari: possono "
-                   "essere incompleti o non aggiornati. Nei giorni festivi e di notte gli orari normali non valgono. "
-                   "L'app non può sapere quali farmacie sono di turno: usa il pulsante qui sopra o telefona per "
-                   "esserne sicuro.")
+                    c2.link_button(rp_t("chiama"), "tel:" + numero, width="stretch")
+        st.link_button(rp_t("turno_btn"), rp_link_turno(ris.get("cc", cc), ris["dove"]), width="stretch")
+        st.caption(rp_t("osm"))
+
+
+def _fa_dialogo_farmacie():
+    """Apre la finestra delle farmacie aperte (titolo nella lingua scelta)."""
+    st.dialog(rp_t("f_titolo"), width="large")(_fa_dialogo_farmacie_corpo)()
 
 
 # =====================================================================

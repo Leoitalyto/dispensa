@@ -94,7 +94,7 @@ Touches-en une pour l'ouvrir ; pour revenir touche **← Retour au garde-manger*
     "d_spesa": ("🛒 Liste de courses et prospectus",
         """- Quand un produit **est fini** il va tout seul dans l'onglet **🛒 Courses**.
 - Dans l'onglet Courses tu peux toucher **J'en ai consommé un** pour retirer une unité.
-- Sur la fiche du produit, à droite de la quantité, il y a le lien vers les **prospectus** des supermarchés, hypermarchés et discounts : choisis la **ville**, regarde les offres et touche le bouton pour mettre le produit dans la **liste de courses**, avec le nom du magasin.""",
+- Sur la fiche du produit, à droite de la quantité, il y a le lien vers les **prospectus** des supermarchés, hypermarchés et discounts : choisis le **pays** (celui de ta langue au départ) et écris la **ville**, regarde les offres et touche le bouton pour mettre le produit dans la **liste de courses**, avec le nom du magasin.""",
         "courses liste de courses acheter prospectus offres supermarche consomme fini ville magasin"),
     "d_gestisci": ("✏️ Gérer beaucoup de produits d'un coup",
         """L'onglet **✏️ Gérer** sert à changer d'un seul coup **quantité, péremptions et notes** de beaucoup de produits, sans les ouvrir un par un.""",
@@ -174,7 +174,7 @@ Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos*
 Les liens sont séparés pour chaque profil de la famille.""",
         "carte sante tessera sanitaria dossier sante electronique fse lien adresse vaccinations en ligne frais deductibles recto verso badge"),
     "f_aperta": ("🔎 Trouver une pharmacie ouverte",
-        """Touche le grand bouton **🔎 Trova una farmacia aperta** en haut : l'appli cherche les pharmacies ouvertes près de toi.""",
+        """Touche le grand bouton en haut (**Trouver une pharmacie ouverte**) : choisis le **pays** (celui de ta langue au départ) et écris **n'importe quelle ville ou code postal**. L'appli cherche les pharmacies ouvertes près de ce lieu.""",
         "pharmacie ouverte trouver chercher proche garde nuit"),
     "f_avvisi": ("🔔 Alertes sur Telegram, e-mail et SMS",
         """Les alertes te rappellent les péremptions (à 60, 30, 14 et 7 jours, 1 jour et le jour même) et, si tu veux, l'heure des traitements. Choisis **un ou plusieurs canaux**.

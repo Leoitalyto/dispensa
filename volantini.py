@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Volantini: il pulsante 🏷️ sulla scheda di ogni prodotto (a destra della quantita'). Si sceglie la citta', si apre la ricerca nei
 siti dei volantini gia' compilata con prodotto e citta', e se si trova l'offerta la si mette nella lista della spesa con il nome
-del supermercato / ipermercato / discount. Solo italiano. Caricato da app_dispensa.py dopo guida.py."""
+del supermercato / ipermercato / discount. Cerca nel Paese della lingua scelta (si può cambiare) e in qualunque citta'.
+I paesi, le citta' di partenza e i siti dei volantini sono in ricerca_paesi.py. Caricato da app_dispensa.py dopo guida.py."""
 import unicodedata
 from urllib.parse import quote_plus
 
@@ -22,8 +23,9 @@ def _slug(testo):
     return s
 
 
-def _link_ricerca(prodotto, citta, sito=""):
-    q = f"{prodotto} offerta volantino {citta}".strip()
+def _link_ricerca(prodotto, citta, sito="", cc="IT"):
+    parole = (PAESI.get(cc) or PAESI["IT"])["offerta"] if "PAESI" in globals() else "offerta volantino"
+    q = f"{prodotto} {parole} {citta}".strip()
     if sito:
         q += f" site:{sito}"
     return "https://www.google.com/search?q=" + quote_plus(q)
@@ -42,7 +44,7 @@ def _dove(x):
     return " · ".join(p for p in pezzi if p)
 
 
-def _aggiungi_offerta(d, r, negozio, tipo, citta, prezzo, valido):
+def _aggiungi_offerta(d, r, negozio, tipo, citta, prezzo, valido, cc="IT"):
     """Mette il prodotto nella lista della spesa con il negozio. False se c'e' gia' la stessa offerta."""
     lista = d.setdefault("spesa", [])
     chiave = _chiave_prodotto(r)
@@ -55,6 +57,7 @@ def _aggiungi_offerta(d, r, negozio, tipo, citta, prezzo, valido):
                   "negozio": negozio, "tipo_negozio": tipo, "citta": citta, "prezzo": float(prezzo) if prezzo else None,
                   "valido_fino": valido.isoformat() if valido else None, "fonte": "volantino"})
     d["citta_volantini"] = citta
+    d["citta_volantini_paese"] = cc
     return True
 
 
@@ -72,28 +75,33 @@ def apri_volantini(rid):
         _nome_p, _marca_p = (r.get("nome") or "").strip(), (r.get("marca") or "").strip()
         prodotto = _nome_p if (not _marca_p or _marca_p.lower() in _nome_p.lower()) else f"{_nome_p} {_marca_p}"
         st.markdown(f"**🏷️ {html.escape(prodotto)}**")
-        citta = st.text_input("📍 Città", value=dati_.get("citta_volantini", ""), key=K("citta"), placeholder="es. Torino").strip()
+        cc = rp_selettore() if "rp_selettore" in globals() else "IT"           # parte dal Paese della lingua; si può cambiare
+        P = PAESI.get(cc) or PAESI["IT"]
+        salvata = dati_.get("citta_volantini", "")
+        di_partenza = salvata if (salvata and dati_.get("citta_volantini_paese", "IT") == cc) else P["citta"]
+        citta = st.text_input(rp_t("v_citta"), value=di_partenza, key=K("citta_" + cc), placeholder=rp_t("dove_ph", citta=P["citta"])).strip()
 
-        st.markdown("**1️⃣ Cerca nei volantini**")
-        st.caption("Non esiste un archivio pubblico dei volantini da controllare in automatico: questi pulsanti aprono la ricerca "
-                   "nei siti dei volantini, già compilata con prodotto e città.")
+        st.markdown(rp_t("v_cerca_h"))
+        st.caption(rp_t("v_cap"))
         if not citta:
-            st.info("Scrivi la città per cercare le offerte della tua zona.")
+            st.info(rp_t("v_scrivi_citta"))
         else:
-            st.link_button("🔎 Cerca nei volantini di " + citta, _link_ricerca(prodotto, citta), width="stretch")
-            c1, c2 = st.columns(2)
-            c1.link_button("DoveConviene", _link_ricerca(prodotto, citta, "doveconviene.it"), width="stretch")
-            c2.link_button("PromoQui", _link_ricerca(prodotto, citta, "promoqui.it"), width="stretch")
-            c3, c4 = st.columns(2)
-            c3.link_button("Volantinofacile", _link_ricerca(prodotto, citta, "volantinofacile.it"), width="stretch")
-            c4.link_button("Tiendeo", _link_ricerca(prodotto, citta, "tiendeo.it"), width="stretch")
-            if _slug(citta):
-                st.link_button("🛒 Tutti i volantini dei supermercati a " + citta, f"https://www.doveconviene.it/{_slug(citta)}/iper-e-super", width="stretch")
+            st.link_button(rp_t("v_cerca_btn", citta=citta), _link_ricerca(prodotto, citta, "", cc), width="stretch")
+            siti = P["siti"]
+            for k in range(0, len(siti), 2):
+                for colonna, (nome_sito, dominio) in zip(st.columns(2), siti[k:k + 2]):
+                    colonna.link_button(nome_sito, _link_ricerca(prodotto, citta, dominio, cc), width="stretch")
+            if cc == "IT" and _slug(citta):
+                st.link_button(rp_t("v_tutti", citta=citta), f"https://www.doveconviene.it/{_slug(citta)}/iper-e-super", width="stretch")
+            else:
+                st.link_button(rp_t("v_tutti", citta=citta), "https://www.google.com/search?q=" + quote_plus(f"{P['tutti']} {citta}"),
+                               width="stretch")
 
         st.markdown("**2️⃣ L'hai trovato in offerta? Mettilo nella lista della spesa**")
-        tipo = st.radio("Dove", list(CATENE), horizontal=True, key=K("tipo"), format_func=lambda x: ICONE_TIPO[x] + " " + x,
+        catene = P.get("catene") or CATENE
+        tipo = st.radio("Dove", list(catene), horizontal=True, key=K("tipo_" + cc), format_func=lambda x: ICONE_TIPO[x] + " " + rp_t("v_tipo_" + x),
                         label_visibility="collapsed")
-        scelta = st.selectbox("Nome del negozio", CATENE[tipo] + ["Altro (scrivo il nome)"], key=K("neg"))
+        scelta = st.selectbox("Nome del negozio", catene[tipo] + ["Altro (scrivo il nome)"], key=K("neg_" + cc + "_" + tipo))
         negozio = st.text_input("Scrivi il nome del negozio", key=K("neg_altro")).strip() if scelta.startswith("Altro") else scelta
         p1, p2 = st.columns(2)
         prezzo = p1.number_input("💶 Prezzo in offerta (facoltativo)", min_value=0.0, step=0.05, format="%.2f", key=K("prezzo"))
@@ -107,7 +115,7 @@ def apri_volantini(rid):
             else:
                 esito = {}
                 try:
-                    salva(lambda d: esito.update(ok=_aggiungi_offerta(d, r, negozio, tipo, citta, prezzo, valido)), "Spesa: offerta " + (r.get("nome") or ""))
+                    salva(lambda d: esito.update(ok=_aggiungi_offerta(d, r, negozio, tipo, citta, prezzo, valido, cc)), "Spesa: offerta " + (r.get("nome") or ""))
                     if esito.get("ok"):
                         st.session_state["messaggio"] = f"🛒 {r.get('nome', '')}: messo nella lista della spesa ({negozio}, {citta})."
                     else:
@@ -116,7 +124,7 @@ def apri_volantini(rid):
                 except Exception as e:
                     st.error(t("Non sono riuscito a salvare: {e}", e=e))
 
-    st.dialog("🏷️ Offerte nei volantini", width="large")(_finestra)()
+    st.dialog(rp_t("v_titolo") if "rp_t" in globals() else "🏷️ Offerte nei volantini", width="large")(_finestra)()
 
 
 # ---------------------------------------------------------------------
