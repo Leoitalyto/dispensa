@@ -153,6 +153,15 @@ To see everything about a medicine, **tap its card**: the detail opens with the 
 4. Tapping a prescription opens the **detail**: you see the photo, tap **✅ Segna come usata** (Mark as used), **✏️ Modifica** or **🗑️ Elimina**.
 5. Prescriptions about to expire show among the things to check, also in **Family control**.""",
         'prescription prescriptions recipe doctor code valid expiry used collected'),
+    "f_invio": ('📤 Export and send (PDF, email, WhatsApp…)',
+        """1. At the top of the Pharmacy open **📤 Esporta e invia** (Export and send). Choose **who** and **what** (medicines, therapies, prescriptions, visits, vaccines, documents, health card, pantry, shopping list).
+2. Choose the **format** (PDF, Excel or print file) and tap **📦 Prepara i file** (Prepare the files).
+3. Then choose how to send them: **📤 Telefono** (the Share sheet opens: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (straight from the app), **💬 WhatsApp** (written summary), **✈️ Telegram** (in your chat with the bot), **📱 SMS** or **📋 Copia** (Copy).
+4. Every document, medicine, prescription and visit also has its own **📤 Invia** (Send) button, with its photos.
+5. The head of the family can send the data of the whole family from **Family control**.
+
+Only for whoever runs the app: to send email and Telegram straight from the app, in Streamlit open Manage app, then Settings, then Secrets, and add EMAIL_USER, EMAIL_PASSWORD and TELEGRAM_TOKEN (the same values used for the notices). It contains health data: check carefully who you send it to.""",
+        'send share whatsapp email telegram sms pdf excel print export attachment file'),
     "f_visite": ("🩺 Visits, tests and reports",
         """1. Open the **🩺 Visite** tab and tap to add.
 2. Write the **date**, **type of visit or test**, **doctor**, **reason** and the **instructions for check-ups**.

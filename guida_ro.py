@@ -153,6 +153,15 @@ Ca să vezi tot despre un medicament, **atinge fișa lui**: se deschide detaliul
 4. Atingând o rețetă se deschide **detaliul**: vezi fotografia, atingi **✅ Segna come usata** (Marchează ca folosită), **✏️ Modifica** sau **🗑️ Elimina**.
 5. Rețetele care expiră curând apar printre lucrurile de verificat, și în **Controlul familiei**.""",
         'reteta retete prescriptie medic cod valabilitate expirare folosita'),
+    "f_invio": ('📤 Exportă și trimite (PDF, email, WhatsApp…)',
+        """1. Sus în Farmacie deschide **📤 Esporta e invia** (Exportă și trimite). Alege **a cui** și **ce** (medicamente, terapii, rețete, vizite, vaccinuri, documente, fișă sanitară, cămară, listă de cumpărături).
+2. Alege **formatul** (PDF, Excel sau fișier de tipărit) și atinge **📦 Prepara i file** (Pregătește fișierele).
+3. Apoi alege cum le trimiți: **📤 Telefono** (se deschide Partajare: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (direct din aplicație), **💬 WhatsApp** (rezumat scris), **✈️ Telegram** (în chatul tău cu botul), **📱 SMS** sau **📋 Copia** (Copiază).
+4. Fiecare document, medicament, rețetă și vizită are și butonul său **📤 Invia** (Trimite), cu fotografiile lui.
+5. Capul familiei poate trimite datele întregii familii din **Controlul familiei**.
+
+Doar pentru cine administrează aplicația: ca să trimiți email și Telegram direct din aplicație, în Streamlit deschide Manage app, apoi Settings, apoi Secrets, și adaugă EMAIL_USER, EMAIL_PASSWORD și TELEGRAM_TOKEN (aceleași valori ca la notificări). Conține date sanitare: verifică bine cui le trimiți.""",
+        'trimite partajare whatsapp email posta telegram sms pdf excel tiparire export atasament fisier'),
     "f_visite": ("🩺 Vizite, analize și rezultate",
         """1. Deschide fila **🩺 Visite** și atinge ca să adaugi.
 2. Scrie **data**, **tipul vizitei sau analizei**, **medicul**, **motivul** și **indicațiile pentru controale**.

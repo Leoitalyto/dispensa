@@ -5,3 +5,4 @@ requests
 pillow
 opencv-python-headless
 onnxruntime
+reportlab

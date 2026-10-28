@@ -153,6 +153,15 @@ Para ver todo de un medicamento, **toca su ficha**: se abre el detalle con el **
 4. Al tocar una receta se abre el **detalle**: ves la foto, tocas **✅ Segna come usata** (Marcar como usada), **✏️ Modifica** o **🗑️ Elimina**.
 5. Las recetas a punto de caducar aparecen entre las cosas por revisar, también en el **Control familiar**.""",
         'receta recetas prescripcion medico codigo validez caducidad usada'),
+    "f_invio": ('📤 Exportar y enviar (PDF, email, WhatsApp…)',
+        """1. Arriba en la Farmacia abre **📤 Esporta e invia** (Exportar y enviar). Elige **de quién** y **qué** (medicamentos, terapias, recetas, visitas, vacunas, documentos, ficha sanitaria, despensa, lista de la compra).
+2. Elige el **formato** (PDF, Excel o archivo para imprimir) y toca **📦 Prepara i file** (Preparar los archivos).
+3. Luego elige cómo enviarlos: **📤 Telefono** (se abre Compartir: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (directamente desde la app), **💬 WhatsApp** (resumen escrito), **✈️ Telegram** (en tu chat con el bot), **📱 SMS** o **📋 Copia** (Copiar).
+4. Cada documento, medicamento, receta y visita tiene también su botón **📤 Invia** (Enviar), con sus fotos.
+5. El cabeza de familia puede enviar los datos de toda la familia desde el **Control familiar**.
+
+Solo para quien gestiona la app: para enviar email y Telegram directamente desde la app, en Streamlit abre Manage app, luego Settings, luego Secrets, y añade EMAIL_USER, EMAIL_PASSWORD y TELEGRAM_TOKEN (los mismos valores de los avisos). Contiene datos sanitarios: comprueba bien a quién lo envías.""",
+        'enviar compartir whatsapp email correo telegram sms pdf excel imprimir exportar adjunto archivo'),
     "f_visite": ("🩺 Visitas, pruebas e informes",
         """1. Abre la pestaña **🩺 Visite** y toca para añadir.
 2. Escribe **fecha**, **tipo de visita o prueba**, **médico**, **motivo** y las **indicaciones para los controles**.

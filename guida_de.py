@@ -153,6 +153,15 @@ Um alles zu einem Medikament zu sehen, **tippe auf seine Karte**: das Detail öf
 4. Tippt man auf ein Rezept, öffnet sich das **Detail**: du siehst das Foto, tippst auf **✅ Segna come usata** (Als verwendet markieren), **✏️ Modifica** oder **🗑️ Elimina**.
 5. Bald ablaufende Rezepte erscheinen bei den Dingen zum Prüfen, auch in der **Familienkontrolle**.""",
         'rezept rezepte verschreibung arzt code gueltigkeit ablauf verwendet'),
+    "f_invio": ('📤 Exportieren und senden (PDF, E-Mail, WhatsApp…)',
+        """1. Öffne oben in der Apotheke **📤 Esporta e invia** (Exportieren und senden). Wähle **von wem** und **was** (Medikamente, Therapien, Rezepte, Besuche, Impfungen, Dokumente, Gesundheitskarte, Vorrat, Einkaufsliste).
+2. Wähle das **Format** (PDF, Excel oder Druckdatei) und tippe auf **📦 Prepara i file** (Dateien vorbereiten).
+3. Dann wähle, wie du sie sendest: **📤 Telefono** (das Teilen-Fenster öffnet sich: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (direkt aus der App), **💬 WhatsApp** (geschriebene Zusammenfassung), **✈️ Telegram** (in deinem Chat mit dem Bot), **📱 SMS** oder **📋 Copia** (Kopieren).
+4. Jedes Dokument, Medikament, Rezept und jeder Besuch hat auch seinen eigenen Knopf **📤 Invia** (Senden), mit seinen Fotos.
+5. Das Familienoberhaupt kann die Daten der ganzen Familie über die **Familienkontrolle** senden.
+
+Nur für den, der die App verwaltet: um E-Mail und Telegram direkt aus der App zu senden, öffne in Streamlit Manage app, dann Settings, dann Secrets, und füge EMAIL_USER, EMAIL_PASSWORD und TELEGRAM_TOKEN hinzu (dieselben Werte wie bei den Erinnerungen). Es enthält Gesundheitsdaten: prüfe genau, an wen du es sendest.""",
+        'senden teilen whatsapp email post telegram sms pdf excel drucken exportieren anhang datei'),
     "f_visite": ("🩺 Arztbesuche, Untersuchungen und Befunde",
         """1. Öffne den Reiter **🩺 Visite** und tippe zum Hinzufügen.
 2. Schreibe **Datum**, **Art des Besuchs oder der Untersuchung**, **Arzt**, **Grund** und die **Hinweise für Kontrollen**.

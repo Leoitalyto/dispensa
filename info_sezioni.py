@@ -19,7 +19,7 @@ _NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🏥 Farmacia", "docu
 # ---------------------------------------------------------------------
 # Nome (ed eventuale link) del bot Telegram dell'app: scrivi qui il link vero, per esempio "https://t.me/NomeDelTuoBot"
 _BOT_NOME = "Dispensa Leo"
-_BOT_LINK = ""
+_BOT_LINK = "https://t.me/dispensa_leo_bot"
 
 _BOT_RIGA = (f"**{_BOT_NOME}**" if not _BOT_LINK else f"**{_BOT_NOME}** (tocca [questo link]({_BOT_LINK}))")
 
@@ -248,6 +248,15 @@ Facoltativo: spunta **«Nei messaggi non scrivere i nomi dei medicinali»** se v
          """In **🧾 I miei dati personali e report completo** scrivi nome e cognome e scarichi un **report da stampare** con tutto quello che hai inserito. Il file **JSON** contiene gli stessi dati per una copia di sicurezza.
 Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
          "report completo stampare esportare scaricare dati personali copia pdf json"),
+        ("📤 Esportare e inviare (PDF, email, WhatsApp…)",
+         """1. In alto nella Farmacia apri **📤 Esporta e invia**. Scegli **di chi** e **cosa** (medicinali, terapie, prescrizioni, visite, vaccini, documenti, scheda sanitaria, dispensa, lista della spesa).
+2. Scegli il **formato** (PDF, Excel o file da stampare) e tocca **📦 Prepara i file**.
+3. Poi scegli come inviarli: **📤 Telefono** (si apre Condividi: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (direttamente dall'app), **💬 WhatsApp** (riepilogo scritto), **✈️ Telegram** (nella tua chat con il bot), **📱 SMS** o **📋 Copia**.
+4. Ogni documento, medicinale, prescrizione e visita ha anche il suo tasto **📤 Invia**, con le sue foto.
+5. Il capo famiglia può inviare i dati di tutta la famiglia dal **Controllo famiglia**.
+
+Solo per chi gestisce l'app: per mandare email e Telegram direttamente dall'app, in Streamlit apri Manage app, poi Settings, poi Secrets, e aggiungi EMAIL_USER, EMAIL_PASSWORD e TELEGRAM_TOKEN (gli stessi valori degli avvisi). Contiene dati sanitari: controlla bene a chi invii.""",
+         "invio inviare mandare condividere whatsapp email posta telegram sms pdf excel stampare esportare condividi allegato file"),
     ],
 
     "utilita": [
@@ -339,7 +348,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nell
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
-    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }

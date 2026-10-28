@@ -153,6 +153,15 @@ Pour tout voir d'un médicament, **touche sa fiche** : le détail s'ouvre avec l
 4. En touchant une ordonnance, le **détail** s'ouvre : tu vois la photo, tu touches **✅ Segna come usata** (Marquer comme utilisée), **✏️ Modifica** ou **🗑️ Elimina**.
 5. Les ordonnances bientôt périmées apparaissent parmi les choses à vérifier, aussi dans le **Contrôle famille**.""",
         'ordonnance ordonnances prescription medecin code validite expiration utilisee'),
+    "f_invio": ('📤 Exporter et envoyer (PDF, email, WhatsApp…)',
+        """1. En haut de la Pharmacie ouvre **📤 Esporta e invia** (Exporter et envoyer). Choisis **de qui** et **quoi** (médicaments, traitements, ordonnances, visites, vaccins, documents, fiche santé, garde-manger, liste de courses).
+2. Choisis le **format** (PDF, Excel ou fichier à imprimer) et touche **📦 Prepara i file** (Préparer les fichiers).
+3. Puis choisis comment les envoyer : **📤 Telefono** (la fenêtre Partager s'ouvre : WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (directement depuis l'appli), **💬 WhatsApp** (résumé écrit), **✈️ Telegram** (dans ta discussion avec le bot), **📱 SMS** ou **📋 Copia** (Copier).
+4. Chaque document, médicament, ordonnance et visite a aussi son bouton **📤 Invia** (Envoyer), avec ses photos.
+5. Le chef de famille peut envoyer les données de toute la famille depuis le **Contrôle famille**.
+
+Seulement pour qui gère l'appli : pour envoyer email et Telegram directement depuis l'appli, dans Streamlit ouvre Manage app, puis Settings, puis Secrets, et ajoute EMAIL_USER, EMAIL_PASSWORD et TELEGRAM_TOKEN (les mêmes valeurs que pour les rappels). Il contient des données de santé : vérifie bien à qui tu l'envoies.""",
+        'envoyer partager whatsapp email courrier telegram sms pdf excel imprimer exporter piece jointe fichier'),
     "f_visite": ("🩺 Visites, examens et comptes rendus",
         """1. Ouvre l'onglet **🩺 Visite** et touche pour ajouter.
 2. Écris **date**, **type de visite ou d'examen**, **médecin**, **motif** et les **consignes pour les contrôles**.

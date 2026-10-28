@@ -366,6 +366,8 @@ def schermata_farmacia():
 
     _fa_blocco_avvisi()
     _fa_blocco_personale()
+    if "inv_hub_miei" in globals():
+        inv_hub_miei("farm")
 
     f = _fa_dati()
     profili = _fa_profili(f)
@@ -1000,6 +1002,15 @@ def _fa_dialogo_elimina_voce(lista, rec_id, etichetta):
         st.rerun()
 
 
+def _fa_visita_invia(v, chi=""):
+    """Finestra per inviare una visita o un esame con i suoi referti allegati."""
+    titolo = f"🩺 {v.get('categoria', 'Visita')} del {data_it(v['data'])}" + (f" · {chi}" if chi else "")
+    coppie = [("Medico o struttura", v.get("medico")), ("Motivo", v.get("motivo")), ("Controlli successivi", v.get("controlli")),
+              ("Prossimo appuntamento", data_it(v["prossimo"]) if v.get("prossimo") else None), ("Note", v.get("note"))]
+    st.dialog("📤 Invia visita o esame", width="large")(
+        lambda: inv_canali("vis_" + v["id"], titolo, _fa_inv_testo(titolo, coppie), _fa_inv_allegati(v.get("allegati", [])), oggetto=titolo))()
+
+
 def _fa_tab_visite(f, pid, nomi, oggi_):
     visite = [v for v in f.get("visite", []) if v.get("profilo", "p0") == pid]
     prossimi = sorted([v for v in visite if v.get("prossimo") and v["prossimo"] >= oggi_.isoformat()],
@@ -1039,11 +1050,13 @@ def _fa_tab_visite(f, pid, nomi, oggi_):
         with st.container(border=True):
             st.markdown(f"<div class='fa-med' style='--c:#00897b'>{righe}</div>", unsafe_allow_html=True)
             _fa_bottoni_allegati(v.get("allegati", []), "visita", v["id"])
-            b1, b2 = st.columns(2, gap="small")
+            b1, b2, b3 = st.columns(3, gap="small")
             if b1.button("Elimina", icon=":material/delete:", key="fa_elv_" + v["id"], width="stretch"):
                 _fa_dialogo_elimina_voce("visite", v["id"], f"{v.get('categoria', '')} del {data_it(v['data'])}")
             if b2.button("Modifica", icon=":material/edit:", key="fa_mov_" + v["id"], width="stretch"):
                 _fa_dialogo_visita(pid, v["id"])
+            if "inv_canali" in globals() and b3.button("Invia", icon=":material/send:", key="fa_inv_vis_" + v["id"], width="stretch"):
+                _fa_visita_invia(v, nomi.get(pid, ""))
 
 
 # =====================================================================
@@ -1215,6 +1228,9 @@ def _fa_presc_dettaglio_corpo(pre_id, pid):
                     st.button("🗑️ Togli questo file", key=f"fa_pct_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, True))
     else:
         st.info("Nessuna foto o PDF allegato. Tocca «Modifica» per aggiungere la ricetta.")
+
+    _fa_inv_voce(f"presc_{pre_id}", "📤 Invia questa prescrizione (email, WhatsApp…)", f"📝 Prescrizione: {r.get('tipo', '')}",
+                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati")], allegati)
 
     # --- usata / modifica / elimina
     st.divider()
@@ -2014,6 +2030,9 @@ def _fa_med_dettaglio_corpo(med_id, pid):
         st.rerun()
     st.caption("📖 Controindicazioni e avvertenze sono nel foglio illustrativo ufficiale: leggilo o chiedi al medico o al farmacista. "
                "L'app non valuta se un medicinale va bene per una malattia.")
+
+    _fa_inv_voce(f"med_{med_id}", "📤 Invia questo medicinale (email, WhatsApp…)", f"💊 {m.get('nome', 'Medicinale')}",
+                 [(k, v) for k, v in dati if v and k != "Nome"], ([m["foto_grande"]] if m.get("foto_grande") else []) + list(m.get("foglio", [])))
 
     # --- modifica ed eliminazione
     st.divider()
@@ -3190,6 +3209,30 @@ def _doc_card(x, oggi_, emoji):
     return f"<div class='{classe}' style='--c:{_DOC_COL[stato]}'>{righe}</div>"
 
 
+def _fa_inv_allegati(allegati):
+    """I file (foto e PDF) di una voce, pronti da inviare: [(nome, tipo, byte)]."""
+    risultato = []
+    for a_ in allegati:
+        try:
+            d_ = carica_dati(crea_archivio(), _fa_percorso_doc(a_["id"]))
+            if d_.get("b64"):
+                risultato.append((a_.get("nome") or f"foto_{a_['id']}.webp", d_.get("mime") or "application/octet-stream", base64.b64decode(d_["b64"])))
+        except Exception:
+            continue
+    return risultato
+
+
+def _fa_inv_testo(titolo, coppie):
+    """Il riepilogo scritto di una voce, per WhatsApp, email e SMS."""
+    return titolo + "\n" + "\n".join(f"• {k}: {v}" for k, v in coppie if v)
+
+
+def _fa_inv_voce(chiave, etichetta, titolo, coppie, allegati):
+    """Il tasto «Invia» di una voce (documento, medicinale, prescrizione, visita), se il modulo dell'invio c'è."""
+    if "inv_voce" in globals():
+        inv_voce(chiave, etichetta, titolo, _fa_inv_testo(titolo, coppie), lambda: _fa_inv_allegati(allegati))
+
+
 def _doc_fronte_retro(allegati):
     """Divide gli allegati in (fronte, retro, altri): dal nome («Fronte - …», «Retro - …») oppure, in mancanza, dall'ordine delle immagini."""
     immagini = [x for x in allegati if str(x.get("mime", "")).startswith("image/")]
@@ -3280,6 +3323,9 @@ def _doc_dettaglio_corpo(doc_id, pid):
                                        mime=d_.get("mime", "application/octet-stream"), key=f"doc_dl_{a_['id']}", width="stretch")
     else:
         st.info("Nessuna foto o file allegato. Tocca «Modifica» per aggiungere il fronte e il retro.")
+
+    _fa_inv_voce(f"doc_{doc_id}", "📤 Invia questo documento (email, WhatsApp…)", f"{emoji} {x.get('tipo', 'Documento')} di {nomi.get(x.get('profilo', 'p0'), '')}".strip(),
+                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati")], allegati)
 
     # --- modifica ed eliminazione
     st.divider()
@@ -3398,6 +3444,8 @@ def schermata_documenti():
             if st.button("Apri", key="doc_apri_" + x["id"], width="stretch"):            # il pulsante copre tutta la scheda (invisibile)
                 _doc_dettaglio(x["id"], pid)
     _doc_gestione_tipi(f)
+    if "inv_hub_miei" in globals():
+        inv_hub_miei("doc", ["Documenti"])
     st.caption("🔔 Gli avvisi su Telegram e per email (se li hai attivati) arrivano 6 mesi prima (primo avviso) e 3 mesi prima "
                "(secondo avviso, più insistente). Contiene dati personali: non condividerli con chi non deve vederli.")
 

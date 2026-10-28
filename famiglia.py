@@ -228,10 +228,23 @@ FAM_SEZIONI = [("Medicinali", FAM_H_MEDICINALI, _fam_righe_medicinali), ("Terapi
            ("Vaccinazioni", FAM_H_VACCINI, _fam_righe_vaccini), ("Documenti", FAM_H_DOCUMENTI, _fam_righe_documenti)]
 
 
+FAM_TITOLI = [t_ for t_, _, _ in FAM_SEZIONI]
+FAM_SCHEDA = "Scheda sanitaria e medico"          # gruppo sanguigno, allergie, medico e scheda sanitaria (non è una tabella)
+
+
+def _fam_sezioni(sezioni):
+    """Le sezioni scelte (None = tutte), nell'ordine di sempre."""
+    return [x for x in FAM_SEZIONI if sezioni is None or x[0] in sezioni]
+
+
+def _fam_con_scheda(sezioni):
+    return sezioni is None or FAM_SCHEDA in sezioni
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Esportazione: HTML da stampare, Excel, JSON
 # ---------------------------------------------------------------------------------------------------------------------
-def fam_html(persone, oggi_):
+def fam_html(persone, oggi_, sezioni=None, extra_html=""):
     e = html.escape
     parti = []
     for i, p in enumerate(persone):
@@ -239,18 +252,20 @@ def fam_html(persone, oggi_):
         dott = pr.get("dottore") or {}
         corpo = [f"<h2 class='persona{' prima' if i == 0 else ''}'>👤 {e(p['nome'])}"
                  + (f" <small>(account di {e(p['origine'])})</small>" if p["origine"] and p["origine"] != p["nome"] else "") + "</h2>",
-                 f"<p>Gruppo sanguigno: <b>{e(pr.get('gruppo') or 'non indicato')}</b><br>Allergie e intolleranze dichiarate: "
-                 f"<b>{e(', '.join((f.get('allergie') or {}).get(pid, [])) or 'nessuna')}</b></p>"]
-        if dott.get("nome") or dott.get("telefono") or dott.get("email"):
+                 ]
+        if _fam_con_scheda(sezioni):
+            corpo.append(f"<p>Gruppo sanguigno: <b>{e(pr.get('gruppo') or 'non indicato')}</b><br>Allergie e intolleranze dichiarate: "
+                         f"<b>{e(', '.join((f.get('allergie') or {}).get(pid, [])) or 'nessuna')}</b></p>")
+        if _fam_con_scheda(sezioni) and (dott.get("nome") or dott.get("telefono") or dott.get("email")):
             corpo.append(f"<p><b>Il mio {e(str(dott.get('tipo', 'Dottore')).lower())}:</b> {e(dott.get('nome', ''))}"
                          + (f" · tel. {e(dott['telefono'])}" if dott.get("telefono") else "") + (f" · {e(dott['email'])}" if dott.get("email") else "")
                          + (f" · {e(dott['indirizzo'])}" if dott.get("indirizzo") else "") + "</p>")
         san = pr.get("sanitario") or {}
         for titolo, ch in (("Patologie", "patologie"), ("Interventi subiti", "interventi"), ("Storia clinica di rilievo", "storia"),
                            ("Familiarità", "famiglia"), ("Altre informazioni", "altro")):
-            if san.get(ch):
+            if _fam_con_scheda(sezioni) and san.get(ch):
                 corpo.append(f"<p><b>{titolo}:</b><br>{e(san[ch]).replace(chr(10), '<br>')}</p>")
-        for titolo, intest, fn in FAM_SEZIONI:
+        for titolo, intest, fn in _fam_sezioni(sezioni):
             corpo.append(_fa_tabella_html(titolo, intest, fn(p)))
         parti.append("".join(corpo))
     nomi = ", ".join(p["nome"] for p in persone)
@@ -264,9 +279,33 @@ th,td{{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}
 @media print{{h2.persona{{page-break-before:always;break-before:page}}h2.prima{{page-break-before:auto;break-before:auto}}table{{page-break-inside:auto}}tr{{page-break-inside:avoid}}}}</style></head><body>
 <h1>Report famiglia · Farmacia</h1>
 <div class="box"><b>{len(persone)} persone</b>: {e(nomi)}<br>Creato il {data_it(oggi_.isoformat())}</div>
-{''.join(parti)}
+{''.join(parti)}{extra_html}
 <p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista.
 Le foto e i PDF caricati non sono inclusi. Contiene dati sanitari: conservalo con cura e non condividerlo con chi non deve vederlo.</p></body></html>"""
+
+
+def fam_pagine(persone, sezioni=None):
+    """Una pagina per persona, in forma neutra (serve a creare il PDF): [{'titolo', 'intro': [righe di testo], 'tabelle': [(titolo, intestazioni, righe)]}]."""
+    pagine = []
+    for p in persone:
+        pr, f, pid = p["p"], p["f"], p["pid"]
+        intro = []
+        if _fam_con_scheda(sezioni):
+            intro.append(f"Gruppo sanguigno: {pr.get('gruppo') or 'non indicato'}   ·   Allergie e intolleranze dichiarate: "
+                         f"{', '.join((f.get('allergie') or {}).get(pid, [])) or 'nessuna'}")
+            dott = pr.get("dottore") or {}
+            if dott.get("nome") or dott.get("telefono") or dott.get("email"):
+                intro.append(f"Il mio {str(dott.get('tipo', 'Dottore')).lower()}: {dott.get('nome', '')}"
+                             + (f" · tel. {dott['telefono']}" if dott.get("telefono") else "") + (f" · {dott['email']}" if dott.get("email") else "")
+                             + (f" · {dott['indirizzo']}" if dott.get("indirizzo") else ""))
+            san = pr.get("sanitario") or {}
+            for titolo, ch in (("Patologie", "patologie"), ("Interventi subiti", "interventi"), ("Storia clinica di rilievo", "storia"),
+                               ("Familiarità", "famiglia"), ("Altre informazioni", "altro")):
+                if san.get(ch):
+                    intro.append(f"{titolo}: {san[ch]}")
+        pagine.append({"titolo": p["nome"] + (f" (account di {p['origine']})" if p["origine"] and p["origine"] != p["nome"] else ""),
+                       "intro": intro, "tabelle": [(t_, i_, fn(p)) for t_, i_, fn in _fam_sezioni(sezioni)]})
+    return pagine
 
 
 def _fam_nome_foglio(nome, usati):
@@ -338,24 +377,26 @@ def fam_xlsx(fogli):
     return buf.getvalue()
 
 
-def fam_fogli(persone):
-    """I fogli dell'Excel: un foglio per argomento, con una colonna «Persona» per distinguere chi è chi."""
+def fam_fogli(persone, sezioni=None, extra=None):
+    """I fogli dell'Excel: un foglio per argomento, con una colonna «Persona» per distinguere chi è chi. extra = altri fogli (nome, intestazioni, righe)."""
     anag = [_fam_anagrafica(p) for p in persone]
-    fogli = [("Persone", list(anag[0].keys()) if anag else ["Persona"], [list(a.values()) for a in anag])]
-    for titolo, intest, fn in FAM_SEZIONI:
+    fogli = []
+    if _fam_con_scheda(sezioni):
+        fogli.append(("Persone", list(anag[0].keys()) if anag else ["Persona"], [list(a.values()) for a in anag]))
+    for titolo, intest, fn in _fam_sezioni(sezioni):
         righe = []
         for p in persone:
             righe += [[p["nome"]] + r for r in fn(p)]
         fogli.append((titolo, ["Persona"] + intest, righe))
-    return fogli
+    return fogli + list(extra or [])
 
 
-def fam_json(persone):
+def fam_json(persone, sezioni=None):
     out = []
     for p in persone:
-        out.append({"persona": p["nome"], "account": p["origine"] or "capo famiglia", "anagrafica": _fam_anagrafica(p),
-                    "scheda_sanitaria": p["p"].get("sanitario"),
-                    **{re.sub(r"[^a-z0-9_]", "", titolo.lower().replace(" ", "_")): [dict(zip(intest, r)) for r in fn(p)] for titolo, intest, fn in FAM_SEZIONI}})
+        out.append({"persona": p["nome"], "account": p["origine"] or "capo famiglia",
+                    **({"anagrafica": _fam_anagrafica(p), "scheda_sanitaria": p["p"].get("sanitario")} if _fam_con_scheda(sezioni) else {}),
+                    **{re.sub(r"[^a-z0-9_]", "", titolo.lower().replace(" ", "_")): [dict(zip(intest, r)) for r in fn(p)] for titolo, intest, fn in _fam_sezioni(sezioni)}})
     return json.dumps(out, ensure_ascii=False, indent=2).encode("utf-8")
 
 
@@ -467,6 +508,8 @@ def schermata_famiglia():
                        width="stretch", key="fam_dl_json")
     st.caption("«Da stampare» si apre nel browser: tocca Stampa e scegli «Salva come PDF» oppure stampa su carta (una persona per pagina). "
                "Contiene dati sanitari: non condividerlo con chi non deve vederlo. Foto e PDF caricati non sono inclusi.")
+    if "inv_hub_famiglia" in globals():
+        inv_hub_famiglia(sel, "tutti" if cosa == "Tutta la famiglia" else sel[0]["nome"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
