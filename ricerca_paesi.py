@@ -13,55 +13,55 @@ import streamlit as st
 PAESE_LINGUA = {"it": "IT", "en": "GB", "es": "ES", "fr": "FR", "de": "DE", "ro": "RO", "ar": "EG"}
 
 PAESI = {
-    "IT": {"bandiera": "🇮🇹", "nome": "Italia", "q": "Italy", "cc": "it", "tz": "Europe/Rome", "citta": "Torino", "cap": r"\d{5}",
+    "IT": {"farmacia": "farmacia", "bandiera": "🇮🇹", "nome": "Italia", "q": "Italy", "cc": "it", "tz": "Europe/Rome", "citta": "Torino", "cap": r"\d{5}",
            "turno": "farmacie di turno", "offerta": "offerta volantino", "tutti": "volantini supermercati",
            "siti": [("DoveConviene", "doveconviene.it"), ("PromoQui", "promoqui.it"), ("Volantinofacile", "volantinofacile.it"),
                     ("Tiendeo", "tiendeo.it")],
            "catene": None},
-    "ES": {"bandiera": "🇪🇸", "nome": "España", "q": "Spain", "cc": "es", "tz": "Europe/Madrid", "citta": "Barcelona", "cap": r"\d{5}",
+    "ES": {"farmacia": "farmacia", "bandiera": "🇪🇸", "nome": "España", "q": "Spain", "cc": "es", "tz": "Europe/Madrid", "citta": "Barcelona", "cap": r"\d{5}",
            "turno": "farmacias de guardia", "offerta": "oferta folleto", "tutti": "folletos supermercados",
            "siti": [("Tiendeo", "tiendeo.es"), ("Ofertia", "ofertia.com")],
            "catene": {"Supermercato": ["Mercadona", "Dia", "Eroski", "Consum", "Caprabo", "BonPreu", "Condis", "Ahorramás", "Supercor"],
                       "Ipermercato": ["Carrefour", "Alcampo", "Hipercor", "E.Leclerc"],
                       "Discount": ["Lidl", "Aldi", "Dia Maxi"]}},
-    "GB": {"bandiera": "🇬🇧", "nome": "United Kingdom", "q": "United Kingdom", "cc": "gb", "tz": "Europe/London", "citta": "London",
+    "GB": {"farmacia": "pharmacy", "bandiera": "🇬🇧", "nome": "United Kingdom", "q": "United Kingdom", "cc": "gb", "tz": "Europe/London", "citta": "London",
            "cap": r"[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}",
            "turno": "late night pharmacy open now", "offerta": "offer leaflet", "tutti": "supermarket leaflets",
            "siti": [("Tiendeo", "tiendeo.co.uk"), ("MySupermarket", "mysupermarket.co.uk")],
            "catene": {"Supermercato": ["Tesco", "Sainsbury's", "Asda", "Morrisons", "Waitrose", "Co-op", "M&S Food", "Iceland"],
                       "Ipermercato": ["Tesco Extra", "Asda Superstore", "Sainsbury's Superstore"],
                       "Discount": ["Aldi", "Lidl", "Farmfoods", "B&M"]}},
-    "FR": {"bandiera": "🇫🇷", "nome": "France", "q": "France", "cc": "fr", "tz": "Europe/Paris", "citta": "Paris", "cap": r"\d{5}",
+    "FR": {"farmacia": "pharmacie", "bandiera": "🇫🇷", "nome": "France", "q": "France", "cc": "fr", "tz": "Europe/Paris", "citta": "Paris", "cap": r"\d{5}",
            "turno": "pharmacie de garde", "offerta": "promo prospectus", "tutti": "catalogues supermarchés",
            "siti": [("Tiendeo", "tiendeo.fr"), ("Bonial", "bonial.fr"), ("PromoCatalogues", "promocatalogues.com")],
            "catene": {"Supermercato": ["Carrefour Market", "Intermarché", "Monoprix", "Casino", "Franprix", "Super U", "Match"],
                       "Ipermercato": ["Carrefour", "E.Leclerc", "Auchan", "Hyper U", "Cora", "Géant Casino"],
                       "Discount": ["Lidl", "Aldi", "Netto", "Leader Price"]}},
-    "DE": {"bandiera": "🇩🇪", "nome": "Deutschland", "q": "Germany", "cc": "de", "tz": "Europe/Berlin", "citta": "Berlin", "cap": r"\d{5}",
+    "DE": {"farmacia": "Apotheke", "bandiera": "🇩🇪", "nome": "Deutschland", "q": "Germany", "cc": "de", "tz": "Europe/Berlin", "citta": "Berlin", "cap": r"\d{5}",
            "turno": "Notdienst Apotheke", "offerta": "Angebot Prospekt", "tutti": "Supermarkt Prospekte",
            "siti": [("Kaufda", "kaufda.de"), ("Marktjagd", "marktjagd.de"), ("Tiendeo", "tiendeo.de")],
            "catene": {"Supermercato": ["Edeka", "Rewe", "Tegut", "Nahkauf"],
                       "Ipermercato": ["Kaufland", "Real", "Globus", "Marktkauf"],
                       "Discount": ["Aldi", "Lidl", "Penny", "Netto"]}},
-    "RO": {"bandiera": "🇷🇴", "nome": "România", "q": "Romania", "cc": "ro", "tz": "Europe/Bucharest", "citta": "București", "cap": r"\d{6}",
+    "RO": {"farmacia": "farmacie", "bandiera": "🇷🇴", "nome": "România", "q": "Romania", "cc": "ro", "tz": "Europe/Bucharest", "citta": "București", "cap": r"\d{6}",
            "turno": "farmacie de gardă non-stop", "offerta": "ofertă catalog", "tutti": "cataloage supermarketuri",
            "siti": [("Tiendeo", "tiendeo.ro")],
            "catene": {"Supermercato": ["Mega Image", "Profi", "Carrefour Market", "Annabella"],
                       "Ipermercato": ["Kaufland", "Carrefour", "Auchan", "Selgros", "Cora"],
                       "Discount": ["Lidl", "Penny", "Aldi"]}},
-    "EG": {"bandiera": "🇪🇬", "nome": "مصر", "q": "Egypt", "cc": "eg", "tz": "Africa/Cairo", "citta": "القاهرة", "cap": None,
+    "EG": {"farmacia": "صيدلية", "bandiera": "🇪🇬", "nome": "مصر", "q": "Egypt", "cc": "eg", "tz": "Africa/Cairo", "citta": "القاهرة", "cap": None,
            "turno": "صيدلية مناوبة", "offerta": "عروض", "tutti": "عروض السوبرماركت", "siti": [],
            "catene": {"Supermercato": ["Spinneys", "Metro", "Seoudi", "Fathalla"], "Ipermercato": ["Carrefour", "Hyperone", "Lulu"],
                       "Discount": ["Kazyon", "Oscar"]}},
-    "MA": {"bandiera": "🇲🇦", "nome": "المغرب", "q": "Morocco", "cc": "ma", "tz": "Africa/Casablanca", "citta": "الدار البيضاء", "cap": None,
+    "MA": {"farmacia": "صيدلية", "bandiera": "🇲🇦", "nome": "المغرب", "q": "Morocco", "cc": "ma", "tz": "Africa/Casablanca", "citta": "الدار البيضاء", "cap": None,
            "turno": "صيدلية الحراسة", "offerta": "عروض", "tutti": "عروض السوبرماركت", "siti": [],
            "catene": {"Supermercato": ["Marjane", "Carrefour Market", "Acima"], "Ipermercato": ["Marjane", "Carrefour", "Aswak Assalam"],
                       "Discount": ["Label'Vie"]}},
-    "SA": {"bandiera": "🇸🇦", "nome": "السعودية", "q": "Saudi Arabia", "cc": "sa", "tz": "Asia/Riyadh", "citta": "الرياض", "cap": None,
+    "SA": {"farmacia": "صيدلية", "bandiera": "🇸🇦", "nome": "السعودية", "q": "Saudi Arabia", "cc": "sa", "tz": "Asia/Riyadh", "citta": "الرياض", "cap": None,
            "turno": "صيدلية 24 ساعة", "offerta": "عروض", "tutti": "عروض السوبرماركت", "siti": [],
            "catene": {"Supermercato": ["Panda", "Othaim", "Tamimi", "Danube"], "Ipermercato": ["Hyper Panda", "Lulu", "Carrefour"],
                       "Discount": ["Al Raya", "Bin Dawood"]}},
-    "AE": {"bandiera": "🇦🇪", "nome": "الإمارات", "q": "United Arab Emirates", "cc": "ae", "tz": "Asia/Dubai", "citta": "دبي", "cap": None,
+    "AE": {"farmacia": "صيدلية", "bandiera": "🇦🇪", "nome": "الإمارات", "q": "United Arab Emirates", "cc": "ae", "tz": "Asia/Dubai", "citta": "دبي", "cap": None,
            "turno": "صيدلية 24 ساعة", "offerta": "عروض", "tutti": "عروض السوبرماركت", "siti": [],
            "catene": {"Supermercato": ["Spinneys", "Waitrose", "Choithrams", "Union Coop"], "Ipermercato": ["Carrefour", "Lulu", "Géant"],
                       "Discount": ["Al Maya", "Nesto"]}},
@@ -222,6 +222,15 @@ RP_TR["de"].update({'gps_btn': '📍 Meinen Standort nutzen (GPS)', 'gps_hint': 
 RP_TR["ro"].update({'gps_btn': '📍 Folosește locația mea (GPS)', 'gps_hint': 'Telefonul îți va cere permisiunea de a folosi locația. Nu se salvează. Sau scrie orașul mai jos.', 'gps_err_perm': 'Nu am permisiunea de a folosi locația. Permite-o în setările browserului pentru acest site sau scrie orașul.', 'gps_err_non_disp': 'Nu pot găsi locația acum. Pornește GPS-ul sau scrie orașul.', 'gps_err_tempo': 'Locația durează prea mult. Încearcă afară sau scrie orașul.', 'gps_err_no': 'Acest telefon sau browser nu permite folosirea locației. Scrie orașul.', 'gps_luogo': 'locația ta (±{acc} m)'})
 RP_TR["ar"].update({'gps_btn': '📍 استخدم موقعي (GPS)', 'gps_hint': 'سيطلب منك الهاتف الإذن باستخدام الموقع. لا يتم حفظه. أو اكتب المدينة في الأسفل.', 'gps_err_perm': 'ليس لدي إذن باستخدام الموقع. اسمح به في إعدادات المتصفح لهذا الموقع أو اكتب المدينة.', 'gps_err_non_disp': 'لا أستطيع إيجاد الموقع الآن. شغّل GPS أو اكتب المدينة.', 'gps_err_tempo': 'الموقع يستغرق وقتاً طويلاً. حاول في الهواء الطلق أو اكتب المدينة.', 'gps_err_no': 'هذا الهاتف أو المتصفح لا يسمح باستخدام الموقع. اكتب المدينة.', 'gps_luogo': 'موقعك (±{acc} م)'})
 
+# --- errori dei servizi delle mappe e alternativa con Google Maps ---
+RP_TR["it"].update({'err_geo': 'Il servizio che trova le città non risponde in questo momento.', 'err_farm': 'Il servizio che elenca le farmacie è sovraccarico e non risponde. Riprova tra qualche secondo.', 'fallback_btn': '🗺️ Apri Google Maps e cerca le farmacie qui', 'dettaglio': 'Dettaglio tecnico: {d}', 'riprova': 'Tocca Cerca per riprovare, oppure usa Google Maps.'})
+RP_TR["en"].update({'err_geo': 'The service that finds cities is not responding right now.', 'err_farm': 'The service that lists pharmacies is overloaded and not responding. Try again in a few seconds.', 'fallback_btn': '🗺️ Open Google Maps and look for pharmacies here', 'dettaglio': 'Technical detail: {d}', 'riprova': 'Tap Search to try again, or use Google Maps.'})
+RP_TR["es"].update({'err_geo': 'El servicio que encuentra las ciudades no responde en este momento.', 'err_farm': 'El servicio que lista las farmacias está sobrecargado y no responde. Inténtalo de nuevo en unos segundos.', 'fallback_btn': '🗺️ Abrir Google Maps y buscar farmacias aquí', 'dettaglio': 'Detalle técnico: {d}', 'riprova': 'Toca Buscar para intentarlo de nuevo, o usa Google Maps.'})
+RP_TR["fr"].update({'err_geo': 'Le service qui trouve les villes ne répond pas pour le moment.', 'err_farm': 'Le service qui liste les pharmacies est surchargé et ne répond pas. Réessaie dans quelques secondes.', 'fallback_btn': '🗺️ Ouvrir Google Maps et chercher les pharmacies ici', 'dettaglio': 'Détail technique : {d}', 'riprova': 'Touche Chercher pour réessayer, ou utilise Google Maps.'})
+RP_TR["de"].update({'err_geo': 'Der Dienst, der Städte findet, antwortet gerade nicht.', 'err_farm': 'Der Dienst, der Apotheken auflistet, ist überlastet und antwortet nicht. Versuche es in ein paar Sekunden noch einmal.', 'fallback_btn': '🗺️ Google Maps öffnen und hier nach Apotheken suchen', 'dettaglio': 'Technisches Detail: {d}', 'riprova': 'Tippe auf Suchen, um es erneut zu versuchen, oder nutze Google Maps.'})
+RP_TR["ro"].update({'err_geo': 'Serviciul care găsește orașele nu răspunde acum.', 'err_farm': 'Serviciul care listează farmaciile este suprasolicitat și nu răspunde. Încearcă din nou peste câteva secunde.', 'fallback_btn': '🗺️ Deschide Google Maps și caută farmacii aici', 'dettaglio': 'Detaliu tehnic: {d}', 'riprova': 'Atinge Caută ca să încerci din nou sau folosește Google Maps.'})
+RP_TR["ar"].update({'err_geo': 'الخدمة التي تجد المدن لا تستجيب الآن.', 'err_farm': 'الخدمة التي تعرض الصيدليات مثقلة ولا تستجيب. حاول مرة أخرى بعد ثوانٍ.', 'fallback_btn': '🗺️ افتح خرائط Google وابحث عن الصيدليات هنا', 'dettaglio': 'تفصيل تقني: {d}', 'riprova': 'المس بحث للمحاولة مرة أخرى أو استخدم خرائط Google.'})
+
 
 def _rp_lingua():
     try:
@@ -355,3 +364,12 @@ def rp_inietta_gps():
 def rp_link_turno(cc, dove):
     from urllib.parse import quote_plus
     return "https://www.google.com/search?q=" + quote_plus(f"{PAESI[cc]['turno']} {dove}")
+
+
+def rp_link_mappe(cc, dove="", lat=None, lon=None):
+    """Un link a Google Maps con la ricerca delle farmacie: funziona anche quando i servizi delle mappe dell'app non rispondono."""
+    from urllib.parse import quote_plus
+    parola = PAESI.get(cc, PAESI["IT"])["farmacia"]
+    if lat is not None and lon is not None:
+        return f"https://www.google.com/maps/search/{quote_plus(parola)}/@{lat},{lon},15z"
+    return "https://www.google.com/maps/search/" + quote_plus(f"{parola} {dove}".strip())

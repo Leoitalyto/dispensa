@@ -1137,7 +1137,11 @@ import math as _math
 
 _GG = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 _RE_ORA = re.compile(r"(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})")
-_SERVER_OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
+_SERVER_OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter",
+                    "https://overpass.kumi.systems/api/interpreter", "https://overpass.openstreetmap.fr/api/interpreter",
+                    "https://z.overpass-api.de/api/interpreter"]
+# Chi usa i servizi gratuiti di OpenStreetMap deve farsi riconoscere con un indirizzo di contatto (altrimenti può essere rifiutato)
+UA_MAPPE = {"User-Agent": "DispensaFamiglia/1.0 (https://github.com/Leoitalyto/dispensa)", "Accept-Language": "it,en;q=0.8"}
 
 
 def _fa_oh_parse(oh):
@@ -1214,28 +1218,68 @@ def _fa_distanza_km(lat1, lon1, lat2, lon2):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fa_geocodifica(testo, cc="IT"):
-    """Trova il posto (città, comune o codice postale) nel Paese scelto con OpenStreetMap (Nominatim)."""
+    """Trova il posto (città, comune o codice postale) nel Paese scelto: OpenStreetMap (Nominatim) e, se non risponde, Photon.
+    Ritorna (lat, lon, nome), oppure None se il posto non esiste. Se nessun servizio risponde, solleva un errore."""
+    errori, risposto = [], False
     for par in rp_geocodifica_parametri(testo, cc):
-        r = requests.get("https://nominatim.openstreetmap.org/search", headers=UA, timeout=15, params=par)
-        r.raise_for_status()
-        j = r.json()
-        if j:
-            return float(j[0]["lat"]), float(j[0]["lon"]), j[0].get("display_name", "")
+        try:
+            r = requests.get("https://nominatim.openstreetmap.org/search", headers=UA_MAPPE, timeout=15, params=par)
+            r.raise_for_status()
+            risposto = True
+            j = r.json()
+            if j:
+                return float(j[0]["lat"]), float(j[0]["lon"]), j[0].get("display_name", "")
+        except Exception as e:
+            errori.append(f"nominatim {type(e).__name__}")
+    if not risposto:                                         # Nominatim non risponde: provo un altro servizio gratuito
+        try:
+            lg = lingua() if lingua() in ("en", "de", "fr") else "en"
+            r = requests.get("https://photon.komoot.io/api/", headers=UA_MAPPE, timeout=15,
+                             params={"q": f"{testo}, {PAESI[cc]['q']}", "limit": 5, "lang": lg})
+            r.raise_for_status()
+            risposto = True
+            for ft in r.json().get("features", []):
+                pr = ft.get("properties") or {}
+                if (pr.get("countrycode") or "").upper() == cc:
+                    lo, la = ft["geometry"]["coordinates"][:2]
+                    nome = ", ".join(x for x in (pr.get("name"), pr.get("city"), pr.get("state"), pr.get("country")) if x)
+                    return float(la), float(lo), nome
+        except Exception as e:
+            errori.append(f"photon {type(e).__name__}")
+    if not risposto:
+        raise RuntimeError("; ".join(errori) or "nessun servizio")
     return None
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _fa_overpass(lat, lon, raggio):
-    query = f'[out:json][timeout:25];nwr["amenity"="pharmacy"](around:{raggio},{lat},{lon});out center tags 80;'
-    ultimo = None
-    for url in _SERVER_OVERPASS:
-        try:
-            r = requests.post(url, data={"data": query}, headers=UA, timeout=30)
-            r.raise_for_status()
-            return r.json().get("elements", [])
-        except Exception as e:
-            ultimo = e
-    raise ultimo
+    """Le farmacie intorno a un punto, da OpenStreetMap (Overpass). I server pubblici sono spesso sovraccarichi: se uno non risponde
+    si prova con gli altri, poi si riprova una seconda volta. Se nessuno risponde, l'errore dice quali e perché."""
+    import time as _t
+    query = (f'[out:json][timeout:20];(node["amenity"="pharmacy"](around:{raggio},{lat},{lon});'
+             f'way["amenity"="pharmacy"](around:{raggio},{lat},{lon}););out center tags 60;')
+    errori, inizio = [], _t.time()
+    for giro in range(2):
+        for url in _SERVER_OVERPASS:
+            if _t.time() - inizio > 45:
+                break
+            nome = url.split("//")[1].split("/")[0]
+            try:
+                r = requests.post(url, data={"data": query}, headers=UA_MAPPE, timeout=15)
+                if r.status_code in (429, 502, 503, 504):
+                    errori.append(f"{nome} HTTP {r.status_code}")
+                    continue
+                r.raise_for_status()
+                j = r.json()
+                if j.get("remark") and "error" in str(j["remark"]).lower() and not j.get("elements"):
+                    errori.append(f"{nome} sovraccarico")
+                    continue
+                return j.get("elements", [])
+            except Exception as e:
+                errori.append(f"{nome} {type(e).__name__}")
+        if giro == 0 and _t.time() - inizio < 30:
+            _t.sleep(2)
+    raise RuntimeError("; ".join(errori[-6:]) or "nessun server")
 
 
 def _fa_cerca_farmacie(lat, lon, quando):
@@ -1266,13 +1310,19 @@ def _fa_cerca_farmacie(lat, lon, quando):
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fa_reverse(lat, lon):
     """Da latitudine e longitudine al nome del posto e al Paese (OpenStreetMap, Nominatim). Ritorna (codice Paese, nome posto)."""
-    r = requests.get("https://nominatim.openstreetmap.org/reverse", headers=UA, timeout=15,
+    r = requests.get("https://nominatim.openstreetmap.org/reverse", headers=UA_MAPPE, timeout=15,
                      params={"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 10, "accept-language": lingua()})
     r.raise_for_status()
     j = r.json() or {}
     ind = j.get("address") or {}
     posto = ind.get("city") or ind.get("town") or ind.get("village") or ind.get("municipality") or ind.get("county") or ""
     return (ind.get("country_code") or "").upper(), posto
+
+
+def _fa_errore_ricerca(cc, chiave, eccezione, dove="", lat=None, lon=None):
+    """Mette nei risultati un errore chiaro (quale servizio non risponde), il dettaglio tecnico e un link a Google Maps."""
+    st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t(chiave), "dettaglio": str(eccezione)[:300],
+                                   "mappe": rp_link_mappe(cc, dove, lat, lon)}
 
 
 def _fa_cerca_con_gps(valore, cc):
@@ -1282,19 +1332,21 @@ def _fa_cerca_con_gps(valore, cc):
         st.session_state["fa_farm"] = {"dove": "", "cc": cc, "errore": rp_testo_errore_gps(esito[1])}
         return
     _, lat, lon, acc, tz = esito
-    try:
-        with st.spinner("…"):
-            quando = rp_ora_locale(cc, tz)
-            try:
-                cc_gps, posto = _fa_reverse(round(lat, 2), round(lon, 2))
-            except Exception:
-                cc_gps, posto = "", ""
+    with st.spinner("…"):
+        quando = rp_ora_locale(cc, tz)
+        try:
+            cc_gps, posto = _fa_reverse(round(lat, 2), round(lon, 2))
+        except Exception:
+            cc_gps, posto = "", ""
+        cc_uso = cc_gps if cc_gps in PAESI else cc
+        try:
             righe = _fa_cerca_farmacie(lat, lon, quando)
-        luogo = rp_t("gps_luogo", acc=acc) + (f" · {posto}" if posto else "")
-        st.session_state["fa_farm"] = {"dove": posto or f"{lat:.4f}, {lon:.4f}", "cc": cc_gps if cc_gps in PAESI else cc,
-                                       "luogo": luogo, "quando": quando.isoformat(), "righe": righe}
-    except Exception:
-        st.session_state["fa_farm"] = {"dove": "", "cc": cc, "errore": rp_t("err_rete")}
+        except Exception as e:
+            _fa_errore_ricerca(cc_uso, "err_farm", e, posto, lat, lon)
+            return
+    luogo = rp_t("gps_luogo", acc=acc) + (f" · {posto}" if posto else "")
+    st.session_state["fa_farm"] = {"dove": posto or f"{lat:.4f}, {lon:.4f}", "cc": cc_uso,
+                                   "luogo": luogo, "quando": quando.isoformat(), "righe": righe}
 
 
 def _fa_dialogo_farmacie_corpo():
@@ -1315,22 +1367,34 @@ def _fa_dialogo_farmacie_corpo():
         if not dove.strip():
             st.error(rp_t("err_vuoto"))
         else:
-            try:
-                with st.spinner("…"):
+            with st.spinner("…"):
+                try:
                     posto = _fa_geocodifica(dove, cc)
+                except Exception as e:
+                    _fa_errore_ricerca(cc, "err_geo", e, dove)
+                else:
                     if not posto:
-                        st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t("err_non_trovo", paese=P["nome"])}
+                        st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t("err_non_trovo", paese=P["nome"]),
+                                                       "mappe": rp_link_mappe(cc, dove)}
                     else:
                         quando = rp_ora_locale(cc)         # l'ora del Paese scelto, per capire se è aperta
-                        st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "luogo": posto[2], "quando": quando.isoformat(),
-                                                       "righe": _fa_cerca_farmacie(posto[0], posto[1], quando)}
-            except Exception:
-                st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "errore": rp_t("err_rete")}
+                        try:
+                            righe = _fa_cerca_farmacie(posto[0], posto[1], quando)
+                        except Exception as e:
+                            _fa_errore_ricerca(cc, "err_farm", e, dove, posto[0], posto[1])
+                        else:
+                            st.session_state["fa_farm"] = {"dove": dove, "cc": cc, "luogo": posto[2], "quando": quando.isoformat(),
+                                                           "righe": righe}
     ris = st.session_state.get("fa_farm")
     if not ris:
         st.caption(rp_t("scrivi"))
     elif ris.get("errore"):
         st.error(ris["errore"])
+        if ris.get("mappe"):
+            st.caption(rp_t("riprova"))
+            st.link_button(rp_t("fallback_btn"), ris["mappe"], type="primary", width="stretch")
+        if ris.get("dettaglio"):
+            st.caption(rp_t("dettaglio", d=ris["dettaglio"]))
     else:
         solo_aperte = st.checkbox(rp_t("solo_aperte"), key="fa_solo_aperte")
         righe = [r for r in ris["righe"] if not solo_aperte or r["stato"] == "aperta"]
