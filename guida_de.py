@@ -278,10 +278,11 @@ Oben siehst du die Zähler. Wenn du **Telegram** oder **E-Mail** aktiviert hast 
         """Über der Liste ist das Feld **Suchen**: schreibe den Typ, die Nummer, die Behörde oder eine Notiz. Daneben wähle eine **Kategorie**, um nur diese zu sehen.""",
         "suchen suche finden filter kategorie liste"),
     "x_modificare": ("✏️ Bearbeiten, öffnen und löschen",
-        """- **Ein Foto öffnen:** tippe auf den Dateinamen unter dem Dokument: du siehst es groß und kannst es **herunterladen**.
-- **Bearbeiten:** tippe auf **Modifica**, ändere die Daten oder füge weitere Fotos hinzu, dann speichere.
+        """- **Ein Dokument öffnen:** tippe auf seine **farbige Karte**: das Detail öffnet sich mit allen Daten.
+- **Vorder- und Rückseite ansehen:** im Detail tippe auf **👁️ Mostra fronte e retro** (Vorder- und Rückseite zeigen): du siehst sie groß und kannst sie **herunterladen**.
+- **Bearbeiten:** im Detail tippe auf **✏️ Modifica**, ändere die Daten oder füge weitere Fotos hinzu, dann speichere.
 - **Nur ein Foto entfernen:** in Modifica, in der Liste **Già allegato**, tippe auf 🗑️ neben der Datei.
-- **Das Dokument löschen:** tippe auf **Elimina** und bestätige.""",
+- **Das Dokument löschen:** im Detail tippe auf **🗑️ Elimina** und bestätige.""",
         "bearbeiten andern loschen entfernen offnen anhang herunterladen foto"),
     "x_tipi": ("⚙️ Die Dokumenttypen",
         """Unten auf der Seite öffne **⚙️ Gestisci i tipi di documento**: du kannst eigene Typen **hinzufügen**, **entfernen** oder die nicht genutzten **ausblenden**.""",

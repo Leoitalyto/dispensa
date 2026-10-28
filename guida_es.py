@@ -278,10 +278,11 @@ Arriba ves los contadores. Si has activado **Telegram** o el **correo** (se hace
         """Sobre la lista está el campo **Buscar**: escribe el tipo, el número, el organismo o una nota. Al lado elige una **categoría** para ver solo esos.""",
         "buscar busqueda encontrar filtro categoria lista"),
     "x_modificare": ("✏️ Editar, abrir y eliminar",
-        """- **Abrir una foto:** toca el nombre del archivo bajo el documento: la ves grande y puedes **descargarla**.
-- **Editar:** toca **Modifica**, cambia los datos o añade más fotos, luego guarda.
+        """- **Abrir un documento:** toca su **ficha de color**: se abre el detalle con todos los datos.
+- **Ver anverso y reverso:** en el detalle toca **👁️ Mostra fronte e retro** (Mostrar anverso y reverso): las ves grandes y puedes **descargarlas**.
+- **Editar:** en el detalle toca **✏️ Modifica**, cambia los datos o añade más fotos, luego guarda.
 - **Quitar una sola foto:** en Modifica, en la lista **Già allegato**, toca 🗑️ junto al archivo.
-- **Eliminar el documento:** toca **Elimina** y confirma.""",
+- **Eliminar el documento:** en el detalle toca **🗑️ Elimina** y confirma.""",
         "editar modificar cambiar eliminar borrar abrir adjunto descargar quitar foto"),
     "x_tipi": ("⚙️ Los tipos de documento",
         """Al final de la página abre **⚙️ Gestisci i tipi di documento**: puedes **añadir** tus tipos, **quitarlos** u **ocultar** los que no usas.""",

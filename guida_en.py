@@ -278,10 +278,11 @@ At the top you see the counters. If you turned on **Telegram** or **email** (don
         """Above the list there is the **Search** field: write the type, the number, the issuer or a note. Next to it choose a **category** to see only those.""",
         "search find filter category list"),
     "x_modificare": ("✏️ Editing, opening and deleting",
-        """- **Open a photo:** tap the file name under the document: you see it big and can **download** it.
-- **Edit:** tap **Modifica**, change the data or add more photos, then save.
+        """- **Open a document:** tap its **coloured card**: the detail opens with all the data.
+- **See front and back:** in the detail tap **👁️ Mostra fronte e retro** (Show front and back): you see them big and can **download** them.
+- **Edit:** in the detail tap **✏️ Modifica**, change the data or add more photos, then save.
 - **Remove a single photo:** in Edit, in the **Già allegato** list, tap 🗑️ next to the file.
-- **Delete the document:** tap **Elimina** and confirm.""",
+- **Delete the document:** in the detail tap **🗑️ Elimina** and confirm.""",
         "edit change delete remove open attachment download photo"),
     "x_tipi": ("⚙️ Document types",
         """At the bottom of the page open **⚙️ Gestisci i tipi di documento**: you can **add** your own types, **remove** them or **hide** those you don't use.""",

@@ -311,10 +311,11 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nell
          """Sopra l'elenco c'è il campo **Cerca**: scrivi il tipo, il numero, l'ente o una nota. Accanto scegli una **categoria** per vedere solo quelli.""",
          "cercare ricerca trovare filtro categoria elenco"),
         ("✏️ Modificare, aprire ed eliminare",
-         """- **Aprire una foto:** tocca il nome del file sotto il documento: la vedi grande e puoi **scaricarla**.
-- **Modificare:** tocca **Modifica**, cambia i dati o aggiungi altre foto, poi salva.
+         """- **Aprire un documento:** tocca la sua **scheda colorata**: si apre il dettaglio con tutti i dati.
+- **Vedere fronte e retro:** nel dettaglio tocca **👁️ Mostra fronte e retro**: le vedi grandi e puoi **scaricarle**.
+- **Modificare:** nel dettaglio tocca **✏️ Modifica**, cambia i dati o aggiungi altre foto, poi salva.
 - **Togliere una foto sola:** in Modifica, nella lista **Già allegato**, tocca 🗑️ accanto al file.
-- **Eliminare il documento:** tocca **Elimina** e conferma.""",
+- **Eliminare il documento:** nel dettaglio tocca **🗑️ Elimina** e conferma.""",
          "modificare modifica eliminare cancellare aprire allegato scaricare togliere foto"),
         ("⚙️ I tipi di documento",
          """In fondo alla pagina apri **⚙️ Gestisci i tipi di documento**: puoi **aggiungere** i tuoi tipi, **toglierli** o **nascondere** quelli che non usi.""",

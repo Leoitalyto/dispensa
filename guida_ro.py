@@ -278,10 +278,11 @@ Sus vezi contoarele. Dacă ai activat **Telegram** sau **e-mailul** (se face în
         """Deasupra listei este câmpul **Caută**: scrie tipul, numărul, instituția sau o notă. Alături alege o **categorie** ca să le vezi doar pe acelea.""",
         "cauta cautare gaseste filtru categorie lista"),
     "x_modificare": ("✏️ Modifici, deschizi și ștergi",
-        """- **Deschide o fotografie:** atinge numele fișierului de sub document: o vezi mare și o poți **descărca**.
-- **Modifică:** atinge **Modifica**, schimbă datele sau adaugă alte fotografii, apoi salvează.
+        """- **Deschide un document:** atinge **fișa lui colorată**: se deschide detaliul cu toate datele.
+- **Vezi fața și spatele:** în detaliu atinge **👁️ Mostra fronte e retro** (Arată fața și spatele): le vezi mari și le poți **descărca**.
+- **Modifică:** în detaliu atinge **✏️ Modifica**, schimbă datele sau adaugă alte fotografii, apoi salvează.
 - **Scoate o singură fotografie:** în Modifica, în lista **Già allegato**, atinge 🗑️ lângă fișier.
-- **Șterge documentul:** atinge **Elimina** și confirmă.""",
+- **Șterge documentul:** în detaliu atinge **🗑️ Elimina** și confirmă.""",
         "modifica schimba sterge elimina deschide atasament descarca scoate foto"),
     "x_tipi": ("⚙️ Tipurile de documente",
         """La sfârșitul paginii deschide **⚙️ Gestisci i tipi di documento**: poți **adăuga** tipurile tale, le poți **scoate** sau **ascunde** pe cele pe care nu le folosești.""",

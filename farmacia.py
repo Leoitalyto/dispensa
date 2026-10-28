@@ -2806,9 +2806,134 @@ def _doc_card(x, oggi_, emoji):
     return f"<div class='{classe}' style='--c:{_DOC_COL[stato]}'>{righe}</div>"
 
 
+def _doc_fronte_retro(allegati):
+    """Divide gli allegati in (fronte, retro, altri): dal nome («Fronte - …», «Retro - …») oppure, in mancanza, dall'ordine delle immagini."""
+    immagini = [x for x in allegati if str(x.get("mime", "")).startswith("image/")]
+    altri = [x for x in allegati if not str(x.get("mime", "")).startswith("image/")]
+    fronte = next((x for x in immagini if x["nome"].lower().startswith("fronte")), None) or (immagini[0] if immagini else None)
+    retro = next((x for x in immagini if x["nome"].lower().startswith("retro")), None)
+    if retro is None:
+        resto = [x for x in immagini if x is not fronte]
+        retro = resto[0] if resto else None
+    extra = [x for x in immagini if x is not fronte and x is not retro]
+    return fronte, retro, extra + altri
+
+
+def _doc_imposta(chiave, valore):
+    """Usata dai pulsanti (on_click): cambia lo stato PRIMA che la finestra venga ridisegnata, così il testo dei pulsanti è subito giusto."""
+    if valore is None:
+        st.session_state.pop(chiave, None)
+    else:
+        st.session_state[chiave] = valore
+
+
+def _doc_alterna(chiave):
+    st.session_state[chiave] = not st.session_state.get(chiave, False)
+
+
+def _doc_elimina(doc_id):
+    """Elimina un documento e i suoi file. Ritorna None se va bene, altrimenti il messaggio d'errore."""
+    f = _fa_dati()
+    rec = next((x for x in f.get("documenti", []) if x["id"] == doc_id), {})
+    ids = [a["id"] for a in rec.get("allegati", [])]
+    try:
+        _fa_salva(lambda f_: f_.__setitem__("documenti", [x for x in f_.get("documenti", []) if x["id"] != doc_id]), "Documenti: eliminato")
+    except Exception as e:
+        return str(e)
+    _fa_cancella_files(ids)
+    return None
+
+
+def _doc_dettaglio_corpo(doc_id, pid):
+    f = _fa_dati()
+    x = next((d_ for d_ in f.get("documenti", []) if d_["id"] == doc_id), None)
+    if not x:
+        st.error("Non trovo più questo documento.")
+        return
+    nomi = {p_["id"]: p_["nome"] for p_ in _fa_profili(f)}
+    cat = _doc_catalogo(f)
+    emoji = {t_: c.split(" ")[0] for c, lst in cat.items() for t_ in lst}.get(x.get("tipo"), "📄")
+    oggi_ = oggi()
+    st.markdown(_doc_card(x, oggi_, emoji), unsafe_allow_html=True)
+
+    # --- tutti i dati del documento
+    stato, giorni = _doc_stato(x.get("scadenza"), oggi_)
+    dati = [("Tipo", x.get("tipo")), ("Di chi è", nomi.get(x.get("profilo", "p0"))), ("Numero o identificativo", x.get("numero")),
+            ("Rilasciato da", x.get("ente")), ("Data di rilascio", data_it(x["rilascio"]) if x.get("rilascio") else None),
+            ("Scadenza", "Non scade" if x.get("senza_scadenza") else (data_it(x["scadenza"]) if x.get("scadenza") else None)),
+            ("Giorni alla scadenza", None if x.get("senza_scadenza") or not x.get("scadenza") else
+             (f"scaduto da {abs(giorni or 0)} giorni" if (giorni or 0) < 0 else f"{giorni} giorni")),
+            ("Note", x.get("note")), ("File allegati", str(len(x.get("allegati", []))) if x.get("allegati") else None)]
+    righe = "".join(f"<tr><td style='padding:4px 10px 4px 0;opacity:.7;white-space:nowrap'>{html.escape(k)}</td>"
+                    f"<td style='padding:4px 0'><b>{html.escape(str(v))}</b></td></tr>" for k, v in dati if v)
+    st.markdown(f"<table style='border-collapse:collapse;width:100%'>{righe}</table>", unsafe_allow_html=True)
+
+    # --- fronte e retro: un tasto per vederli
+    allegati = x.get("allegati", [])
+    if allegati:
+        k_vis = f"doc_vis_{doc_id}"
+        vis = st.session_state.get(k_vis, False)
+        st.button(("🙈 Nascondi fronte e retro" if vis else "👁️ Mostra fronte e retro"), key=f"doc_btnvis_{doc_id}",
+                  type="primary", width="stretch", on_click=_doc_alterna, args=(k_vis,))
+        if vis:
+            fronte, retro, altri = _doc_fronte_retro(allegati)
+            for titolo, a_ in (("📄 Fronte", fronte), ("📄 Retro", retro)):
+                st.markdown(f"**{titolo}**")
+                if not a_:
+                    st.caption("Non c'è ancora: puoi aggiungerla con «Modifica».")
+                    continue
+                d_ = carica_dati(crea_archivio(), _fa_percorso_doc(a_["id"]))
+                if d_.get("b64"):
+                    st.image(base64.b64decode(d_["b64"]))
+                    st.download_button("⬇ Scarica", base64.b64decode(d_["b64"]), file_name=a_["nome"], mime=d_.get("mime", "image/webp"),
+                                       key=f"doc_dl_{a_['id']}", width="stretch")
+                else:
+                    st.error("Non trovo questa immagine.")
+            for a_ in altri:                                   # PDF e altre pagine
+                d_ = carica_dati(crea_archivio(), _fa_percorso_doc(a_["id"]))
+                if d_.get("b64"):
+                    st.download_button("⬇ " + a_["nome"], base64.b64decode(d_["b64"]), file_name=a_["nome"],
+                                       mime=d_.get("mime", "application/octet-stream"), key=f"doc_dl_{a_['id']}", width="stretch")
+    else:
+        st.info("Nessuna foto o file allegato. Tocca «Modifica» per aggiungere il fronte e il retro.")
+
+    # --- modifica ed eliminazione
+    st.divider()
+    if st.session_state.get(f"doc_conf_{doc_id}"):
+        st.warning(f"Vuoi eliminare **{x.get('tipo', 'questo documento')}**? Verranno eliminati anche i file allegati.")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("Sì, elimina", type="primary", key=f"doc_si_{doc_id}", width="stretch"):
+            errore = _doc_elimina(doc_id)
+            if errore:
+                st.error(f"Non sono riuscito a eliminarlo: {errore}")
+            else:
+                st.session_state.pop(f"doc_conf_{doc_id}", None)
+                st.session_state["fa_msg"] = "🗑️ Documento eliminato."
+                st.rerun()
+        s2.button("Annulla", key=f"doc_no_{doc_id}", width="stretch", on_click=_doc_imposta, args=(f"doc_conf_{doc_id}", None))
+    else:
+        b1, b2 = st.columns(2, gap="small")
+        if b1.button("✏️ Modifica", key=f"doc_dmo_{doc_id}", width="stretch"):
+            st.session_state["doc_modulo"] = {"pid": pid, "doc_id": doc_id}
+            st.rerun()
+        b2.button("🗑️ Elimina", key=f"doc_del_{doc_id}", width="stretch", on_click=_doc_imposta, args=(f"doc_conf_{doc_id}", True))
+
+
+def _doc_dettaglio(doc_id, pid):
+    """Apre il dettaglio completo del documento: dati, fronte e retro, modifica ed eliminazione."""
+    st.dialog("📄 Documento", width="large")(lambda: _doc_dettaglio_corpo(doc_id, pid))()
+
+
 def schermata_documenti():
     st.markdown(_FA_CSS, unsafe_allow_html=True)
     _doc_css()
+    st.markdown("""<style>
+[class*="st-key-doc_box_"]{position:relative}
+[class*="st-key-doc_apri_"]{position:absolute !important;top:0;left:0;right:0;bottom:0;z-index:3;margin:0 !important}
+[class*="st-key-doc_apri_"] [data-testid="stButton"],[class*="st-key-doc_apri_"] button{width:100%;height:100%;min-height:0}
+[class*="st-key-doc_apri_"] button{opacity:0;cursor:pointer}
+.doc-apri{margin-top:8px;font-size:.8rem;font-weight:700;opacity:.65;text-align:center}
+</style>""", unsafe_allow_html=True)
     if st.button("← Torna alla dispensa", key="doc_indietro"):
         st.session_state.pop("sezione_home", None)
         st.session_state.pop("doc_modulo", None)
@@ -2881,15 +3006,13 @@ def schermata_documenti():
     elif not visibili:
         st.info("Nessun documento corrisponde ai filtri.")
     for x in visibili:
-        with st.container(border=True):
-            st.markdown(_doc_card(x, oggi_, emoji_di.get(x.get("tipo"), "📄")), unsafe_allow_html=True)
-            _fa_bottoni_allegati(x.get("allegati", []), "documento", x["id"])
-            b1, b2 = st.columns(2, gap="small")
-            if b1.button("Elimina", icon=":material/delete:", key="doc_el_" + x["id"], width="stretch"):
-                _fa_dialogo_elimina_voce("documenti", x["id"], x.get("tipo", "documento"))
-            if b2.button("Modifica", icon=":material/edit:", key="doc_mo_" + x["id"], width="stretch"):
-                st.session_state["doc_modulo"] = {"pid": pid, "doc_id": x["id"]}
-                st.rerun()
+        with st.container(border=True, key="doc_box_" + x["id"]):
+            n_all = len(x.get("allegati", []))
+            st.markdown(_doc_card(x, oggi_, emoji_di.get(x.get("tipo"), "📄"))
+                        + "<div class='doc-apri'>👆 Tocca per aprire: foto fronte e retro, dettagli, modifica"
+                        + (f" · 🖼️ {n_all}" if n_all else "") + "</div>", unsafe_allow_html=True)
+            if st.button("Apri", key="doc_apri_" + x["id"], width="stretch"):            # il pulsante copre tutta la scheda (invisibile)
+                _doc_dettaglio(x["id"], pid)
     _doc_gestione_tipi(f)
     st.caption("🔔 Gli avvisi su Telegram e per email (se li hai attivati) arrivano 6 mesi prima (primo avviso) e 3 mesi prima "
                "(secondo avviso, più insistente). Contiene dati personali: non condividerli con chi non deve vederli.")
