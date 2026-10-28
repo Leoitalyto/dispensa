@@ -222,7 +222,9 @@ Mesajele pleacă de la adresa de e-mail a aplicației. **Prima dată uită-te ș
 ### 💬 SMS
 Sunt cu plată și de obicei nu sunt active: întreabă administratorul.
 
-Opțional: bifează **„Nei messaggi non scrivere i nomi dei medicinali”** (în mesaje să nu se scrie numele medicamentelor) dacă vrei mai multă confidențialitate.""",
+Opțional: bifează **„Nei messaggi non scrivere i nomi dei medicinali”** (în mesaje să nu se scrie numele medicamentelor) dacă vrei mai multă confidențialitate.
+
+Capul familiei, în același formular, poate activa și rezumatul zilnic al familiei și alerta când o persoană nu înregistrează o doză în 90 de minute. Rețetele care expiră curând trimit alerte cu 14, 7, 3 și 1 zile înainte și chiar în ziua respectivă.""",
         "notificari avertizari telegram chat id bot start userinfobot email sms memento mesaj primi activeaza numar gmail spam"),
     "f_report": ("🧾 Raport complet și date",
         """În **🧾 I miei dati personali e report completo** scrii nume și prenume și descarci un **raport de tipărit** cu tot ce ai introdus. Fișierul **JSON** conține aceleași date pentru o copie de siguranță.

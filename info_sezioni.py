@@ -242,7 +242,9 @@ I collegamenti sono separati per ogni profilo della famiglia.""",
 ### 💬 SMS
 Sono a pagamento e di solito non sono attivi: chiedi all'amministratore.
 
-Facoltativo: spunta **«Nei messaggi non scrivere i nomi dei medicinali»** se vuoi più privacy.""",
+Facoltativo: spunta **«Nei messaggi non scrivere i nomi dei medicinali»** se vuoi più privacy.
+
+Il capo famiglia, nello stesso modulo, può attivare anche il riepilogo della famiglia ogni mattina e l'avviso se una persona non registra una dose entro 90 minuti. Le prescrizioni in scadenza avvisano a 14, 7, 3 e 1 giorno e il giorno stesso.""",
          "avvisi notifiche telegram chat id bot avvia start userinfobot email sms promemoria messaggio ricevere attivare numero id gmail spam posta"),
         ("🧾 Report completo e dati",
          """In **🧾 I miei dati personali e report completo** scrivi nome e cognome e scarichi un **report da stampare** con tutto quello che hai inserito. Il file **JSON** contiene gli stessi dati per una copia di sicurezza.

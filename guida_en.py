@@ -222,7 +222,9 @@ Messages are sent from the app's email address. **The first time also look in Sp
 ### 💬 SMS
 They are paid and usually not active: ask the administrator.
 
-Optional: tick **«Nei messaggi non scrivere i nomi dei medicinali»** (do not write medicine names in messages) if you want more privacy.""",
+Optional: tick **«Nei messaggi non scrivere i nomi dei medicinali»** (do not write medicine names in messages) if you want more privacy.
+
+The head of the family, in the same form, can also turn on the daily family summary and the alert when a person does not log a dose within 90 minutes. Prescriptions about to expire send alerts at 14, 7, 3 and 1 days and on the day itself.""",
         "alerts notifications telegram chat id bot start userinfobot email sms reminder message receive activate number gmail spam mail"),
     "f_report": ("🧾 Full report and data",
         """In **🧾 I miei dati personali e report completo** write your name and surname and download a **report to print** with everything you entered. The **JSON** file contains the same data as a backup copy.

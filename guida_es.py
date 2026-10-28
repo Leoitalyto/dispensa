@@ -222,7 +222,9 @@ Los mensajes salen de la dirección de correo de la app. **La primera vez mira t
 ### 💬 SMS
 Son de pago y normalmente no están activos: pregunta al administrador.
 
-Opcional: marca **«Nei messaggi non scrivere i nomi dei medicinali»** (no escribir los nombres de los medicamentos en los mensajes) si quieres más privacidad.""",
+Opcional: marca **«Nei messaggi non scrivere i nomi dei medicinali»** (no escribir los nombres de los medicamentos en los mensajes) si quieres más privacidad.
+
+El cabeza de familia, en el mismo formulario, puede activar también el resumen diario de la familia y el aviso cuando una persona no registra una dosis en 90 minutos. Las recetas a punto de caducar avisan a los 14, 7, 3 y 1 días y el mismo día.""",
         "avisos notificaciones telegram chat id bot iniciar start userinfobot correo email sms recordatorio mensaje recibir activar numero gmail spam"),
     "f_report": ("🧾 Informe completo y datos",
         """En **🧾 I miei dati personali e report completo** escribe nombre y apellidos y descargas un **informe para imprimir** con todo lo que has introducido. El archivo **JSON** contiene los mismos datos como copia de seguridad.

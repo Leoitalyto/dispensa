@@ -222,7 +222,9 @@ Die Nachrichten kommen von der E-Mail-Adresse der App. **Schau beim ersten Mal a
 ### 💬 SMS
 Sie kosten Geld und sind meist nicht aktiv: frag den Administrator.
 
-Optional: hake **„Nei messaggi non scrivere i nomi dei medicinali“** (in Nachrichten keine Medikamentennamen schreiben) an, wenn du mehr Privatsphäre willst.""",
+Optional: hake **„Nei messaggi non scrivere i nomi dei medicinali“** (in Nachrichten keine Medikamentennamen schreiben) an, wenn du mehr Privatsphäre willst.
+
+Das Familienoberhaupt kann im selben Formular auch die tägliche Familienübersicht und die Warnung aktivieren, wenn eine Person eine Einnahme nicht innerhalb von 90 Minuten einträgt. Bald ablaufende Rezepte melden sich 14, 7, 3 und 1 Tag vorher und am Tag selbst.""",
         "benachrichtigungen warnungen telegram chat id bot start userinfobot email sms erinnerung nachricht erhalten aktivieren nummer gmail spam"),
     "f_report": ("🧾 Vollständiger Bericht und Daten",
         """In **🧾 I miei dati personali e report completo** schreibst du Vor- und Nachname und lädst einen **Bericht zum Ausdrucken** mit allem herunter, was du eingetragen hast. Die **JSON**-Datei enthält dieselben Daten als Sicherungskopie.

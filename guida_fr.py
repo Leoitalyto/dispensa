@@ -222,7 +222,9 @@ Les messages partent de l'adresse e-mail de l'appli. **La première fois regarde
 ### 💬 SMS
 Ils sont payants et en général pas actifs : demande à l'administrateur.
 
-Facultatif : coche **« Nei messaggi non scrivere i nomi dei medicinali »** (ne pas écrire les noms des médicaments dans les messages) si tu veux plus de confidentialité.""",
+Facultatif : coche **« Nei messaggi non scrivere i nomi dei medicinali »** (ne pas écrire les noms des médicaments dans les messages) si tu veux plus de confidentialité.
+
+Le chef de famille, dans le même formulaire, peut aussi activer le résumé quotidien de la famille et l'alerte quand une personne n'enregistre pas une prise dans les 90 minutes. Les ordonnances bientôt périmées envoient des alertes à 14, 7, 3 et 1 jours et le jour même.""",
         "alertes notifications telegram chat id bot demarrer start userinfobot email sms rappel message recevoir activer numero gmail spam"),
     "f_report": ("🧾 Rapport complet et données",
         """Dans **🧾 I miei dati personali e report completo** écris nom et prénom et télécharge un **rapport à imprimer** avec tout ce que tu as saisi. Le fichier **JSON** contient les mêmes données pour une copie de sauvegarde.
