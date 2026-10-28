@@ -47,6 +47,53 @@ _JS_FOTO = r"""
   try {
     if (w.__scattaAttivo) return;
     w.__scattaAttivo = true;
+    var MSG = __MSG__;
+    var ultimo = null;                                  // l'ultimo campo scelto: {inp, camera, chiave}
+    function avviso(testo, ms) {
+      var el = doc.getElementById('foto-avviso');
+      if (!el) {
+        el = doc.createElement('div'); el.id = 'foto-avviso';
+        el.style.cssText = 'position:fixed;left:50%;top:78px;transform:translateX(-50%);max-width:92vw;background:#14302b;color:#fff;padding:10px 16px;' +
+          'border-radius:16px;font:600 14px/1.3 sans-serif;z-index:100002;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.35)';
+        doc.body.appendChild(el);
+      }
+      el.textContent = testo; el.style.display = 'block';
+      w.clearTimeout(el.__t); el.__t = w.setTimeout(function () { el.style.display = 'none'; }, ms || 5000);
+    }
+    // la foto del telefono pesa parecchi MB: la riduco prima di caricarla (molto piu' veloce e affidabile)
+    function riduci(f, cb) {
+      if (!w.createImageBitmap || f.size < 600000) { cb(f); return; }
+      var fatto = false;
+      function una(g) { if (!fatto) { fatto = true; cb(g); } }
+      w.setTimeout(function () { una(f); }, 8000);       // se la riduzione si blocca, carico l'originale
+      w.createImageBitmap(f, {imageOrientation: 'from-image'}).then(function (bm) {
+        var s = Math.min(1, 1800 / Math.max(bm.width, bm.height));
+        var c = doc.createElement('canvas'); c.width = Math.max(1, Math.round(bm.width * s)); c.height = Math.max(1, Math.round(bm.height * s));
+        c.getContext('2d').drawImage(bm, 0, 0, c.width, c.height);
+        c.toBlob(function (b) {
+          if (!b) { una(f); return; }
+          una(new w.File([b], ((f.name || 'foto').replace(/\.\w+$/, '')) + '.jpg', {type: 'image/jpeg', lastModified: Date.now()}));
+        }, 'image/jpeg', 0.9);
+      }).catch(function () { una(f); });
+    }
+    function consegna(inp) {
+      var f = inp && inp.files && inp.files[0];
+      if (!f || inp.__fatto === f) return;
+      inp.__fatto = f;
+      avviso(MSG.carico, 7000);
+      riduci(f, function (g) {
+        var dest = doc.querySelector('[class~="st-key-' + (inp.__camera ? 'fotocam_' : 'fotogal_') + inp.__chiave + '"] input[type="file"]');
+        if (!dest) { avviso(MSG.nonarrivata, 9000); return; }
+        try {
+          var dt = new w.DataTransfer(); dt.items.add(g); dest.files = dt.files;
+          dest.dispatchEvent(new w.Event('change', {bubbles: true}));
+        } catch (err) { avviso(MSG.nonarrivata, 9000); }
+      });
+    }
+    function ricontrolla() { if (ultimo) w.setTimeout(function () { consegna(ultimo.inp); }, 700); }
+    // dopo lo scatto il telefono torna al browser: se l'evento di cambio e' andato perso, la foto si recupera da qui
+    doc.addEventListener('visibilitychange', function () { if (!doc.hidden) ricontrolla(); });
+    w.addEventListener('focus', ricontrolla);
     doc.addEventListener('click', function (e) {
       var b = e.target && e.target.closest ? e.target.closest('button') : null;
       if (!b) return;
@@ -57,21 +104,15 @@ _JS_FOTO = r"""
       if (!m) return;
       var camera = (m[1] === 'scatta'), chiave = m[2];
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if (ultimo && ultimo.inp && ultimo.inp.parentNode) ultimo.inp.parentNode.removeChild(ultimo.inp);
       var inp = doc.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
       if (camera) inp.setAttribute('capture', 'environment');
-      inp.addEventListener('change', function () {
-        var f = inp.files && inp.files[0];
-        if (f) {
-          var dest = doc.querySelector('[class~="st-key-' + (camera ? 'fotocam_' : 'fotogal_') + chiave + '"] input[type="file"]');
-          if (dest) {
-            var dt = new w.DataTransfer(); dt.items.add(f); dest.files = dt.files;
-            dest.dispatchEvent(new w.Event('change', {bubbles: true}));
-          }
-        }
-        if (inp.parentNode) inp.parentNode.removeChild(inp);
-      });
-      doc.body.appendChild(inp);
+      inp.__camera = camera; inp.__chiave = chiave;
+      inp.addEventListener('change', function () { consegna(inp); });
+      inp.addEventListener('input', function () { consegna(inp); });
+      doc.body.appendChild(inp);                        // resta nella pagina: se il telefono la ricarica, la foto si recupera
+      ultimo = {inp: inp};
       inp.click();
     }, true);
   } catch (e) {}
@@ -80,7 +121,9 @@ _JS_FOTO = r"""
 
 
 def _avvia_fotocamera_posteriore():
-    codice = _JS_FOTO.replace("__TESTO__", json.dumps(t("Scatta foto"), ensure_ascii=False))
+    msg = {"carico": (_fp("foto_carico") if "_fp" in globals() else "⏳ Sto caricando la foto…"),
+           "nonarrivata": (_fp("foto_non_arrivata") if "_fp" in globals() else "⚠️ La foto non è arrivata. Riprova oppure usa «Carica dal telefono».")}
+    codice = _JS_FOTO.replace("__TESTO__", json.dumps(t("Scatta foto"), ensure_ascii=False)).replace("__MSG__", json.dumps(msg, ensure_ascii=False))
     pagina = ("<script>(function(){"
               "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
               "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"

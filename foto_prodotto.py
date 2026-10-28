@@ -304,24 +304,81 @@ def _maschera_ai(rgb):
     return _affina_bordo(rgb, cv2.GaussianBlur(alfa, (0, 0), 0.9))
 
 
-def scontorna_e_addrizza(dati, lato=720):
-    """Da una foto (bytes) a una immagine WebP trasparente, ritagliata sul prodotto e addrizzata. Ritorna 'data:image/webp;base64,...'."""
+def _maschera_classica_grande(bgr):
+    """GrabCut su una copia piccola, riportata alla misura della foto (0/255), oppure None."""
+    h, w = bgr.shape[:2]
+    scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
+    piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
+    mp = _maschera_prodotto(piccola)
+    if mp is None:
+        return None
+    m = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
+    m = cv2.GaussianBlur(m, (0, 0), 1.6)
+    return np.clip((m.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
+
+
+def _scegli_maschera(rgb, bgr):
+    """Sceglie come ritagliare. Ritorna (maschera, modo): 'ai' (sagoma precisa), 'classica', 'scatola' (il prodotto riempie la foto:
+    si tiene tutto) oppure (None, 'intera') se non si capisce dov'e' il prodotto.
+    Il modello AI a volte riconosce solo un dettaglio (per esempio il fungo disegnato sulla busta del risotto): se la sagoma e' piccola
+    e dentro la foto c'e' un oggetto molto piu' grande che la contiene, vale l'oggetto grande."""
+    ai = _maschera_ai(rgb)
+    area_ai = float((ai > 127).mean()) if ai is not None else 0.0
+    if ai is not None and area_ai >= 0.22:
+        return ai, "ai"
+    cl = _maschera_classica_grande(bgr)
+    area_cl = float((cl > 127).mean()) if cl is not None else 0.0
+    if cl is not None:
+        contiene = 1.0 if ai is None else float(((ai > 127) & (cl > 127)).sum()) / max(1.0, float((ai > 127).sum()))
+        if area_cl >= max(0.10, 1.8 * area_ai) and contiene >= 0.6:
+            return (cl, "scatola") if area_cl >= 0.45 else (cl, "classica")
+    if ai is not None and area_ai >= 0.08:
+        return ai, "ai"
+    return None, "intera"
+
+
+def controlla_foto(dati):
+    """Controlla se la foto e' utilizzabile. Ritorna la lista dei problemi: 'piccola', 'sfocata', 'scura', 'chiara', 'vuota' (lista vuota = va bene)."""
+    problemi = []
+    try:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+        if min(img.size) < 360:
+            problemi.append("piccola")
+        g = img.convert("L")
+        g.thumbnail((800, 800))
+        a = np.array(g)
+        media = float(a.mean())
+        contrasto = float(np.percentile(a, 98) - np.percentile(a, 2))
+        nitidezza = float(cv2.Laplacian(a, cv2.CV_64F).var())
+        if contrasto < 12 and nitidezza < 5:
+            problemi.append("vuota")
+        elif media < 38 or (media < 60 and contrasto < 28):
+            problemi.append("scura")
+        elif media > 238 and contrasto < 40:
+            problemi.append("chiara")
+        elif nitidezza < 35:
+            problemi.append("sfocata")
+    except Exception:
+        return []                                              # se non riesco a controllare, non blocco niente
+    return problemi
+
+
+def _scontorna_completa(dati, lato=720, mantieni=False):
+    """Da una foto (bytes) a (immagine WebP trasparente ritagliata e addrizzata, modo). mantieni=True: tutta la foto, senza togliere lo sfondo."""
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
     img.thumbnail((1200, 1200))
     rgb = np.array(img)
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     h, w = bgr.shape[:2]
-    mask = _maschera_ai(rgb)
-    if mask is None:                                                         # riserva: metodo senza modello
-        scala = 360.0 / max(h, w) if max(h, w) > 360 else 1.0
-        piccola = cv2.resize(bgr, (max(1, int(w * scala)), max(1, int(h * scala))), interpolation=cv2.INTER_AREA)
-        mp = _maschera_prodotto(piccola)
-        if mp is not None:
-            mask = cv2.resize(mp, (w, h), interpolation=cv2.INTER_LINEAR)
-            mask = cv2.GaussianBlur(mask, (0, 0), 1.6)
-            mask = np.clip((mask.astype(np.float32) - 110) * 255 / 90, 0, 255).astype(np.uint8)
+    mask, modo = (None, "intera") if mantieni else _scegli_maschera(rgb, bgr)
     if mask is None:
         rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])
+    elif modo == "scatola":
+        # il prodotto riempie la foto: si ritaglia a rettangolo (con un po' di margine) e niente trasparenze, cosi' non si perde nulla
+        ys, xs = np.where(mask > 127)
+        m = int(0.04 * max(xs.max() - xs.min(), ys.max() - ys.min()))
+        x0, x1, y0, y1 = max(0, xs.min() - m), min(w, xs.max() + m + 1), max(0, ys.min() - m), min(h, ys.max() + m + 1)
+        rgba = np.dstack([rgb, np.full((h, w), 255, np.uint8)])[y0:y1, x0:x1]
     else:
         rgba = np.dstack([rgb, mask])
         ang = _angolo_totale(rgb, mask)
@@ -344,27 +401,36 @@ def scontorna_e_addrizza(dati, lato=720):
     out = nitida
     buf = io.BytesIO()
     out.save(buf, "WEBP", quality=86, method=6)
-    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode(), modo
+
+
+def scontorna_e_addrizza(dati, lato=720):
+    """Da una foto (bytes) a una immagine WebP trasparente, ritagliata sul prodotto e addrizzata. Ritorna 'data:image/webp;base64,...'."""
+    return _scontorna_completa(dati, lato)[0]
 
 
 # ---------------------------------------------------------------------
 # Campo foto (uno solo, in alto) usato da "Aggiungi" e da "Modifica"
 # ---------------------------------------------------------------------
-_VERSIONE_FOTO = 9
+_VERSIONE_FOTO = 10
 
 
-def _foto_lavorata(dati):
-    """Scontorna e addrizza una sola volta per ogni foto (la scelta resta in memoria durante la sessione)."""
+def _foto_lavorata_modo(dati, mantieni=False):
+    """Scontorna e addrizza una sola volta per ogni foto (la scelta resta in memoria durante la sessione). Ritorna (uri, modo)."""
     mem = st.session_state.setdefault("_foto_lavorate", {})
-    chiave = (hash(dati), _VERSIONE_FOTO)                      # se cambia il metodo, le vecchie foto in memoria non valgono piu'
+    chiave = (hash(dati), bool(mantieni), _VERSIONE_FOTO)      # se cambia il metodo, le vecchie foto in memoria non valgono piu'
     if chiave not in mem:
         if len(mem) >= 4:
             mem.pop(next(iter(mem)))
         try:
-            mem[chiave] = scontorna_e_addrizza(dati)
+            mem[chiave] = _scontorna_completa(dati, mantieni=mantieni)
         except Exception:
-            mem[chiave] = foto_a_data_uri(dati, 720)         # se qualcosa va storto resta la foto normale
+            mem[chiave] = (foto_a_data_uri(dati, 720), "intera")   # se qualcosa va storto resta la foto normale
     return mem[chiave]
+
+
+def _foto_lavorata(dati):
+    return _foto_lavorata_modo(dati)[0]
 
 
 def _ritocco(uri, grado, sopra, sotto, sinistra, destra):
@@ -647,6 +713,23 @@ def foto_ampia_html(src):
     return f"<div class='foto-ampia'><img src='{html.escape(src, quote=True)}' alt=''></div>"
 
 
+_FP_IT = {
+    "foto_ricevuta": "📥 Foto ricevuta: {nome} ({kb} KB)", "foto_elimina": "🗑️ Elimina questa foto",
+    "foto_tolta": "Foto eliminata. Scegline o scattane un'altra con i pulsanti qui sopra.",
+    "foto_tieni": "Tieni tutta la foto (non togliere lo sfondo)", "foto_usa_comunque": "✅ Usa comunque questa foto",
+    "foto_problema": "⚠️ Questa foto non va bene:", "foto_consiglio": "Eliminala e fanne un'altra: più luce, telefono fermo, prodotto ben centrato.",
+    "foto_p_piccola": "è troppo piccola", "foto_p_sfocata": "è sfocata", "foto_p_scura": "è troppo scura", "foto_p_chiara": "è troppo chiara",
+    "foto_p_vuota": "sembra vuota (non si vede il prodotto)",
+    "foto_scatola": "Il prodotto riempie la foto: ho tenuto tutta la confezione. Se non va bene, spunta «Tieni tutta la foto» o usa la cornice.",
+}
+
+
+def _fp(chiave, **valori):
+    """Un testo del campo foto nella lingua scelta (se non c'e' la traduzione, in italiano)."""
+    testo = (rp_t(chiave) if "rp_t" in globals() and chiave in RP_TR.get(lingua() if "lingua" in globals() else "it", {}) else _FP_IT[chiave])
+    return testo.format(**valori) if valori else testo
+
+
 def campo_foto(chiave, attuale=""):
     """Punto unico per la foto. A sinistra 'Scatta' (apre la fotocamera VERA del telefono, lato posteriore, con messa a fuoco),
     a destra 'Carica dal telefono'. I due tasti li gestisce fotocamera.py: la foto scelta finisce nei campi nascosti qui sotto.
@@ -681,12 +764,33 @@ def campo_foto(chiave, attuale=""):
     file = candidati.get(ultima) or next((f for f in candidati.values() if f is not None), None)
 
     nuova = ""
+    ident_f = None
     if file is not None:
-        with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
-            automatica = _foto_lavorata(file.getvalue())
         ident_f = f"{chiave}_{getattr(file, 'file_id', None) or file.name + str(file.size)}"
+        if st.session_state.get(f"{chiave}_scartata") == ident_f:
+            st.caption(_fp("foto_tolta"))
+            file = None
+    if file is not None:
+        st.caption(_fp("foto_ricevuta", nome=file.name, kb=file.size // 1024))
+        problemi = controlla_foto(file.getvalue())
+        if problemi and not st.session_state.get(f"{chiave}_ok_{ident_f}"):
+            # la foto non rispetta i requisiti: si propone subito di eliminarla e rifarla
+            st.warning(_fp("foto_problema") + " " + ", ".join(_fp("foto_p_" + p) for p in problemi) + ".\n\n" + _fp("foto_consiglio"))
+            c_el, c_ok = st.columns(2, gap="small")
+            if c_el.button(_fp("foto_elimina"), key=f"fp_elimina_{ident_f}", type="primary", width="stretch"):
+                st.session_state[f"{chiave}_scartata"] = ident_f
+                st.rerun()
+            if c_ok.button(_fp("foto_usa_comunque"), key=f"fp_usa_{ident_f}", width="stretch"):
+                st.session_state[f"{chiave}_ok_{ident_f}"] = True
+                st.rerun()
+            return ""
+        tieni = st.checkbox(_fp("foto_tieni"), key=f"fp_tieni_{ident_f}")
+        with st.spinner(t("Sto ritagliando e raddrizzando la foto…")):
+            automatica, modo = _foto_lavorata_modo(file.getvalue(), tieni)
+        if modo == "scatola":
+            st.caption(_fp("foto_scatola"))
         # editor come quello del telefono: righello per raddrizzare e cornice per tagliare
-        sigla = hashlib.md5(ident_f.encode()).hexdigest()[:10]
+        sigla = hashlib.md5((ident_f + str(tieni)).encode()).hexdigest()[:10]
         etichetta = f"ritocco{sigla}"
         with st.container(key="nascosti_rit_" + sigla):
             params = st.text_input(etichetta, key=f"rit_{sigla}", label_visibility="collapsed")
@@ -703,6 +807,9 @@ def campo_foto(chiave, attuale=""):
             nuova = _ritocco(nuova, grado, sopra, sotto, sinistra, destra)
         st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
         st.caption(f"✅ {t('Foto pronta: sfondo tolto e prodotto raddrizzato.')} (v{_VERSIONE_FOTO})")
+        if st.button(_fp("foto_elimina"), key=f"fp_elimina2_{ident_f}", width="stretch"):
+            st.session_state[f"{chiave}_scartata"] = ident_f
+            st.rerun()
     elif attuale and src_sicuro(attuale):
         st.markdown(foto_ampia_html(src_sicuro(attuale)), unsafe_allow_html=True)
     return nuova

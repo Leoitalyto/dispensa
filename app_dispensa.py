@@ -15,6 +15,10 @@ _AGGANCI = {
         ("# --- intestazione e avvisi ---",
          'if st.session_state.get("farmacia_aperta"):\n    schermata_farmacia()\n    st.stop()\n'
          "# --- intestazione e avvisi ---"),
+        # pulsante «Schermo intero» sotto la tabella dei prodotti (tabella_intera.py)
+        ('            if len(_spunte) > 1:\n                st.caption(t("Spunta una sola riga da modificare."))\n',
+         '            if len(_spunte) > 1:\n                st.caption(t("Spunta una sola riga da modificare."))\n'
+         '            if "tf_pulsante" in globals():\n                tf_pulsante(gruppo, sezione)\n'),
         # pulsante «Informazioni» (guida a tendina) sotto l'intestazione della dispensa
         ("# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n",
          "# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n"
@@ -38,7 +42,7 @@ def _carica(percorso):
     exec(compile(_testo, percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "utilita.py", "assistente.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "utilita.py", "assistente.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):

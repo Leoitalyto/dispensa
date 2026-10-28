@@ -3198,7 +3198,20 @@ def campo_foto_doc(chiave, titolo):
     if st.session_state.get(f"{chiave}_scartata") == ident_f:
         st.caption("Foto tolta. Tocca uno dei due pulsanti per sceglierne un'altra.")
         return ""
-    st.caption(f"📥 Foto ricevuta: {file.name} ({file.size // 1024} KB)")
+    st.caption(rp_t("foto_ricevuta", nome=file.name, kb=file.size // 1024) if "rp_t" in globals()
+               else f"📥 Foto ricevuta: {file.name} ({file.size // 1024} KB)")
+    problemi = controlla_foto(file.getvalue()) if ("controlla_foto" in globals() and "rp_t" in globals()) else []
+    if problemi and not st.session_state.get(f"{chiave}_ok_{ident_f}"):
+        # la foto non rispetta i requisiti: si propone subito di eliminarla e rifarla
+        st.warning(rp_t("foto_problema") + " " + ", ".join(rp_t("foto_p_" + p_) for p_ in problemi) + ".\n\n" + rp_t("foto_consiglio"))
+        c_el, c_ok = st.columns(2, gap="small")
+        if c_el.button(rp_t("foto_elimina"), key=f"docfp_el_{ident_f}", type="primary", width="stretch"):
+            st.session_state[f"{chiave}_scartata"] = ident_f
+            st.rerun()
+        if c_ok.button(rp_t("foto_usa_comunque"), key=f"docfp_ok_{ident_f}", width="stretch"):
+            st.session_state[f"{chiave}_ok_{ident_f}"] = True
+            st.rerun()
+        return ""
     tieni = st.checkbox("Tieni anche lo sfondo (se il documento viene tagliato male)", key=f"docsf_{ident_f}")
     with st.spinner("Sto togliendo lo sfondo e raddrizzando il documento… (può richiedere qualche secondo)"):
         automatica = _doc_lavorata(file.getvalue(), tieni)
