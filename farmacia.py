@@ -431,7 +431,7 @@ def schermata_farmacia():
         f"<div class='fa-k scaduto'><span>Scaduti</span><b>{n('scaduto')}</b></div></div>",
         unsafe_allow_html=True)
 
-    tab_med, tab_ter, tab_vis, tab_vac = st.tabs(["💊 Medicinali", "📅 Terapie", "🩺 Visite", "💉 Vaccini"])
+    tab_med, tab_ter, tab_pre, tab_vis, tab_vac = st.tabs(["💊 Medicinali", "📅 Terapie", "📝 Prescrizioni", "🩺 Visite", "💉 Vaccini"])
     with tab_med:
         _fa_blocco_allergie(f, pid, nomi, del_profilo)
         if st.button("➕ Aggiungi medicinale", type="primary", key="fa_aggiungi", width="stretch"):
@@ -477,6 +477,8 @@ def schermata_farmacia():
     with tab_ter:
         _fa_tab_terapie(f, pid, nomi, oggi_)
         _fa_report_medico(f, pid, nomi, oggi_)
+    with tab_pre:
+        _fa_tab_prescrizioni(f, pid, nomi, oggi_)
     with tab_vis:
         _fa_tab_visite(f, pid, nomi, oggi_)
     with tab_vac:
@@ -810,10 +812,11 @@ def _fa_elimina_profilo(f, pid):
     ids += [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid and m.get("foto_grande")]
     ids += [a["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid for a in m.get("foglio", [])]
     ids += [a["id"] for x in f.get("documenti", []) if x.get("profilo", "p0") == pid for a in x.get("allegati", [])]
+    ids += [a["id"] for x in f.get("prescrizioni", []) if x.get("profilo", "p0") == pid for a in x.get("allegati", [])]
 
     def _m(f):
         f["profili"] = [p for p in f["profili"] if p["id"] != pid]
-        for chiave in ("medicinali", "terapie", "visite", "vaccinazioni", "documenti"):
+        for chiave in ("medicinali", "terapie", "prescrizioni", "visite", "vaccinazioni", "documenti"):
             f[chiave] = [x for x in f.get(chiave, []) if x.get("profilo", "p0") != pid]
         f["registro"] = {k: r for k, r in (f.get("registro") or {}).items() if r.get("p", "p0") != pid}
         (f.get("vaccini_doc") or {}).pop(pid, None)
@@ -831,6 +834,10 @@ def _fa_rimuovi_allegato(tipo, proprietario, did):
                     v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
         elif tipo == "documento":
             for v in f.get("documenti", []):
+                if v["id"] == proprietario:
+                    v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
+        elif tipo == "prescrizione":
+            for v in f.get("prescrizioni", []):
                 if v["id"] == proprietario:
                     v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
         else:
@@ -973,7 +980,7 @@ def _fa_dialogo_vaccinazione(pid, vac_id=None):
 @st.dialog("Conferma eliminazione")
 def _fa_dialogo_elimina_voce(lista, rec_id, etichetta):
     st.write(f"Vuoi eliminare **{etichetta}**?")
-    if lista in ("visite", "documenti"):
+    if lista in ("visite", "documenti", "prescrizioni"):
         st.caption("Verranno eliminati anche i file allegati.")
     c1, c2 = st.columns(2)
     if c1.button("Sì, elimina", type="primary", width="stretch"):
@@ -1039,6 +1046,260 @@ def _fa_tab_visite(f, pid, nomi, oggi_):
                 _fa_dialogo_visita(pid, v["id"])
 
 
+# =====================================================================
+# PRESCRIZIONI (RICETTE MEDICHE): data, medico, cosa è prescritto, codice, validità, foto della ricetta
+# =====================================================================
+TIPI_PRESC = ["Farmaci", "Esami e analisi", "Visita specialistica", "Altro"]
+STATI_PRESC = ["Da usare", "Usata"]
+_FA_PRESC_COL = {"ok": "#00897b", "urgente": "#e65100", "scaduta": "#b71c1c", "usata": "#9e9e9e", "nessuna": "#00897b"}
+
+
+def _fa_presc_stato(r, oggi_):
+    """(stato, giorni): 'usata', 'scaduta', 'urgente' (valida ancora al massimo 7 giorni), 'ok' oppure 'nessuna' (senza data di validità)."""
+    if r.get("stato") == "Usata":
+        return "usata", None
+    val = _fa_data(r.get("valida_fino"))
+    if not val:
+        return "nessuna", None
+    g = (val - oggi_).days
+    return ("scaduta" if g < 0 else "urgente" if g <= 7 else "ok"), g
+
+
+def _fa_presc_testo_stato(r, oggi_):
+    stato, g = _fa_presc_stato(r, oggi_)
+    val = data_it(r["valida_fino"]) if r.get("valida_fino") else ""
+    return {"usata": "✅ Usata", "scaduta": f"🔴 SCADUTA da {abs(g or 0)} giorni · {val}", "urgente": f"🟠 Scade tra {g} giorni · {val}",
+            "ok": f"🟢 Valida fino al {val} ({g} giorni)", "nessuna": "🟢 Senza data di scadenza"}[stato]
+
+
+def _fa_presc_card(r, oggi_):
+    e = html.escape
+    stato, _ = _fa_presc_stato(r, oggi_)
+    righe = f"<div class='nome'>📝 {e(r.get('tipo', 'Prescrizione'))}</div>"
+    if r.get("data"):
+        righe += f"<div class='riga'>📅 Emessa il {data_it(r['data'])}</div>"
+    if r.get("medico"):
+        righe += f"<div class='riga'>👨‍⚕️ {e(r['medico'])}</div>"
+    if r.get("prescritto"):
+        testo = r["prescritto"] if len(r["prescritto"]) <= 140 else r["prescritto"][:137] + "…"
+        righe += f"<div class='riga'>💊 {e(testo)}</div>"
+    if r.get("codice"):
+        righe += f"<div class='riga'>🔢 {e(r['codice'])}</div>"
+    return f"<div class='fa-med' style='--c:{_FA_PRESC_COL[stato]}'>{righe}<span class='scad'>{e(_fa_presc_testo_stato(r, oggi_))}</span></div>"
+
+
+@st.dialog("Prescrizione")
+def _fa_dialogo_prescrizione(pid, pre_id=None):
+    f = _fa_dati()
+    r = next((x for x in f.get("prescrizioni", []) if x["id"] == pre_id), {}) if pre_id else {}
+    with st.form("fa_form_presc"):
+        c1, c2 = st.columns(2)
+        data_r = c1.date_input("Data della prescrizione", value=_fa_data(r.get("data")) or oggi(), format="DD/MM/YYYY",
+                               min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
+        tipo = c2.selectbox("Tipo", TIPI_PRESC, index=_fa_idx(TIPI_PRESC, r.get("tipo")))
+        medico = st.text_input("Medico che ha prescritto", value=r.get("medico", ""))
+        prescritto = st.text_area("Cosa è stato prescritto (medicinali, esami, visite)", value=r.get("prescritto", ""))
+        codice = st.text_input("Codice della ricetta (NRE) o numero", value=r.get("codice", ""))
+        valida = st.date_input("Valida fino al (facoltativa)", value=_fa_data(r.get("valida_fino")), format="DD/MM/YYYY",
+                               min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
+        stato = st.selectbox("Stato", STATI_PRESC, index=_fa_idx(STATI_PRESC, r.get("stato")))
+        note = st.text_area("Note", value=r.get("note", ""))
+        if r.get("allegati"):
+            st.caption(f"File già allegati: {len(r['allegati'])} (si vedono e si tolgono dal dettaglio della prescrizione).")
+        nuovi = st.file_uploader("Allega la ricetta: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
+        inviato = st.form_submit_button("Salva", type="primary")
+    if inviato:
+        if not (prescritto.strip() or codice.strip() or nuovi):
+            st.error("Scrivi cosa è stato prescritto, il codice della ricetta oppure allega la foto.")
+            return
+        try:
+            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+        except ValueError as e:
+            st.error(str(e))
+            return
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare i file: {e}")
+            return
+        rec = {"profilo": pid, "data": data_r.isoformat(), "tipo": tipo, "medico": medico.strip(), "prescritto": prescritto.strip(),
+               "codice": codice.strip(), "valida_fino": valida.isoformat() if valida else None, "stato": stato, "note": note.strip()}
+
+        def _scrivi(f):
+            f.setdefault("prescrizioni", [])
+            if pre_id:
+                for x in f["prescrizioni"]:
+                    if x["id"] == pre_id:
+                        x.update(rec)
+                        x["allegati"] = (x.get("allegati") or []) + riferimenti
+            else:
+                rec["id"] = uuid.uuid4().hex[:10]
+                rec["allegati"] = riferimenti
+                f["prescrizioni"].append(rec)
+        try:
+            _fa_salva(_scrivi, "Farmacia: prescrizione")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Prescrizione salvata."
+        st.rerun()
+
+
+def _fa_presc_aggiorna(pre_id, **campi):
+    def _m(f):
+        for x in f.get("prescrizioni", []):
+            if x["id"] == pre_id:
+                x.update(campi)
+    _fa_salva(_m, "Farmacia: prescrizione")
+
+
+def _fa_presc_elimina(pre_id):
+    """Elimina una prescrizione e i suoi file. Ritorna None se va bene, altrimenti il messaggio d'errore."""
+    f = _fa_dati()
+    rec = next((x for x in f.get("prescrizioni", []) if x["id"] == pre_id), {})
+    ids = [a["id"] for a in rec.get("allegati", [])]
+    try:
+        _fa_salva(lambda f_: f_.__setitem__("prescrizioni", [x for x in f_.get("prescrizioni", []) if x["id"] != pre_id]), "Farmacia: prescrizione eliminata")
+    except Exception as e:
+        return str(e)
+    _fa_cancella_files(ids)
+    return None
+
+
+def _fa_presc_dettaglio_corpo(pre_id, pid):
+    f = _fa_dati()
+    r = next((x for x in f.get("prescrizioni", []) if x["id"] == pre_id), None)
+    if not r:
+        st.error("Non trovo più questa prescrizione.")
+        return
+    oggi_ = oggi()
+    st.markdown(_fa_presc_card(r, oggi_), unsafe_allow_html=True)
+    dati = [("Tipo", r.get("tipo")), ("Data della prescrizione", data_it(r["data"]) if r.get("data") else None), ("Medico", r.get("medico")),
+            ("Cosa è stato prescritto", r.get("prescritto")), ("Codice della ricetta", r.get("codice")),
+            ("Valida fino al", data_it(r["valida_fino"]) if r.get("valida_fino") else None), ("Stato", _fa_presc_testo_stato(r, oggi_)),
+            ("Note", r.get("note")), ("File allegati", str(len(r.get("allegati", []))) if r.get("allegati") else None)]
+    righe = "".join(f"<tr><td style='padding:4px 10px 4px 0;opacity:.7;white-space:nowrap;vertical-align:top'>{html.escape(k)}</td>"
+                    f"<td style='padding:4px 0'><b>{html.escape(str(v)).replace(chr(10), '<br>')}</b></td></tr>" for k, v in dati if v)
+    st.markdown(f"<table style='border-collapse:collapse;width:100%'>{righe}</table>", unsafe_allow_html=True)
+
+    # --- la ricetta (foto o PDF): un tasto per vederla
+    allegati = r.get("allegati", [])
+    if allegati:
+        k_vis = f"fa_vispresc_{pre_id}"
+        vis = st.session_state.get(k_vis, False)
+        st.button("🙈 Nascondi la ricetta" if vis else "👁️ Mostra la ricetta (foto o PDF)", key=f"fa_btnpresc_{pre_id}", type="primary", width="stretch",
+                  on_click=_doc_alterna, args=(k_vis,))
+        if vis:
+            for a_ in allegati:
+                d_ = carica_dati(crea_archivio(), _fa_percorso_doc(a_["id"]))
+                if not d_.get("b64"):
+                    st.warning(f"Non trovo il file «{a_['nome']}».")
+                    continue
+                dati_a = base64.b64decode(d_["b64"])
+                if d_.get("mime", "").startswith("image/"):
+                    st.image(dati_a)
+                st.download_button("⬇ " + a_["nome"], dati_a, file_name=a_["nome"], mime=d_.get("mime", "application/octet-stream"),
+                                   key=f"fa_pdl_{a_['id']}", width="stretch")
+                k_c = f"fa_pcf_{a_['id']}"
+                if st.session_state.get(k_c):
+                    q1, q2 = st.columns(2, gap="small")
+                    if q1.button("Sì, togli il file", type="primary", key=f"fa_pcs_{a_['id']}", width="stretch"):
+                        try:
+                            _fa_rimuovi_allegato("prescrizione", pre_id, a_["id"])
+                        except Exception as e:
+                            st.error(f"Non sono riuscito a toglierlo: {e}")
+                        else:
+                            st.session_state.pop(k_c, None)
+                            st.session_state["fa_msg"] = "🗑️ File tolto dalla prescrizione."
+                            st.rerun()
+                    q2.button("Annulla", key=f"fa_pcn_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, None))
+                else:
+                    st.button("🗑️ Togli questo file", key=f"fa_pct_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, True))
+    else:
+        st.info("Nessuna foto o PDF allegato. Tocca «Modifica» per aggiungere la ricetta.")
+
+    # --- usata / modifica / elimina
+    st.divider()
+    usata = r.get("stato") == "Usata"
+    if st.button("↩ Rimetti «Da usare»" if usata else "✅ Segna come usata (ritirata o eseguita)", key=f"fa_pus_{pre_id}", type="secondary" if usata else "primary",
+                 width="stretch"):
+        try:
+            _fa_presc_aggiorna(pre_id, stato="Da usare" if usata else "Usata")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+        else:
+            st.session_state["fa_msg"] = "↩ Di nuovo da usare." if usata else "✅ Prescrizione segnata come usata."
+            st.rerun()
+    if st.session_state.get(f"fa_pconf_{pre_id}"):
+        st.warning("Vuoi eliminare questa prescrizione? Verranno eliminati anche i file allegati.")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("Sì, elimina", type="primary", key=f"fa_psi_{pre_id}", width="stretch"):
+            errore = _fa_presc_elimina(pre_id)
+            if errore:
+                st.error(f"Non sono riuscito a eliminarla: {errore}")
+            else:
+                st.session_state.pop(f"fa_pconf_{pre_id}", None)
+                st.session_state["fa_msg"] = "🗑️ Prescrizione eliminata."
+                st.rerun()
+        s2.button("Annulla", key=f"fa_pno_{pre_id}", width="stretch", on_click=_doc_imposta, args=(f"fa_pconf_{pre_id}", None))
+    else:
+        b1, b2 = st.columns(2, gap="small")
+        if b1.button("✏️ Modifica", key=f"fa_pmo_{pre_id}", width="stretch"):
+            st.session_state["fa_apri_presc"] = (pid, pre_id)             # il modulo si apre appena questa finestra si chiude
+            st.rerun()
+        b2.button("🗑️ Elimina", key=f"fa_pel_{pre_id}", width="stretch", on_click=_doc_imposta, args=(f"fa_pconf_{pre_id}", True))
+
+
+def _fa_presc_dettaglio(pre_id, pid):
+    st.dialog("📝 Prescrizione", width="large")(lambda: _fa_presc_dettaglio_corpo(pre_id, pid))()
+
+
+def _fa_tab_prescrizioni(f, pid, nomi, oggi_):
+    if st.session_state.get("fa_apri_presc"):
+        p_, i_ = st.session_state.pop("fa_apri_presc")
+        _fa_dialogo_prescrizione(p_, i_)
+    st.markdown("""<style>
+[class*="st-key-fa_pbox_"]{position:relative}
+[class*="st-key-fa_papri_"]{position:absolute !important;top:0;left:0;right:0;bottom:0;z-index:3;margin:0 !important}
+[class*="st-key-fa_papri_"] [data-testid="stButton"],[class*="st-key-fa_papri_"] button{width:100%;height:100%;min-height:0}
+[class*="st-key-fa_papri_"] button{opacity:0;cursor:pointer}
+.fa-apri{margin-top:8px;font-size:.8rem;font-weight:700;opacity:.65;text-align:center;clear:both}
+</style>""", unsafe_allow_html=True)
+    elenco = [x for x in f.get("prescrizioni", []) if x.get("profilo", "p0") == pid]
+    in_scadenza = [x for x in elenco if _fa_presc_stato(x, oggi_)[0] in ("scaduta", "urgente")]
+    for x in in_scadenza:
+        st.warning(f"📝 {x.get('tipo', 'Prescrizione')}" + (f" ({x['prescritto'][:40]})" if x.get("prescritto") else "") + " · " + _fa_presc_testo_stato(x, oggi_))
+    if st.button("➕ Aggiungi prescrizione", type="primary", key="fa_nuova_presc", width="stretch"):
+        _fa_dialogo_prescrizione(pid)
+    c1, c2 = st.columns([3, 2])
+    cerca = c1.text_input("Cerca", placeholder="medico, medicinale, codice…", label_visibility="collapsed", key="fa_cerca_presc")
+    filtro = c2.selectbox("Mostra", ["Tutte", "Da usare", "In scadenza o scadute", "Usate"], label_visibility="collapsed", key="fa_filtro_presc")
+    visibili = []
+    for x in elenco:
+        testo = " ".join(str(x.get(k, "")) for k in ("tipo", "medico", "prescritto", "codice", "note")).lower()
+        st_, _ = _fa_presc_stato(x, oggi_)
+        if cerca and cerca.lower() not in testo:
+            continue
+        if filtro == "Da usare" and st_ == "usata":
+            continue
+        if filtro == "In scadenza o scadute" and st_ not in ("scaduta", "urgente"):
+            continue
+        if filtro == "Usate" and st_ != "usata":
+            continue
+        visibili.append(x)
+    visibili.sort(key=lambda x: (_fa_presc_stato(x, oggi_)[0] == "usata", x.get("valida_fino") or "9999-12-31", x.get("data") or ""))
+    if not elenco:
+        st.info(f"Nessuna prescrizione per {nomi[pid]}. Tocca «Aggiungi prescrizione» e allega la foto della ricetta.")
+    elif not visibili:
+        st.info("Nessun risultato.")
+    for x in visibili:
+        with st.container(border=True, key="fa_pbox_" + x["id"]):
+            n_all = len(x.get("allegati", []))
+            st.markdown(_fa_presc_card(x, oggi_) + "<div class='fa-apri'>👆 Tocca per aprire: ricetta, dettagli, modifica"
+                        + (f" · 🖼️ {n_all}" if n_all else "") + "</div>", unsafe_allow_html=True)
+            if st.button("Apri", key="fa_papri_" + x["id"], width="stretch"):
+                _fa_presc_dettaglio(x["id"], pid)
+    st.caption("📝 Le prescrizioni qui sono promemoria con la foto della ricetta: non sostituiscono la ricetta originale né il parere del medico.")
+
+
 def _fa_tab_vaccini(f, pid, nomi, oggi_):
     st.subheader(f"📄 Documento vaccinale di {nomi[pid]}")
     pagine = (f.get("vaccini_doc") or {}).get(pid, [])
@@ -1096,7 +1357,7 @@ def _fa_tab_vaccini(f, pid, nomi, oggi_):
 
 def _fa_esporta(f, pid, nomi):
     with st.expander("📦 Esporta i dati di questo profilo"):
-        chiavi = ("medicinali", "terapie", "visite", "vaccinazioni")
+        chiavi = ("medicinali", "terapie", "prescrizioni", "visite", "vaccinazioni")
         dati = {"profilo": nomi[pid],
                 "dottore": next((p.get("dottore") for p in f.get("profili", []) if p["id"] == pid), None),
                 "scheda_sanitaria": next((p.get("sanitario") for p in f.get("profili", []) if p["id"] == pid), None),
@@ -1906,6 +2167,12 @@ def _fa_html_completo(d, oggi_):
                                         ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", [])), ", ".join(t_.get("orari", [])),
                                         f"dal {D(t_.get('inizio'))}" + (f" al {D(t_['fine'])}" if t_.get("fine") else ""),
                                         STATI_TER.get(t_.get("stato", "attiva"), ""), t_.get("note", "")] for t_ in ter]))
+        pres = sorted([x for x in f.get("prescrizioni", []) if x.get("profilo", "p0") == pid], key=lambda x: x.get("data", ""), reverse=True)
+        parti.append(_fa_tabella_html("Prescrizioni (ricette)", ["Data", "Tipo", "Medico", "Cosa è prescritto", "Codice", "Valida fino al", "Stato", "Note",
+                                                                 "Documenti allegati"],
+                                      [[D(x.get("data")), x.get("tipo", ""), x.get("medico", ""), x.get("prescritto", ""), x.get("codice", ""),
+                                        D(x.get("valida_fino")), x.get("stato", ""), x.get("note", ""),
+                                        ", ".join(a["nome"] for a in x.get("allegati", []))] for x in pres]))
         reg = sorted([r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid],
                      key=lambda r: (r.get("d", ""), r.get("o", "")), reverse=True)
         parti.append(_fa_tabella_html("Assunzioni registrate come prese", ["Data", "Ora prevista", "Medicinale", "Quantità", "Registrata il"],

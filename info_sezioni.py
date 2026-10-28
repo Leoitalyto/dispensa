@@ -175,7 +175,9 @@ L'app ti **ricorda** e organizza quello che inserisci tu. **Non dà consigli med
 4. Scegli la **scadenza** e **per chi è**.
 5. Tocca **Salva**.
 
-Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale puoi allegare il **foglio illustrativo** (PDF, foto o link).""",
+Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale puoi allegare il **foglio illustrativo** (PDF, foto o link).
+
+Per vedere tutto di un medicinale **tocca la sua scheda**: si apre il dettaglio con il **foglio illustrativo (bugiardino)**, la foto grande, le terapie collegate e i pulsanti **✏️ Modifica** e **🗑️ Elimina**.""",
          "medicinale medicinali farmaco aggiungere confezione foto scadenza principio attivo dosaggio foglio illustrativo bugiardino archivio"),
         ("🎨 Scadenze e allergie ai farmaci",
          """- 🟠 **Arancione**: scade entro 2 mesi. 🔴 **Rosso**: entro 1 mese. ⚫ **Scaduto**: da buttare in modo corretto.
@@ -189,6 +191,13 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
 5. Il **calendario** mostra la settimana e il mese.
 6. Il **Report per il medico** (periodo a scelta) si stampa o si apre in Excel.""",
          "terapia terapie calendario assunzione presa orari report medico storico pillola dose"),
+        ("📝 Le prescrizioni (ricette)",
+         """1. Apri la scheda **📝 Prescrizioni** e tocca **➕ Aggiungi prescrizione**.
+2. Scrivi la **data**, il **tipo** (farmaci, esami, visita…), il **medico**, cosa è stato **prescritto**, il **codice della ricetta** e fino a quando è **valida**.
+3. Allega la **foto della ricetta** oppure il PDF.
+4. Toccando una prescrizione si apre il **dettaglio**: vedi la foto, tocchi **✅ Segna come usata**, **✏️ Modifica** o **🗑️ Elimina**.
+5. Le prescrizioni in scadenza compaiono tra le cose da controllare, anche nel **Controllo famiglia**.""",
+         "prescrizione prescrizioni ricetta ricette medico impegnativa codice nre validità scadenza usata ritirata"),
         ("🩺 Visite, esami e referti",
          """1. Apri la scheda **🩺 Visite** e tocca per aggiungere.
 2. Scrivi **data**, **tipo di visita o esame**, **medico**, **motivo** e le **indicazioni per i controlli**.
@@ -330,7 +339,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nell
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
-    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }

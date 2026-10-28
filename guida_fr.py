@@ -130,7 +130,9 @@ L'appli te **rappelle** et organise ce que tu saisis. Elle **ne donne pas de con
 4. Choisis la **péremption** et **pour qui c'est**.
 5. Touche **Salva**.
 
-Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos**. Tu peux joindre au médicament la **notice** (PDF, photo ou lien).""",
+Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos**. Tu peux joindre au médicament la **notice** (PDF, photo ou lien).
+
+Pour tout voir d'un médicament, **touche sa fiche** : le détail s'ouvre avec la **notice**, la grande photo, les traitements liés et les boutons **✏️ Modifica** et **🗑️ Elimina**.""",
         "medicament medicaments ajouter boite photo peremption principe actif dosage notice archive"),
     "f_scadenze": ("🎨 Péremptions et allergies aux médicaments",
         """- 🟠 **Orange** : périme dans moins de 2 mois. 🔴 **Rouge** : dans moins de 1 mois. ⚫ **Périmé** : à jeter correctement.
@@ -144,6 +146,13 @@ Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos*
 5. Le **calendrier** montre la semaine et le mois.
 6. Le **Rapport pour le médecin** (période au choix) s'imprime ou s'ouvre dans Excel.""",
         "traitement traitements calendrier prise heures rapport medecin historique pilule dose"),
+    "f_prescrizioni": ('📝 Ordonnances',
+        """1. Ouvre l'onglet **📝 Prescrizioni** et touche **➕ Aggiungi prescrizione**.
+2. Écris la **date**, le **type** (médicaments, examens, consultation…), le **médecin**, ce qui a été **prescrit**, le **code de l'ordonnance** et jusqu'à quand elle est **valable**.
+3. Joins la **photo de l'ordonnance** ou le PDF.
+4. En touchant une ordonnance, le **détail** s'ouvre : tu vois la photo, tu touches **✅ Segna come usata** (Marquer comme utilisée), **✏️ Modifica** ou **🗑️ Elimina**.
+5. Les ordonnances bientôt périmées apparaissent parmi les choses à vérifier, aussi dans le **Contrôle famille**.""",
+        'ordonnance ordonnances prescription medecin code validite expiration utilisee'),
     "f_visite": ("🩺 Visites, examens et comptes rendus",
         """1. Ouvre l'onglet **🩺 Visite** et touche pour ajouter.
 2. Écris **date**, **type de visite ou d'examen**, **médecin**, **motif** et les **consignes pour les contrôles**.

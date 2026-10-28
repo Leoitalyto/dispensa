@@ -130,7 +130,9 @@ Die App **erinnert dich** und ordnet, was du einträgst. Sie **gibt keine medizi
 4. Wähle das **Ablaufdatum** und **für wen es ist**.
 5. Tippe auf **Salva**.
 
-Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden. Dem Medikament kannst du den **Beipackzettel** anhängen (PDF, Foto oder Link).""",
+Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden. Dem Medikament kannst du den **Beipackzettel** anhängen (PDF, Foto oder Link).
+
+Um alles zu einem Medikament zu sehen, **tippe auf seine Karte**: das Detail öffnet sich mit dem **Beipackzettel**, dem großen Foto, den verknüpften Therapien und den Knöpfen **✏️ Modifica** und **🗑️ Elimina**.""",
         "medikament medikamente arznei hinzufugen packung foto ablaufdatum wirkstoff dosierung beipackzettel archiv"),
     "f_scadenze": ("🎨 Ablaufdaten und Medikamentenallergien",
         """- 🟠 **Orange**: läuft in weniger als 2 Monaten ab. 🔴 **Rot**: in weniger als 1 Monat. ⚫ **Abgelaufen**: richtig entsorgen.
@@ -144,6 +146,13 @@ Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden.
 5. Der **Kalender** zeigt Woche und Monat.
 6. Der **Bericht für den Arzt** (Zeitraum nach Wahl) lässt sich drucken oder in Excel öffnen.""",
         "therapie therapien kalender einnahme genommen uhrzeiten bericht arzt chronik tablette dosis"),
+    "f_prescrizioni": ('📝 Rezepte',
+        """1. Öffne den Reiter **📝 Prescrizioni** und tippe auf **➕ Aggiungi prescrizione**.
+2. Schreibe das **Datum**, die **Art** (Medikamente, Untersuchungen, Besuch…), den **Arzt**, was **verschrieben** wurde, den **Rezeptcode** und bis wann es **gültig** ist.
+3. Füge das **Foto des Rezepts** oder die PDF hinzu.
+4. Tippt man auf ein Rezept, öffnet sich das **Detail**: du siehst das Foto, tippst auf **✅ Segna come usata** (Als verwendet markieren), **✏️ Modifica** oder **🗑️ Elimina**.
+5. Bald ablaufende Rezepte erscheinen bei den Dingen zum Prüfen, auch in der **Familienkontrolle**.""",
+        'rezept rezepte verschreibung arzt code gueltigkeit ablauf verwendet'),
     "f_visite": ("🩺 Arztbesuche, Untersuchungen und Befunde",
         """1. Öffne den Reiter **🩺 Visite** und tippe zum Hinzufügen.
 2. Schreibe **Datum**, **Art des Besuchs oder der Untersuchung**, **Arzt**, **Grund** und die **Hinweise für Kontrollen**.

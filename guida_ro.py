@@ -130,7 +130,9 @@ Aplicația îți **amintește** și organizează ce introduci tu. **Nu dă sfatu
 4. Alege **expirarea** și **pentru cine este**.
 5. Atinge **Salva**.
 
-Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medicament poți atașa **prospectul** (PDF, fotografie sau link).""",
+Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medicament poți atașa **prospectul** (PDF, fotografie sau link).
+
+Ca să vezi tot despre un medicament, **atinge fișa lui**: se deschide detaliul cu **prospectul**, fotografia mare, terapiile legate și butoanele **✏️ Modifica** și **🗑️ Elimina**.""",
         "medicament medicamente adauga cutie foto expirare substanta activa doza prospect arhiva"),
     "f_scadenze": ("🎨 Expirări și alergii la medicamente",
         """- 🟠 **Portocaliu**: expiră în mai puțin de 2 luni. 🔴 **Roșu**: în mai puțin de 1 lună. ⚫ **Expirat**: de aruncat corect.
@@ -144,6 +146,13 @@ Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medic
 5. **Calendarul** arată săptămâna și luna.
 6. **Raportul pentru medic** (perioadă la alegere) se tipărește sau se deschide în Excel.""",
         "tratament tratamente terapie calendar administrare luat ore raport medic istoric pastila doza"),
+    "f_prescrizioni": ('📝 Rețete',
+        """1. Deschide fila **📝 Prescrizioni** și atinge **➕ Aggiungi prescrizione**.
+2. Scrie **data**, **tipul** (medicamente, analize, consult…), **medicul**, ce a fost **prescris**, **codul rețetei** și până când este **valabilă**.
+3. Atașează **fotografia rețetei** sau PDF-ul.
+4. Atingând o rețetă se deschide **detaliul**: vezi fotografia, atingi **✅ Segna come usata** (Marchează ca folosită), **✏️ Modifica** sau **🗑️ Elimina**.
+5. Rețetele care expiră curând apar printre lucrurile de verificat, și în **Controlul familiei**.""",
+        'reteta retete prescriptie medic cod valabilitate expirare folosita'),
     "f_visite": ("🩺 Vizite, analize și rezultate",
         """1. Deschide fila **🩺 Visite** și atinge ca să adaugi.
 2. Scrie **data**, **tipul vizitei sau analizei**, **medicul**, **motivul** și **indicațiile pentru controale**.

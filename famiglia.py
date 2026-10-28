@@ -9,6 +9,7 @@ Caricato da app_dispensa.py dopo farmacia.py; il pulsante si aggancia in farmaci
 import html
 import io
 import json
+import re
 import zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape as _xml_escape
@@ -92,6 +93,15 @@ def fam_riepilogo(p, oggi_, ora_adesso):
     ritardo = [x for x in r["dosi_oggi"] if x["stato"] == "da_prendere"]
     if ritardo:
         r["allerte"].append(f"⚠️ {len(ritardo)} assunzione/i di oggi non ancora registrata/e: " + ", ".join(f"{x['ora']} {x['medicinale']}" for x in ritardo[:4]))
+    # prescrizioni da usare
+    pres = _fam_di(f, "prescrizioni", pid)
+    r["prescrizioni"] = pres
+    pres_urg = [(x, _fa_presc_stato(x, oggi_)) for x in pres if _fa_presc_stato(x, oggi_)[0] in ("scaduta", "urgente")]
+    r["presc_urgenti"] = pres_urg
+    if pres_urg:
+        r["allerte"].append("📝 Prescrizioni da usare, in scadenza o scadute: " + ", ".join(
+            f"{x.get('tipo', '')}" + (f" ({x['prescritto'][:30]})" if x.get("prescritto") else "") + f" - {'scaduta' if st_[0] == 'scaduta' else 'scade tra ' + str(st_[1]) + ' g'}"
+            for x, st_ in pres_urg[:3]))
     # visite ed esami
     vis = _fam_di(f, "visite", pid)
     prossime = []
@@ -204,7 +214,16 @@ def _fam_anagrafica(p):
             "Medico": dott.get("nome", ""), "Telefono medico": dott.get("telefono", ""), "Email medico": dott.get("email", "")}
 
 
-FAM_SEZIONI = [("Medicinali", FAM_H_MEDICINALI, _fam_righe_medicinali), ("Terapie e prescrizioni", FAM_H_TERAPIE, _fam_righe_terapie),
+def _fam_righe_prescrizioni(p):
+    pres = sorted(_fam_di(p["f"], "prescrizioni", p["pid"]), key=lambda x: x.get("data", ""), reverse=True)
+    return [[_fam_d(x.get("data")), x.get("tipo", ""), x.get("medico", ""), x.get("prescritto", ""), x.get("codice", ""), _fam_d(x.get("valida_fino")),
+             x.get("stato", ""), x.get("note", ""), ", ".join(a["nome"] for a in x.get("allegati", []))] for x in pres]
+
+
+FAM_H_PRESCRIZIONI = ["Data", "Tipo", "Medico", "Cosa è prescritto", "Codice", "Valida fino al", "Stato", "Note", "Documenti allegati"]
+
+FAM_SEZIONI = [("Medicinali", FAM_H_MEDICINALI, _fam_righe_medicinali), ("Terapie", FAM_H_TERAPIE, _fam_righe_terapie),
+               ("Prescrizioni (ricette)", FAM_H_PRESCRIZIONI, _fam_righe_prescrizioni),
            ("Assunzioni registrate", FAM_H_REGISTRO, _fam_righe_registro), ("Visite, esami e referti", FAM_H_VISITE, _fam_righe_visite),
            ("Vaccinazioni", FAM_H_VACCINI, _fam_righe_vaccini), ("Documenti", FAM_H_DOCUMENTI, _fam_righe_documenti)]
 
@@ -336,7 +355,7 @@ def fam_json(persone):
     for p in persone:
         out.append({"persona": p["nome"], "account": p["origine"] or "capo famiglia", "anagrafica": _fam_anagrafica(p),
                     "scheda_sanitaria": p["p"].get("sanitario"),
-                    **{titolo.lower().replace(" ", "_").replace(",", ""): [dict(zip(intest, r)) for r in fn(p)] for titolo, intest, fn in FAM_SEZIONI}})
+                    **{re.sub(r"[^a-z0-9_]", "", titolo.lower().replace(" ", "_")): [dict(zip(intest, r)) for r in fn(p)] for titolo, intest, fn in FAM_SEZIONI}})
     return json.dumps(out, ensure_ascii=False, indent=2).encode("utf-8")
 
 
@@ -360,7 +379,8 @@ def _fam_dettaglio_persona(p, oggi_, ora_adesso):
         st.warning(a)
     if not r["allerte"]:
         st.success("Tutto in ordine: niente di urgente.")
-    t_oggi, t_med, t_ter, t_vis, t_vac, t_doc, t_san = st.tabs(["⏰ Oggi", "💊 Medicinali", "📅 Terapie", "🩺 Visite ed esami", "💉 Vaccini", "📁 Documenti", "🩻 Scheda sanitaria"])
+    t_oggi, t_med, t_ter, t_pre, t_vis, t_vac, t_doc, t_san = st.tabs(["⏰ Oggi", "💊 Medicinali", "📅 Terapie", "📝 Prescrizioni", "🩺 Visite ed esami", "💉 Vaccini",
+                                                                       "📁 Documenti", "🩻 Scheda sanitaria"])
     with t_oggi:
         icone = {"presa": "✅ presa", "da_prendere": "⚠️ da prendere", "piu_tardi": "⏳ più tardi"}
         _fam_tabella(["Ora", "Medicinale", "Quantità", "Stato"], [[x["ora"], x["medicinale"], x["quantita"], icone[x["stato"]]] for x in r["dosi_oggi"]],
@@ -371,6 +391,8 @@ def _fam_dettaglio_persona(p, oggi_, ora_adesso):
         _fam_tabella(FAM_H_TERAPIE, _fam_righe_terapie(p), "Nessuna terapia inserita.")
         st.markdown("**Assunzioni registrate (le più recenti)**")
         _fam_tabella(FAM_H_REGISTRO, _fam_righe_registro(p)[:30], "Nessuna assunzione registrata.")
+    with t_pre:
+        _fam_tabella(FAM_H_PRESCRIZIONI, _fam_righe_prescrizioni(p), "Nessuna prescrizione inserita.")
     with t_vis:
         _fam_tabella(FAM_H_VISITE, _fam_righe_visite(p), "Nessuna visita o esame inserito.")
     with t_vac:

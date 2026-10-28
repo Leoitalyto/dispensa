@@ -130,7 +130,9 @@ La app te **recuerda** y organiza lo que introduces tú. **No da consejos médic
 4. Elige la **caducidad** y **para quién es**.
 5. Toca **Salva**.
 
-Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicamento puedes adjuntar el **prospecto** (PDF, foto o enlace).""",
+Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicamento puedes adjuntar el **prospecto** (PDF, foto o enlace).
+
+Para ver todo de un medicamento, **toca su ficha**: se abre el detalle con el **prospecto**, la foto grande, las terapias vinculadas y los botones **✏️ Modifica** y **🗑️ Elimina**.""",
         "medicamento medicamentos farmaco añadir envase foto caducidad principio activo dosis prospecto archivo"),
     "f_scadenze": ("🎨 Caducidades y alergias a fármacos",
         """- 🟠 **Naranja**: caduca en menos de 2 meses. 🔴 **Rojo**: en menos de 1 mes. ⚫ **Caducado**: tirar de forma correcta.
@@ -144,6 +146,13 @@ Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicam
 5. El **calendario** muestra la semana y el mes.
 6. El **Informe para el médico** (periodo a elegir) se imprime o se abre en Excel.""",
         "terapia terapias calendario toma tomada horas informe medico historial pastilla dosis"),
+    "f_prescrizioni": ('📝 Recetas',
+        """1. Abre la pestaña **📝 Prescrizioni** y toca **➕ Aggiungi prescrizione**.
+2. Escribe la **fecha**, el **tipo** (medicamentos, pruebas, visita…), el **médico**, lo que se ha **recetado**, el **código de la receta** y hasta cuándo es **válida**.
+3. Adjunta la **foto de la receta** o el PDF.
+4. Al tocar una receta se abre el **detalle**: ves la foto, tocas **✅ Segna come usata** (Marcar como usada), **✏️ Modifica** o **🗑️ Elimina**.
+5. Las recetas a punto de caducar aparecen entre las cosas por revisar, también en el **Control familiar**.""",
+        'receta recetas prescripcion medico codigo validez caducidad usada'),
     "f_visite": ("🩺 Visitas, pruebas e informes",
         """1. Abre la pestaña **🩺 Visite** y toca para añadir.
 2. Escribe **fecha**, **tipo de visita o prueba**, **médico**, **motivo** y las **indicaciones para los controles**.

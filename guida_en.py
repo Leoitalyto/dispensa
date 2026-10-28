@@ -130,7 +130,9 @@ The app **reminds you** and organises what you enter. It **does not give medical
 4. Choose the **expiry** and **who it is for**.
 5. Tap **Salva**.
 
-You can reuse a photo already saved from the **photo archive**. You can attach the **leaflet** to the medicine (PDF, photo or link).""",
+You can reuse a photo already saved from the **photo archive**. You can attach the **leaflet** to the medicine (PDF, photo or link).
+
+To see everything about a medicine, **tap its card**: the detail opens with the **leaflet (package insert)**, the big photo, the linked therapies and the buttons **✏️ Modifica** and **🗑️ Elimina**.""",
         "medicine medicines drug add box photo expiry active ingredient dosage leaflet archive"),
     "f_scadenze": ("🎨 Expiry and drug allergies",
         """- 🟠 **Orange**: expires within 2 months. 🔴 **Red**: within 1 month. ⚫ **Expired**: dispose of it correctly.
@@ -144,6 +146,13 @@ You can reuse a photo already saved from the **photo archive**. You can attach t
 5. The **calendar** shows the week and the month.
 6. The **Report for the doctor** (period of your choice) can be printed or opened in Excel.""",
         "therapy therapies calendar intake taken times report doctor history pill dose"),
+    "f_prescrizioni": ('📝 Prescriptions',
+        """1. Open the **📝 Prescrizioni** tab and tap **➕ Aggiungi prescrizione**.
+2. Write the **date**, the **type** (medicines, tests, visit…), the **doctor**, what was **prescribed**, the **prescription code** and until when it is **valid**.
+3. Attach the **photo of the prescription** or the PDF.
+4. Tapping a prescription opens the **detail**: you see the photo, tap **✅ Segna come usata** (Mark as used), **✏️ Modifica** or **🗑️ Elimina**.
+5. Prescriptions about to expire show among the things to check, also in **Family control**.""",
+        'prescription prescriptions recipe doctor code valid expiry used collected'),
     "f_visite": ("🩺 Visits, tests and reports",
         """1. Open the **🩺 Visite** tab and tap to add.
 2. Write the **date**, **type of visit or test**, **doctor**, **reason** and the **instructions for check-ups**.
