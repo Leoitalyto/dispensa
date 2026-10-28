@@ -132,7 +132,9 @@ Aplicația îți **amintește** și organizează ce introduci tu. **Nu dă sfatu
 
 Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medicament poți atașa **prospectul** (PDF, fotografie sau link).
 
-Ca să vezi tot despre un medicament, **atinge fișa lui**: se deschide detaliul cu **prospectul**, fotografia mare, terapiile legate și butoanele **✏️ Modifica** și **🗑️ Elimina**.""",
+Ca să vezi tot despre un medicament, **atinge fișa lui**: se deschide detaliul cu **prospectul**, fotografia mare, terapiile legate și butoanele **✏️ Modifica** și **🗑️ Elimina**.
+
+Ca să economisești timp atinge **📷 Inquadra la scatola** (Scanează cutia): aplicația citește pătrățelul (DataMatrix) sau liniile și completează data de expirare, lotul și codul. Dacă medicamentul e deja în casă copiază și numele și doza; dacă e nou, scrie numele o singură dată și data viitoare îl recunoaște.""",
         "medicament medicamente adauga cutie foto expirare substanta activa doza prospect arhiva"),
     "f_scadenze": ("🎨 Expirări și alergii la medicamente",
         """- 🟠 **Portocaliu**: expiră în mai puțin de 2 luni. 🔴 **Roșu**: în mai puțin de 1 lună. ⚫ **Expirat**: de aruncat corect.

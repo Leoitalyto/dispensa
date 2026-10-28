@@ -177,7 +177,9 @@ L'app ti **ricorda** e organizza quello che inserisci tu. **Non dà consigli med
 
 Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale puoi allegare il **foglio illustrativo** (PDF, foto o link).
 
-Per vedere tutto di un medicinale **tocca la sua scheda**: si apre il dettaglio con il **foglio illustrativo (bugiardino)**, la foto grande, le terapie collegate e i pulsanti **✏️ Modifica** e **🗑️ Elimina**.""",
+Per vedere tutto di un medicinale **tocca la sua scheda**: si apre il dettaglio con il **foglio illustrativo (bugiardino)**, la foto grande, le terapie collegate e i pulsanti **✏️ Modifica** e **🗑️ Elimina**.
+
+Per risparmiare tempo tocca **📷 Inquadra la scatola**: l'app legge il quadratino (DataMatrix) o le barre e riempie scadenza, lotto e codice. Se il medicinale è già in casa ricopia anche nome e dosaggio; se è nuovo scrivi il nome una volta sola e dalla prossima volta lo riconosce.""",
          "medicinale medicinali farmaco aggiungere confezione foto scadenza principio attivo dosaggio foglio illustrativo bugiardino archivio"),
         ("🎨 Scadenze e allergie ai farmaci",
          """- 🟠 **Arancione**: scade entro 2 mesi. 🔴 **Rosso**: entro 1 mese. ⚫ **Scaduto**: da buttare in modo corretto.

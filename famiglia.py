@@ -550,7 +550,7 @@ def fam_catalogo_medicinali(f, pid):
             visti.add(chiave)
             di_chi = nomi.get(m.get("profilo", "p0"), "")
             etichetta = " · ".join(x for x in (m.get("nome"), m.get("dosaggio"), m.get("forma")) if x) + (f"  (di {di_chi})" if di_chi else "")
-            risultato.append((etichetta, {k: m.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma", "unita")}))
+            risultato.append((etichetta, {k: m.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma", "unita", "aic", "gtin", "ean")}))
     _aggiungi(f.get("medicinali", []), {p_["id"]: p_["nome"] for p_ in _fa_profili(f)})
     try:
         utenti = leggi_utenti()

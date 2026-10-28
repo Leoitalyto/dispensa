@@ -134,6 +134,16 @@ def _fa_modulo_medicinale(pid, med_id=None):
             if scelta_casa != etichette_casa[0]:
                 m = dict(casa[etichette_casa.index(scelta_casa) - 1][1])
                 st.caption("Ho copiato nome, principio attivo, dosaggio e forma: controlla, aggiungi scadenza e quantità, poi salva.")
+    pref_scan = {}
+    if not med_id and "sm_blocco" in globals():
+        # «Inquadra la scatola»: legge DataMatrix, bollino o barre e ricopia scadenza, lotto, codice e (se lo conosce) il nome
+        try:
+            conosciuti = list(f.get("medicinali", [])) + ([c_[1] for c_ in fam_catalogo_medicinali(f, pid)] if "fam_catalogo_medicinali" in globals() else [])
+        except Exception:
+            conosciuti = list(f.get("medicinali", []))
+        pref_scan = sm_blocco(conosciuti)
+        if pref_scan:
+            m = {**m, **pref_scan}
     # la foto sta in cima, come nella dispensa: fotocamera posteriore, sfondo tolto, righello e ritaglio
     st.markdown("**📷 Foto della confezione** (facoltativa)")
     ck = "fa_" + (med_id or "nuovo")
@@ -212,6 +222,11 @@ def _fa_modulo_medicinale(pid, med_id=None):
                "dosaggio": dosaggio.strip(), "forma": forma, "quantita": float(quantita), "unita": unita,
                "scadenza": scadenza.isoformat() if scadenza else None,
                "acquisto": acquisto.isoformat() if acquisto else None, "profilo": per, "note": note.strip()}
+        for k_cod in ("aic", "gtin", "ean", "lotto"):                      # codici letti dalla scatola (servono a riconoscerla la prossima volta)
+            v_cod = pref_scan.get(k_cod) or m.get(k_cod)
+            if v_cod:
+                rec[k_cod] = v_cod
+        st.session_state.pop("sm_prefill", None)
 
         def _scrivi(f):
             if med_id:
@@ -1984,7 +1999,7 @@ def _fa_med_dettaglio_corpo(med_id, pid):
             ("Forma", m.get("forma")), ("Quantità", quantita), ("Scadenza", data_it(m["scadenza"]) if m.get("scadenza") else None),
             ("Stato", f"{ICONE[stato]} {testo_giorni(stato, giorni)}" if m.get("scadenza") else None),
             ("Data di acquisto", data_it(m["acquisto"]) if m.get("acquisto") else None),
-            ("Per chi è", nomi.get(m.get("profilo", pid))), ("Note", m.get("note")),
+            ("Per chi è", nomi.get(m.get("profilo", pid))), ("Lotto", m.get("lotto")), ("Codice AIC", m.get("aic")), ("Note", m.get("note")),
             ("Foglio illustrativo", "disponibile" if (m.get("foglio") or m.get("foglio_link")) else "non ancora aggiunto")]
     righe = "".join(f"<tr><td style='padding:4px 10px 4px 0;opacity:.7;white-space:nowrap;vertical-align:top'>{html.escape(k)}</td>"
                     f"<td style='padding:4px 0'><b>{html.escape(str(v))}</b></td></tr>" for k, v in dati if v)

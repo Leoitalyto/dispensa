@@ -132,7 +132,9 @@ The app **reminds you** and organises what you enter. It **does not give medical
 
 You can reuse a photo already saved from the **photo archive**. You can attach the **leaflet** to the medicine (PDF, photo or link).
 
-To see everything about a medicine, **tap its card**: the detail opens with the **leaflet (package insert)**, the big photo, the linked therapies and the buttons **✏️ Modifica** and **🗑️ Elimina**.""",
+To see everything about a medicine, **tap its card**: the detail opens with the **leaflet (package insert)**, the big photo, the linked therapies and the buttons **✏️ Modifica** and **🗑️ Elimina**.
+
+To save time tap **📷 Inquadra la scatola** (Scan the box): the app reads the small square (DataMatrix) or the bars and fills in expiry date, batch and code. If the medicine is already at home it also copies name and dose; if it is new, write the name once and next time it recognises it.""",
         "medicine medicines drug add box photo expiry active ingredient dosage leaflet archive"),
     "f_scadenze": ("🎨 Expiry and drug allergies",
         """- 🟠 **Orange**: expires within 2 months. 🔴 **Red**: within 1 month. ⚫ **Expired**: dispose of it correctly.
