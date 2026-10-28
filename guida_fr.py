@@ -174,7 +174,7 @@ Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos*
 Les liens sont séparés pour chaque profil de la famille.""",
         "carte sante tessera sanitaria dossier sante electronique fse lien adresse vaccinations en ligne frais deductibles recto verso badge"),
     "f_aperta": ("🔎 Trouver une pharmacie ouverte",
-        """Touche le grand bouton en haut (**Trouver une pharmacie ouverte**) : choisis le **pays** (celui de ta langue au départ) et écris **n'importe quelle ville ou code postal**. L'appli cherche les pharmacies ouvertes près de ce lieu.""",
+        """Touche le grand bouton en haut (**Trouver une pharmacie ouverte**) : choisis le **pays** (celui de ta langue au départ) et écris **n'importe quelle ville ou code postal**. L'appli cherche les pharmacies ouvertes près de ce lieu. Ou touche **📍 Utiliser ma position (GPS)** : le téléphone demande l'autorisation et l'appli cherche autour de toi (la position n'est pas enregistrée).""",
         "pharmacie ouverte trouver chercher proche garde nuit"),
     "f_avvisi": ("🔔 Alertes sur Telegram, e-mail et SMS",
         """Les alertes te rappellent les péremptions (à 60, 30, 14 et 7 jours, 1 jour et le jour même) et, si tu veux, l'heure des traitements. Choisis **un ou plusieurs canaux**.

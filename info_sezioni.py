@@ -219,7 +219,7 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
 I collegamenti sono separati per ogni profilo della famiglia.""",
          "tessera sanitaria fascicolo sanitario elettronico fse link collegamento indirizzo vaccinazioni online spese sanitarie detraibili fronte retro badge azzurro 730 detrazioni"),
         ("🔎 Trova una farmacia aperta",
-         """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: scegli il **Paese** (parte da quello della tua lingua) e scrivi **qualunque città o codice postale**. L'app cerca le farmacie aperte vicino a quel posto.""",
+         """Tocca il pulsante grande **🔎 Trova una farmacia aperta** in alto: scegli il **Paese** (parte da quello della tua lingua) e scrivi **qualunque città o codice postale**. L'app cerca le farmacie aperte vicino a quel posto. Oppure tocca **📍 Usa la mia posizione (GPS)**: il telefono ti chiede il permesso e l'app cerca intorno a dove sei (la posizione non viene salvata).""",
          "farmacia aperta trovare cercare vicino turno notte"),
         ("🔔 Avvisi su Telegram, email e SMS",
          """Gli avvisi ti ricordano le scadenze (a 60, 30, 14 e 7 giorni, 1 giorno e il giorno stesso) e, se vuoi, l'ora delle terapie. Scegli **uno o più canali**.

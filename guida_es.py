@@ -174,7 +174,7 @@ Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicam
 Los enlaces están separados para cada perfil de la familia.""",
         "tarjeta sanitaria tessera expediente sanitario electronico fse enlace link direccion vacunas en linea gastos deducibles anverso reverso insignia"),
     "f_aperta": ("🔎 Encuentra una farmacia abierta",
-        """Toca el botón grande de arriba (**Encuentra una farmacia abierta**): elige el **país** (parte del de tu idioma) y escribe **cualquier ciudad o código postal**. La app busca las farmacias abiertas cerca de ese lugar.""",
+        """Toca el botón grande de arriba (**Encuentra una farmacia abierta**): elige el **país** (parte del de tu idioma) y escribe **cualquier ciudad o código postal**. La app busca las farmacias abiertas cerca de ese lugar. O toca **📍 Usar mi ubicación (GPS)**: el teléfono pide permiso y la app busca alrededor de donde estás (la ubicación no se guarda).""",
         "farmacia abierta encontrar buscar cerca guardia noche"),
     "f_avvisi": ("🔔 Avisos por Telegram, correo y SMS",
         """Los avisos te recuerdan las caducidades (a 60, 30, 14 y 7 días, 1 día y el mismo día) y, si quieres, la hora de las terapias. Elige **uno o más canales**.

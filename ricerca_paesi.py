@@ -213,6 +213,15 @@ RP_TR = {
     },
 }
 
+# --- ricerca con il GPS del telefono ---
+RP_TR["it"].update({'gps_btn': '📍 Usa la mia posizione (GPS)', 'gps_hint': 'Il telefono ti chiederà il permesso di usare la posizione. Non viene salvata. Oppure scrivi la città qui sotto.', 'gps_err_perm': 'Non ho il permesso di usare la posizione. Consentila nelle impostazioni del browser per questo sito, oppure scrivi la città.', 'gps_err_non_disp': 'Non riesco a trovare la posizione adesso. Accendi il GPS oppure scrivi la città.', 'gps_err_tempo': "La posizione ci mette troppo. Riprova all'aperto oppure scrivi la città.", 'gps_err_no': 'Questo telefono o browser non permette di usare la posizione. Scrivi la città.', 'gps_luogo': 'la tua posizione (±{acc} m)'})
+RP_TR["en"].update({'gps_btn': '📍 Use my location (GPS)', 'gps_hint': 'The phone will ask permission to use your location. It is not saved. Or write the city below.', 'gps_err_perm': 'I do not have permission to use the location. Allow it in the browser settings for this site, or write the city.', 'gps_err_non_disp': 'I cannot find the location right now. Turn on GPS or write the city.', 'gps_err_tempo': 'The location is taking too long. Try again outdoors or write the city.', 'gps_err_no': 'This phone or browser does not allow using the location. Write the city.', 'gps_luogo': 'your location (±{acc} m)'})
+RP_TR["es"].update({'gps_btn': '📍 Usar mi ubicación (GPS)', 'gps_hint': 'El teléfono te pedirá permiso para usar la ubicación. No se guarda. O escribe la ciudad abajo.', 'gps_err_perm': 'No tengo permiso para usar la ubicación. Permítela en los ajustes del navegador para este sitio, o escribe la ciudad.', 'gps_err_non_disp': 'No consigo encontrar la ubicación ahora. Enciende el GPS o escribe la ciudad.', 'gps_err_tempo': 'La ubicación tarda demasiado. Inténtalo al aire libre o escribe la ciudad.', 'gps_err_no': 'Este teléfono o navegador no permite usar la ubicación. Escribe la ciudad.', 'gps_luogo': 'tu ubicación (±{acc} m)'})
+RP_TR["fr"].update({'gps_btn': '📍 Utiliser ma position (GPS)', 'gps_hint': "Le téléphone te demandera l'autorisation d'utiliser la position. Elle n'est pas enregistrée. Ou écris la ville ci-dessous.", 'gps_err_perm': "Je n'ai pas l'autorisation d'utiliser la position. Autorise-la dans les réglages du navigateur pour ce site, ou écris la ville.", 'gps_err_non_disp': "Je n'arrive pas à trouver la position pour le moment. Allume le GPS ou écris la ville.", 'gps_err_tempo': 'La position met trop de temps. Réessaie en extérieur ou écris la ville.', 'gps_err_no': "Ce téléphone ou navigateur ne permet pas d'utiliser la position. Écris la ville.", 'gps_luogo': 'ta position (±{acc} m)'})
+RP_TR["de"].update({'gps_btn': '📍 Meinen Standort nutzen (GPS)', 'gps_hint': 'Das Handy fragt nach der Erlaubnis, den Standort zu nutzen. Er wird nicht gespeichert. Oder schreibe unten die Stadt.', 'gps_err_perm': 'Ich habe keine Erlaubnis, den Standort zu nutzen. Erlaube ihn in den Browser-Einstellungen für diese Seite oder schreibe die Stadt.', 'gps_err_non_disp': 'Ich finde den Standort gerade nicht. Schalte das GPS ein oder schreibe die Stadt.', 'gps_err_tempo': 'Der Standort braucht zu lange. Versuche es im Freien oder schreibe die Stadt.', 'gps_err_no': 'Dieses Handy oder dieser Browser erlaubt keine Standortnutzung. Schreibe die Stadt.', 'gps_luogo': 'dein Standort (±{acc} m)'})
+RP_TR["ro"].update({'gps_btn': '📍 Folosește locația mea (GPS)', 'gps_hint': 'Telefonul îți va cere permisiunea de a folosi locația. Nu se salvează. Sau scrie orașul mai jos.', 'gps_err_perm': 'Nu am permisiunea de a folosi locația. Permite-o în setările browserului pentru acest site sau scrie orașul.', 'gps_err_non_disp': 'Nu pot găsi locația acum. Pornește GPS-ul sau scrie orașul.', 'gps_err_tempo': 'Locația durează prea mult. Încearcă afară sau scrie orașul.', 'gps_err_no': 'Acest telefon sau browser nu permite folosirea locației. Scrie orașul.', 'gps_luogo': 'locația ta (±{acc} m)'})
+RP_TR["ar"].update({'gps_btn': '📍 استخدم موقعي (GPS)', 'gps_hint': 'سيطلب منك الهاتف الإذن باستخدام الموقع. لا يتم حفظه. أو اكتب المدينة في الأسفل.', 'gps_err_perm': 'ليس لدي إذن باستخدام الموقع. اسمح به في إعدادات المتصفح لهذا الموقع أو اكتب المدينة.', 'gps_err_non_disp': 'لا أستطيع إيجاد الموقع الآن. شغّل GPS أو اكتب المدينة.', 'gps_err_tempo': 'الموقع يستغرق وقتاً طويلاً. حاول في الهواء الطلق أو اكتب المدينة.', 'gps_err_no': 'هذا الهاتف أو المتصفح لا يسمح باستخدام الموقع. اكتب المدينة.', 'gps_luogo': 'موقعك (±{acc} م)'})
+
 
 def _rp_lingua():
     try:
@@ -253,14 +262,94 @@ def rp_geocodifica_parametri(testo, cc):
     return [{**par, "format": "json", "limit": 1, "countrycodes": P["cc"], "accept-language": _rp_lingua()} for par in tentativi]
 
 
-def rp_ora_locale(cc):
-    """Data e ora adesso nel fuso orario del Paese scelto (serve a capire se una farmacia è aperta)."""
+def rp_ora_locale(cc, tz=None):
+    """Data e ora adesso nel fuso orario del Paese scelto, o in quello indicato dal telefono (serve a capire se una farmacia è aperta)."""
     from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    for nome in (tz, PAESI.get(cc, {}).get("tz")):
+        try:
+            if nome:
+                return _dt.now(ZoneInfo(nome))
+        except Exception:
+            continue
+    return _dt.now()
+
+
+def rp_leggi_gps(valore):
+    """Dal testo mandato dal browser («lat|lon|precisione|fuso|ora» oppure «errore|codice|ora») ricava ('ok', lat, lon, precisione, fuso)
+    oppure ('errore', codice)."""
+    parti = str(valore or "").split("|")
+    if parti[0] == "errore":
+        return ("errore", parti[1] if len(parti) > 1 else "")
     try:
-        from zoneinfo import ZoneInfo
-        return _dt.now(ZoneInfo(PAESI[cc]["tz"]))
+        lat, lon = float(parti[0]), float(parti[1])
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError
+        acc = int(float(parti[2])) if len(parti) > 2 and parti[2] else 0
+        return ("ok", lat, lon, acc, parti[3] if len(parti) > 3 else "")
     except Exception:
-        return _dt.now()
+        return ("errore", "")
+
+
+def rp_testo_errore_gps(codice):
+    return rp_t({"1": "gps_err_perm", "2": "gps_err_non_disp", "3": "gps_err_tempo", "nogps": "gps_err_no"}.get(str(codice), "gps_err_non_disp"))
+
+
+# Il tasto «Usa la mia posizione» è un normale pulsante di Streamlit: il browser (JavaScript) ne intercetta il tocco, chiede la posizione
+# al telefono e la scrive nel campo nascosto «gps-posizione», così l'app la riceve. La posizione non viene salvata.
+RP_JS_GPS = r"""
+(function () {
+  var w = window, doc = w.document;
+  try {
+    if (w.__gpsAttivo) return;
+    w.__gpsAttivo = true;
+    doc.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('[class*="st-key-gps_btn"] button, button[class*="st-key-gps_btn"]') : null;
+      if (!b) return;
+      var inp = doc.querySelector('input[aria-label="gps-posizione"]');
+      if (!inp) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      function invia(v) {
+        var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, v);
+        inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+        inp.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+        inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+      }
+      if (!w.navigator.geolocation) { invia('errore|nogps|' + Date.now()); return; }
+      w.navigator.geolocation.getCurrentPosition(function (p) {
+        var tz = ''; try { tz = w.Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (x) {}
+        invia(p.coords.latitude + '|' + p.coords.longitude + '|' + Math.round(p.coords.accuracy || 0) + '|' + tz + '|' + Date.now());
+      }, function (err) { invia('errore|' + (err && err.code ? err.code : 2) + '|' + Date.now()); },
+      {enableHighAccuracy: true, timeout: 20000, maximumAge: 60000});
+    }, true);
+  } catch (err) { /* se qualcosa non va, resta la ricerca scrivendo la città */ }
+})();
+"""
+
+
+def rp_inietta_gps():
+    """Inserisce nella pagina il piccolo script del GPS (una volta sola per sessione; lo stesso metodo di voce.py e fotocamera.py)."""
+    if st.session_state.get("_rp_gps_js"):
+        return
+    st.session_state["_rp_gps_js"] = True
+    import json as _json
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
+              "var s=P.document.createElement('script');s.textContent=" + _json.dumps(RP_JS_GPS) + ";P.document.head.appendChild(s);})();</script>")
+    try:
+        st.html(pagina, unsafe_allow_javascript=True)
+    except Exception:
+        pass
+    try:
+        if hasattr(st, "iframe"):
+            st.iframe(pagina, height=1)
+        else:
+            import streamlit.components.v1 as _comp_gps
+            _comp_gps.html(pagina, height=0)
+    except Exception:
+        pass
 
 
 def rp_link_turno(cc, dove):

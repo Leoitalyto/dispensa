@@ -174,7 +174,7 @@ Poți refolosi o fotografie deja salvată din **arhiva de fotografii**. La medic
 Legăturile sunt separate pentru fiecare profil al familiei.""",
         "card de sanatate tessera sanitaria dosar medical electronic fse link adresa vaccinari online cheltuieli medicale deductibile fata spate insigna"),
     "f_aperta": ("🔎 Găsește o farmacie deschisă",
-        """Atinge butonul mare de sus (**Găsește o farmacie deschisă**): alege **țara** (pornește de la cea a limbii tale) și scrie **orice oraș sau cod poștal**. Aplicația caută farmaciile deschise lângă acel loc.""",
+        """Atinge butonul mare de sus (**Găsește o farmacie deschisă**): alege **țara** (pornește de la cea a limbii tale) și scrie **orice oraș sau cod poștal**. Aplicația caută farmaciile deschise lângă acel loc. Sau atinge **📍 Folosește locația mea (GPS)**: telefonul cere permisiunea și aplicația caută în jurul tău (locația nu se salvează).""",
         "farmacie deschisa gaseste cauta aproape garda noapte"),
     "f_avvisi": ("🔔 Notificări pe Telegram, e-mail și SMS",
         """Notificările îți amintesc expirările (la 60, 30, 14 și 7 zile, 1 zi și chiar în ziua respectivă) și, dacă vrei, ora tratamentelor. Alege **unul sau mai multe canale**.

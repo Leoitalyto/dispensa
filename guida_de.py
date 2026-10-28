@@ -174,7 +174,7 @@ Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden.
 Die Links sind für jedes Familienprofil getrennt.""",
         "gesundheitskarte tessera sanitaria gesundheitsakte elektronisch fse link adresse impfungen online absetzbar gesundheitskosten vorderseite ruckseite abzeichen"),
     "f_aperta": ("🔎 Eine geöffnete Apotheke finden",
-        """Tippe oben auf den großen Knopf (**Geöffnete Apotheke finden**): wähle das **Land** (es beginnt mit dem deiner Sprache) und schreibe **eine beliebige Stadt oder Postleitzahl**. Die App sucht geöffnete Apotheken in der Nähe dieses Ortes.""",
+        """Tippe oben auf den großen Knopf (**Geöffnete Apotheke finden**): wähle das **Land** (es beginnt mit dem deiner Sprache) und schreibe **eine beliebige Stadt oder Postleitzahl**. Die App sucht geöffnete Apotheken in der Nähe dieses Ortes. Oder tippe auf **📍 Meinen Standort nutzen (GPS)**: das Handy fragt nach der Erlaubnis und die App sucht rund um deinen Standort (er wird nicht gespeichert).""",
         "apotheke geoffnet finden suchen nahe notdienst nacht"),
     "f_avvisi": ("🔔 Benachrichtigungen per Telegram, E-Mail und SMS",
         """Die Benachrichtigungen erinnern dich an die Ablaufdaten (bei 60, 30, 14 und 7 Tagen, 1 Tag und am Tag selbst) und, wenn du willst, an die Uhrzeit der Therapien. Wähle **einen oder mehrere Kanäle**.

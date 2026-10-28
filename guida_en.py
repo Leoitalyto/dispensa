@@ -174,7 +174,7 @@ You can reuse a photo already saved from the **photo archive**. You can attach t
 The links are separate for each family profile.""",
         "health card tessera sanitaria electronic health file fse link address vaccinations online deductible medical expenses front back badge"),
     "f_aperta": ("🔎 Find an open pharmacy",
-        """Tap the big button at the top (**Find an open pharmacy**): choose the **country** (it starts from the one of your language) and write **any city or postcode**. The app looks for pharmacies open near that place.""",
+        """Tap the big button at the top (**Find an open pharmacy**): choose the **country** (it starts from the one of your language) and write **any city or postcode**. The app looks for pharmacies open near that place. Or tap **📍 Use my location (GPS)**: the phone asks permission and the app searches around where you are (the location is not saved).""",
         "pharmacy open find search nearby night"),
     "f_avvisi": ("🔔 Alerts on Telegram, email and SMS",
         """Alerts remind you of expiry dates (at 60, 30, 14 and 7 days, 1 day and the day itself) and, if you want, of the time of your therapies. Choose **one or more channels**.

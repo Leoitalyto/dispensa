@@ -1263,9 +1263,51 @@ def _fa_cerca_farmacie(lat, lon, quando):
     return righe
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fa_reverse(lat, lon):
+    """Da latitudine e longitudine al nome del posto e al Paese (OpenStreetMap, Nominatim). Ritorna (codice Paese, nome posto)."""
+    r = requests.get("https://nominatim.openstreetmap.org/reverse", headers=UA, timeout=15,
+                     params={"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 10, "accept-language": lingua()})
+    r.raise_for_status()
+    j = r.json() or {}
+    ind = j.get("address") or {}
+    posto = ind.get("city") or ind.get("town") or ind.get("village") or ind.get("municipality") or ind.get("county") or ""
+    return (ind.get("country_code") or "").upper(), posto
+
+
+def _fa_cerca_con_gps(valore, cc):
+    """Cerca le farmacie intorno alla posizione GPS mandata dal telefono (la posizione non viene salvata)."""
+    esito = rp_leggi_gps(valore)
+    if esito[0] != "ok":
+        st.session_state["fa_farm"] = {"dove": "", "cc": cc, "errore": rp_testo_errore_gps(esito[1])}
+        return
+    _, lat, lon, acc, tz = esito
+    try:
+        with st.spinner("…"):
+            quando = rp_ora_locale(cc, tz)
+            try:
+                cc_gps, posto = _fa_reverse(round(lat, 2), round(lon, 2))
+            except Exception:
+                cc_gps, posto = "", ""
+            righe = _fa_cerca_farmacie(lat, lon, quando)
+        luogo = rp_t("gps_luogo", acc=acc) + (f" · {posto}" if posto else "")
+        st.session_state["fa_farm"] = {"dove": posto or f"{lat:.4f}, {lon:.4f}", "cc": cc_gps if cc_gps in PAESI else cc,
+                                       "luogo": luogo, "quando": quando.isoformat(), "righe": righe}
+    except Exception:
+        st.session_state["fa_farm"] = {"dove": "", "cc": cc, "errore": rp_t("err_rete")}
+
+
 def _fa_dialogo_farmacie_corpo():
     cc = rp_selettore()                                   # parte dal Paese della lingua scelta; si può cambiare
     P = PAESI[cc]
+    rp_inietta_gps()
+    with st.container(key="nascosti_gps"):                # campo nascosto dove il telefono scrive la posizione GPS
+        gps_val = st.text_input("gps-posizione", key="rp_gps_val", label_visibility="collapsed")
+    st.button(rp_t("gps_btn"), key="gps_btn", type="primary", width="stretch")   # il tocco lo gestisce il browser (JavaScript)
+    st.caption(rp_t("gps_hint"))
+    if gps_val and gps_val != st.session_state.get("rp_gps_visto"):
+        st.session_state["rp_gps_visto"] = gps_val
+        _fa_cerca_con_gps(gps_val, cc)
     with st.form("fa_form_farm"):
         dove = st.text_input(rp_t("dove"), value=P["citta"], key=f"rp_f_dove_{cc}", placeholder=rp_t("dove_ph", citta=P["citta"]))
         cerca = st.form_submit_button(rp_t("cerca"), type="primary")
