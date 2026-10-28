@@ -257,7 +257,7 @@ def fam_html(persone, oggi_, sezioni=None, extra_html=""):
             corpo.append(f"<p>Gruppo sanguigno: <b>{e(pr.get('gruppo') or 'non indicato')}</b><br>Allergie e intolleranze dichiarate: "
                          f"<b>{e(', '.join((f.get('allergie') or {}).get(pid, [])) or 'nessuna')}</b></p>")
         if _fam_con_scheda(sezioni) and (dott.get("nome") or dott.get("telefono") or dott.get("email")):
-            corpo.append(f"<p><b>Il mio {e(str(dott.get('tipo', 'Dottore')).lower())}:</b> {e(dott.get('nome', ''))}"
+            corpo.append(f"<p><b>{"La mia dottoressa" if dott.get('tipo') == "Dottoressa" else "Il mio dottore"}:</b> {e(dott.get('nome', ''))}"
                          + (f" · tel. {e(dott['telefono'])}" if dott.get("telefono") else "") + (f" · {e(dott['email'])}" if dott.get("email") else "")
                          + (f" · {e(dott['indirizzo'])}" if dott.get("indirizzo") else "") + "</p>")
         san = pr.get("sanitario") or {}
@@ -295,7 +295,7 @@ def fam_pagine(persone, sezioni=None):
                          f"{', '.join((f.get('allergie') or {}).get(pid, [])) or 'nessuna'}")
             dott = pr.get("dottore") or {}
             if dott.get("nome") or dott.get("telefono") or dott.get("email"):
-                intro.append(f"Il mio {str(dott.get('tipo', 'Dottore')).lower()}: {dott.get('nome', '')}"
+                intro.append(f"{'La mia dottoressa' if dott.get('tipo') == 'Dottoressa' else 'Il mio dottore'}: {dott.get('nome', '')}"
                              + (f" · tel. {dott['telefono']}" if dott.get("telefono") else "") + (f" · {dott['email']}" if dott.get("email") else "")
                              + (f" · {dott['indirizzo']}" if dott.get("indirizzo") else ""))
             san = pr.get("sanitario") or {}

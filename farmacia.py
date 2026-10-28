@@ -2161,7 +2161,7 @@ def _fa_html_completo(d, oggi_):
                      f"Allergie e intolleranze dichiarate: <b>{e(', '.join(allergie)) if allergie else 'nessuna'}</b></p>")
         dott = p.get("dottore") or {}
         if dott.get("nome") or dott.get("telefono") or dott.get("email"):
-            parti.append(f"<p><b>Il mio {e(dott.get('tipo', 'Dottore').lower())}:</b> {e(dott.get('nome', ''))}"
+            parti.append(f"<p><b>{"La mia dottoressa" if dott.get('tipo') == "Dottoressa" else "Il mio dottore"}:</b> {e(dott.get('nome', ''))}"
                          + (f" · tel. {e(dott['telefono'])}" if dott.get("telefono") else "")
                          + (f" · {e(dott['email'])}" if dott.get("email") else "")
                          + (f" · {e(dott['indirizzo'])}" if dott.get("indirizzo") else "") + "</p>")
