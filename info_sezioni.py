@@ -45,6 +45,20 @@ I messaggi partono dall'indirizzo email dell'app. **La prima volta guarda anche 
 
 _GUIDE = {
     "dispensa": [
+        ("🤖 L'assistente digitale (il robottino)",
+         """È il **robottino giallo e blu** in basso a destra, con la faccia rotonda. **Toccalo** e si apre il suo pannello.
+
+Che cosa sa fare:
+- **📖 Spiegami questa pagina**: ti racconta a voce a cosa serve la pagina in cui sei.
+- **🧭 Giro guidato**: ti spiega tutta l'app passo per passo (Avanti e Indietro).
+- **🆕 Cosa c'è di nuovo**: ti dice le novità e dove trovarle.
+- **🎤 Fai una domanda**: tocca, parla (per esempio «come aggiungo una foto al documento?») e ti risponde con la guida. Funziona su Chrome per Android.
+- Puoi anche **scrivere** la domanda nella casella.
+
+**Voce:** usa la voce del telefono. Se non vuoi sentirlo, tocca **🔊 Voce: attiva** per spegnerla.
+
+**Per disattivarlo:** tocca **⛔ Disattiva assistente** nel suo pannello. Per riattivarlo apri il pulsante rosso **Clicca per informazioni** e tocca **✅ Attiva** nel riquadro dell'assistente. La scelta resta salvata sul telefono.""",
+         "assistente robot robottino voce parla microfono ascolta domanda giro guidato novità disattivare attivare spegnere aiuto assistente digitale"),
         ("🚀 A cosa serve e come si comincia",
          """**A cosa serve:** tiene l'elenco di quello che hai in casa, di quando scade e di cosa contiene. Ti avvisa prima che qualcosa vada a male.
 
@@ -439,7 +453,18 @@ def _dialogo_info(sezione):
                                 unsafe_allow_html=True)
                     st.markdown(corpo)
         st.divider()
+    if "assistente" in globals():
+        with st.container(border=True):
+            st.markdown("**🤖 Assistente digitale** (il robottino che parla e ti aiuta)")
+            c_on, c_off = st.columns(2)
+            if c_on.button("✅ Attiva", key=f"asst_on_{sezione}", width="stretch"):
+                st.session_state["_asst_cmd"] = "on"
+                st.rerun()
+            if c_off.button("⛔ Disattiva", key=f"asst_off_{sezione}", width="stretch"):
+                st.session_state["_asst_cmd"] = "off"
+                st.rerun()
     st.markdown(f"**Tutti gli argomenti · {_NOMI_SEZIONI.get(sezione, sezione)}**")
+
     for titolo, corpo, _chiavi in _GUIDE.get(sezione, []):
         with st.expander(titolo):
             st.markdown(corpo)
@@ -457,9 +482,10 @@ div.hero::after{width:180px !important;height:158px !important;top:-10px !import
 </style>"""
 
 
-# Elenco delle novità: (data ISO, simbolo, titolo, DOVE SI TROVA). Si aggiunge una riga per ogni novità: il banner
-# mostra solo quelle degli ultimi 14 giorni, poi scompaiono da sole.
+# Elenco delle novità: (data ISO, simbolo, titolo, DOVE SI TROVA). Si aggiunge una riga per ogni novità: l'assistente
+# digitale le dice a voce («Cosa c'è di nuovo») solo per gli ultimi 14 giorni, poi scompaiono da sole.
 _NOVITA = [
+    ("2026-10-28", "🤖", "Assistente digitale", "Il robottino rotondo in basso a destra: toccalo e ti spiega l'app a voce, anche con il microfono"),
     ("2026-10-27", "🦆", "Nuova utilità: Wimbi", "Home → Utilità → il papero con le cuffie; tocca la scritta verde per il bugiardino"),
     ("2026-10-27", "🧰", "Nuova pagina «Utilità»", "Home → terza icona azzurra «Utilità», accanto a Farmacia e I miei documenti"),
     ("2026-10-27", "ℹ️", "Guida in ogni pagina", "Pulsante rosso «Clicca per informazioni» in alto, con spiegazioni e ricerca"),
@@ -467,42 +493,15 @@ _NOVITA = [
     ("2026-10-27", "📷", "Documenti: foto e lettura automatica", "I miei documenti → «Aggiungi un documento»"),
 ]
 
-_CSS_NOVITA = """<style>
-@keyframes nov-vai{0%{opacity:0;transform:translate(-50%,-14px)}5%{opacity:1;transform:translate(-50%,0)}
-88%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-8px);visibility:hidden}}
-.nov-banner{position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:99999;width:min(94vw,520px);
-background:rgba(255,255,255,.97);border-radius:22px;padding:12px 16px 10px;box-shadow:0 12px 34px rgba(0,0,0,.28);
-border:2px solid #26a69a;color:#16302b;pointer-events:none;opacity:0;animation:nov-vai 14s ease forwards}
-.nov-banner .nov-t{font-weight:900;font-size:1.02rem;margin-bottom:6px;color:#00796b}
-.nov-banner .nov-r{font-size:.86rem;line-height:1.25;margin:5px 0}
-.nov-banner .nov-r span{opacity:.78;font-size:.8rem}
-</style>"""
-
-
-def banner_novita():
-    """All'apertura dell'app mostra per pochi secondi le novità recenti e dove trovarle; poi scompare da solo.
-    È solo da leggere (non si tocca) e compare una volta per ogni nuova apertura."""
-    if st.session_state.get("_novita_mostrate"):
-        return
-    st.session_state["_novita_mostrate"] = True
-    try:
-        from datetime import date as _d
-        oggi_ = oggi() if "oggi" in globals() else _d.today()
-        recenti = [n for n in _NOVITA if (oggi_ - _d.fromisoformat(n[0])).days <= 14][:5]
-    except Exception:
-        return
-    if not recenti:
-        return
-    righe = "".join(f"<div class='nov-r'><b>{n[1]} {html.escape(n[2])}</b><br><span>📍 {html.escape(n[3])}</span></div>"
-                    for n in recenti)
-    st.markdown(_CSS_NOVITA + f"<div class='nov-banner'><div class='nov-t'>🆕 Novità nell'app</div>{righe}</div>",
-                unsafe_allow_html=True)
-
-
 def pulsante_info(sezione):
     """Mostra il pulsante con l'immagine «Informazioni»; toccandolo si apre la guida di quella sezione."""
     uri = _info_uri()
     chiave = f"ginfo_{sezione}"
+    if "assistente" in globals():                       # il robottino assistente (assistente.py)
+        try:
+            assistente(sezione)
+        except Exception:
+            pass
     if sezione == "dispensa":
         st.markdown(_CSS_BANNER_GRANDE, unsafe_allow_html=True)
     if uri:
