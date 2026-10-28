@@ -445,14 +445,21 @@ def inv_prepara(chiave, persone, d_conto, scelte, formati, titolo_rep, oggi_):
                                                  "firma": (tuple(scelte), tuple(formati), tuple(p["chiave"] for p in persone))}
 
 
-def inv_hub(chiave, persone, d_conto, titolo_rep, preselezione=None, solo_extra=False):
+def _inv_apri(chiave_exp):
+    """Si usa nei pulsanti e nelle scelte (on_click / on_change): ricorda che il pannello va tenuto aperto quando la pagina si ridisegna."""
+    st.session_state[chiave_exp] = True
+
+
+def inv_hub(chiave, persone, d_conto, titolo_rep, preselezione=None, solo_extra=False, chiave_exp=None):
     """«Esporta e invia»: si sceglie cosa e in che formato, si preme Prepara, poi si invia con il canale preferito."""
     oggi_ = oggi()
     scelte_possibili = FAM_TITOLI + [FAM_SCHEDA] + INV_EXTRA
     predefinite = preselezione or [x for x in scelte_possibili if x not in ("Assunzioni registrate",)]
-    scelte = st.multiselect("Cosa vuoi inviare o esportare", scelte_possibili, default=predefinite, key=f"inv_sc_{chiave}")
-    formati = st.multiselect("Formato dei file", ["PDF", "Excel", "Da stampare (HTML)"], default=["PDF"], key=f"inv_fm_{chiave}")
-    if st.button("📦 Prepara i file", type="primary", key=f"inv_prep_{chiave}", width="stretch", disabled=not (scelte and formati)):
+    cb = dict(on_change=_inv_apri, args=(chiave_exp,)) if chiave_exp else {}
+    scelte = st.multiselect("Cosa vuoi inviare o esportare", scelte_possibili, default=predefinite, key=f"inv_sc_{chiave}", **cb)
+    formati = st.multiselect("Formato dei file", ["PDF", "Excel", "Da stampare (HTML)"], default=["PDF"], key=f"inv_fm_{chiave}", **cb)
+    cbb = dict(on_click=_inv_apri, args=(chiave_exp,)) if chiave_exp else {}
+    if st.button("📦 Prepara i file", type="primary", key=f"inv_prep_{chiave}", width="stretch", disabled=not (scelte and formati), **cbb):
         with st.spinner("Preparo i file…"):
             inv_prepara(chiave, persone, d_conto, scelte, formati, titolo_rep, oggi_)
     pronti = st.session_state.get(f"inv_pronti_{chiave}")
@@ -474,17 +481,22 @@ def inv_hub_miei(chiave="miei", preselezione=None, aperto=False):
     d = _inv_dati_conto()
     f = d.get("farmacia") or {}
     profili = _fa_profili(f)
-    with st.expander("📤 Esporta e invia: PDF, email, WhatsApp, Telegram…", expanded=aperto):
+    chiave_exp = f"inv_exp_{chiave}"
+    with st.expander("📤 Esporta e invia: PDF, email, WhatsApp, Telegram…", expanded=aperto or bool(st.session_state.get(chiave_exp))):
         nomi = {p["id"]: p["nome"] for p in profili}
         opzioni = ["Tutti i profili"] + [p["id"] for p in profili] if len(profili) > 1 else [profili[0]["id"]]
-        scelta = st.selectbox("Di chi", opzioni, format_func=lambda x: x if x == "Tutti i profili" else nomi[x], key=f"inv_chi_{chiave}")
+        scelta = st.selectbox("Di chi", opzioni, format_func=lambda x: x if x == "Tutti i profili" else nomi[x], key=f"inv_chi_{chiave}",
+                              on_change=_inv_apri, args=(chiave_exp,))
         sel = profili if scelta == "Tutti i profili" else [p for p in profili if p["id"] == scelta]
         persone = [{"chiave": "io:" + p["id"], "nome": p["nome"], "origine": "", "d": d, "f": f, "pid": p["id"], "p": p} for p in sel]
-        inv_hub(f"{chiave}_{scelta}", persone, d, "Farmacia " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione)
+        inv_hub(f"{chiave}_{scelta}", persone, d, "Farmacia " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
+                chiave_exp=chiave_exp)
 
 
 def inv_hub_famiglia(persone, scelta_nome, chiave="fam"):
     """Lo stesso pannello nel Controllo famiglia: tutta la famiglia o una persona."""
     d_capo = _inv_dati_conto()
-    with st.expander("📤 Invia tutto: PDF, email, WhatsApp, Telegram…", expanded=False):
-        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Farmacia famiglia" if len(persone) > 1 else "Farmacia " + persone[0]["nome"])
+    chiave_exp = f"inv_exp_{chiave}"
+    with st.expander("📤 Invia tutto: PDF, email, WhatsApp, Telegram…", expanded=bool(st.session_state.get(chiave_exp))):
+        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Farmacia famiglia" if len(persone) > 1 else "Farmacia " + persone[0]["nome"],
+                chiave_exp=chiave_exp)
