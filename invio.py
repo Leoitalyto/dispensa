@@ -169,7 +169,7 @@ def inv_indirizzi(testo):
 
 def inv_invia_email(destinatari, oggetto, testo, allegati):
     """Manda l'email con gli allegati. allegati = [(nome, mime, byte)]. Ritorna (True, '') oppure (False, motivo)."""
-    utente, password = inv_segreto("EMAIL_USER"), inv_segreto("EMAIL_PASSWORD")
+    utente, password = inv_segreto("EMAIL_USER"), inv_segreto("EMAIL_PASSWORD").replace(" ", "")      # Google mostra il codice a gruppi di 4: gli spazi non servono
     if not (utente and password):
         return False, "mancano EMAIL_USER o EMAIL_PASSWORD nei Secrets"
     if sum(len(a[2]) for a in allegati) > _MAX_ALLEGATI:
