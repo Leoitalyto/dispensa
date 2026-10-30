@@ -307,9 +307,27 @@ def _inv_dati_conto():
         return {}
 
 
+def _inv_nomi_unici(allegati):
+    """Se due file hanno lo stesso nome (succede: per esempio fronte e retro scattati dal telefono), il secondo diventa «nome (2)», il terzo «nome (3)»…
+    Servono nomi diversi per le caselle, per i pulsanti di scarico e per gli allegati dell'email."""
+    usati, risultato = set(), []
+    for nome, mime, dati in allegati:
+        base, punto, est = nome.rpartition(".")
+        if not punto:
+            base, est = nome, ""
+        candidato, n = nome, 1
+        while candidato in usati:
+            n += 1
+            candidato = f"{base} ({n})" + (f".{est}" if est else "")
+        usati.add(candidato)
+        risultato.append((candidato, mime, dati))
+    return risultato
+
+
 def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
     """I modi di inviare. allegati = [(nome, mime, byte)]; testo = il riepilogo scritto."""
     oggetto = oggetto or titolo
+    allegati = _inv_nomi_unici(list(allegati))
     chiave = re.sub(r"\W+", "_", str(chiave))                     # le chiavi dei pulsanti finiscono nei nomi di classe della pagina
     d_conto = _inv_dati_conto()
     st.warning("🔒 Stai per inviare **dati personali e sanitari**: controlla bene a chi li mandi.")
@@ -329,7 +347,7 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
         else:
             a = st.text_input("A chi (uno o più indirizzi, separati da virgola)", value=d_conto.get("avviso_email", ""), key=f"inv_a_{chiave}")
             msg = st.text_area("Messaggio", value="Ti mando in allegato i documenti. " if allegati else "Ecco il riepilogo.", key=f"inv_m_{chiave}", height=80)
-            scelti = [x for x in allegati if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{x[0]}")]
+            scelti = [x for i, x in enumerate(allegati) if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{i}")]
             if st.button("✉️ Invia l'email", type="primary", key=f"inv_si_{chiave}", width="stretch"):
                 ok, ko = inv_indirizzi(a)
                 if not ok:
@@ -373,8 +391,8 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
         st.caption("Tocca l'icona in alto a destra del riquadro per copiare, poi incolla dove vuoi.")
         st.code(testo, language=None)
     st.markdown("**⬇ Oppure scarica i file**")
-    for nome, mime, dati in allegati:
-        st.download_button(f"⬇ {nome}", dati, file_name=nome, mime=mime, key=f"inv_dl_{chiave}_{nome}", width="stretch")
+    for i, (nome, mime, dati) in enumerate(allegati):
+        st.download_button(f"⬇ {nome}", dati, file_name=nome, mime=mime, key=f"inv_dl_{chiave}_{i}", width="stretch")
 
 
 def inv_voce(chiave, etichetta, titolo, testo, carica_allegati):
@@ -383,7 +401,10 @@ def inv_voce(chiave, etichetta, titolo, testo, carica_allegati):
     aperto = st.session_state.get(k, False)
     st.button("🙈 Chiudi l'invio" if aperto else etichetta, key=f"inv_tasto_{chiave}", width="stretch", on_click=_inv_alterna, args=(k,))
     if aperto:
-        inv_canali(chiave, titolo, testo, list(carica_allegati()), oggetto=titolo)
+        try:
+            inv_canali(chiave, titolo, testo, list(carica_allegati()), oggetto=titolo)
+        except Exception as e:
+            st.error(f"Non riesco ad aprire l'invio ({type(e).__name__}). Chiudi e riprova; se capita ancora, scrivimelo.")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
