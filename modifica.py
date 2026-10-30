@@ -48,6 +48,11 @@ def apri_modifica(rid):
             scad_att = aggiungi_mesi(oggi(), 6)
         scad = s1.date_input(t("Scadenza"), value=scad_att, format="DD/MM/YYYY", disabled=senza_scad, key=K("scad"))
         note = st.text_input(t("Note (facoltative)"), value=r.get("note", ""), key=K("note"))
+        try:
+            acq_att = date.fromisoformat(r["acquisto"]) if r.get("acquisto") else None
+        except Exception:
+            acq_att = None
+        acquisto = st.date_input(t("Data di acquisto (facoltativa)"), value=acq_att, format="DD/MM/YYYY", key=K("acquisto"))
 
         with st.expander((("🌾 " + t("Allergeni e ingredienti")) if per_chi != "animali" else ("🥣 " + t("Composizione")))):
             if per_chi != "animali":
@@ -78,7 +83,8 @@ def apri_modifica(rid):
                     comuni["immagine"] = nuova_foto
                 elif togli_foto:
                     comuni["immagine"] = ""
-                singoli = {"quantita": float(quant), "scadenza": None if senza_scad else scad.isoformat(), "note": note.strip()}
+                singoli = {"quantita": float(quant), "scadenza": None if senza_scad else scad.isoformat(), "note": note.strip(),
+                           "acquisto": acquisto.isoformat() if acquisto else None}
 
                 def _applica(d):
                     for x in d.get("articoli", []):

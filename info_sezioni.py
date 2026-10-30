@@ -137,6 +137,8 @@ Toccane una per aprirla; per tornare tocca **← Torna alla dispensa**. In ogni 
         ("🛒 Lista della spesa e volantini",
          """- Quando un prodotto **finisce** va da solo nella scheda **🛒 Spesa**.
 - Nella scheda Spesa puoi toccare **Ne ho consumato uno** per scalare un'unità.
+- Quando aggiungi qualcosa alla lista scrivi anche **quanti ne servono**; nella tabella puoi cambiare la colonna **Quanti**.
+- Segna **Preso** quello che hai comprato: sotto compare **📦 Metti in dispensa i prodotti presi**. Confermi le unità, la scadenza e **dove** le metti, e li porta in dispensa con la **data di acquisto** di oggi (e li toglie dalla lista).
 - Sulla scheda del prodotto, a destra della quantità, c'è il collegamento ai **volantini** di supermercati, ipermercati e discount: scegli il **Paese** (parte da quello della tua lingua) e scrivi la **città**, guarda le offerte e tocca il pulsante per mettere il prodotto nella **lista della spesa**, con il nome del negozio.""",
          "spesa lista della spesa comprare volantini offerte supermercato consumato finito città negozio"),
         ("✏️ Gestisci tanti prodotti in una volta",
@@ -162,6 +164,8 @@ I numeri partono da quando hai installato questo aggiornamento.""",
 3. Il tuo **ruolo** è scritto sotto: **👑 Amministratore** fa tutto; **✏️ Collaboratore** inserisce prodotti, cambia quantità e scadenze, registra i consumi e usa la lista della spesa; **👁️ Visualizzatore** può solo guardare.
 4. La scheda **🕘 Storico** dice **chi ha fatto cosa e quando**. L'amministratore può **↩️ annullare** un'operazione sbagliata (anche un prodotto eliminato per errore).
 5. Per portare prodotti dalla tua dispensa personale tocca **📥 Porta qui prodotti**: li copia, non li sposta.
+6. Se sei **Visualizzatore** i pulsanti che modificano (Elimina, Modifica, Aggiungi alla lista) e le schede Aggiungi e Gestisci non si vedono: puoi solo guardare.
+7. La **lista della spesa** è comune: tutti vedono cosa manca e chi lo compra segna **Preso** e lo mette in dispensa.
 
 Se in due modificate nello stesso momento, le quantità si sommano giuste; se cambiate lo stesso dato insieme vale l'ultima modifica, e lo storico permette di tornare indietro.
 **L'amministratore** assegna il ruolo nella scheda **Utenti**, accanto a «Parte della famiglia». Le cose di **Salute** restano sempre personali.""",

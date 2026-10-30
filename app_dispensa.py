@@ -38,6 +38,13 @@ _AGGANCI = {
          'if "fd_selettore" in globals():\n    fd_selettore()\n'),
     ],
     "parte4.py": [
+        # data di acquisto nel modulo «Aggiungi»
+        ('    note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))\n',
+         '    note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))\n'
+         '    acquisto = st.date_input(t("Data di acquisto (facoltativa)"), value=None, key=K("acquisto"), format="DD/MM/YYYY")\n'),
+        ('                "aggiunto_da": utente.strip(), "aggiunto_il": datetime.now().isoformat(timespec="seconds"),\n',
+         '                "aggiunto_da": utente.strip(), "aggiunto_il": datetime.now().isoformat(timespec="seconds"),\n'
+         '                "acquisto": acquisto.isoformat() if acquisto else None,\n'),
         # scheda Utenti: l'interruttore «Parte della famiglia» e la spiegazione
         ('        st.caption(t("Al primo accesso la persona può scegliere una password sua."))\n',
          '        st.caption(t("Al primo accesso la persona può scegliere una password sua."))\n'

@@ -13,10 +13,39 @@ def aggiungi_a_spesa(d, r):
     chiave = _chiave_prodotto(r)
     if not chiave or any(_chiave_prodotto(x) == chiave and not x.get("preso") for x in lista):
         return False
+    try:
+        q = max(float(r.get("q") or 1), 1.0)
+    except (TypeError, ValueError):
+        q = 1.0
     lista.append({"id": uuid.uuid4().hex[:10], "nome": r.get("nome", ""), "marca": r.get("marca", ""),
-                  "barcode": r.get("barcode", ""), "per_chi": r.get("per_chi", "adulti"), "preso": False,
+                  "barcode": r.get("barcode", ""), "per_chi": r.get("per_chi", "adulti"), "preso": False, "q": q,
                   "aggiunto_il": datetime.now().isoformat(timespec="seconds")})
     return True
+
+
+def spesa_in_dispensa(d, scelte, utente="", oggi_=None):
+    """Porta in dispensa i prodotti della lista della spesa già presi. scelte = [{'id', 'quantita', 'scadenza' (ISO o None), 'posto'}].
+    Crea le voci della dispensa (con la data di acquisto di oggi) e le toglie dalla lista. Ritorna quante ne ha create."""
+    oggi_iso = (oggi_ or date.today()).isoformat()
+    lista = d.setdefault("spesa", [])
+    fatte, ids = 0, set()
+    for sc in scelte:
+        x = next((y for y in lista if y.get("id") == sc["id"]), None)
+        if x is None:
+            continue
+        q = float(sc.get("quantita") or 0)
+        if q <= 0:
+            continue
+        d.setdefault("articoli", []).append({
+            "id": uuid.uuid4().hex[:10], "barcode": x.get("barcode", ""), "nome": x.get("nome", ""), "marca": x.get("marca", ""),
+            "formato_valore": None, "formato_unita": None, "immagine": "", "allergeni": [], "tracce": [], "senza_glutine": False,
+            "allergeni_noti": False, "ingredienti": "", "note": "", "categoria": "", "extra": {}, "per_chi": x.get("per_chi", "adulti"),
+            "posto": sc.get("posto") or "dispensa", "posto_altro": "", "aggiunto_da": utente, "aggiunto_il": datetime.now().isoformat(timespec="seconds"),
+            "acquisto": oggi_iso, "quantita": q, "scadenza": sc.get("scadenza") or None})
+        ids.add(x["id"])
+        fatte += 1
+    d["spesa"] = [y for y in lista if y.get("id") not in ids]
+    return fatte
 
 
 def togli_da_spesa(d, prodotti):
@@ -94,9 +123,10 @@ def _corpo_spesa():
     st.subheader("🛒 " + t("Lista della spesa"))
     st.caption(t("I prodotti finiti (0 unità) arrivano qui da soli. Quando li aggiungi di nuovo in dispensa escono dalla lista."))
     giro = st.session_state.setdefault("spesa_giro", 0)
-    c1, c2 = st.columns([3, 2])
+    c1, cq, c2 = st.columns([3, 1.3, 2])
     nuovo = c1.text_input(t("Cosa devi comprare?"), key=f"spesa_nuovo_{giro}", label_visibility="collapsed",
                           placeholder=t("Cosa devi comprare?"))
+    quanti = cq.number_input("Quanti", min_value=1.0, step=1.0, value=1.0, key=f"spesa_q_{giro}", label_visibility="collapsed", help="Quante unità comprare")
     if c2.button("➕ " + t("Aggiungi alla lista"), key=f"spesa_aggiungi_{giro}", width="stretch"):
         nome = nuovo.strip()
         if not nome:
@@ -105,7 +135,7 @@ def _corpo_spesa():
             st.info(t("È già nella lista."))
         else:
             try:
-                salva(lambda d: aggiungi_a_spesa(d, {"nome": nome}), "Spesa: " + nome)
+                salva(lambda d: aggiungi_a_spesa(d, {"nome": nome, "q": quanti}), "Spesa: " + nome)
                 st.session_state["spesa_giro"] = giro + 1
                 _ricarica()
             except Exception as e:
@@ -125,13 +155,14 @@ def _corpo_spesa():
     if not lista:
         st.info(t("La lista della spesa è vuota."))
         return
-    df = pd.DataFrame([{"id": x["id"], "Preso": bool(x.get("preso")),
+    df = pd.DataFrame([{"id": x["id"], "Preso": bool(x.get("preso")), "Quantità": float(x.get("q") or 1),
                         "Prodotto": x.get("nome", "") + (f" · {x['marca']}" if x.get("marca") else ""),
                         "Dove": (_dove(x) if "_dove" in globals() else ""),
                         "🗑️": False} for x in lista]).set_index("id")
     modificata = st.data_editor(df, hide_index=True, width="stretch", key=f"editor_spesa_{len(lista)}_{giro}_{filtro_neg}",
                                 disabled=["Prodotto", "Dove"],
                                 column_config={"Preso": st.column_config.CheckboxColumn(t("Preso"), width="small"),
+                                               "Quantità": st.column_config.NumberColumn("Quanti", min_value=1.0, step=1.0, width="small"),
                                                "Prodotto": st.column_config.TextColumn(t("Prodotto")),
                                                "Dove": st.column_config.TextColumn("🏪 Dove"),
                                                "🗑️": st.column_config.CheckboxColumn("🗑️", width="small")})
@@ -144,6 +175,10 @@ def _corpo_spesa():
                 if bool(m["🗑️"]):
                     continue
                 x["preso"] = bool(m["Preso"])
+                try:
+                    x["q"] = max(float(m["Quantità"]), 1.0)
+                except (TypeError, ValueError):
+                    pass
             nuova.append(x)
         d["spesa"] = nuova
 
@@ -163,6 +198,29 @@ def _corpo_spesa():
             _ricarica()
         except Exception as e:
             st.error(t("Non sono riuscito a salvare: {e}", e=e))
+    # ---- i prodotti presi vanno in dispensa, con quantità, scadenza e posto
+    presi = [x for x in lista if x.get("preso")]
+    if presi:
+        with st.expander(f"📦 Metti in dispensa i prodotti presi ({len(presi)})", expanded=True):
+            st.caption("Conferma quante unità hai preso, la scadenza e dove le metti: li aggiungo alla dispensa con la data di acquisto di oggi.")
+            scelte = []
+            for x in presi:
+                st.markdown(f"**{x.get('nome', '')}**" + (f" · {x['marca']}" if x.get("marca") else ""))
+                g1, g2, g3 = st.columns([1, 2, 2])
+                q_ = g1.number_input("Unità", min_value=0.0, step=1.0, value=float(x.get("q") or 1), key=f"sp_q_{x['id']}")
+                senza = g2.checkbox("Senza scadenza", value=False, key=f"sp_ns_{x['id']}")
+                sc_ = g2.date_input("Scadenza", value=aggiungi_mesi(oggi(), 6), format="DD/MM/YYYY", key=f"sp_sc_{x['id']}", disabled=senza)
+                posti_ = list(POSTI) if "POSTI" in globals() else ["dispensa"]
+                po_ = g3.selectbox("Dove", posti_, format_func=(nome_posto_scelta if "nome_posto_scelta" in globals() else str), key=f"sp_po_{x['id']}",
+                                   index=posti_.index(st.session_state.get("ultimo_posto", "dispensa")) if st.session_state.get("ultimo_posto", "dispensa") in posti_ else 0)
+                scelte.append({"id": x["id"], "quantita": q_, "scadenza": None if senza else sc_.isoformat(), "posto": po_})
+            if st.button("📦 " + "Metti in dispensa", type="primary", key="spesa_in_dispensa", width="stretch"):
+                try:
+                    salva(lambda d: spesa_in_dispensa(d, scelte, utente if "utente" in globals() else ""), "Dalla spesa alla dispensa")
+                    st.session_state["messaggio"] = f"📦 {len(scelte)} prodotti messi in dispensa."
+                    _ricarica()
+                except Exception as e:
+                    st.error(t("Non sono riuscito a salvare: {e}", e=e))
 
 
 scheda_spesa = st.fragment(_corpo_spesa) if _FRAMMENTO else _corpo_spesa

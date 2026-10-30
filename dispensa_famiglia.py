@@ -249,6 +249,7 @@ def fd_selettore():
     ruolo = fd_ruolo()
     if not ruolo:
         return
+    fd_nascondi_modifiche(ruolo == "visualizzatore" and st.session_state.get("fd_modo") == "famiglia")
     st.segmented_control("Quale dispensa", ["personale", "famiglia"], key="fd_modo_w", default=st.session_state.get("fd_modo", "personale"),
                          format_func=lambda m: "🧑 La mia dispensa" if m == "personale" else "👨‍👩‍👧 Dispensa di famiglia", on_change=_fd_cambia_modo,
                          label_visibility="collapsed", width="stretch")
@@ -300,6 +301,37 @@ def fd_porta_prodotti():
                 st.rerun()
             except Exception as e:
                 st.error(f"Non sono riuscito: {e}")
+
+
+_FD_JS_SOLA_LETTURA = r"""
+(function () {
+  var w = window, d = w.document;
+  try {
+    w.__fdSL = __ATTIVO__;
+    if (w.__fdSLpronto) { w.__fdSLagg(); return; }
+    w.__fdSLpronto = true;
+    var stile = d.createElement('style'); stile.id = 'fd-sola-lettura'; d.head.appendChild(stile);
+    var css = '[class*="st-key-cest_"],[class*="st-key-modif_"],[class*="st-key-spesa_aggiungi"],[class*="st-key-spesa_salva"],[class*="st-key-spesa_pulisci"],' +
+              '[class*="st-key-spesa_in_dispensa"]{display:none !important}';
+    w.__fdSLagg = function () {
+      stile.textContent = w.__fdSL ? css : '';
+      var tl = d.querySelector('[data-baseweb="tab-list"]');            // le schede «Aggiungi» e «Gestisci» (2ª e 3ª)
+      if (!tl) return;
+      var tabs = tl.querySelectorAll('[role="tab"]');
+      [1, 2].forEach(function (i) { if (tabs[i]) tabs[i].style.display = w.__fdSL ? 'none' : ''; });
+    };
+    new w.MutationObserver(function () { w.__fdSLagg(); }).observe(d.body, {childList: true, subtree: true});
+    w.__fdSLagg();
+  } catch (e) { /* se non si può, restano i messaggi di sola consultazione */ }
+})();
+"""
+
+
+def fd_nascondi_modifiche(attivo):
+    """Ai visualizzatori nasconde i pulsanti che modificano (Elimina, Modifica, Aggiungi alla lista…) e le schede Aggiungi e Gestisci; agli altri li rimostra."""
+    if "_nav_pagina_js" not in globals():
+        return
+    _nav_pagina_js(_FD_JS_SOLA_LETTURA.replace("__ATTIVO__", "true" if attivo else "false"))
 
 
 def _fd_aggiorna_ora():
