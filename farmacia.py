@@ -1888,7 +1888,7 @@ def _fa_blocco_avvisi():
     with st.expander("🔔 Scegli come ricevere gli avvisi"):
         st.caption("Puoi attivare più canali insieme: gli avvisi arrivano su tutti quelli che spunti.")
         _fa_guida_avvisi()
-        fam_m = fam_r = None
+        fam_m = fam_r = fd_s = fd_e = None
         with st.form("fa_form_avvisi"):
             c_tg = st.checkbox("📱 Telegram (gratuito)", value="telegram" in canali)
             v_tg = st.text_input("Chat ID di Telegram (solo numeri)", value=chat, placeholder="es. 123456789")
@@ -1905,9 +1905,16 @@ def _fa_blocco_avvisi():
                                     value=bool(d.get("avvisi_famiglia")))
                 fam_r = st.checkbox("🔔 Avvisami se una persona della famiglia non registra una dose entro 90 minuti (esclusi i tuoi)",
                                     value=bool(d.get("avvisi_famiglia_ritardi")))
+            if "fd_ruolo" in globals() and fd_ruolo():                                  # chi fa parte della dispensa di famiglia
+                fd_s = st.checkbox("🏠 Avvisami anche delle scadenze della dispensa di famiglia",
+                                   value=bool(d.get("avvisi_famiglia_dispensa")))
+                fd_e = st.checkbox("📉 …e dei prodotti in esaurimento (ne resta una sola unità; ogni lunedì)",
+                                   value=bool(d.get("avvisi_famiglia_esaurimento")))
             ok = st.form_submit_button("Salva")
         st.caption("Gli avvisi arrivano quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso, e ogni lunedì "
                    "per ciò che è già scaduto; per le prescrizioni a 14, 7, 3 e 1 giorno e il giorno stesso. "
+                   "Chi fa parte della dispensa di famiglia può ricevere anche gli avvisi di scadenza dei prodotti comuni e, ogni lunedì, quelli "
+                   "in esaurimento: ognuno sceglie se riceverli, sui suoi canali. "
                    "Il capo famiglia può ricevere ogni mattina il riepilogo di tutta la famiglia (chi ha «Parte della famiglia» attivo) "
                    "e un avviso se una persona non registra una dose entro 90 minuti. Gli SMS sono brevi e non riportano mai i nomi dei medicinali. "
                    "Perché i messaggi partano, l'amministratore deve aver attivato ogni canale su GitHub; "
@@ -1937,6 +1944,8 @@ def _fa_blocco_avvisi():
                      "telegram_privacy": bool(privacy), "avvisi_dosi": bool(dosi)}
             if fam_m is not None:                                                # le due scelte del capo famiglia
                 nuovi.update({"avvisi_famiglia": bool(fam_m), "avvisi_famiglia_ritardi": bool(fam_r)})
+            if fd_s is not None:                                                 # le due scelte di chi fa parte della dispensa di famiglia
+                nuovi.update({"avvisi_famiglia_dispensa": bool(fd_s), "avvisi_famiglia_esaurimento": bool(fd_e)})
             salva(lambda d: d.update(nuovi), "Avvisi")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")

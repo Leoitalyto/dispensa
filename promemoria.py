@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Promemoria di scadenza per "La nostra dispensa" e per la Farmacia: Telegram, email e SMS.
+"""Promemoria di scadenza per "La nostra dispensa" e per Salute: Telegram, email e SMS.
 
 Gira ogni mattina su GitHub Actions dentro il repository dei dati (dispensa-dati).
 Legge i file dispense/*.json e avvisa ogni persona con i canali che ha scelto nell'app.
@@ -153,7 +153,7 @@ def testo_lungo(d, oggi, in_soglia, scaduti, docs=()):
             righe.append(f"• {icona} {nome}{extra} – {quando(g)} ({s.strftime('%d/%m/%Y')})")
         if med and privacy:
             righe.append(("• 💊 1 medicinale" if len(med) == 1 else f"• 💊 {len(med)} medicinali")
-                         + ": apri la Farmacia per i dettagli")
+                         + ": apri Salute per i dettagli")
     secondi = [x for x in docs if x[0] == 2]
     primi = [x for x in docs if x[0] == 1]
     if secondi:                                  # secondo avviso: più insistente
@@ -299,7 +299,7 @@ def testo_dosi(d, dosi):
         else:
             righe.append(f"• 💊 {nome}{extra}" + (f" – {quantita}" if quantita else "") + f" – ore {ora}")
     righe.append("")
-    righe.append("Quando l'hai presa, segnalala nella Farmacia dell'app (scheda Terapie).")
+    righe.append("Quando l'hai presa, segnalala in Salute nell'app (scheda Terapie).")
     return "\n".join(righe)
 
 
@@ -386,13 +386,13 @@ def riepilogo_famiglia(oggi, privacy=False):
                 continue
             blocco.append(f"• {icona} {cosa}" + (f" – {quando_}" if quando_ else ""))
         if meds and privacy:
-            blocco.append(("• 💊 1 medicinale" if len(meds) == 1 else f"• 💊 {len(meds)} medicinali") + ": apri la Farmacia per i dettagli")
+            blocco.append(("• 💊 1 medicinale" if len(meds) == 1 else f"• 💊 {len(meds)} medicinali") + ": apri Salute per i dettagli")
         blocchi.append("\n".join(blocco))
     testo = [f"👨‍👩‍👧 Riepilogo famiglia · {giorni_it[oggi.weekday()]} {oggi.strftime('%d/%m/%Y')}", ""] + ["\n\n".join(blocchi)] if blocchi else []
     if tranquilli:
         testo += ["", "✅ Nessun problema per: " + ", ".join(tranquilli)]
     if blocchi:
-        testo += ["", "Apri la Farmacia → Controllo famiglia per i dettagli."]
+        testo += ["", "Apri Salute → Controllo famiglia per i dettagli."]
     return "\n".join(testo), len(blocchi)
 
 
@@ -431,6 +431,95 @@ def invia_al_capo(d_capo, oggetto, testo, canali=("telegram", "email")):
         elif canale == "email" and canale in canali and (d_capo.get("avviso_email") or "").strip():
             esiti.append((canale, invia_email(d_capo["avviso_email"].strip(), oggetto, testo)))
     return esiti
+
+
+def raccogli_famiglia(d_fam, oggi, con_esaurimento=False):
+    """La dispensa di famiglia: (in scadenza, già scaduti il lunedì, in esaurimento il lunedì). I prodotti hanno la stessa regola dei giorni della dispensa personale."""
+    in_soglia, scaduti, esaurimento = [], [], []
+    for r in d_fam.get("articoli", []):
+        s = data_di(r.get("scadenza"))
+        if not s:
+            continue
+        g = (s - oggi).days
+        voce = (g, "🥫", r.get("nome", "Prodotto"), s, None)
+        if g in SOGLIE:
+            in_soglia.append(voce)
+        elif g < 0 and oggi.weekday() == 0:
+            scaduti.append(voce)
+    if con_esaurimento and oggi.weekday() == 0:                       # ogni lunedì: prodotti di cui resta una sola unità in tutto
+        totali, nomi = {}, {}
+        for r in d_fam.get("articoli", []):
+            chiave = (r.get("barcode") or "").strip() or (r.get("nome") or "").strip().lower()
+            if not chiave:
+                continue
+            try:
+                totali[chiave] = totali.get(chiave, 0.0) + float(r.get("quantita") or 0)
+            except (TypeError, ValueError):
+                continue
+            nomi.setdefault(chiave, r.get("nome", "Prodotto"))
+        esaurimento = sorted((nomi[k], q) for k, q in totali.items() if 0 < q <= 1)
+    return sorted(in_soglia, key=lambda x: x[0]), sorted(scaduti, key=lambda x: x[0]), esaurimento
+
+
+def testo_famiglia_dispensa(oggi, in_soglia, scaduti, esaurimento):
+    righe = [f"🏠 Dispensa di famiglia – promemoria del {oggi.strftime('%d/%m/%Y')}"]
+    if in_soglia:
+        righe += ["", "⚠️ In scadenza:"] + [f"• 🥫 {nome} – {quando(g)} ({s.strftime('%d/%m/%Y')})" for g, _, nome, s, _ in in_soglia]
+    if scaduti:
+        righe += ["", "⚫ Già scaduti (da buttare o controllare):"] + [f"• 🥫 {nome} – {quando(g)} ({s.strftime('%d/%m/%Y')})" for g, _, nome, s, _ in scaduti]
+    if esaurimento:
+        righe += ["", "📉 In esaurimento (ne resta una sola unità):"] + [f"• {nome}" for nome, _ in esaurimento]
+    return "\n".join(righe)
+
+
+def testo_sms_famiglia(oggi, in_soglia, scaduti, esaurimento):
+    n = len(in_soglia) + len(scaduti)
+    parti = []
+    if n:
+        parti.append(f"{n} prodott{'o' if n == 1 else 'i'} in scadenza o scadut{'o' if n == 1 else 'i'}")
+    if esaurimento:
+        parti.append(f"{len(esaurimento)} in esaurimento")
+    return "Dispensa di famiglia: " + ", ".join(parti) + ". Apri l'app per i dettagli."
+
+
+def membri_famiglia(bloccati):
+    """Chi fa parte della dispensa di famiglia: il capo famiglia e gli utenti con «Parte della famiglia» (con i loro dati personali, dove stanno i canali degli avvisi)."""
+    risultato = []
+    if "admin" not in bloccati:
+        risultato.append(("admin", leggi("dispense/admin.json")))
+    for u in leggi("utenti.json").get("utenti", []):
+        if u.get("famiglia") and u.get("attivo", True) and u.get("id") and u["id"] not in bloccati:
+            risultato.append((u["id"], leggi(f"dispense/{u['id']}.json")))
+    return risultato
+
+
+def avvisi_dispensa_famiglia(oggi, bloccati, registra):
+    """Gli avvisi della dispensa comune, solo a chi li ha scelti (ognuno li riceve sui suoi canali)."""
+    d_fam = leggi("famiglia/dispensa.json")
+    if not d_fam.get("articoli") and not PROVA:
+        return
+    for uid, d in membri_famiglia(bloccati):
+        vuole_s, vuole_e = bool(d.get("avvisi_famiglia_dispensa")), bool(d.get("avvisi_famiglia_esaurimento"))
+        if not (vuole_s or vuole_e):
+            continue
+        in_soglia, scaduti, esaurimento = raccogli_famiglia(d_fam, oggi, vuole_e)
+        if not vuole_s:
+            in_soglia, scaduti = [], []
+        if not PROVA and not (in_soglia or scaduti or esaurimento):
+            continue
+        for canale in canali_di(d):
+            if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi della dispensa di famiglia." if PROVA else testo_famiglia_dispensa(oggi, in_soglia, scaduti, esaurimento)
+                esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
+            elif canale == "email" and (d.get("avviso_email") or "").strip():
+                testo = "Prova riuscita: da oggi ricevi via email gli avvisi della dispensa di famiglia." if PROVA else testo_famiglia_dispensa(oggi, in_soglia, scaduti, esaurimento)
+                esito = invia_email(d["avviso_email"].strip(), "Dispensa di famiglia - La nostra dispensa", testo)
+            elif canale == "sms" and (d.get("avviso_sms") or "").strip():
+                testo = "Dispensa di famiglia: prova riuscita." if PROVA else testo_sms_famiglia(oggi, in_soglia, scaduti, esaurimento)
+                esito = invia_sms(d["avviso_sms"].strip(), testo)
+            else:
+                continue
+            registra(f"{uid}-famiglia-dispensa", canale, esito)
 
 
 def canali_di(d):
@@ -479,11 +568,11 @@ def main():
             continue
         for canale in canali_di(d):
             if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
-                testo = "✅ Prova riuscita: da oggi ricevi qui i promemoria della dispensa e della Farmacia." if PROVA \
+                testo = "✅ Prova riuscita: da oggi ricevi qui i promemoria della dispensa e di Salute." if PROVA \
                     else testo_lungo(d, oggi, in_soglia, scaduti, docs)
                 esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
             elif canale == "email" and (d.get("avviso_email") or "").strip():
-                testo = "Prova riuscita: da oggi ricevi via email i promemoria della dispensa e della Farmacia." if PROVA \
+                testo = "Prova riuscita: da oggi ricevi via email i promemoria della dispensa e di Salute." if PROVA \
                     else testo_lungo(d, oggi, in_soglia, scaduti, docs)
                 esito = invia_email(d["avviso_email"].strip(), "Promemoria scadenze - La nostra dispensa", testo)
             elif canale == "sms" and (d.get("avviso_sms") or "").strip():
@@ -493,6 +582,8 @@ def main():
             else:
                 continue
             registra(uid, canale, esito)
+    if not DOSI:                                                     # avvisi della dispensa di famiglia (ogni mattina, non nei controlli delle dosi)
+        avvisi_dispensa_famiglia(oggi, bloccati, registra)
     # il capo famiglia (account «admin»): riepilogo del mattino e dosi non registrate
     d_capo = leggi("dispense/admin.json")
     if "admin" not in bloccati:
