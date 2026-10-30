@@ -10,10 +10,16 @@ _AGGANCI = {
     "parte3.py": [
         # scheda «Statistiche» (statistiche.py), prima di Info
         ('+ [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/info: " + t("Info")])',
-         '+ [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/bar_chart: " + t("Statistiche"), ":material/info: " + t("Info")])'),
+         '+ [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/bar_chart: " + t("Statistiche")] + ([":material/history: " + t("Storico")] if ("fd_attivo" in globals() and fd_attivo()) else []) + [":material/info: " + t("Info")])'),
         ("tab_spesa = _schede[-3]\ntab_messaggi = _schede[-2]\ntab_info = _schede[-1]\n",
-         "tab_spesa = _schede[-4]\ntab_messaggi = _schede[-3]\ntab_statistiche = _schede[-2]\ntab_info = _schede[-1]\n"
-         "with tab_statistiche:\n    if \"schermata_statistiche\" in globals():\n        schermata_statistiche()\n"),
+         "_k = 1 if (\"fd_attivo\" in globals() and fd_attivo()) else 0\n"
+         "tab_spesa = _schede[-4 - _k]\ntab_messaggi = _schede[-3 - _k]\ntab_statistiche = _schede[-2 - _k]\ntab_info = _schede[-1]\n"
+         "with tab_statistiche:\n    if \"schermata_statistiche\" in globals():\n        schermata_statistiche()\n"
+         "if _k:\n    with _schede[-2]:\n        fd_scheda_storico()\n"),
+        # dispensa di famiglia (dispensa_famiglia.py): sceglie il file prima di leggere i dati e mostra il selettore sotto il titolo
+        ("utente = sess[\"nome\"]\ne_admin = bool(sess.get(\"admin\"))\n",
+         "if \"fd_prepara\" in globals():\n    fd_prepara()\nutente = sess[\"nome\"]\ne_admin = bool(sess.get(\"admin\"))\n"),
+
         ("f1, f2, f3 = st.columns([3, 2, 2])",
          "f1, f2, f3, f4 = st.columns([3, 2, 2, 1])"),
         ('_viste = {"schede": "Schede", "tabella": "Tabella"}',
@@ -28,7 +34,8 @@ _AGGANCI = {
         # pulsante «Informazioni» (guida a tendina) sotto l'intestazione della dispensa
         ("# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n",
          "# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n"
-         'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'),
+         'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'
+         'if "fd_selettore" in globals():\n    fd_selettore()\n'),
     ],
     "parte4.py": [
         # scheda Utenti: l'interruttore «Parte della famiglia» e la spiegazione
@@ -47,7 +54,9 @@ _AGGANCI = {
          '                        salva_file("utenti.json", _imposta_fam, f"Famiglia: {u[\'nome\']}")\n'
          '                        st.rerun()\n'
          '                    except Exception as e:\n'
-         '                        st.error(t("Non sono riuscito a salvare: {e}", e=e))\n'),
+         '                        st.error(t("Non sono riuscito a salvare: {e}", e=e))\n'
+         '                if _in_fam and "fd_selettore_ruolo" in globals():\n'
+         '                    fd_selettore_ruolo(u)\n'),
     ],
 }
 
@@ -67,10 +76,14 @@ def _carica(percorso):
     exec(compile(_testo, percorso, "exec"), globals())
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica(_percorso)
-for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
-    _carica(os.path.join(_cartella, _nome))
+try:
+    for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
+        _carica(os.path.join(_cartella, _nome))
+finally:
+    if "fd_ripristina" in globals():
+        fd_ripristina()                                   # a fine pagina il percorso torna sempre quello personale

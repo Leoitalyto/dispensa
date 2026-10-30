@@ -155,6 +155,17 @@ Come si contano i numeri:
 
 I numeri partono da quando hai installato questo aggiornamento.""",
          "statistiche sprechi spreco consumato buttato scaduto grafico mese percentuale quanto butto"),
+        ("👨‍👩‍👧 La dispensa di famiglia",
+         """La **dispensa di famiglia** è una dispensa **comune**: tutti i familiari vedono gli stessi prodotti, sempre aggiornati.
+1. In alto, sotto il titolo, scegli **🧑 La mia dispensa** oppure **👨‍👩‍👧 Dispensa di famiglia**. (Compare solo se l'amministratore ti ha inserito nella famiglia.)
+2. Dentro la dispensa di famiglia tutto funziona come sempre: schede, tabella, **Aggiungi**, **Gestisci**, **Spesa** e **Statistiche**.
+3. Il tuo **ruolo** è scritto sotto: **👑 Amministratore** fa tutto; **✏️ Collaboratore** inserisce prodotti, cambia quantità e scadenze, registra i consumi e usa la lista della spesa; **👁️ Visualizzatore** può solo guardare.
+4. La scheda **🕘 Storico** dice **chi ha fatto cosa e quando**. L'amministratore può **↩️ annullare** un'operazione sbagliata (anche un prodotto eliminato per errore).
+5. Per portare prodotti dalla tua dispensa personale tocca **📥 Porta qui prodotti**: li copia, non li sposta.
+
+Se in due modificate nello stesso momento, le quantità si sommano giuste; se cambiate lo stesso dato insieme vale l'ultima modifica, e lo storico permette di tornare indietro.
+**L'amministratore** assegna il ruolo nella scheda **Utenti**, accanto a «Parte della famiglia». Le cose di **Salute** restano sempre personali.""",
+         "famiglia familiari condivisa condivisione comune dispensa ruolo collaboratore visualizzatore amministratore storico annullare permessi"),
         ("👤 Password, lingua e messaggi",
          """- **Password:** ti viene data da chi gestisce l'app. Al primo accesso puoi cambiarla. È solo tua.
 - **Lingua:** nel menu a sinistra c'è **🌐 Lingua / Language**.
@@ -453,7 +464,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in S
 # Codici stabili delle voci (nell'ordine di _GUIDE): servono per collegare le traduzioni. Chi aggiunge una voce italiana
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
-    "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_statistiche d_account d_aiuto".split(),
+    "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_statistiche d_famiglia d_account d_aiuto".split(),
     "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_trasferisci f_sbaglio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
