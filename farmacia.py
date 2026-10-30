@@ -419,6 +419,9 @@ def schermata_farmacia():
     if st.session_state.get("sezione_home") == "archivio" and "schermata_archivio" in globals():
         schermata_archivio()
         return
+    if st.session_state.get("sezione_home") == "trasferimento" and "schermata_trasferimento" in globals():
+        schermata_trasferimento()
+        return
     if st.session_state.get("fa_famiglia") and "schermata_famiglia" in globals():
         schermata_famiglia()
         return
@@ -429,6 +432,8 @@ def schermata_farmacia():
         fam_pulsante_capo()
     if "archivio_pulsante" in globals():
         archivio_pulsante("salute")
+    if "trasferimento_pulsante" in globals():
+        trasferimento_pulsante("salute")
     if "fam_avviso_membro" in globals():
         fam_avviso_membro()
     if st.session_state.get("fa_msg"):
@@ -1350,6 +1355,8 @@ def _fa_presc_dettaglio_corpo(pre_id, pid):
     else:
         st.info("Nessuna foto o PDF allegato. Tocca «Modifica» per aggiungere la ricetta.")
 
+    if "tr_annotazioni_ui" in globals():
+        tr_annotazioni_ui("prescrizioni", pre_id, f"presc_{pre_id}")
     _fa_inv_voce(f"presc_{pre_id}", "📤 Invia questa prescrizione (email, WhatsApp…)", f"📝 Prescrizione: {r.get('tipo', '')}",
                  [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati")], allegati)
 
@@ -2173,6 +2180,8 @@ def _fa_med_dettaglio_corpo(med_id, pid):
     st.caption("📖 Controindicazioni e avvertenze sono nel foglio illustrativo ufficiale: leggilo o chiedi al medico o al farmacista. "
                "L'app non valuta se un medicinale va bene per una malattia.")
 
+    if "tr_annotazioni_ui" in globals():
+        tr_annotazioni_ui("medicinali", med_id, f"med_{med_id}")
     _fa_inv_voce(f"med_{med_id}", "📤 Invia questo medicinale (email, WhatsApp…)", f"💊 {m.get('nome', 'Medicinale')}",
                  [(k, v) for k, v in dati if v and k != "Nome"], ([m["foto_grande"]] if m.get("foto_grande") else []) + list(m.get("foglio", [])))
 
@@ -3559,6 +3568,8 @@ def _doc_dettaglio_corpo(doc_id, pid):
             else:
                 st.session_state["fa_msg"] = f"🧹 Tolto/i {len(doppi)} file doppio/i: la stessa foto era salvata due volte."
                 st.rerun()
+    if "tr_annotazioni_ui" in globals():
+        tr_annotazioni_ui("documenti", doc_id, f"doc_{doc_id}")
     _fa_inv_voce(f"doc_{doc_id}", "📤 Invia questo documento (email, WhatsApp…)", f"{emoji} {x.get('tipo', 'Documento')} di {nomi.get(x.get('profilo', 'p0'), '')}".strip(),
                  [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati", "Di chi è", "Giorni alla scadenza")], allegati)
 
@@ -3758,7 +3769,7 @@ def _doc_modulo(pid, doc_id=None):
         da_salvare += list(nuovi or [])
         lati_nuovi = {lato_d for foto_d, lato_d in ((foto_fronte, "Fronte"), (foto_retro, "Retro")) if foto_d}
         vecchi = next((d_.get("allegati") or [] for d_ in _fa_dati().get("documenti", []) if d_["id"] == doc_id), []) if doc_id else []
-        sostituiti = [a for a in vecchi if any(str(a.get("nome", "")).startswith(l_ + " -") for l_ in lati_nuovi)]     # il vecchio fronte/retro che viene rifatto
+        sostituiti = [a for a in vecchi if not a.get("originale") and any(str(a.get("nome", "")).startswith(l_ + " -") for l_ in lati_nuovi)]     # il vecchio fronte/retro che viene rifatto (gli originali ricevuti restano)
         try:
             riferimenti = _fa_salva_files(da_salvare, [a for a in vecchi if a not in sostituiti]) if da_salvare else []
         except ValueError as ex:

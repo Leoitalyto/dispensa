@@ -330,6 +330,21 @@ Per mandare **tutto insieme** (PDF o Excel) usa **📤 Esporta e invia** in alto
 
 Ogni bugiardino che salvi viene conservato nell'app: se incolli il link di un PDF, ne tengo una copia.""",
          "archivio bugiardino bugiardini foto documenti file pdf cercare ritrovare riaprire copia sicurezza backup zip"),
+        ("🔁 Mandare i miei dati a un'altra persona (e riceverli)",
+         """Il **file di trasferimento** (estensione «.dispensa») porta i tuoi dati nell'app di un'altra persona, già in ordine.
+**Per mandarli:**
+1. Apri **Salute** e tocca **🔁 Trasferisci dati**, scheda **📤 Esporta**.
+2. Scegli **Tutto**, **Solo alcune categorie** o le **singole voci**, e di quali persone.
+3. Metti una **password** (consigliata), spunta il **consenso** e tocca **📦 Crea il file da inviare**.
+4. **Scarica** il file e mandalo per email o Telegram; per WhatsApp usa la graffetta 📎 e scegli «Documento». Dai la password a voce.
+**Per riceverli:**
+1. Salva sul telefono il file ricevuto.
+2. In **🔁 Trasferisci dati** vai su **📥 Importa**, scegli il file ed eventualmente scrivi la password.
+3. L'app controlla che il file sia integro, ti mostra chi lo manda e cosa contiene. Spunta il consenso e tocca **📥 Importa**.
+4. Trovi una **nuova scheda con il nome della persona**, con medicinali, terapie, visite, vaccini e documenti. Non si sovrascrive niente di tuo.
+
+Foto e PDF ricevuti restano **originali** (🔒): puoi correggere i dati scritti e aggiungere **annotazioni** separate.""",
+         "trasferire trasferimento esportare importare file dispensa altra persona utente scheda password mandare dati ricevere condividere archivio"),
         ("↩️ Ho eliminato qualcosa per sbaglio",
          """Mi dispiace. Nell'app non c'è un cestino: l'eliminazione è definitiva.
 Però i dati sono salvati con la **cronologia** su GitHub, quindi molto spesso si possono **ritrovare**: chiedilo a chi gestisce l'app (l'amministratore) dicendo cosa hai tolto e più o meno quando.
@@ -426,7 +441,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in S
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
-    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_sbaglio".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_trasferisci f_sbaglio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }
@@ -729,7 +744,7 @@ _META_GUIDA = {
     "f_el_prof": ("elimina", "profilo"), "f_condividi": ("condividi", None), "f_sbaglio": ("recupera", None),
     "f_medicinale": ("aggiungi", "medicinale"), "f_terapie": ("aggiungi", "terapia"), "f_prescrizioni": ("aggiungi", "prescrizione"),
     "f_visite": ("aggiungi", "visita"), "f_vaccini": ("aggiungi", "vaccino"), "f_invio": ("condividi", None),
-    "x_modificare": ("modifica", "documento"), "f_report": ("esporta", None), "f_archivio": ("vedi", None),
+    "x_modificare": ("modifica", "documento"), "f_report": ("esporta", None), "f_archivio": ("vedi", None), "f_trasferisci": ("esporta", None),
 }
 # ---- Le parole (inizi di parola) con cui si riconoscono azioni e oggetti nelle domande.
 _INTENTI = {

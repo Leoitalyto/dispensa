@@ -40,7 +40,7 @@ def ar_voci(f, nomi_profili):
             return
         visti.add(rif["id"])
         voci.append({"id": rif["id"], "nome": rif.get("nome") or "file", "mime": _ar_mime(rif), "categoria": categoria, "collegato": collegato,
-                     "pid": pid, "persona": nomi_profili.get(pid, ""), "data": data or ""})
+                     "pid": pid, "persona": nomi_profili.get(pid, ""), "data": data or "", "originale": bool(rif.get("originale"))})
     for m in f.get("medicinali", []):
         pid, nome = m.get("profilo", "p0"), m.get("nome", "")
         aggiungi(m.get("foto_grande"), "Foto confezione", f"Medicinale: {nome}", pid, m.get("acquisto"))
@@ -154,7 +154,7 @@ def _ar_scheda(v):
     righe = [f"{AR_ICONE.get(v['categoria'], '📎')} <b>{e(v['nome'])}</b>",
              f"🏷️ {e(v['categoria'])} · {'📄 PDF' if pdf else '🖼️ immagine'}",
              f"🔗 {e(v['collegato'])}" + (f" · 👤 {e(v['persona'])}" if v["persona"] else ""),
-             f"📅 {_ar_data_it(v['data'])}"]
+             f"📅 {_ar_data_it(v['data'])}" + (" · 🔒 originale ricevuto" if v.get("originale") else "")]
     return "<div style='line-height:1.5;font-size:.92rem'>" + "<br>".join(righe) + "</div>"
 
 
