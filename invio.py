@@ -230,6 +230,39 @@ _JS_INVIO = r"""
       el.textContent = t; el.style.display = 'block';
       w.clearTimeout(el.__t); el.__t = w.setTimeout(function () { el.style.display = 'none'; }, 6000);
     }
+    /* una riga di stato sotto i pulsanti «Condividi»: dice se questo browser può condividere le foto e cosa è successo toccando */
+    function nomeBrowser() {
+      var ua = w.navigator.userAgent || '', m, nome = '';
+      if (/FBAN|FBAV|Instagram|MicroMessenger|WhatsApp|Telegram|Line\//.test(ua)) nome = 'un browser dentro un\'altra app';
+      else if ((m = ua.match(/(SamsungBrowser|EdgA|OPR|Firefox|FxiOS|CriOS)\/([\d]+)/))) nome = m[1].replace('SamsungBrowser', 'Samsung Internet').replace('EdgA', 'Edge').replace('OPR', 'Opera').replace('CriOS', 'Chrome').replace('FxiOS', 'Firefox') + ' ' + m[2];
+      else if ((m = ua.match(/Chrome\/([\d]+)/))) nome = 'Chrome ' + m[1];
+      else if (/Safari/.test(ua)) nome = 'Safari';
+      return nome || 'browser sconosciuto';
+    }
+    function capacita() {
+      var f = null, files = false;
+      try { f = new w.File([new Uint8Array([1])], 'prova.jpg', {type: 'image/jpeg'}); } catch (x) {}
+      try { files = !!(w.navigator.canShare && f && w.navigator.canShare({files: [f]})); } catch (x) {}
+      return {share: !!w.navigator.share, files: files};
+    }
+    function stato(testo, tipo, tutti) {
+      var els = d.querySelectorAll('.inv-diag');
+      for (var i = 0; i < els.length; i++) {
+        els[i].textContent = testo; els[i].setAttribute('data-ok', '1');
+        els[i].style.color = tipo === 'ko' ? '#b71c1c' : (tipo === 'ok' ? '#1b5e20' : '#455a64');
+      }
+    }
+    function diagnosi() {
+      var els = d.querySelectorAll('.inv-diag:not([data-ok])'); if (!els.length) return;
+      var c = capacita(), b = nomeBrowser(), t, tipo;
+      if (!c.share) { t = '⚠️ ' + MSG.diag_no + ' (' + b + ')'; tipo = 'ko'; }
+      else if (!c.files) { t = '⚠️ ' + MSG.diag_nofile + ' (' + b + ')'; tipo = 'ko'; }
+      else { t = '✅ ' + MSG.diag_ok + ' (' + b + ')'; tipo = 'ok'; }
+      for (var i = 0; i < els.length; i++) { els[i].textContent = t; els[i].setAttribute('data-ok', '1'); els[i].style.color = tipo === 'ko' ? '#b71c1c' : '#1b5e20'; }
+    }
+    diagnosi();
+    var attesaDiag = null;
+    new w.MutationObserver(function () { if (attesaDiag) return; attesaDiag = w.setTimeout(function () { attesaDiag = null; diagnosi(); }, 400); }).observe(d.body, {childList: true, subtree: true});
     function aFile(f) {
       var b = w.atob(f.b64), a = new Uint8Array(b.length);
       for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
@@ -242,14 +275,20 @@ _JS_INVIO = r"""
       var m = (c.className || '').match(/st-key-invio_share_(\S+)/);
       var P = m && w.__invioDati && (w.__invioDati[m[1]] || w.__invioDati[m[1].replace(/__\w+$/, '')]);
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      if (!P) { avviso(MSG.nondati); return; }
-      if (!w.navigator.share) { avviso(MSG.nonsupp); return; }
+      if (!P) { avviso(MSG.nondati); stato('⚠️ ' + MSG.nondati, 'ko'); return; }
+      if (!w.navigator.share) { avviso(MSG.nonsupp); stato('⚠️ ' + MSG.nonsupp, 'ko'); return; }
       var files = [];
       try { files = (P.files || []).map(aFile); } catch (x) {}
       if (w.navigator.canShare) files = files.filter(function (f) { try { return w.navigator.canShare({files: [f]}); } catch (x) { return false; } });
       var dati = {title: P.titolo, text: P.testo};
-      if (files.length) dati.files = files; else if ((P.files || []).length) avviso(MSG.solotesto);
-      w.navigator.share(dati).catch(function (err) { if (!err || err.name !== 'AbortError') avviso(MSG.errore); });
+      if (files.length) dati.files = files; else if ((P.files || []).length) { avviso(MSG.solotesto); stato('⚠️ ' + MSG.solotesto, 'ko'); }
+      else stato('⏳ ' + MSG.apro, 'info');
+      if (files.length) stato('⏳ ' + MSG.apro + ' (' + files.length + ' ' + (files.length === 1 ? 'file' : 'file') + ')', 'info');
+      var soloTesto = !files.length && (P.files || []).length > 0;
+      w.navigator.share(dati).then(function () { if (soloTesto) stato('⚠️ ' + MSG.solotesto, 'ko'); else stato('✅ ' + MSG.fatto, 'ok'); }).catch(function (err) {
+        if (err && err.name === 'AbortError') { stato('Annullato: puoi riprovare.', 'info'); return; }
+        avviso(MSG.errore); stato('⚠️ ' + MSG.errore + ' [' + ((err && err.name) || 'errore') + ']', 'ko');
+      });
     }, true);
   } catch (err) { /* resta la scelta di scaricare i file */ }
 })();
@@ -258,7 +297,11 @@ _JS_INVIO = r"""
 _MSG_JS = {"nondati": "Prima tocca «Prepara» così i file sono pronti da condividere.",
            "nonsupp": "Questo browser non ha la finestra «Condividi»: usa Email, WhatsApp o scarica il file.",
            "solotesto": "Questi file non si possono condividere da qui: mando solo il riepilogo. Per i file usa Email o scarica.",
-           "errore": "Non sono riuscito ad aprire «Condividi». Prova con Email o scarica il file."}
+           "errore": "Non sono riuscito ad aprire «Condividi». Prova con Email o scarica il file.",
+           "apro": "Apro «Condividi»…", "fatto": "Fatto: controlla l'app che hai scelto.",
+           "diag_ok": "Pronto: toccando il pulsante si apre «Condividi» con le foto",
+           "diag_no": "Questo browser non ha «Condividi»: usa Chrome, oppure scarica le foto qui sotto e allegale in WhatsApp con la graffetta 📎",
+           "diag_nofile": "Questo browser non può condividere le foto: usa Chrome, oppure scarica le foto qui sotto e allegale in WhatsApp con la graffetta 📎"}
 
 
 def _inv_pagina_js(codice):
@@ -377,6 +420,7 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
         inv_registra_condivisione(chiave, titolo, testo, allegati)
         with st.container(key=f"invio_share_{chiave}"):
             st.button("📤 Condividi con un'altra app", key=f"invio_btn_share_{chiave}", type="primary", width="stretch")
+        st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
     with t_mail:
         if not inv_email_pronta():
             st.info("Per mandare l'email **direttamente dall'app** servono i dati della casella nei Secrets di Streamlit "
@@ -407,9 +451,12 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
                         st.error("Non sono riuscito a inviarla: " + motivo)
     with t_wa:
         if allegati:
-            st.caption("**Con le foto e i file:** si apre «Condividi» del telefono, tocca **WhatsApp**, scegli la persona e invia: le foto sono allegate.")
+            st.markdown("**1️⃣ Tocca il pulsante verde qui sotto**")
             with st.container(key=f"invio_share_{chiave}__wa"):
                 st.button("💬 Manda su WhatsApp con le foto", key=f"invio_btn_share_wa_{chiave}", type="primary", width="stretch")
+            st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
+            st.markdown("**2️⃣ Si apre «Condividi»:** tocca **WhatsApp**, scegli la persona e invia. Le foto sono già allegate.")
+            st.caption("Se non si apre, scarica le foto con i pulsanti in fondo e allegale in WhatsApp con la graffetta 📎.")
             st.divider()
             st.caption("**Solo il testo** (senza foto):")
         num = st.text_input("Numero (facoltativo, con prefisso senza +, es. 39333…)", key=f"inv_wa_{chiave}")
