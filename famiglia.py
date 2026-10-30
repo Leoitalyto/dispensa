@@ -152,12 +152,12 @@ def _fam_d(iso):
 
 def _fam_righe_medicinali(p):
     f = p["f"]
-    return [[m.get("nome", ""), m.get("marca", ""), m.get("principio", ""), m.get("dosaggio", ""), m.get("forma", ""),
+    return [[m.get("nome", ""), m.get("categoria") or "Farmaco", m.get("marca", ""), m.get("principio", ""), m.get("dosaggio", ""), m.get("forma", ""),
              f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}".strip(), _fam_d(m.get("scadenza")), _fam_d(m.get("acquisto")),
              m.get("note", "")] for m in sorted(_fam_di(f, "medicinali", p["pid"]), key=lambda m: m.get("scadenza") or "9999")]
 
 
-FAM_H_MEDICINALI = ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità", "Scadenza", "Acquisto", "Note"]
+FAM_H_MEDICINALI = ["Nome", "Tipo", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità", "Scadenza", "Acquisto", "Note"]
 
 
 def _fam_righe_terapie(p):
@@ -550,7 +550,7 @@ def fam_catalogo_medicinali(f, pid):
             visti.add(chiave)
             di_chi = nomi.get(m.get("profilo", "p0"), "")
             etichetta = " · ".join(x for x in (m.get("nome"), m.get("dosaggio"), m.get("forma")) if x) + (f"  (di {di_chi})" if di_chi else "")
-            risultato.append((etichetta, {k: m.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma", "unita", "aic", "gtin", "ean")}))
+            risultato.append((etichetta, {k: m.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma", "unita", "aic", "gtin", "ean", "categoria")}))
     _aggiungi(f.get("medicinali", []), {p_["id"]: p_["nome"] for p_ in _fa_profili(f)})
     try:
         utenti = leggi_utenti()

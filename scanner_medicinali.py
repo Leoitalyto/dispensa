@@ -350,6 +350,30 @@ def sm_cerca_aifa(aic):
     return risultato
 
 
+def sm_cerca_ean(ean):
+    """Cerca un codice EAN (integratori, prodotti erboristici, dispositivi...) negli elenchi pubblici già usati dalla dispensa (Open Food Facts e Open Products
+    Facts). Ritorna {'nome', 'marca', 'categoria', 'fonte'} oppure None."""
+    if "cerca_prodotto" not in globals() or not ean:
+        return None
+    try:
+        p = cerca_prodotto(ean, "neonati")                      # «neonati» cerca anche in Open Products Facts (prodotti non alimentari)
+    except Exception:
+        return None
+    if not p or "errore" in p:
+        return None
+    nome = p.get("product_name_it") or p.get("product_name") or p.get("product_name_en") or ""
+    marca = (p.get("brands") or "").split(",")[0].strip()
+    if not nome and not marca:
+        return None
+    testo = " ".join(str(p.get(k) or "") for k in ("categories", "labels_tags", "product_name")).lower()
+    categoria = ""
+    if any(x in testo for x in ("supplement", "integrator", "vitamin", "dietary", "complemen")):
+        categoria = "Integratore"
+    elif any(x in testo for x in ("herbal", "erbor", "tisan", "infus", "tintura")):
+        categoria = "Prodotto erboristico"
+    return {"nome": nome.strip(), "marca": marca, "categoria": categoria, "quantita_testo": str(p.get("quantity") or "")}
+
+
 def sm_data_it(iso):
     return "/".join(reversed(iso.split("-"))) if iso else ""
 
@@ -497,7 +521,7 @@ def sm_prepara(codici, dati_foto, conosciuti):
         return {"_errore": "non vedo né un codice né una data di scadenza"}
     noto = sm_trova_in_memoria(conosciuti, info)
     if noto:
-        pref.update({k: noto.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
+        pref.update({k: noto.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma", "categoria")})
         pref["_origine"] = "casa"
     elif info["aic"]:
         with st.spinner("Cerco il medicinale nell'elenco AIFA…"):
@@ -507,7 +531,13 @@ def sm_prepara(codici, dati_foto, conosciuti):
                 aifa = None
         if aifa:
             pref.update({k: aifa.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
-            pref["_origine"] = "aifa"
+            pref["_origine"], pref["categoria"] = "aifa", "Farmaco"
+    if not pref["_origine"] and (info["ean"] or info["gtin"]):
+        with st.spinner("Cerco il prodotto negli elenchi pubblici…"):
+            trovato = sm_cerca_ean(info["ean"] or info["gtin"].lstrip("0"))
+        if trovato:
+            pref.update({k: trovato.get(k, "") for k in ("nome", "marca", "categoria")})
+            pref["_origine"] = "ean"
     return pref
 
 
@@ -592,6 +622,9 @@ def sm_blocco(elenco_conosciuti, chiave="scanmed"):
                 st.info(f"✅ Lo conosco: **{risultato.get('nome', '')}** è già in casa. Ho ricopiato nome, principio attivo, dosaggio e forma.")
             elif risultato.get("_origine") == "aifa":
                 st.info(f"✅ Trovato nell'elenco AIFA: **{risultato.get('nome', '')}**. Controlla che sia giusto prima di salvare.")
+            elif risultato.get("_origine") == "ean":
+                st.info(f"✅ Trovato in un elenco pubblico (Open Food Facts): **{risultato.get('nome', '')}**"
+                        + (f", categoria «{risultato['categoria']}»" if risultato.get("categoria") else "") + ". Controlla che sia giusto prima di salvare.")
             else:
                 st.info("Non conosco ancora questo medicinale: scrivi il nome una volta, dalla prossima volta lo riconosco da solo.")
         if st.button("✖ Togli la scansione", key=f"{chiave}_togli"):

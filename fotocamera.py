@@ -76,34 +76,27 @@ _JS_FOTO = r"""
         }, 'image/jpeg', 0.9);
       }).catch(function () { una(f); });
     }
+    function invia(g, camera, chiave) {                   // consegna un file al campo di caricamento nascosto di Streamlit
+      var dest = doc.querySelector('[class~="st-key-' + (camera ? 'fotocam_' : 'fotogal_') + chiave + '"] input[type="file"]');
+      if (!dest) { avviso(MSG.nonarrivata, 9000); return; }
+      try {
+        var dt = new w.DataTransfer(); dt.items.add(g); dest.files = dt.files;
+        dest.dispatchEvent(new w.Event('change', {bubbles: true}));
+      } catch (err) { avviso(MSG.nonarrivata, 9000); }
+    }
     function consegna(inp) {
       var f = inp && inp.files && inp.files[0];
       if (!f || inp.__fatto === f) return;
       inp.__fatto = f;
       avviso(MSG.carico, 7000);
-      riduci(f, function (g) {
-        var dest = doc.querySelector('[class~="st-key-' + (inp.__camera ? 'fotocam_' : 'fotogal_') + inp.__chiave + '"] input[type="file"]');
-        if (!dest) { avviso(MSG.nonarrivata, 9000); return; }
-        try {
-          var dt = new w.DataTransfer(); dt.items.add(g); dest.files = dt.files;
-          dest.dispatchEvent(new w.Event('change', {bubbles: true}));
-        } catch (err) { avviso(MSG.nonarrivata, 9000); }
-      });
+      riduci(f, function (g) { invia(g, inp.__camera, inp.__chiave); });
     }
     function ricontrolla() { if (ultimo) w.setTimeout(function () { consegna(ultimo.inp); }, 700); }
     // dopo lo scatto il telefono torna al browser: se l'evento di cambio e' andato perso, la foto si recupera da qui
     doc.addEventListener('visibilitychange', function () { if (!doc.hidden) ricontrolla(); });
     w.addEventListener('focus', ricontrolla);
-    doc.addEventListener('click', function (e) {
-      var b = e.target && e.target.closest ? e.target.closest('button') : null;
-      if (!b) return;
-      var c = b.closest('[class*="st-key-scatta_"],[class*="st-key-galleria_"]');
-      if (!c) return;
-      var cls = c.className || '';
-      var m = cls.match(/st-key-(scatta|galleria)_(\S+)/);
-      if (!m) return;
-      var camera = (m[1] === 'scatta'), chiave = m[2];
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    // il vecchio modo: si apre l'app fotocamera del telefono (serve se la fotocamera nella pagina non e' disponibile)
+    function apriInput(camera, chiave) {
       if (ultimo && ultimo.inp && ultimo.inp.parentNode) ultimo.inp.parentNode.removeChild(ultimo.inp);
       var inp = doc.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
@@ -114,6 +107,53 @@ _JS_FOTO = r"""
       doc.body.appendChild(inp);                        // resta nella pagina: se il telefono la ricarica, la foto si recupera
       ultimo = {inp: inp};
       inp.click();
+    }
+    // la fotocamera DENTRO la pagina: il browser resta in primo piano (niente cambio di app) e la foto parte subito, leggera
+    function apriCamera(chiave, aFallback) {
+      var ov = doc.createElement('div'); ov.id = 'foto-camera';
+      ov.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:#000;z-index:100003;display:flex;flex-direction:column';
+      ov.innerHTML = '<video playsinline muted autoplay style="flex:1;width:100%;min-height:0;object-fit:contain;background:#000"></video>' +
+        '<div style="position:absolute;left:0;right:0;top:14px;text-align:center;color:#fff;font:600 15px/1.3 sans-serif;text-shadow:0 1px 4px #000;padding:0 70px">' + MSG.inquadra + '</div>' +
+        '<button id="foto-annulla" style="position:absolute;right:12px;top:10px;width:48px;height:48px;border-radius:24px;border:0;background:#fff;font:700 22px sans-serif">✖</button>' +
+        '<button id="foto-scatta" style="position:absolute;left:50%;bottom:30px;margin-left:-40px;width:80px;height:80px;border-radius:40px;border:6px solid #fff;background:rgba(255,255,255,.4)"></button>';
+      doc.body.appendChild(ov);
+      var video = ov.querySelector('video'), flusso = null, chiuso = false;
+      function chiudi() { chiuso = true; try { if (flusso) flusso.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} if (ov.parentNode) ov.parentNode.removeChild(ov); }
+      ov.querySelector('#foto-annulla').onclick = chiudi;
+      ov.querySelector('#foto-scatta').onclick = function () {
+        if (!video.videoWidth) return;
+        var s = Math.min(1, 2200 / Math.max(video.videoWidth, video.videoHeight));
+        var c = doc.createElement('canvas'); c.width = Math.max(1, Math.round(video.videoWidth * s)); c.height = Math.max(1, Math.round(video.videoHeight * s));
+        c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+        c.toBlob(function (b) {
+          if (!b) { avviso(MSG.nonarrivata, 9000); return; }
+          chiudi();
+          avviso(MSG.carico, 7000);
+          invia(new w.File([b], 'foto-' + Date.now() + '.jpg', {type: 'image/jpeg', lastModified: Date.now()}), true, chiave);
+        }, 'image/jpeg', 0.92);
+      };
+      w.navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 2560}, height: {ideal: 1440}}, audio: false}).then(function (st) {
+        if (chiuso) { st.getTracks().forEach(function (t) { t.stop(); }); return; }
+        flusso = st; video.srcObject = st;
+        try { st.getVideoTracks()[0].applyConstraints({advanced: [{focusMode: 'continuous'}]}).catch(function () {}); } catch (e) {}
+        var pr = video.play(); if (pr && pr.catch) pr.catch(function () {});
+      }).catch(function () { w.__fotoSenzaLive = true; chiudi(); aFallback(); });
+    }
+    doc.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var c = b.closest('[class*="st-key-scatta_"],[class*="st-key-galleria_"]');
+      if (!c) return;
+      var cls = c.className || '';
+      var m = cls.match(/st-key-(scatta|galleria)_(\S+)/);
+      if (!m) return;
+      var camera = (m[1] === 'scatta'), chiave = m[2];
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if (camera && !w.__fotoSenzaLive && w.navigator.mediaDevices && w.navigator.mediaDevices.getUserMedia) {
+        apriCamera(chiave, function () { apriInput(true, chiave); });
+        return;
+      }
+      apriInput(camera, chiave);
     }, true);
   } catch (e) {}
 })();
@@ -121,7 +161,8 @@ _JS_FOTO = r"""
 
 
 def _avvia_fotocamera_posteriore():
-    msg = {"carico": (_fp("foto_carico") if "_fp" in globals() else "⏳ Sto caricando la foto…"),
+    msg = {"inquadra": "Inquadra e tocca il cerchio bianco per scattare",
+           "carico": (_fp("foto_carico") if "_fp" in globals() else "⏳ Sto caricando la foto…"),
            "nonarrivata": (_fp("foto_non_arrivata") if "_fp" in globals() else "⚠️ La foto non è arrivata. Riprova oppure usa «Carica dal telefono».")}
     codice = _JS_FOTO.replace("__TESTO__", json.dumps(t("Scatta foto"), ensure_ascii=False)).replace("__MSG__", json.dumps(msg, ensure_ascii=False))
     pagina = ("<script>(function(){"

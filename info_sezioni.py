@@ -179,7 +179,9 @@ Puoi riusare una foto già salvata dall'**archivio delle foto**. Al medicinale p
 
 Per vedere tutto di un medicinale **tocca la sua scheda**: si apre il dettaglio con il **foglio illustrativo (bugiardino)**, la foto grande, le terapie collegate e i pulsanti **✏️ Modifica** e **🗑️ Elimina**.
 
-Per risparmiare tempo tocca **🎥 Scansiona in diretta** e inquadra il quadratino (DataMatrix) o le barre sulla scatola: l'app riempie scadenza, lotto e codice. Se il telefono non lo permette, scatta una foto: leggo anche la scadenza scritta sulla scatola. Se il medicinale è già in casa ricopia anche nome e dosaggio; se è nuovo scrivi il nome una volta sola e dalla prossima volta lo riconosce.""",
+Per risparmiare tempo tocca **🎥 Scansiona in diretta** e inquadra il quadratino (DataMatrix) o le barre sulla scatola: l'app riempie scadenza, lotto e codice. Se il telefono non lo permette, scatta una foto: leggo anche la scadenza scritta sulla scatola. Se il medicinale è già in casa ricopia anche nome e dosaggio; se è nuovo scrivi il nome una volta sola e dalla prossima volta lo riconosce.
+
+In alto scegli **🏷️ Che cos'è?**: oltre ai farmaci puoi inserire integratori, prodotti erboristici, dispositivi medici (cerotti, siringhe, apparecchi), omeopatici e preparati galenici. Le scritte del modulo cambiano con la categoria. Gli integratori hanno il codice a barre (EAN); gli omeopatici il bollino con il codice AIC; i dispositivi medici di solito l'EAN; i preparati galenici non hanno codice: fotografa l'etichetta e leggo la data. Nell'elenco puoi filtrare per categoria.""",
          "medicinale medicinali farmaco aggiungere confezione foto scadenza principio attivo dosaggio foglio illustrativo bugiardino archivio"),
         ("🎨 Scadenze e allergie ai farmaci",
          """- 🟠 **Arancione**: scade entro 2 mesi. 🔴 **Rosso**: entro 1 mese. ⚫ **Scaduto**: da buttare in modo corretto.

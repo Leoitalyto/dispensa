@@ -12,6 +12,37 @@ MAX_PROFILI = 12
 FORME_MED = ["compresse", "capsule", "gocce", "sciroppo", "fiale", "bustine", "crema / pomata",
              "spray", "cerotti", "supposte", "collirio", "altro"]
 UNITA_MED = ["pz", "ml", "g", "dosi"]
+# Che cos'è: oltre ai farmaci anche integratori, prodotti erboristici, dispositivi medici, omeopatici e preparati galenici
+CATEGORIE_MED = {"Farmaco": "💊", "Integratore": "🍊", "Prodotto erboristico": "🌿", "Dispositivo medico": "🩹",
+                 "Omeopatico": "💧", "Preparato galenico": "⚗️"}
+FORME_PER_CATEGORIA = {
+    "Integratore": ["compresse", "capsule", "bustine", "gocce", "sciroppo", "polvere", "fiale", "gomme", "altro"],
+    "Prodotto erboristico": ["tisana", "tintura madre", "capsule", "compresse", "gocce", "olio", "polvere", "altro"],
+    "Dispositivo medico": ["cerotti", "siringhe", "garze e medicazioni", "termometro", "misuratore (pressione, glicemia…)",
+                           "mascherine e guanti", "altro"],
+    "Omeopatico": ["granuli", "globuli", "gocce", "fiale", "compresse", "pomata", "altro"],
+    "Preparato galenico": ["capsule", "bustine", "crema / pomata", "soluzione", "sciroppo", "supposte", "gocce", "altro"],
+}
+CAMPI_CATEGORIA = {                                  # le scritte del modulo cambiano con la categoria
+    "Farmaco": {"nome": "Nome del medicinale *", "marca": "Marca commerciale", "principio": "Principio attivo",
+                "dosaggio": "Dosaggio (es. 500 mg)", "scadenza": "Data di scadenza", "guida": ""},
+    "Integratore": {"nome": "Nome del prodotto *", "marca": "Marca", "principio": "Ingredienti principali (es. vitamina D, magnesio)",
+                    "dosaggio": "Contenuto o dose (es. 1000 UI per compressa)", "scadenza": "Da consumarsi preferibilmente entro",
+                    "guida": "Gli integratori hanno il codice a barre (EAN): inquadralo e, se è in un elenco pubblico, compilo nome e marca."},
+    "Prodotto erboristico": {"nome": "Nome del prodotto *", "marca": "Marca o erboristeria", "principio": "Piante o ingredienti",
+                             "dosaggio": "Quantità o dose consigliata", "scadenza": "Da consumarsi preferibilmente entro",
+                             "guida": "I prodotti erboristici spesso hanno il codice a barre (EAN); altrimenti basta una foto della confezione."},
+    "Dispositivo medico": {"nome": "Nome o modello *", "marca": "Marca", "principio": "Descrizione o uso",
+                           "dosaggio": "Misura o specifica (es. 10x10 cm, 5 ml)", "scadenza": "Data di scadenza (se c'è)",
+                           "guida": "Cerotti, siringhe, garze e apparecchi hanno di solito un codice EAN; i più recenti anche il quadratino (DataMatrix) con lotto e scadenza."},
+    "Omeopatico": {"nome": "Nome del prodotto *", "marca": "Marca", "principio": "Composizione (es. Arnica montana)",
+                   "dosaggio": "Diluizione o dose (es. 9 CH)", "scadenza": "Data di scadenza",
+                   "guida": "Gli omeopatici hanno il bollino con il codice AIC o il codice EAN: inquadralo per leggere scadenza e lotto."},
+    "Preparato galenico": {"nome": "Nome del preparato *", "marca": "Farmacia che l'ha preparato", "principio": "Composizione (principi attivi)",
+                           "dosaggio": "Concentrazione (es. 2%)", "scadenza": "Da usare entro",
+                           "guida": "I preparati galenici non hanno il codice a barre: la farmacia scrive sull'etichetta la data di preparazione e il «da usare entro». "
+                                    "Fotografa l'etichetta e leggo la data."},
+}
 FILTRI_MED = {"tutti": "Tutti", "scaduti": "Scaduti", "1mese": "Entro 1 mese",
               "2mesi": "Entro 2 mesi", "ok": "Non in scadenza"}
 
@@ -144,6 +175,16 @@ def _fa_modulo_medicinale(pid, med_id=None):
         pref_scan = sm_blocco(conosciuti)
         if pref_scan:
             m = {**m, **pref_scan}
+    cat_suggerita = pref_scan.get("categoria") or (m.get("categoria") if m.get("categoria") in CATEGORIE_MED else "Farmaco")
+    st.markdown("**🏷️ Che cos'è?**")
+    categoria = st.selectbox("Categoria", list(CATEGORIE_MED), index=_fa_idx(list(CATEGORIE_MED), cat_suggerita), label_visibility="collapsed",
+                             format_func=lambda c: f"{CATEGORIE_MED[c]} {c}", key=f"fa_cat_{med_id or 'nuovo'}_{cat_suggerita}")
+    cfg = CAMPI_CATEGORIA.get(categoria, CAMPI_CATEGORIA["Farmaco"])
+    forme_cat = list(FORME_PER_CATEGORIA.get(categoria, FORME_MED))
+    if m.get("forma") and m["forma"] not in forme_cat:
+        forme_cat.append(m["forma"])
+    if cfg["guida"]:
+        st.caption("ℹ️ " + cfg["guida"])
     # la foto sta in cima, come nella dispensa: fotocamera posteriore, sfondo tolto, righello e ritaglio
     st.markdown("**📷 Foto della confezione** (facoltativa)")
     ck = "fa_" + (med_id or "nuovo")
@@ -165,15 +206,17 @@ def _fa_modulo_medicinale(pid, med_id=None):
     scelta_arch = _fa_scegli_da_archivio(f, ck)
     with st.form("fa_form_med"):
         togli_foto = st.checkbox("Rimuovi la foto attuale") if m.get("foto") else False
-        nome = st.text_input("Nome del medicinale *", value=m.get("nome", ""))
-        marca = st.text_input("Marca commerciale", value=m.get("marca", ""))
-        principio = st.text_input("Principio attivo", value=m.get("principio", ""))
-        dosaggio = st.text_input("Dosaggio (es. 500 mg)", value=m.get("dosaggio", ""))
-        forma = st.selectbox("Forma", FORME_MED, index=_fa_idx(FORME_MED, m.get("forma")))
+        nome = st.text_input(cfg["nome"], value=m.get("nome", ""))
+        marca = st.text_input(cfg["marca"], value=m.get("marca", ""))
+        principio = st.text_input(cfg["principio"], value=m.get("principio", ""))
+        dosaggio = st.text_input(cfg["dosaggio"], value=m.get("dosaggio", ""))
+        forma = st.selectbox("Forma" if categoria != "Dispositivo medico" else "Tipo", forme_cat, index=_fa_idx(forme_cat, m.get("forma")))
+        preparato = (st.date_input("Data di preparazione", value=_fa_data(m.get("preparato")), format="DD/MM/YYYY",
+                                   min_value=date(2000, 1, 1), max_value=date(2100, 12, 31)) if categoria == "Preparato galenico" else None)
         c1, c2 = st.columns(2)
         quantita = c1.number_input("Quantità", min_value=0.0, step=1.0, value=float(m.get("quantita", 1.0)))
         unita = c2.selectbox("Unità", UNITA_MED, index=_fa_idx(UNITA_MED, m.get("unita")))
-        scadenza = st.date_input("Data di scadenza", value=_fa_data(m.get("scadenza")), format="DD/MM/YYYY",
+        scadenza = st.date_input(cfg["scadenza"], value=_fa_data(m.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
         acquisto = st.date_input("Data di acquisto (facoltativa)", value=_fa_data(m.get("acquisto")),
                                  format="DD/MM/YYYY", min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
@@ -183,7 +226,7 @@ def _fa_modulo_medicinale(pid, med_id=None):
         inviato = st.form_submit_button("Salva", type="primary")
     if inviato:
         if not nome.strip():
-            st.error("Scrivi il nome del medicinale.")
+            st.error("Scrivi il nome.")
             return
         foto = "" if togli_foto else m.get("foto", "")
         grande, da_cancellare = (None if togli_foto else m.get("foto_grande")), ([m["foto_grande"]["id"]] if togli_foto and m.get("foto_grande") else [])
@@ -218,10 +261,12 @@ def _fa_modulo_medicinale(pid, med_id=None):
                               "grande": grande, "data": oggi().isoformat()}
             except Exception:
                 nuova_voce = None
-        rec = {"foto": foto, "foto_grande": grande, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
+        rec = {"categoria": categoria, "foto": foto, "foto_grande": grande, "nome": nome.strip(), "marca": marca.strip(), "principio": principio.strip(),
                "dosaggio": dosaggio.strip(), "forma": forma, "quantita": float(quantita), "unita": unita,
                "scadenza": scadenza.isoformat() if scadenza else None,
                "acquisto": acquisto.isoformat() if acquisto else None, "profilo": per, "note": note.strip()}
+        if preparato:
+            rec["preparato"] = preparato.isoformat()
         for k_cod in ("aic", "gtin", "ean", "lotto"):                      # codici letti dalla scatola (servono a riconoscerla la prossima volta)
             v_cod = pref_scan.get(k_cod) or m.get(k_cod)
             if v_cod:
@@ -308,7 +353,8 @@ def _fa_dialogo_foto(m):
 def _fa_card(m, data_oggi, conflitti=()):
     stato, giorni = stato_scadenza(m.get("scadenza"), data_oggi)
     e = html.escape
-    riga1 = " · ".join(x for x in (m.get("marca"), m.get("principio"), m.get("dosaggio"), m.get("forma")) if x)
+    cat = m.get("categoria") if m.get("categoria") in CATEGORIE_MED else "Farmaco"
+    riga1 = " · ".join(x for x in (None if cat == "Farmaco" else cat, m.get("marca"), m.get("principio"), m.get("dosaggio"), m.get("forma")) if x)
     scad = f"{ICONE[stato]} {testo_giorni(stato, giorni)}"
     if m.get("scadenza"):
         scad += f" · {data_it(m['scadenza'])}"
@@ -325,7 +371,7 @@ def _fa_card(m, data_oggi, conflitti=()):
         extra = (f"<div class='riga' style='color:#b71c1c;font-weight:800'>🚨 Attenzione: «{e(c)}» è segnato come "
                  f"allergia di questo profilo</div>") + extra
     sfondo = ";background:#ffebee" if conflitti else ""
-    return (f"<div class='fa-med' style='--c:{COLORI[stato]}{sfondo}'>{foto}<div class='nome'>💊 {e(m.get('nome', ''))}</div>"
+    return (f"<div class='fa-med' style='--c:{COLORI[stato]}{sfondo}'>{foto}<div class='nome'>{CATEGORIE_MED[cat]} {e(m.get('nome', ''))}</div>"
             f"<div class='riga'>{e(riga1)}</div>"
             f"<div class='riga'>📦 {fmt_num(float(m.get('quantita') or 0))} {e(m.get('unita', ''))}</div>"
             f"<span class='scad'>{e(scad)}</span>{extra}</div>")
@@ -460,12 +506,16 @@ def schermata_farmacia():
         filtro = c2.selectbox("Mostra", list(FILTRI_MED), format_func=lambda k: FILTRI_MED[k],
                               label_visibility="collapsed", key="fa_filtro")
         ordine = c3.selectbox("Ordina", ["Per scadenza", "Per nome"], label_visibility="collapsed", key="fa_ordine")
+        cat_filtro = st.selectbox("Categoria", ["Tutte le categorie"] + list(CATEGORIE_MED), label_visibility="collapsed", key="fa_cat_filtro",
+                                  format_func=lambda c: c if c == "Tutte le categorie" else f"{CATEGORIE_MED[c]} {c}")
         vista = st.radio("Vista", ["Schede", "Tabella"], horizontal=True, key="fa_vista", label_visibility="collapsed")
 
         visibili = []
         for m, s in stati:
             testo = " ".join(m.get(k, "") for k in ("nome", "marca", "principio")).lower()
             if cerca and cerca.lower() not in testo:
+                continue
+            if cat_filtro != "Tutte le categorie" and (m.get("categoria") or "Farmaco") != cat_filtro:
                 continue
             if filtro == "scaduti" and s != "scaduto":
                 continue
@@ -1995,9 +2045,11 @@ def _fa_med_dettaglio_corpo(med_id, pid):
     nomi = {p_["id"]: p_["nome"] for p_ in _fa_profili(f)}
     stato, giorni = stato_scadenza(m.get("scadenza"), oggi_)
     quantita = f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}".strip()
-    dati = [("Nome", m.get("nome")), ("Marca", m.get("marca")), ("Principio attivo", m.get("principio")), ("Dosaggio", m.get("dosaggio")),
+    cat_m = m.get("categoria") if m.get("categoria") in CATEGORIE_MED else "Farmaco"
+    dati = [("Categoria", f"{CATEGORIE_MED[cat_m]} {cat_m}"), ("Nome", m.get("nome")), ("Marca", m.get("marca")), ("Principio attivo", m.get("principio")), ("Dosaggio", m.get("dosaggio")),
             ("Forma", m.get("forma")), ("Quantità", quantita), ("Scadenza", data_it(m["scadenza"]) if m.get("scadenza") else None),
             ("Stato", f"{ICONE[stato]} {testo_giorni(stato, giorni)}" if m.get("scadenza") else None),
+            ("Data di preparazione", data_it(m["preparato"]) if m.get("preparato") else None),
             ("Data di acquisto", data_it(m["acquisto"]) if m.get("acquisto") else None),
             ("Per chi è", nomi.get(m.get("profilo", pid))), ("Lotto", m.get("lotto")), ("Codice AIC", m.get("aic")), ("Note", m.get("note")),
             ("Foglio illustrativo", "disponibile" if (m.get("foglio") or m.get("foglio_link")) else "non ancora aggiunto")]
@@ -2096,7 +2148,7 @@ def _fa_elenco_medicinali(f, pid, visibili, vista, oggi_):
         righe = []
         for m in visibili:
             stato, giorni = stato_scadenza(m.get("scadenza"), oggi_)
-            righe.append({"Foto": src_sicuro(m.get("foto") or "") or _FA_FOTO_VUOTA, "Medicinale": m.get("nome", ""),
+            righe.append({"Foto": src_sicuro(m.get("foto") or "") or _FA_FOTO_VUOTA, "Medicinale": m.get("nome", ""), "Tipo": m.get("categoria") or "Farmaco",
                           "Marca": m.get("marca", ""), "Principio attivo": m.get("principio", ""),
                           "Dosaggio": m.get("dosaggio", ""), "Forma": m.get("forma", ""),
                           "Quantità": f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}",
@@ -2203,9 +2255,9 @@ def _fa_html_completo(d, oggi_):
                                       [[x.get("tipo", ""), x.get("numero", ""), x.get("ente", ""), D(x.get("rilascio")),
                                         "non scade" if x.get("senza_scadenza") else D(x.get("scadenza"))] for x in docs_p]))
         meds = [m for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid]
-        parti.append(_fa_tabella_html("Medicinali", ["Nome", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
+        parti.append(_fa_tabella_html("Medicinali", ["Nome", "Tipo", "Marca", "Principio attivo", "Dosaggio", "Forma", "Quantità",
                                                       "Scadenza", "Acquisto", "Note"],
-                                      [[m.get("nome", ""), m.get("marca", ""), m.get("principio", ""), m.get("dosaggio", ""),
+                                      [[m.get("nome", ""), m.get("categoria") or "Farmaco", m.get("marca", ""), m.get("principio", ""), m.get("dosaggio", ""),
                                         m.get("forma", ""), f"{fmt_num(float(m.get('quantita') or 0))} {m.get('unita', '')}",
                                         D(m.get("scadenza")), D(m.get("acquisto")), m.get("note", "")] for m in meds]))
         ter = [t_ for t_ in f.get("terapie", []) if t_.get("profilo", "p0") == pid]
