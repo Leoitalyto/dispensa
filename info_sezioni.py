@@ -142,6 +142,19 @@ Toccane una per aprirla; per tornare tocca **← Torna alla dispensa**. In ogni 
         ("✏️ Gestisci tanti prodotti in una volta",
          """La scheda **✏️ Gestisci** serve per cambiare in un colpo solo **quantità, scadenze e note** di tanti prodotti, senza aprirli uno per uno.""",
          "gestisci modificare molti più prodotti insieme quantità scadenze note"),
+        ("📊 Le statistiche sugli sprechi",
+         """La scheda **📊 Statistiche** ti dice **quanto consumi e quanto butti**.
+1. Tocca **Statistiche** nel menu in alto della dispensa.
+2. Scegli il periodo: **30 giorni**, **3 mesi**, **12 mesi** o **Da sempre**.
+3. Vedi i **consumati**, gli **sprecati** e la **percentuale di spreco**, per sezione (adulti, neonati, animali), **mese per mese**, i **prodotti che sprechi di più** e quelli che **ora rischiano di scadere**.
+
+Come si contano i numeri:
+- **✅ Consumato**: quando premi **«Ne ho consumato uno»** o un prodotto finisce.
+- **🗑️ Sprecato**: quando elimini un prodotto e, nella domanda **«Perché lo elimini?»**, scegli «Era scaduto» o «L'ho buttato».
+- Se scegli **«Ho sbagliato a inserirlo»** non viene contato: è solo una correzione.
+
+I numeri partono da quando hai installato questo aggiornamento.""",
+         "statistiche sprechi spreco consumato buttato scaduto grafico mese percentuale quanto butto"),
         ("👤 Password, lingua e messaggi",
          """- **Password:** ti viene data da chi gestisce l'app. Al primo accesso puoi cambiarla. È solo tua.
 - **Lingua:** nel menu a sinistra c'è **🌐 Lingua / Language**.
@@ -440,7 +453,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in S
 # Codici stabili delle voci (nell'ordine di _GUIDE): servono per collegare le traduzioni. Chi aggiunge una voce italiana
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
-    "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
+    "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_statistiche d_account d_aiuto".split(),
     "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_trasferisci f_sbaglio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),

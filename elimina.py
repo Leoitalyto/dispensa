@@ -31,6 +31,10 @@ def apri_elimina(ids):
                 if st.checkbox(" · ".join(pezzi), value=r["id"] in ids, key=f"el_{giro}_{r['id']}"):
                     scelte.append(r["id"])
         nella_spesa = st.checkbox("🛒 " + t("Metti nella lista della spesa"), key=f"el_spesa_{giro}")
+        motivo = None
+        if scelte and "MOTIVI_ELIMINA" in globals():
+            _scaduto_sel = any(stato_scadenza(r.get("scadenza"), oggi())[0] == "scaduto" for r in tutti if r["id"] in scelte)
+            motivo = st.radio("Perché lo elimini? (serve per le statistiche)", MOTIVI_ELIMINA, index=0 if _scaduto_sel else 1, key=f"el_motivo_{giro}_{int(_scaduto_sel)}")
         if not scelte:
             st.caption(t("Spunta almeno una voce da eliminare."))
         c1, c2 = st.columns(2)
@@ -39,6 +43,10 @@ def apri_elimina(ids):
             def _togli(d):
                 tolte = [r for r in d.get("articoli", []) if r["id"] in scelte]
                 d["articoli"] = [r for r in d.get("articoli", []) if r["id"] not in scelte]
+                _tipo_ev = tipo_da_motivo(motivo) if motivo and "tipo_da_motivo" in globals() else None
+                if _tipo_ev:                                           # per le statistiche
+                    for r in tolte:
+                        registra_evento(d, _tipo_ev, r, motivo=motivo)
                 if nella_spesa:
                     for r in tolte:
                         if not any(_chiave_prodotto(x) == _chiave_prodotto(r) for x in d["articoli"]):

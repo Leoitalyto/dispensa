@@ -32,6 +32,8 @@ def consuma_uno(d, id_riga):
     if riga is None:
         return {"stato": "assente"}
     resto = float(riga.get("quantita") or 0) - 1
+    if "registra_evento" in globals():
+        registra_evento(d, "consumato", riga, 1)                      # per le statistiche
     if resto > 0:
         riga["quantita"] = resto
         return {"stato": "resta", "nome": riga.get("nome", ""), "n": resto}
@@ -56,13 +58,21 @@ _applica_modifiche_senza_spesa = applica_modifiche
 
 
 def applica_modifiche(d, modificata):
-    finiti = []
+    finiti, cestinati = [], []
     for r in d.get("articoli", []):
         if r["id"] in modificata.index:
             m = modificata.loc[r["id"]]
-            if not bool(m["🗑️"]) and float(m["Unità"]) <= 0:
+            if bool(m["🗑️"]):
+                cestinati.append(dict(r))
+            elif float(m["Unità"]) <= 0:
                 finiti.append(dict(r))
     _applica_modifiche_senza_spesa(d, modificata)
+    if "registra_evento" in globals():                                 # per le statistiche: finito = consumato; cestinato e scaduto = sprecato
+        for r in finiti:
+            registra_evento(d, "consumato", r)
+        for r in cestinati:
+            if stato_scadenza(r.get("scadenza"), oggi())[0] == "scaduto":
+                registra_evento(d, "sprecato", r, motivo="Era scaduto: l'ho buttato")
     for r in finiti:
         if not any(_chiave_prodotto(x) == _chiave_prodotto(r) for x in d.get("articoli", [])):
             aggiungi_a_spesa(d, r)

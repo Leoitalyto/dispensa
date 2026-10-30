@@ -342,7 +342,44 @@ _JS_ASSISTENTE = r"""
     try { r.start(); } catch (e) { fine(); }
   }
   function haParola(n, lista) { return String(lista || '').split(' ').some(function (x) { x = norm(x).trim(); return x && n.indexOf(x) >= 0; }); }
+  /* ---------- assistente con intelligenza artificiale (facoltativo): se c'è, la domanda va al modello; se non risponde, vale la guida ---------- */
+  var storia = [], inAttesa = null;
+  function ricorda(q, r) { storia.push({r: 'u', t: q}, {r: 'a', t: String(r || '').slice(0, 700)}); if (storia.length > 12) storia = storia.slice(-12); }
+  function mandaAlModello(inp, valore) {
+    var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, valore);
+    inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+    inp.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+    inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+  }
   function chiedi(testo) {
+    testo = (testo || '').trim();
+    var A = D.ai, n0 = ' ' + norm(testo) + ' ';
+    var speciale = !testo || (haParola(n0, T('i_off')) && haParola(n0, T('i_ass'))) || haParola(n0, T('i_silenzio')) || haParola(n0, T('i_novita')) || haParola(n0, T('i_giro')) ||
+      (n0.trim().split(' ').length <= 3 && haParola(n0, T('i_saluto')));
+    var inp = A && A.attivo && /^it/i.test(D.lang || 'it') && !speciale ? doc.querySelector('input[aria-label="asst-llm-q"]') : null;
+    if (!inp) { chiediLocale(testo); ricorda(testo, elTitolo.textContent + '. ' + elTesto.textContent); return; }
+    var it = rileva(testo); if (it.az) memoria.az = it.az; if (it.og) memoria.og = it.og;      /* la guida ricorda l'argomento anche se risponde il modello */
+    var id = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+    if (inAttesa) w.clearTimeout(inAttesa.t);
+    inAttesa = {id: id, testo: testo, t: w.setTimeout(function () {                 /* il modello non risponde: vale la guida */
+      if (inAttesa && inAttesa.id === id) { var q = inAttesa.testo; inAttesa = null; chiediLocale(q); ricorda(q, elTitolo.textContent + '. ' + elTesto.textContent); }
+    }, A.timeout || 35000)};
+    mostra('💭 ' + (A.pensando || ''), A.attendi || '', ' ', false);
+    chips([]);
+    mandaAlModello(inp, JSON.stringify({id: id, q: testo.slice(0, 500), h: storia.slice(-6)}));
+  }
+  function rispostaModello(r) {
+    if (!inAttesa || !r || r.id !== inAttesa.id) return;
+    w.clearTimeout(inAttesa.t);
+    var q = inAttesa.testo; inAttesa = null;
+    if (r.ok && r.testo) {
+      mostra('💬 ' + ((D.ai && D.ai.titolo) || ''), r.testo, perVoce(r.testo).slice(0, 700));
+      ricorda(q, r.testo);
+      chips(argomentiSezione());
+    } else { chiediLocale(q); ricorda(q, elTitolo.textContent + '. ' + elTesto.textContent); }
+  }
+  function chiediLocale(testo) {
     testo = (testo || '').trim(); if (!testo) { mostra(T('a_dimmi_t'), T('a_dimmi_x'), ' ', false); return; }
     var n = norm(testo);
     if (haParola(n, T('i_off')) && haParola(n, T('i_ass'))) { mostra(T('a_off_t'), T('a_off_x')); chips([]); return; }
@@ -419,6 +456,7 @@ _JS_ASSISTENTE = r"""
       if (c.stop) { D.stop = c.stop; stopSet = null; indice = null; }
       if (c.guida) { D.guida = c.guida; indice = null; }
       if (c.novita) D.novita = c.novita;
+      if (c.ai !== undefined) D.ai = c.ai;
       if (c.sezione) D.sezione = c.sezione;
       if (c.ctx) D.ctx = c.ctx;
       if (cambiaUI) applicaUI();
@@ -426,6 +464,7 @@ _JS_ASSISTENTE = r"""
       ctxCorrente = ctxAttuale();
       if (aperto && tourIdx < 0) paginaCorrente(false);
     },
+    llm: rispostaModello,
     apri: apri, chiudi: chiudi
   };
   } catch (err) { /* se qualcosa non va, l'app funziona come prima, senza assistente */ }
@@ -472,6 +511,8 @@ def _novita_recenti():
 def _config_assistente(contesto, completo, cmd):
     sezione = contesto.split(":")[0]
     cfg = {"ctx": contesto, "sezione": sezione, "novita": _novita_recenti()}
+    if "ai_config" in globals() and _lingua_guida() == "it":
+        cfg["ai"] = ai_config()                            # l'intelligenza artificiale è facoltativa, solo in italiano
     if cmd:
         cfg["cmd"] = {"id": str(__import__("time").time()), "az": cmd}
     if completo:
@@ -496,11 +537,26 @@ def _config_assistente(contesto, completo, cmd):
     return cfg
 
 
+@st.fragment
+def _ai_frammento(contesto):
+    """Il campo nascosto da cui il browser manda la domanda al modello. Sta in un «frammento»: la risposta non ricarica la pagina e non chiude le finestre aperte."""
+    st.markdown("<style>[class*='st-key-nascosti_asst_ai']{display:none !important}</style>", unsafe_allow_html=True)
+    with st.container(key="nascosti_asst_ai"):
+        valore = st.text_input("asst-llm-q", key="_asst_llm_q", label_visibility="collapsed")
+    if valore and valore != st.session_state.get("_ai_visto"):
+        st.session_state["_ai_visto"] = valore
+        ris = ai_gestisci(valore, contesto) if "ai_gestisci" in globals() else None
+        if ris:
+            _inietta("(function(){var a=window.__assistente;if(a&&a.llm)a.llm(" + json.dumps(ris, ensure_ascii=False) + ");})();")
+
+
 def assistente(contesto):
     """Mostra (o aggiorna) il robottino assistente e gli dice in quale pagina ci si trova (es. «farmacia», «farmacia:tessera»).
     Lo script completo parte la prima volta (e quando cambia la lingua); poi si manda solo la pagina e gli eventuali comandi."""
     if "nav_pulisci_interfaccia" in globals():
         nav_pulisci_interfaccia()                          # nasconde la linguetta «Manage app» che copre i pulsanti in basso
+    if "ai_attivo" in globals() and ai_attivo():
+        _ai_frammento(contesto)
     cmd = st.session_state.pop("_asst_cmd", None)
     lg = _lingua_guida()
     completo = (not st.session_state.get("_asst_inviato")) or st.session_state.get("_asst_lang") != lg
