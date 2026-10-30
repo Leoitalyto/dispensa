@@ -240,7 +240,7 @@ _JS_INVIO = r"""
       if (!b) return;
       var c = b.closest('[class*="st-key-invio_share_"]');
       var m = (c.className || '').match(/st-key-invio_share_(\S+)/);
-      var P = m && w.__invioDati && w.__invioDati[m[1]];
+      var P = m && w.__invioDati && (w.__invioDati[m[1]] || w.__invioDati[m[1].replace(/__\w+$/, '')]);
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       if (!P) { avviso(MSG.nondati); return; }
       if (!w.navigator.share) { avviso(MSG.nonsupp); return; }
@@ -307,6 +307,42 @@ def _inv_dati_conto():
         return {}
 
 
+def _inv_senza_doppioni(allegati):
+    """Toglie i file identici (stesso contenuto): capita che la stessa foto sia stata salvata due volte. Ritorna (elenco, quanti tolti)."""
+    import hashlib
+    visti, risultato = set(), []
+    for nome, mime, dati in allegati:
+        impronta = hashlib.sha256(dati).hexdigest()
+        if impronta in visti:
+            continue
+        visti.add(impronta)
+        risultato.append((nome, mime, dati))
+    return risultato, len(allegati) - len(risultato)
+
+
+def _inv_converti_immagini(allegati):
+    """Le foto salvate nell'app sono in formato WebP: WhatsApp e altre app non le accettano sempre. Per l'invio diventano JPEG
+    (le parti trasparenti, dove è stato tolto lo sfondo, diventano bianche)."""
+    risultato = []
+    for nome, mime, dati in allegati:
+        if mime == "image/webp" or nome.lower().endswith(".webp"):
+            try:
+                from PIL import Image
+                im = Image.open(io.BytesIO(dati))
+                if im.mode in ("RGBA", "LA") or "transparency" in im.info:
+                    fondo = Image.new("RGB", im.size, (255, 255, 255))
+                    fondo.paste(im.convert("RGBA"), mask=im.convert("RGBA").getchannel("A"))
+                    im = fondo
+                buf = io.BytesIO()
+                im.convert("RGB").save(buf, "JPEG", quality=92, optimize=True)
+                risultato.append((nome.rsplit(".", 1)[0] + ".jpg", "image/jpeg", buf.getvalue()))
+                continue
+            except Exception:
+                pass
+        risultato.append((nome, mime, dati))
+    return risultato
+
+
 def _inv_nomi_unici(allegati):
     """Se due file hanno lo stesso nome (succede: per esempio fronte e retro scattati dal telefono), il secondo diventa «nome (2)», il terzo «nome (3)»…
     Servono nomi diversi per le caselle, per i pulsanti di scarico e per gli allegati dell'email."""
@@ -327,10 +363,13 @@ def _inv_nomi_unici(allegati):
 def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
     """I modi di inviare. allegati = [(nome, mime, byte)]; testo = il riepilogo scritto."""
     oggetto = oggetto or titolo
-    allegati = _inv_nomi_unici(list(allegati))
+    allegati, doppi = _inv_senza_doppioni(list(allegati))
+    allegati = _inv_nomi_unici(_inv_converti_immagini(allegati))
     chiave = re.sub(r"\W+", "_", str(chiave))                     # le chiavi dei pulsanti finiscono nei nomi di classe della pagina
     d_conto = _inv_dati_conto()
     st.warning("🔒 Stai per inviare **dati personali e sanitari**: controlla bene a chi li mandi.")
+    if doppi:
+        st.info(f"ℹ️ C'erano {doppi} file identici (la stessa foto salvata più volte): li mando una volta sola.")
     t_tel, t_mail, t_wa, t_tg, t_sms, t_copia = st.tabs(["📤 Telefono", "✉️ Email", "💬 WhatsApp", "✈️ Telegram", "📱 SMS", "📋 Copia"])
     with t_tel:
         st.caption("Si apre la finestra **Condividi** del telefono: scegli WhatsApp, Gmail, Telegram, Drive, Signal, Messenger… "
@@ -367,9 +406,16 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
                     else:
                         st.error("Non sono riuscito a inviarla: " + motivo)
     with t_wa:
+        if allegati:
+            st.caption("**Con le foto e i file:** si apre «Condividi» del telefono, tocca **WhatsApp**, scegli la persona e invia: le foto sono allegate.")
+            with st.container(key=f"invio_share_{chiave}__wa"):
+                st.button("💬 Manda su WhatsApp con le foto", key=f"invio_btn_share_wa_{chiave}", type="primary", width="stretch")
+            st.divider()
+            st.caption("**Solo il testo** (senza foto):")
         num = st.text_input("Numero (facoltativo, con prefisso senza +, es. 39333…)", key=f"inv_wa_{chiave}")
-        st.link_button("💬 Apri WhatsApp con il riepilogo", inv_link_whatsapp(num, testo), width="stretch")
-        st.caption("Da un link WhatsApp non può allegare file: per mandare anche il PDF o le foto usa la scheda **Telefono** e scegli WhatsApp.")
+        st.link_button("💬 Apri WhatsApp con il riepilogo scritto", inv_link_whatsapp(num, testo), width="stretch")
+        if not allegati:
+            st.caption("Questo invio è solo testo: non ci sono foto o file da allegare.")
     with t_tg:
         chat = str(d_conto.get("telegram_chat_id") or "").strip()
         if not inv_segreto("TELEGRAM_TOKEN"):

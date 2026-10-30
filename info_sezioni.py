@@ -315,9 +315,21 @@ Attenzione: si eliminano anche tutti i dati di quella persona. Per cambiare solo
 1. **Tocca la scheda** del documento, medicinale, prescrizione o visita.
 2. Tocca **📤 Invia questo… (email, WhatsApp…)**.
 3. Scegli **📤 Telefono** per aprire il menu «Condividi» del telefono (WhatsApp, Gmail, Telegram…), **✉️ Email** per mandarla dall'app, o **💬 WhatsApp**, **✈️ Telegram**, **📱 SMS**, **📋 Copia**.
+4. Per mandare le **foto su WhatsApp** tocca **💬 Manda su WhatsApp con le foto**, poi scegli WhatsApp e la persona. Il tasto «Apri WhatsApp con il riepilogo» manda invece **solo il testo**.
+
+Se la stessa foto era stata salvata due volte, la mando una volta sola. Per il **codice fiscale**: in Salute tocca la **tessera sanitaria** e poi **📤 Invia il codice fiscale**.
 
 Per mandare **tutto insieme** (PDF o Excel) usa **📤 Esporta e invia** in alto in Salute.""",
          "inviare condividere mandare spedire whatsapp email telegram sms documento ricetta medicinale visita"),
+        ("🗂️ L'Archivio di bugiardini, foto e documenti",
+         """Nell'**Archivio** trovi tutti i file che hai caricato: fogli illustrativi (bugiardini), foto delle confezioni, documenti, ricette, referti e pagine del libretto vaccinale.
+1. Apri **Salute** (o **I miei documenti**) e tocca **🗂️ Archivio**, oppure usa **Archivio →** in alto.
+2. **Cerca** per nome del file, del medicinale o della persona, oppure filtra per **persona**, **categoria**, **tipologia** (immagini o PDF) e **data**.
+3. Tocca **👁️ Apri** per rivedere il file senza ricaricarlo, **⬇ Scarica** per salvarlo e **📤 Invia** per mandarlo con email, WhatsApp o Telegram.
+4. In fondo c'è la **🛡️ Copia di sicurezza**: un unico file ZIP con tutti i file, in cartelle ordinate.
+
+Ogni bugiardino che salvi viene conservato nell'app: se incolli il link di un PDF, ne tengo una copia.""",
+         "archivio bugiardino bugiardini foto documenti file pdf cercare ritrovare riaprire copia sicurezza backup zip"),
         ("↩️ Ho eliminato qualcosa per sbaglio",
          """Mi dispiace. Nell'app non c'è un cestino: l'eliminazione è definitiva.
 Però i dati sono salvati con la **cronologia** su GitHub, quindi molto spesso si possono **ritrovare**: chiedilo a chi gestisce l'app (l'amministratore) dicendo cosa hai tolto e più o meno quando.
@@ -414,7 +426,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in S
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
-    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_sbaglio".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_sbaglio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }
@@ -717,7 +729,7 @@ _META_GUIDA = {
     "f_el_prof": ("elimina", "profilo"), "f_condividi": ("condividi", None), "f_sbaglio": ("recupera", None),
     "f_medicinale": ("aggiungi", "medicinale"), "f_terapie": ("aggiungi", "terapia"), "f_prescrizioni": ("aggiungi", "prescrizione"),
     "f_visite": ("aggiungi", "visita"), "f_vaccini": ("aggiungi", "vaccino"), "f_invio": ("condividi", None),
-    "x_modificare": ("modifica", "documento"), "f_report": ("esporta", None),
+    "x_modificare": ("modifica", "documento"), "f_report": ("esporta", None), "f_archivio": ("vedi", None),
 }
 # ---- Le parole (inizi di parola) con cui si riconoscono azioni e oggetti nelle domande.
 _INTENTI = {

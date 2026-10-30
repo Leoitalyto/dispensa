@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """NAVIGAZIONE tra le sezioni e pulizia dell'interfaccia.
-Le sezioni dell'app, nell'ordine: Dispensa → Salute → I miei documenti → Utilità.
+Le sezioni dell'app, nell'ordine: Dispensa → Salute → I miei documenti → Archivio → Utilità.
 Ogni sezione ha in alto, nello stesso posto, due pulsanti: «← precedente» e «successiva →».
 In più c'è un piccolo controllo che nasconde la linguetta nera «Manage app» di Streamlit, che copre i pulsanti in basso a destra.
 (La linguetta la vede solo chi ha fatto l'accesso a Streamlit come proprietario dell'app: gli altri utenti non l'hanno mai.)
@@ -9,8 +9,8 @@ import json
 
 import streamlit as st
 
-SEZIONI_NAV = ["dispensa", "salute", "documenti", "utilita"]
-NOMI_NAV = {"dispensa": "Dispensa", "salute": "Salute", "documenti": "I miei documenti", "utilita": "Utilità"}
+SEZIONI_NAV = ["dispensa", "salute", "documenti", "archivio", "utilita"]
+NOMI_NAV = {"dispensa": "Dispensa", "salute": "Salute", "documenti": "I miei documenti", "archivio": "Archivio", "utilita": "Utilità"}
 _STATI_DA_CHIUDERE = ("fa_modulo_med", "fa_modulo_foglio", "fa_modulo_dottore", "fa_modulo_sanitario", "fa_modulo_tessera", "doc_modulo",
                       "fa_famiglia", "fa_apri_presc")
 

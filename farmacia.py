@@ -416,6 +416,9 @@ def schermata_farmacia():
     if st.session_state.get("sezione_home") == "documenti":
         schermata_documenti()
         return
+    if st.session_state.get("sezione_home") == "archivio" and "schermata_archivio" in globals():
+        schermata_archivio()
+        return
     if st.session_state.get("fa_famiglia") and "schermata_famiglia" in globals():
         schermata_famiglia()
         return
@@ -424,6 +427,8 @@ def schermata_farmacia():
                 unsafe_allow_html=True)
     if "fam_pulsante_capo" in globals():
         fam_pulsante_capo()
+    if "archivio_pulsante" in globals():
+        archivio_pulsante("salute")
     if "fam_avviso_membro" in globals():
         fam_avviso_membro()
     if st.session_state.get("fa_msg"):
@@ -875,17 +880,44 @@ def _fa_prepara_file(up):
     return {"nome": nome, "mime": mime}, dati
 
 
-def _fa_salva_files(caricati):
-    """Salva i file nell'archivio (uno per documento) e restituisce i riferimenti da mettere nella scheda."""
+def _fa_salva_files(caricati, esistenti=None):
+    """Salva i file nell'archivio (uno per documento) e restituisce i riferimenti da mettere nella scheda.
+    Se un file ha lo stesso contenuto di uno già presente in «esistenti» (o di un altro dello stesso gruppo), non lo salva due volte."""
+    import hashlib as _hl_sf
     pronti = [_fa_prepara_file(u) for u in caricati]          # se uno non va bene, non si salva nulla
+    gia = {a.get("sha") for a in (esistenti or []) if a.get("sha")}
     riferimenti = []
     with st.spinner("Salvo i documenti…"):
         for meta, dati in pronti:
+            sha = _hl_sf.sha256(dati).hexdigest()
+            if sha in gia:                                      # la stessa foto è già lì
+                continue
+            gia.add(sha)
             did = uuid.uuid4().hex[:12]
             corpo = {"nome": meta["nome"], "mime": meta["mime"], "b64": base64.b64encode(dati).decode()}
             salva_file(_fa_percorso_doc(did), lambda d, c=corpo: d.update(c), "Salute: documento")
-            riferimenti.append({"id": did, "nome": meta["nome"], "mime": meta["mime"]})
+            riferimenti.append({"id": did, "nome": meta["nome"], "mime": meta["mime"], "sha": sha})
     return riferimenti
+
+
+def _fa_ids_doppioni(refs):
+    """Fra i file indicati, quelli con lo stesso identico contenuto di uno già visto (si tiene il primo). Legge i file dall'archivio."""
+    import hashlib as _hl_dd
+    visti, doppi = set(), []
+    for a in refs:
+        try:
+            d = carica_dati(crea_archivio(), _fa_percorso_doc(a["id"]))
+            dati = base64.b64decode(d.get("b64", "")) if d.get("b64") else b""
+        except Exception:
+            continue
+        if not dati:
+            continue
+        h = _hl_dd.sha256(dati).hexdigest()
+        if h in visti:
+            doppi.append(a["id"])
+        else:
+            visti.add(h)
+    return doppi
 
 
 def _fa_cancella_files(ids):
@@ -997,7 +1029,7 @@ def _fa_dialogo_visita(pid, vis_id=None):
     if inviato:
         categoria = nuova.strip() or cat
         try:
-            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+            riferimenti = _fa_salva_files(nuovi, next((x_.get("allegati") or [] for x_ in _fa_dati().get("visite", []) if x_["id"] == vis_id), [])) if nuovi else []
         except ValueError as e:
             st.error(str(e))
             return
@@ -1215,7 +1247,7 @@ def _fa_dialogo_prescrizione(pid, pre_id=None):
             st.error("Scrivi cosa è stato prescritto, il codice della ricetta oppure allega la foto.")
             return
         try:
-            riferimenti = _fa_salva_files(nuovi) if nuovi else []
+            riferimenti = _fa_salva_files(nuovi, next((x_.get("allegati") or [] for x_ in _fa_dati().get("prescrizioni", []) if x_["id"] == pre_id), [])) if nuovi else []
         except ValueError as e:
             st.error(str(e))
             return
@@ -2631,6 +2663,17 @@ def _fa_modulo_foglio(pid, med_id):
             st.error(f"Non sono riuscito a salvare i file: {e}")
             return
 
+        copia_pdf = False
+        if link and not caricati and link != (m.get("foglio_link") or ""):          # un link a un PDF: ne conservo una copia nell'app
+            with st.spinner("Controllo se il link è un PDF da conservare nell'app…"):
+                file_pdf, _motivo = _fa_scarica_pdf(link, f"Foglio illustrativo {m.get('nome', '')}")
+            if file_pdf:
+                try:
+                    nuovi = _fa_salva_files([file_pdf])
+                    copia_pdf = True
+                except Exception:
+                    nuovi = []
+
         def _scrivi(f):
             for x in f["medicinali"]:
                 if x["id"] == med_id:
@@ -2642,7 +2685,8 @@ def _fa_modulo_foglio(pid, med_id):
             st.error(f"Non sono riuscito a salvare: {e}")
             return
         st.session_state.pop("fa_modulo_foglio", None)
-        st.session_state["fa_msg"] = f"✅ Foglio illustrativo di {m.get('nome', '')} salvato: ora lo apri dal pulsante «📖 Apri il foglio illustrativo»."
+        st.session_state["fa_msg"] = (f"✅ Foglio illustrativo di {m.get('nome', '')} salvato: ora lo apri dal pulsante «📖 Apri il foglio illustrativo»."
+                                      + (" Ho conservato anche una copia del PDF nell'app." if copia_pdf else ""))
         st.rerun()
 
 
@@ -3496,8 +3540,27 @@ def _doc_dettaglio_corpo(doc_id, pid):
     else:
         st.info("Nessuna foto o file allegato. Tocca «Modifica» per aggiungere il fronte e il retro.")
 
+    if len(allegati) >= 2 and st.button("🧹 Togli i file doppi", key=f"doc_dup_{doc_id}", width="stretch",
+                                          help="Se la stessa foto è stata salvata due volte, ne tengo una sola."):
+        with st.spinner("Controllo i file…"):
+            doppi = _fa_ids_doppioni(allegati)
+        if not doppi:
+            st.success("Nessun file doppio: è tutto in ordine.")
+        else:
+            def _togli_doppi(f_, doppi=set(doppi)):
+                for d_ in f_.get("documenti", []):
+                    if d_["id"] == doc_id:
+                        d_["allegati"] = [a for a in d_.get("allegati", []) if a["id"] not in doppi]
+            try:
+                _fa_salva(_togli_doppi, "Salute: file doppi tolti")
+                _fa_cancella_files(list(doppi))
+            except Exception as e:
+                st.error(f"Non sono riuscito a toglierli: {e}")
+            else:
+                st.session_state["fa_msg"] = f"🧹 Tolto/i {len(doppi)} file doppio/i: la stessa foto era salvata due volte."
+                st.rerun()
     _fa_inv_voce(f"doc_{doc_id}", "📤 Invia questo documento (email, WhatsApp…)", f"{emoji} {x.get('tipo', 'Documento')} di {nomi.get(x.get('profilo', 'p0'), '')}".strip(),
-                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati")], allegati)
+                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati", "Di chi è", "Giorni alla scadenza")], allegati)
 
     # --- modifica ed eliminazione
     st.divider()
@@ -3536,7 +3599,9 @@ def schermata_documenti():
 [class*="st-key-doc_apri_"] button{opacity:0;cursor:pointer}
 .doc-apri{margin-top:8px;font-size:.8rem;font-weight:700;opacity:.65;text-align:center}
 </style>""", unsafe_allow_html=True)
-    nav_barra("documenti")                               # ← Salute · Utilità →
+    nav_barra("documenti")                               # ← Salute · Archivio →
+    if "archivio_pulsante" in globals():
+        archivio_pulsante("documenti")
     st.markdown("<div class='doc-hero'><h1>📁 I miei documenti</h1><p>Scadenze sempre sotto controllo: ti avviso 6 e 3 mesi prima</p></div>",
                 unsafe_allow_html=True)
     if st.session_state.get("fa_msg"):
@@ -3691,8 +3756,11 @@ def _doc_modulo(pid, doc_id=None):
         da_salvare = [_FaFile(f"{lato_d} - {nome_base}.webp", base64.b64decode(foto_d.split(",", 1)[1]))
                       for foto_d, lato_d in ((foto_fronte, "Fronte"), (foto_retro, "Retro")) if foto_d]
         da_salvare += list(nuovi or [])
+        lati_nuovi = {lato_d for foto_d, lato_d in ((foto_fronte, "Fronte"), (foto_retro, "Retro")) if foto_d}
+        vecchi = next((d_.get("allegati") or [] for d_ in _fa_dati().get("documenti", []) if d_["id"] == doc_id), []) if doc_id else []
+        sostituiti = [a for a in vecchi if any(str(a.get("nome", "")).startswith(l_ + " -") for l_ in lati_nuovi)]     # il vecchio fronte/retro che viene rifatto
         try:
-            riferimenti = _fa_salva_files(da_salvare) if da_salvare else []
+            riferimenti = _fa_salva_files(da_salvare, [a for a in vecchi if a not in sostituiti]) if da_salvare else []
         except ValueError as ex:
             st.error(str(ex))
             return
@@ -3712,7 +3780,7 @@ def _doc_modulo(pid, doc_id=None):
                 for d_ in f["documenti"]:
                     if d_["id"] == doc_id:
                         d_.update(rec)
-                        d_["allegati"] = (d_.get("allegati") or []) + riferimenti
+                        d_["allegati"] = [a for a in (d_.get("allegati") or []) if a["id"] not in {s_["id"] for s_ in sostituiti}] + riferimenti
             else:
                 rec["id"] = uuid.uuid4().hex[:10]
                 rec["allegati"] = riferimenti
@@ -3722,6 +3790,11 @@ def _doc_modulo(pid, doc_id=None):
         except Exception as ex:
             st.error(f"Non sono riuscito a salvare: {ex}")
             return
+        if sostituiti:
+            try:
+                _fa_cancella_files([s_["id"] for s_ in sostituiti])          # i file sostituiti non servono più
+            except Exception:
+                pass
         st.session_state.pop("doc_modulo", None)
         stato_, _g = _doc_stato(rec["scadenza"], oggi())
         st.session_state["fa_msg"] = ("⚠️ Documento salvato, ma attenzione: " + ("è già scaduto." if stato_ == "scaduto"
@@ -4002,8 +4075,49 @@ def _fa_salva_link(pid, chiave, url):
     _fa_salva(_m, "Salute: collegamenti sanitari")
 
 
+_RE_CF_SALUTE = re.compile(r"[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]")
+
+
+def _fa_cf_del_profilo(f, pid):
+    """Il codice fiscale della persona, se già scritto da qualche parte nei suoi documenti (tessera sanitaria, documento «Codice fiscale»). Altrimenti ''."""
+    docs = [x for x in f.get("documenti", []) if x.get("profilo", "p0") == pid]
+    docs.sort(key=lambda x: 0 if (x.get("tipo") or "").strip().lower() in ("tessera sanitaria", "codice fiscale") else 1)
+    trovati = []
+    for x in docs:
+        for campo in ("numero", "note"):
+            testo = re.sub(r"\s+", "", str(x.get(campo) or "").upper())
+            for m in _RE_CF_SALUTE.finditer(testo):
+                trovati.append(m.group(0))
+    valido = globals().get("_doc_cf_valido")
+    for cf in trovati:                                      # meglio uno con il carattere di controllo corretto
+        if valido and valido(cf):
+            return cf
+    return trovati[0] if trovati else ""
+
+
+def _fa_tessera_invio(f, pid, allegati):
+    """In fondo alla tessera sanitaria: invia il codice fiscale (solo testo) o la tessera con le foto."""
+    nome = next((p_["nome"] for p_ in _fa_profili(f) if p_["id"] == pid), "")
+    cf = _fa_cf_del_profilo(f, pid)
+    st.divider()
+    if cf:
+        st.markdown(f"**Codice fiscale:** `{cf}`")
+        if "inv_voce" in globals():
+            inv_voce(f"cf_{pid}", "📤 Invia il codice fiscale", f"Codice fiscale di {nome}", f"Codice fiscale di {nome}: {cf}", lambda: [])
+    else:
+        st.caption("Il codice fiscale non è ancora scritto: aggiungilo nelle **note** della tessera o in un documento «Codice fiscale» (I miei documenti) "
+                   "e potrai inviarlo da qui.")
+    if allegati and "inv_voce" in globals():
+        _fa_inv_voce(f"tessera_{pid}", "📤 Invia la tessera (fronte e retro)", f"Tessera sanitaria di {nome}",
+                     [("Codice fiscale", cf)] if cf else [], allegati)
+
+
 @st.dialog("🪪 La mia tessera sanitaria", width="large")
 def _fa_dialogo_tessera(pid):
+    _fa_tessera_corpo(pid)
+
+
+def _fa_tessera_corpo(pid):
     f = _fa_dati()
     _x, allegati = _fa_tessera_del_profilo(f, pid)
     immagini = [a for a in allegati if str(a.get("mime", "")).startswith("image/")]
@@ -4028,6 +4142,7 @@ def _fa_dialogo_tessera(pid):
             if d.get("b64"):
                 st.download_button("⬇ " + a["nome"], base64.b64decode(d["b64"]), file_name=a["nome"],
                                    mime=d.get("mime", "application/pdf"), key="fa_ts_pdf_" + a["id"], width="stretch")
+    _fa_tessera_invio(f, pid, allegati)
 
 
 def _fa_modulo_tessera(pid):

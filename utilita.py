@@ -166,7 +166,7 @@ def schermata_utilita():
         "border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}"
         ".ut-hero h1{margin:0;font-size:1.8rem;color:#fff;padding:0}.ut-hero p{margin:4px 0 0;opacity:.92}</style>",
         unsafe_allow_html=True)
-    nav_barra("utilita")                                 # ← I miei documenti
+    nav_barra("utilita")                                 # ← Archivio
     st.markdown("<div class='ut-hero'><h1>🧰 Utilità</h1><p>Tocca il pulsante per avviare · tocca il nome per sapere cos'è</p></div>",
                 unsafe_allow_html=True)
     if "pulsante_info" in globals():                      # il pulsante Informazioni sta sempre in alto
