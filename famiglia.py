@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """CONTROLLO FAMIGLIA (per il capo famiglia = amministratore).
-Mette in un unico posto, in sola lettura, la Farmacia di tutte le persone della famiglia: i profili del capo famiglia e la Farmacia
+Mette in un unico posto, in sola lettura, Salute di tutte le persone della famiglia: i profili del capo famiglia e Salute
 delle persone che il capo famiglia ha inserito nella famiglia (interruttore «Parte della famiglia» nella scheda Utenti).
 Per ogni persona: cosa c'è da fare oggi, medicinali e scadenze, terapie e prescrizioni, visite ed esami, vaccini, documenti, scheda sanitaria.
 Tutto si esporta: report da stampare (o salvare in PDF), Excel e file JSON. Foto e PDF caricati non sono inclusi.
-TRASPARENZA: chi è inserito nella famiglia lo vede scritto nella sua Farmacia. Chi non è inserito non è visibile.
+TRASPARENZA: chi è inserito nella famiglia lo vede scritto nella sua Salute. Chi non è inserito non è visibile.
 Caricato da app_dispensa.py dopo farmacia.py; il pulsante si aggancia in farmacia.py."""
 import html
 import io
@@ -34,7 +34,7 @@ def _fam_profili(f, nome_default):
 
 def fam_persone():
     """Elenco delle persone: i profili del capo famiglia e quelli delle persone inserite nella famiglia.
-    Ogni persona è un dizionario: nome, origine (di chi è l'account), d (tutti i dati dell'account), f (la Farmacia), pid, p (profilo)."""
+    Ogni persona è un dizionario: nome, origine (di chi è l'account), d (tutti i dati dell'account), f (Salute), pid, p (profilo)."""
     persone = []
     d_capo = carica_dati(crea_archivio(), st.session_state["percorso"])
     f_capo = d_capo.get("farmacia") or {}
@@ -277,7 +277,7 @@ h3{{font-size:1rem;margin:16px 0 4px}}table{{border-collapse:collapse;width:100%
 th,td{{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}}th{{background:#eee}}
 .vuoto{{color:#666;font-size:.85rem;margin:2px 0}}.nota{{font-size:.8rem;color:#444;margin-top:22px}}.box{{background:#f3f3f3;padding:8px 12px;border-radius:8px}}
 @media print{{h2.persona{{page-break-before:always;break-before:page}}h2.prima{{page-break-before:auto;break-before:auto}}table{{page-break-inside:auto}}tr{{page-break-inside:avoid}}}}</style></head><body>
-<h1>Report famiglia · Farmacia</h1>
+<h1>Report famiglia · Salute</h1>
 <div class="box"><b>{len(persone)} persone</b>: {e(nomi)}<br>Creato il {data_it(oggi_.isoformat())}</div>
 {''.join(parti)}{extra_html}
 <p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista.
@@ -456,7 +456,7 @@ def schermata_famiglia():
     if not fam_e_capo():
         st.error("Questa pagina è riservata al capo famiglia.")
         return
-    if st.button("← Torna alla Farmacia", key="fam_indietro"):
+    if st.button("← Torna a Salute", key="fam_indietro"):
         st.session_state.pop("fa_famiglia", None)
         st.rerun()
     st.markdown("<div class='fa-hero'><h1>👨‍👩‍👧 Controllo famiglia</h1><p>Medicinali, terapie, visite e documenti di tutta la famiglia</p></div>",
@@ -477,8 +477,8 @@ def schermata_famiglia():
                 f"<div class='fa-k rosso'><span>Da prendere oggi</span><b>{n_dosi}</b></div>"
                 f"<div class='fa-k'><span>Appuntamenti 30 giorni</span><b>{n_app}</b></div>"
                 f"<div class='fa-k scaduto'><span>Documenti da rinnovare</span><b>{n_doc}</b></div></div>", unsafe_allow_html=True)
-    st.caption("Vedi anche la Farmacia delle persone che hai inserito nella famiglia dalla scheda **Utenti** (interruttore «Parte della famiglia»): "
-               "loro lo vedono scritto nella loro Farmacia. Si può solo guardare ed esportare: per modificare serve l'account della persona.")
+    st.caption("Vedi anche Salute delle persone che hai inserito nella famiglia dalla scheda **Utenti** (interruttore «Parte della famiglia»): "
+               "loro lo vedono scritto nella loro Salute. Si può solo guardare ed esportare: per modificare serve l'account della persona.")
 
     st.subheader("🔔 Da controllare")
     con_allerte = [(p, riepiloghi[p["chiave"]]) for p in persone if riepiloghi[p["chiave"]]["allerte"]]
@@ -513,10 +513,10 @@ def schermata_famiglia():
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Pezzi che si inseriscono nella Farmacia
+# Pezzi che si inseriscono in Salute
 # ---------------------------------------------------------------------------------------------------------------------
 def fam_pulsante_capo():
-    """Il pulsante «Controllo famiglia» in cima alla Farmacia del capo famiglia."""
+    """Il pulsante «Controllo famiglia» in cima a Salute del capo famiglia."""
     if fam_e_capo() and st.button("👨‍👩‍👧 Controllo famiglia: tutte le persone, terapie, visite, documenti", key="fa_famiglia_apri",
                                   type="primary", width="stretch"):
         st.session_state["fa_famiglia"] = True
@@ -524,7 +524,7 @@ def fam_pulsante_capo():
 
 
 def fam_avviso_membro():
-    """Alle persone inserite nella famiglia: avviso ben visibile che il capo famiglia vede la loro Farmacia."""
+    """Alle persone inserite nella famiglia: avviso ben visibile che il capo famiglia vede la loro Salute."""
     if fam_e_capo():
         return
     try:
@@ -537,7 +537,7 @@ def fam_avviso_membro():
 
 
 def fam_catalogo_medicinali(f, pid):
-    """I medicinali già in casa che si possono riusare per non riscriverli: quelli della Farmacia della persona (di tutti i suoi profili) e,
+    """I medicinali già in casa che si possono riusare per non riscriverli: quelli di Salute della persona (di tutti i suoi profili) e,
     se la persona fa parte della famiglia, quelli del capo famiglia; il capo famiglia vede anche quelli delle persone inserite nella famiglia.
     Ritorna una lista di (etichetta, dati senza foto né quantità)."""
     visti, risultato = set(), []

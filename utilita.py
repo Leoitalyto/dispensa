@@ -158,7 +158,7 @@ def _ut_blocco(u):
 
 
 def schermata_utilita():
-    """La pagina Utilità (si apre dalla Home con la terza icona, accanto a Farmacia e I miei documenti)."""
+    """La pagina Utilità (si apre dalla Home con la terza icona, accanto a Salute e I miei documenti)."""
     st.markdown(
         "<style>@keyframes ut-batte{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}"
         "50%{transform:scale(1.06);filter:drop-shadow(0 0 16px rgba(0,200,215,.95))}}"
@@ -166,10 +166,7 @@ def schermata_utilita():
         "border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}"
         ".ut-hero h1{margin:0;font-size:1.8rem;color:#fff;padding:0}.ut-hero p{margin:4px 0 0;opacity:.92}</style>",
         unsafe_allow_html=True)
-    if st.button("← Torna alla dispensa", key="ut_indietro"):
-        st.session_state.pop("sezione_home", None)
-        st.session_state["farmacia_aperta"] = False
-        st.rerun()
+    nav_barra("utilita")                                 # ← I miei documenti
     st.markdown("<div class='ut-hero'><h1>🧰 Utilità</h1><p>Tocca il pulsante per avviare · tocca il nome per sapere cos'è</p></div>",
                 unsafe_allow_html=True)
     if "pulsante_info" in globals():                      # il pulsante Informazioni sta sempre in alto

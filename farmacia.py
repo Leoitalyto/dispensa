@@ -86,7 +86,7 @@ def _fa_mtime(nome):
 
 
 def _fa_icona_uri():
-    return _fa_icona_uri_cache(_fa_mtime("farmacia.webp"))
+    return _fa_icona_uri_cache(_fa_mtime("salute.webp") or _fa_mtime("farmacia.webp"))
 
 
 @st.cache_resource
@@ -95,11 +95,13 @@ def _fa_icona_uri_cache(_data_file):
         cartella = os.path.dirname(os.path.abspath(__file__))
     except NameError:
         cartella = "."
-    try:
-        with open(os.path.join(cartella, "farmacia.webp"), "rb") as fh:
-            return "data:image/webp;base64," + base64.b64encode(fh.read()).decode()
-    except OSError:
-        return ""
+    for nome in ("salute.webp", "farmacia.webp"):                   # la nuova icona «Salute»; se manca, la vecchia
+        try:
+            with open(os.path.join(cartella, nome), "rb") as fh:
+                return "data:image/webp;base64," + base64.b64encode(fh.read()).decode()
+        except OSError:
+            continue
+    return ""
 
 
 # ---------------------------------------------------------------- dati
@@ -287,7 +289,7 @@ def _fa_modulo_medicinale(pid, med_id=None):
                 while len(arch) > 60:
                     da_cancellare.append(arch.pop()["grande"]["id"])
         try:
-            _fa_salva(_scrivi, "Farmacia: medicinale")
+            _fa_salva(_scrivi, "Salute: medicinale")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -301,15 +303,43 @@ def _fa_modulo_medicinale(pid, med_id=None):
         st.rerun()
 
 
-@st.dialog("Elimina medicinale")
-def _fa_cancella_medicinali(ids):
+def _fa_terapie_collegate(f, ids):
+    """Le terapie che usano i medicinali indicati."""
+    return [t_ for t_ in f.get("terapie", []) if t_.get("med") in ids]
+
+
+def _fa_cancella_medicinali(ids, elimina_terapie=True):
+    """Elimina uno o più medicinali (e i loro file). NON è una finestra: si può usare anche da dentro un'altra finestra.
+    Le terapie collegate si eliminano insieme (predefinito) oppure restano, con il nome del medicinale ricordato e senza collegamento."""
+    ids = list(ids)
     f = _fa_dati()
     foto = [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m["id"] in ids and m.get("foto_grande")]
     foto += [a["id"] for m in f.get("medicinali", []) if m["id"] in ids for a in m.get("foglio", [])]
-    _fa_salva(lambda f: f.__setitem__("medicinali", [x for x in f["medicinali"] if x["id"] not in ids]),
-              "Farmacia: eliminato")
+
+    def _scrivi(f_):
+        nomi = {m["id"]: m.get("nome", "") for m in f_.get("medicinali", [])}
+        f_["medicinali"] = [x for x in f_.get("medicinali", []) if x["id"] not in ids]
+        if elimina_terapie:
+            f_["terapie"] = [t_ for t_ in f_.get("terapie", []) if t_.get("med") not in ids]
+        else:
+            for t_ in f_.get("terapie", []):
+                if t_.get("med") in ids:
+                    t_["nome_med"] = t_.get("nome_med") or nomi.get(t_["med"], "")
+                    t_["med"] = None                                  # il collegamento non c'è più, la terapia resta con il suo nome
+    _fa_salva(_scrivi, "Salute: medicinale eliminato")
     usati = _fa_ids_foto_usati(_fa_dati())                  # le foto dell'archivio restano
-    _fa_cancella_files([i for i in foto if i not in usati])
+    _fa_cancella_files([i_ for i_ in foto if i_ not in usati])
+
+
+def _fa_scelta_terapie_eliminazione(f, ids, chiave):
+    """Mostra quante terapie usano questi medicinali e chiede se eliminarle insieme. Ritorna True se vanno eliminate."""
+    coll = _fa_terapie_collegate(f, ids)
+    if not coll:
+        return True
+    nomi = ", ".join(sorted({_fa_nome_med(f, t_.get("med"), t_.get("nome_med", "")) or "terapia" for t_ in coll}))
+    st.warning(f"💊 Questo medicinale è usato in **{len(coll)} terapia/e** ({nomi}). "
+               "Eliminandolo, le terapie e i loro promemoria non avrebbero più il medicinale a cui riferirsi.")
+    return st.checkbox(f"Elimina anche le {len(coll)} terapia/e collegata/e (consigliato)", value=True, key=chiave)
 
 
 def _fa_dialogo_elimina(med_id, nome):
@@ -319,10 +349,11 @@ def _fa_dialogo_elimina(med_id, nome):
 @st.dialog("Elimina medicinale")
 def _fa_dialogo_elimina_medicinali(ids, etichetta):
     st.write(f"Vuoi eliminare **{etichetta}**?")
+    con_terapie = _fa_scelta_terapie_eliminazione(_fa_dati(), list(ids), "fa_elim_terapie_tab")
     c1, c2 = st.columns(2)
     if c1.button("Sì, elimina", type="primary", width="stretch"):
         try:
-            _fa_cancella_medicinali(list(ids))
+            _fa_cancella_medicinali(list(ids), con_terapie)
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -388,15 +419,8 @@ def schermata_farmacia():
     if st.session_state.get("fa_famiglia") and "schermata_famiglia" in globals():
         schermata_famiglia()
         return
-    if st.button("← Torna alla dispensa", key="fa_indietro"):
-        st.session_state.pop("fa_modulo_med", None)
-        st.session_state.pop("fa_modulo_foglio", None)
-        st.session_state.pop("fa_modulo_dottore", None)
-        st.session_state.pop("fa_modulo_sanitario", None)
-        st.session_state.pop("fa_modulo_tessera", None)
-        st.session_state["farmacia_aperta"] = False
-        st.rerun()
-    st.markdown("<div class='fa-hero'><h1>🏥 Farmacia</h1><p>Medicinali e scadenze della tua famiglia</p></div>",
+    nav_barra("salute")                                  # ← Dispensa · I miei documenti →
+    st.markdown("<div class='fa-hero'><h1>🩺 Salute</h1><p>Medicinali, terapie, visite e vaccini della tua famiglia</p></div>",
                 unsafe_allow_html=True)
     if "fam_pulsante_capo" in globals():
         fam_pulsante_capo()
@@ -448,7 +472,7 @@ def schermata_farmacia():
         if ok_nuovo and nuovo.strip():
             try:
                 _fa_salva(lambda f: f["profili"].append({"id": uuid.uuid4().hex[:8], "nome": nuovo.strip()}),
-                          "Farmacia: profilo")
+                          "Salute: profilo")
                 st.session_state["fa_msg"] = f"✅ Profilo «{nuovo.strip()}» aggiunto."
                 st.rerun()
             except Exception as e:
@@ -466,7 +490,7 @@ def schermata_farmacia():
                         p["nome"] = nuovo_nome.strip() or p["nome"]
                         p["gruppo"] = None if scelto_g == "Non indicato" else scelto_g
             try:
-                _fa_salva(_rin, "Farmacia: nome profilo")
+                _fa_salva(_rin, "Salute: nome profilo")
                 st.rerun()
             except Exception as e:
                 st.error(f"Non sono riuscito a salvare: {e}")
@@ -603,7 +627,7 @@ def _fa_segna(f, pid, t_, d, ora, presa):
                       "q": t_.get("quantita", ""), "quando": adesso().isoformat(timespec="minutes")}
         else:
             reg.pop(k, None)
-    _fa_salva(_m, "Farmacia: assunzione")
+    _fa_salva(_m, "Salute: assunzione")
 
 
 def _fa_riga_dose(f, pid, d, ora, t_, ora_adesso, prefisso):
@@ -699,7 +723,7 @@ def _fa_dialogo_terapia(pid, ter_id=None):
                 rec["id"] = uuid.uuid4().hex[:10]
                 f["terapie"].append(rec)
         try:
-            _fa_salva(_scrivi, "Farmacia: terapia")
+            _fa_salva(_scrivi, "Salute: terapia")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -721,7 +745,7 @@ def _fa_dialogo_elimina_terapia(ter_id, nome):
             if anche_storico:
                 f["registro"] = {k: v for k, v in (f.get("registro") or {}).items() if v.get("t") != ter_id}
         try:
-            _fa_salva(_m, "Farmacia: terapia eliminata")
+            _fa_salva(_m, "Salute: terapia eliminata")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -859,7 +883,7 @@ def _fa_salva_files(caricati):
         for meta, dati in pronti:
             did = uuid.uuid4().hex[:12]
             corpo = {"nome": meta["nome"], "mime": meta["mime"], "b64": base64.b64encode(dati).decode()}
-            salva_file(_fa_percorso_doc(did), lambda d, c=corpo: d.update(c), "Farmacia: documento")
+            salva_file(_fa_percorso_doc(did), lambda d, c=corpo: d.update(c), "Salute: documento")
             riferimenti.append({"id": did, "nome": meta["nome"], "mime": meta["mime"]})
     return riferimenti
 
@@ -867,7 +891,7 @@ def _fa_salva_files(caricati):
 def _fa_cancella_files(ids):
     for did in ids:
         try:
-            crea_archivio().elimina(_fa_percorso_doc(did), "Farmacia: documento eliminato")
+            crea_archivio().elimina(_fa_percorso_doc(did), "Salute: documento eliminato")
         except Exception:
             pass
     carica_dati.clear()
@@ -888,7 +912,7 @@ def _fa_elimina_profilo(f, pid):
         f["registro"] = {k: r for k, r in (f.get("registro") or {}).items() if r.get("p", "p0") != pid}
         (f.get("vaccini_doc") or {}).pop(pid, None)
         (f.get("allergie") or {}).pop(pid, None)
-    _fa_salva(_m, "Farmacia: profilo eliminato")
+    _fa_salva(_m, "Salute: profilo eliminato")
     usati = _fa_ids_foto_usati(_fa_dati())                  # le foto dell'archivio restano
     _fa_cancella_files([i for i in ids if i not in usati])
 
@@ -910,7 +934,7 @@ def _fa_rimuovi_allegato(tipo, proprietario, did):
         else:
             vd = f.setdefault("vaccini_doc", {})
             vd[proprietario] = [a for a in vd.get(proprietario, []) if a["id"] != did]
-    _fa_salva(_m, "Farmacia: allegato eliminato")
+    _fa_salva(_m, "Salute: allegato eliminato")
     _fa_cancella_files([did])
 
 
@@ -998,7 +1022,7 @@ def _fa_dialogo_visita(pid, vis_id=None):
                 rec["allegati"] = riferimenti
                 f["visite"].append(rec)
         try:
-            _fa_salva(_scrivi, "Farmacia: visita")
+            _fa_salva(_scrivi, "Salute: visita")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -1036,7 +1060,7 @@ def _fa_dialogo_vaccinazione(pid, vac_id=None):
                 rec["id"] = uuid.uuid4().hex[:10]
                 f["vaccinazioni"].append(rec)
         try:
-            _fa_salva(_scrivi, "Farmacia: vaccinazione")
+            _fa_salva(_scrivi, "Salute: vaccinazione")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -1056,7 +1080,7 @@ def _fa_dialogo_elimina_voce(lista, rec_id, etichetta):
         ids = [a["id"] for a in rec.get("allegati", [])]
         try:
             _fa_salva(lambda f: f.__setitem__(lista, [x for x in f.get(lista, []) if x["id"] != rec_id]),
-                      "Farmacia: eliminato")
+                      "Salute: eliminato")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -1213,7 +1237,7 @@ def _fa_dialogo_prescrizione(pid, pre_id=None):
                 rec["allegati"] = riferimenti
                 f["prescrizioni"].append(rec)
         try:
-            _fa_salva(_scrivi, "Farmacia: prescrizione")
+            _fa_salva(_scrivi, "Salute: prescrizione")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -1226,7 +1250,7 @@ def _fa_presc_aggiorna(pre_id, **campi):
         for x in f.get("prescrizioni", []):
             if x["id"] == pre_id:
                 x.update(campi)
-    _fa_salva(_m, "Farmacia: prescrizione")
+    _fa_salva(_m, "Salute: prescrizione")
 
 
 def _fa_presc_elimina(pre_id):
@@ -1235,7 +1259,7 @@ def _fa_presc_elimina(pre_id):
     rec = next((x for x in f.get("prescrizioni", []) if x["id"] == pre_id), {})
     ids = [a["id"] for a in rec.get("allegati", [])]
     try:
-        _fa_salva(lambda f_: f_.__setitem__("prescrizioni", [x for x in f_.get("prescrizioni", []) if x["id"] != pre_id]), "Farmacia: prescrizione eliminata")
+        _fa_salva(lambda f_: f_.__setitem__("prescrizioni", [x for x in f_.get("prescrizioni", []) if x["id"] != pre_id]), "Salute: prescrizione eliminata")
     except Exception as e:
         return str(e)
     _fa_cancella_files(ids)
@@ -1392,7 +1416,7 @@ def _fa_tab_vaccini(f, pid, nomi, oggi_):
         try:
             riferimenti = _fa_salva_files(nuovi)
             _fa_salva(lambda f: f.setdefault("vaccini_doc", {}).setdefault(pid, []).extend(riferimenti),
-                      "Farmacia: documento vaccinale")
+                      "Salute: documento vaccinale")
         except ValueError as e:
             st.error(str(e))
         except Exception as e:
@@ -1448,10 +1472,16 @@ def _fa_esporta(f, pid, nomi):
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
         dati["allergie_dichiarate"] = (f.get("allergie") or {}).get(pid, [])
         dati["registro_assunzioni"] = [r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid]
-        st.caption("Scarica un file con medicinali, terapie, visite e vaccinazioni (l'elenco, non le foto). "
-                   "I documenti si scaricano uno per uno dalla loro scheda.")
-        st.download_button("⬇ Scarica i dati (JSON)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
-                           file_name=f"farmacia_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
+        st.caption("Qui puoi scaricare o inviare tutto di questa persona: medicinali, terapie, prescrizioni, visite, vaccinazioni, documenti. "
+                   "Le foto e i PDF si inviano uno per uno dalla scheda di ogni voce (tasto «Invia»).")
+        if "inv_hub" in globals():
+            st.markdown("**📤 Invia o esporta (PDF, Excel, email, WhatsApp, Telegram…)**")
+            p_ = next((p for p in f.get("profili", []) if p["id"] == pid), {"id": pid, "nome": nomi[pid]})
+            inv_hub(f"profilo_{pid}", [{"chiave": "io:" + pid, "nome": nomi[pid], "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}],
+                    _inv_dati_conto(), "Salute " + nomi[pid])
+            st.divider()
+        st.download_button("⬇ Scarica i dati (JSON, per tecnici)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
+                           file_name=f"salute_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
 
 
 # =====================================================================
@@ -1483,7 +1513,7 @@ def _fa_blocco_allergie(f, pid, nomi, medicinali):
     if ok:
         lista = [x.strip() for x in re.split(r"[,;\n]", testo) if x.strip()]
         try:
-            _fa_salva(lambda f: f.setdefault("allergie", {}).__setitem__(pid, lista), "Farmacia: allergie")
+            _fa_salva(lambda f: f.setdefault("allergie", {}).__setitem__(pid, lista), "Salute: allergie")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
         else:
@@ -2118,10 +2148,11 @@ def _fa_med_dettaglio_corpo(med_id, pid):
     st.divider()
     if st.session_state.get(f"fa_conf_{med_id}"):
         st.warning(f"Vuoi eliminare **{m.get('nome', 'questo medicinale')}**?")
+        con_terapie = _fa_scelta_terapie_eliminazione(f, [med_id], f"fa_elim_terapie_{med_id}")
         s1, s2 = st.columns(2, gap="small")
         if s1.button("Sì, elimina", type="primary", key=f"fa_si_{med_id}", width="stretch"):
             try:
-                _fa_cancella_medicinali([med_id])
+                _fa_cancella_medicinali([med_id], con_terapie)
             except Exception as e:
                 st.error(f"Non sono riuscito a eliminarlo: {e}")
             else:
@@ -2371,7 +2402,7 @@ def _fa_miniatura(uri, lato=360):
 
 
 def _fa_assicura_fotocamera():
-    """La Farmacia si apre prima che la dispensa carichi fotocamera.py: lo carico qui, così i tasti
+    """Salute si apre prima che la dispensa carichi fotocamera.py: lo carico qui, così i tasti
     «Scatta la foto» e «Carica dal telefono» aprono la fotocamera posteriore come nella dispensa."""
     if "_avvia_fotocamera_posteriore" in globals():
         return
@@ -2560,7 +2591,7 @@ def _fa_modulo_foglio(pid, med_id):
                         if x["id"] == med_id:
                             x["foglio"] = (x.get("foglio") or []) + nuovi
                             x["foglio_link"] = url
-                _fa_salva(_aggiungi, "Farmacia: foglio illustrativo")
+                _fa_salva(_aggiungi, "Salute: foglio illustrativo")
             except Exception as e:
                 st.error(f"Non sono riuscito a salvarlo: {e}")
             else:
@@ -2579,7 +2610,7 @@ def _fa_modulo_foglio(pid, med_id):
                         if x["id"] == med_id:
                             x["foglio"] = [y for y in x.get("foglio", []) if y["id"] != did]
                 try:
-                    _fa_salva(_togli, "Farmacia: foglio illustrativo")
+                    _fa_salva(_togli, "Salute: foglio illustrativo")
                     _fa_cancella_files([a["id"]])
                 except Exception as e:
                     st.error(f"Non sono riuscito a eliminarlo: {e}")
@@ -2606,7 +2637,7 @@ def _fa_modulo_foglio(pid, med_id):
                     x["foglio"] = (x.get("foglio") or []) + nuovi
                     x["foglio_link"] = link
         try:
-            _fa_salva(_scrivi, "Farmacia: foglio illustrativo")
+            _fa_salva(_scrivi, "Salute: foglio illustrativo")
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
@@ -2647,7 +2678,7 @@ def _fa_scegli_da_archivio(f, ck):
             if c2.button("🗑️ Togli dall'archivio", key="fa_arch_del_" + ck, width="stretch"):
                 try:
                     _fa_salva(lambda f: f.__setitem__("archivio_foto", [e for e in f.get("archivio_foto", []) if e["id"] != scelto]),
-                              "Farmacia: archivio foto")
+                              "Salute: archivio foto")
                     if voce.get("grande") and voce["grande"]["id"] not in _fa_ids_foto_usati(_fa_dati()):
                         _fa_cancella_files([voce["grande"]["id"]])
                 except Exception as e:
@@ -2808,7 +2839,7 @@ def _fa_modulo_dottore(pid):
     tipo_salvato = d.get("tipo")
     femmina = tipo_salvato == "Dottoressa"
 
-    if st.button("← Torna alla Farmacia", key="fa_dott_indietro"):
+    if st.button("← Torna a Salute", key="fa_dott_indietro"):
         st.session_state.pop("fa_modulo_dottore", None)
         st.session_state.pop(chiave_mod, None)
         st.rerun()
@@ -2971,7 +3002,7 @@ def _fa_modulo_dottore(pid):
                 if p["id"] == pid:
                     p["dottore"] = nuovo
         try:
-            _fa_salva(_scrivi, "Farmacia: dottore")
+            _fa_salva(_scrivi, "Salute: dottore")
         except Exception as ex:
             st.error(f"Non sono riuscito a salvare: {ex}")
             return
@@ -3060,7 +3091,7 @@ def _fa_modulo_sanitario(pid):
     modifica = st.session_state.get(chiave_mod, False)
     e = html.escape
 
-    if st.button("← Torna alla Farmacia", key="fa_san_indietro"):
+    if st.button("← Torna a Salute", key="fa_san_indietro"):
         st.session_state.pop("fa_modulo_sanitario", None)
         st.session_state.pop(chiave_mod, None)
         st.rerun()
@@ -3097,7 +3128,7 @@ def _fa_modulo_sanitario(pid):
                         p["sanitario"] = nuovo
                 f.setdefault("allergie", {})[pid] = lista_all
             try:
-                _fa_salva(_scrivi, "Farmacia: scheda sanitaria")
+                _fa_salva(_scrivi, "Salute: scheda sanitaria")
             except Exception as ex:
                 st.error(f"Non sono riuscito a salvare: {ex}")
                 return
@@ -3173,7 +3204,7 @@ def _fa_fasce_dottore(d):
 CATALOGO_DOCUMENTI = {
     "🪪 Identità": ["Carta d'identità", "Passaporto", "Patente di guida", "Codice fiscale", "Permesso di soggiorno",
                     "Certificato di nascita", "Stato di famiglia", "Certificato di residenza", "Tessera elettorale"],
-    "🏥 Salute": ["Tessera sanitaria", "Esenzione ticket", "Certificato medico sportivo", "Certificato di invalidità",
+    "🩺 Salute": ["Tessera sanitaria", "Esenzione ticket", "Certificato medico sportivo", "Certificato di invalidità",
                   "Piano terapeutico", "Polizza sanitaria"],
     "🚗 Veicoli": ["Libretto / carta di circolazione", "Assicurazione auto (RCA)", "Bollo auto", "Revisione del veicolo",
                    "Assicurazione moto", "Patente nautica", "Contrassegno invalidi", "Telepass / abbonamento"],
@@ -3260,7 +3291,7 @@ def _css_icona(chiave, uri, aspetto, animazione, durata, larghezza=100):
 
 
 def icona_farmacia():
-    """Le due icone della Home, una accanto all'altra: Farmacia e I miei documenti. Pulsano piano per far capire che si toccano."""
+    """Le due icone della Home, una accanto all'altra: Salute e I miei documenti. Pulsano piano per far capire che si toccano."""
     uri = _fa_icona_uri()
     uri_d = _fa_file_uri("documenti.webp")
     urg, avv = _doc_conteggi_home()
@@ -3292,7 +3323,7 @@ def icona_farmacia():
             if uri_u:
                 premuto_u = st.button("Utilità", key="ut_icona", help="Apri le Utilità")
         with c1:
-            premuto = st.button("Farmacia" if uri else "🏥 Farmacia", key="fa_icona", help="Apri la Farmacia")
+            premuto = st.button("Salute" if uri else "🩺 Salute", key="fa_icona", help="Apri Salute")
         with c2:
             premuto_d = st.button("I miei documenti" if uri_d else "📁 I miei documenti", key="doc_icona",
                                   help="Apri i miei documenti")
@@ -3505,11 +3536,7 @@ def schermata_documenti():
 [class*="st-key-doc_apri_"] button{opacity:0;cursor:pointer}
 .doc-apri{margin-top:8px;font-size:.8rem;font-weight:700;opacity:.65;text-align:center}
 </style>""", unsafe_allow_html=True)
-    if st.button("← Torna alla dispensa", key="doc_indietro"):
-        st.session_state.pop("sezione_home", None)
-        st.session_state.pop("doc_modulo", None)
-        st.session_state["farmacia_aperta"] = False
-        st.rerun()
+    nav_barra("documenti")                               # ← Salute · Utilità →
     st.markdown("<div class='doc-hero'><h1>📁 I miei documenti</h1><p>Scadenze sempre sotto controllo: ti avviso 6 e 3 mesi prima</p></div>",
                 unsafe_allow_html=True)
     if st.session_state.get("fa_msg"):
@@ -3972,7 +3999,7 @@ def _fa_salva_link(pid, chiave, url):
                 else:
                     link.pop(chiave, None)
                 p["link_sanitari"] = link
-    _fa_salva(_m, "Farmacia: collegamenti sanitari")
+    _fa_salva(_m, "Salute: collegamenti sanitari")
 
 
 @st.dialog("🪪 La mia tessera sanitaria", width="large")
@@ -4010,7 +4037,7 @@ def _fa_modulo_tessera(pid):
     profilo = next((p for p in profili if p["id"] == pid), profili[0])
     link = profilo.get("link_sanitari") or {}
 
-    if st.button("← Torna alla Farmacia", key="fa_ts_indietro"):
+    if st.button("← Torna a Salute", key="fa_ts_indietro"):
         st.session_state.pop("fa_modulo_tessera", None)
         st.rerun()
     st.subheader(f"🪪 Tessera sanitaria e fascicolo · {profilo.get('nome', '')}")

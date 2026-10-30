@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""INVIO E ESPORTAZIONE di tutto quello che c'è nell'app: Farmacia (medicinali, terapie, prescrizioni, visite, vaccini, documenti,
+"""INVIO E ESPORTAZIONE di tutto quello che c'è nell'app: Salute (medicinali, terapie, prescrizioni, visite, vaccini, documenti,
 scheda sanitaria), dispensa e lista della spesa. Si prepara un PDF (anche Excel e file da stampare) e si invia con:
   📤 Telefono: la finestra «Condividi» di Android/iPhone (WhatsApp, Gmail, Telegram, Drive, Signal, Messenger… con il file allegato)
   ✉️ Email: direttamente dall'app, con gli allegati (servono EMAIL_USER ed EMAIL_PASSWORD nei Secrets di Streamlit)
@@ -358,7 +358,7 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
             st.info("Per mandare i file nella tua chat Telegram servono TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): "
                     "la guida «Invio» spiega come. Intanto usa la scheda «Telefono» e scegli Telegram.")
         elif not chat:
-            st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» nella Farmacia, poi torna qui.")
+            st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» in Salute, poi torna qui.")
         else:
             st.caption("Riepilogo e file arrivano nella tua chat con **@dispensa_leo_bot**, da lì li inoltri a chi vuoi.")
             if st.button("✈️ Mandami tutto su Telegram", type="primary", key=f"inv_tg_{chiave}", width="stretch"):
@@ -387,7 +387,7 @@ def inv_voce(chiave, etichetta, titolo, testo, carica_allegati):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# «Esporta e invia» di tutto: dalla Farmacia, dai Documenti e dal Controllo famiglia
+# «Esporta e invia» di tutto: da Salute, dai Documenti e dal Controllo famiglia
 # ---------------------------------------------------------------------------------------------------------------------
 INV_EXTRA = ["Dispensa (prodotti)", "Lista della spesa"]
 
@@ -489,7 +489,7 @@ def inv_hub_miei(chiave="miei", preselezione=None, aperto=False):
                               on_change=_inv_apri, args=(chiave_exp,))
         sel = profili if scelta == "Tutti i profili" else [p for p in profili if p["id"] == scelta]
         persone = [{"chiave": "io:" + p["id"], "nome": p["nome"], "origine": "", "d": d, "f": f, "pid": p["id"], "p": p} for p in sel]
-        inv_hub(f"{chiave}_{scelta}", persone, d, "Farmacia " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
+        inv_hub(f"{chiave}_{scelta}", persone, d, "Salute " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
                 chiave_exp=chiave_exp)
 
 
@@ -498,5 +498,5 @@ def inv_hub_famiglia(persone, scelta_nome, chiave="fam"):
     d_capo = _inv_dati_conto()
     chiave_exp = f"inv_exp_{chiave}"
     with st.expander("📤 Invia tutto: PDF, email, WhatsApp, Telegram…", expanded=bool(st.session_state.get(chiave_exp))):
-        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Farmacia famiglia" if len(persone) > 1 else "Farmacia " + persone[0]["nome"],
+        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Salute famiglia" if len(persone) > 1 else "Salute " + persone[0]["nome"],
                 chiave_exp=chiave_exp)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """CODICE A BARRE DEI MEDICINALI.
-Dalla Farmacia, in «Aggiungi medicinale», si inquadra la scatola e l'app legge:
+Da Salute, in «Aggiungi medicinale», si inquadra la scatola e l'app legge:
   • il DataMatrix GS1 (il quadratino che dal 2025 c'è su tutte le scatole dei farmaci con ricetta): scadenza, lotto e codice prodotto
   • il bollino (Code 39 / Code 32 «Farmadati») o le barre EAN: il codice AIC o EAN
 poi riconosce il medicinale:

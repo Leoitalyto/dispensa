@@ -24,9 +24,9 @@ _TOUR = [
                     "scadenza. I colori ti dicono quando agire: verde tranquillo, arancione entro due mesi, rosso entro un mese."),
     ("Allergeni e ingredienti", "Se scegli le tue allergie nel menu a sinistra, i prodotti pericolosi per te si riconoscono subito e "
                                 "compare una sirena. Su ogni scheda il pulsante Ingredienti mostra la composizione."),
-    ("La Farmacia", "Con la prima icona entri nella Farmacia: medicinali con scadenza, terapie con promemoria su Telegram o email, "
+    ("Salute", "Con la prima icona entri in Salute: medicinali con scadenza, terapie con promemoria su Telegram o email, "
                     "visite, vaccini e un profilo per ogni persona della famiglia."),
-    ("Tessera sanitaria", "Nella Farmacia, accanto alla dottoressa, c'è il badge azzurro della tessera sanitaria: mostra fronte e "
+    ("Tessera sanitaria", "In Salute, accanto alla dottoressa, c'è il badge azzurro della tessera sanitaria: mostra fronte e "
                           "retro e ti fa salvare i collegamenti al fascicolo sanitario, alle vaccinazioni e alle spese detraibili."),
     ("I miei documenti", "Con la seconda icona entri in I miei documenti. Fai la foto del documento: l'app toglie lo sfondo, lo "
                          "raddrizza e prova a leggere tipo, numero e scadenza. Puoi sempre correggere i campi. "
@@ -46,7 +46,7 @@ _CTX_GUIDA = {
     "farmacia:vaccini": "f_vaccini", "farmacia:sanitaria": "f_scheda", "farmacia:dottore": "f_scheda", "farmacia:tessera": "f_tessera",
     "farmacia:medicinale": "f_medicinale", "documenti": "x_cosa", "documenti:nuovo": "x_aggiungere", "utilita": "u_cosa",
 }
-# L'ordine delle schede in basso (per sapere quale è aperta): Dispensa (con «Utenti» solo per l'amministratore) e Farmacia
+# L'ordine delle schede in basso (per sapere quale è aperta): Dispensa (con «Utenti» solo per l'amministratore) e Salute
 _TAB_CTX = {"dispensa": ["dispensa", "aggiungi", "gestisci", "utenti", "spesa", "messaggi", "info"],
             "farmacia": ["farmacia", "terapie", "visite", "vaccini"]}
 
@@ -223,25 +223,55 @@ _JS_ASSISTENTE = r"""
   function combacia(q, ins) { for (var i = 0; i < ins.length; i++) { var x = ins[i]; if (x.indexOf(q) === 0 || (x.length >= 4 && q.indexOf(x) === 0)) return true; } return false; }
   var indice = null;
   function costruisci() { indice = D.guida.map(function (g) { return {g: g, t: parole(g.t), k: parole(g.k), b: parole(g.b)}; }); }
-  function cerca(domanda) {
+  /* ---------- capire COSA si vuole fare (azione) e SU COSA (oggetto), e ricordare l'argomento della conversazione ---------- */
+  var memoria = {az: null, og: null};
+  function rileva(testo) {
+    var n = ' ' + norm(testo).trim() + ' ', I = D.intenti || {az: {}, og: {}}, r = {az: null, og: null};
+    ['az', 'og'].forEach(function (tipo) {
+      var best = 1e9;
+      Object.keys(I[tipo] || {}).forEach(function (k) {
+        I[tipo][k].forEach(function (p) {
+          var esatta = p.charAt(0) === '=', q = norm(esatta ? p.slice(1) : p).trim(), pos = q ? n.indexOf(' ' + q + (esatta ? ' ' : '')) : -1;   /* «=parola»: parola intera */
+          if (pos >= 0 && pos < best) { best = pos; r[tipo] = k; }
+        });
+      });
+    });
+    var rec = (I.az && I.az.recupera) || [];                          /* «per sbaglio», «recuperare»…: vince su tutto (non vuole eliminare, vuole riavere) */
+    if (rec.some(function (p) { var esatta = p.charAt(0) === '=', q = norm(esatta ? p.slice(1) : p).trim(); return q && n.indexOf(' ' + q + (esatta ? ' ' : '')) >= 0; })) r.az = 'recupera';
+    return r;
+  }
+  function cerca(domanda, intento) {
     if (!indice) costruisci();
     var q = parole(domanda); if (!q.length) return [];
-    var ris = [];
+    var az = intento && intento.az, og = intento && intento.og, ris = [], esatte = 0;
     indice.forEach(function (e) {
-      var pt = 0, tr = 0;
+      var pt = 0, tr = 0, bonus = 0, ex = false;
       q.forEach(function (x) {
         if (combacia(x, e.t)) { pt += 3; tr++; } else if (combacia(x, e.k)) { pt += 2; tr++; } else if (combacia(x, e.b)) { pt += 1; tr++; }
       });
-      if (pt) ris.push({p: pt + tr + (e.g.s === D.sezione ? 1 : 0), g: e.g});
+      var a = e.g.a, o = e.g.o;
+      if (az && a) bonus += (a === az) ? 6 : -8;                    /* l'azione giusta (es. eliminare) conta più delle parole */
+      if (og && o) bonus += (o === og) ? 6 : -4;
+      if (az && og && a === az && o === og) { bonus += 12; ex = true; }
+      if (ex) esatte++;
+      if (pt + bonus > 0) ris.push({p: pt + tr + bonus + (e.g.s === D.sezione ? 1 : 0), g: e.g, ex: ex});
     });
     ris.sort(function (a, b) { return b.p - a.p; });
     if (!ris.length) return [];
+    if (esatte) return [ris[0].g];                                  /* azione e oggetto coincidono: una risposta sola, quella giusta */
     var top = ris[0].p; return ris.filter(function (r) { return r.p * 2 >= top; }).slice(0, 4).map(function (r) { return r.g; });
   }
-  function argomento(g, parlare) {
+  function argomento(g, parlare, prefisso) {
     elTour.style.display = 'none'; tourIdx = -1;
-    var corto = perVoce(g.b); if (corto.length > 900) corto = corto.slice(0, 900).replace(/[^.!?؟]*$/, '') || corto.slice(0, 900);
-    mostra(g.t, g.b, corto, parlare);
+    var testo = (prefisso || '') + g.b;
+    var corto = perVoce(testo); if (corto.length > 900) corto = corto.slice(0, 900).replace(/[^.!?؟]*$/, '') || corto.slice(0, 900);
+    mostra(g.t, testo, corto, parlare);
+  }
+  function chipsTesto(lista) {                                       /* pulsanti con una frase già pronta da inviare come domanda */
+    elSugg.innerHTML = '';
+    lista.forEach(function (x) {
+      var b = doc.createElement('button'); b.textContent = x[0]; b.addEventListener('click', function () { elInput.value = x[1]; chiedi(x[1]); }); elSugg.appendChild(b);
+    });
   }
   function chips(lista) {
     elSugg.innerHTML = '';
@@ -320,9 +350,28 @@ _JS_ASSISTENTE = r"""
     if (haParola(n, T('i_novita'))) { novita(); return; }
     if (haParola(n, T('i_giro'))) { tourVai(0); return; }
     if (n.trim().split(' ').length <= 3 && haParola(n, T('i_saluto'))) { paginaCorrente(true); return; }
-    var ris = cerca(testo);
+    var it = rileva(testo), italiano = /^it/i.test(D.lang || 'it');
+    var og = it.og || ((it.az && memoria.og) ? memoria.og : null), az = it.az;     /* «e come lo modifico?»: l'argomento è quello di prima */
+    var verbi = {elimina: 'eliminare', aggiungi: 'aggiungere', modifica: 'modificare', vedi: 'vedere', condividi: 'inviare', esporta: 'esportare', recupera: 'recuperare'};
+    var nomi = {medicinale: 'un medicinale', terapia: 'una terapia', prescrizione: 'una prescrizione', visita: 'una visita o un esame',
+                vaccino: 'una vaccinazione', documento: 'un documento', profilo: 'una persona', foto: 'una foto', bugiardino: 'il bugiardino'};
+    if (italiano && az && !og && !/(foglio|sbaglio|whatsapp|email|mail|telegram|sms|pdf|excel)/.test(n)) {          /* so cosa vuole fare, non su cosa: chiedo */
+      mostra('Su cosa?', 'Certo, ti aiuto a ' + (verbi[az] || 'farlo') + '. Dimmi **su cosa**: scegli qui sotto.');
+      chipsTesto(['medicinale', 'terapia', 'prescrizione', 'visita', 'vaccino', 'documento'].map(function (o) { return [nomi[o].replace(/^(un|una|il) /, ''), (verbi[az] || '') + ' ' + o]; }));
+      memoria.az = az; return;
+    }
+    if (italiano && og && !az && n.trim().split(' ').length <= 3 && nomi[og]) {                                      /* so l'argomento, non l'azione: chiedo */
+      mostra('Cosa vuoi fare?', 'Vuoi **aggiungere**, **modificare**, **eliminare** o **inviare** ' + nomi[og] + '? Scegli qui sotto, oppure scrivimelo.');
+      chipsTesto([['Aggiungere', 'aggiungere ' + og], ['Modificare', 'modificare ' + og], ['Eliminare', 'eliminare ' + og], ['Inviare', 'inviare ' + og]]);
+      memoria.og = og; return;
+    }
+    var ris = cerca(testo, italiano ? {az: az, og: og} : null);
     if (!ris.length) { mostra(T('a_trov_t'), T('a_trov_x')); chips(argomentiSezione()); return; }
-    argomento(ris[0]); chips(ris.slice(1));
+    var guaio = italiano && /(non riesco|non funziona|errore|problema|aiuto|non trovo|non capisco|sbagli)/.test(n);
+    var prefisso = guaio ? 'Mi dispiace per il disagio, vediamo subito insieme.\n\n' : '';
+    if (az) memoria.az = az;
+    if (og) memoria.og = og;
+    argomento(ris[0], undefined, prefisso); chips(ris.slice(1));
   }
   function apri() {
     if (!attivo) return; aperto = true; pan.style.display = 'block'; btn.style.display = 'none';
@@ -433,7 +482,9 @@ def _config_assistente(contesto, completo, cmd):
         cfg["rtl"] = lg == "ar" or ("LINGUE_DA_DESTRA" in globals() and lg in LINGUE_DA_DESTRA)
         cfg["stop"] = list(_STOP_LANG.get(lg, _STOP_LANG["it"]))
         cfg["ui"] = {k: _u(k) for k in UI_IT if k.startswith(("a_", "i_"))}
-        cfg["guida"] = [{"id": v["id"], "s": v["sez"], "t": v["titolo"], "b": v["corpo"], "k": v["chiavi"]} for v in tutte_voci()]
+        cfg["guida"] = [{"id": v["id"], "s": v["sez"], "t": v["titolo"], "b": v["corpo"], "k": v["chiavi"],
+                         "a": (_META_GUIDA.get(v["id"]) or (None, None))[0], "o": (_META_GUIDA.get(v["id"]) or (None, None))[1]} for v in tutte_voci()]
+        cfg["intenti"] = _INTENTI
         cfg["ctxmap"] = dict(_CTX_GUIDA)
         cfg["tabs"] = {k: list(v) for k, v in _TAB_CTX.items()}
         tour = []
@@ -448,6 +499,8 @@ def _config_assistente(contesto, completo, cmd):
 def assistente(contesto):
     """Mostra (o aggiorna) il robottino assistente e gli dice in quale pagina ci si trova (es. «farmacia», «farmacia:tessera»).
     Lo script completo parte la prima volta (e quando cambia la lingua); poi si manda solo la pagina e gli eventuali comandi."""
+    if "nav_pulisci_interfaccia" in globals():
+        nav_pulisci_interfaccia()                          # nasconde la linguetta «Manage app» che copre i pulsanti in basso
     cmd = st.session_state.pop("_asst_cmd", None)
     lg = _lingua_guida()
     completo = (not st.session_state.get("_asst_inviato")) or st.session_state.get("_asst_lang") != lg

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Pulsante «Informazioni» (immagine info.webp) per Dispensa, Farmacia e Documenti.
+"""Pulsante «Informazioni» (immagine info.webp) per Dispensa, Salute e Documenti.
 Toccandolo si apre una guida con caselle a discesa (una per argomento) e un campo di ricerca:
 si scrive una domanda e l'app mostra le spiegazioni più adatte.
 Caricato da app_dispensa.py insieme a farmacia.py. Se manca info.webp il pulsante resta, ma senza immagine."""
@@ -11,7 +11,7 @@ import unicodedata
 
 import streamlit as st
 
-_NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🏥 Farmacia", "documenti": "📁 I miei documenti",
+_NOMI_SEZIONI = {"dispensa": "🏠 Dispensa", "farmacia": "🩺 Salute", "documenti": "📁 I miei documenti",
                   "utilita": "🧰 Utilità"}
 
 # ---------------------------------------------------------------------
@@ -120,9 +120,9 @@ Se hai attivato **Telegram** o l'**email**, l'avviso arriva anche lì.""",
 
 In **Tabella** si spunta la casella 🗑️ della riga e poi si tocca **Elimina le righe spuntate** oppure **Modifica la riga spuntata** (per modificare spunta una riga sola).""",
          "elimina cancellare cestino modifica modificare cambiare correggere info tabella schede vista"),
-        ("🧭 Le icone Farmacia, I miei documenti e Utilità",
+        ("🧭 Le icone Salute, I miei documenti e Utilità",
          """Nella Home, accanto ai comandi di ricerca, trovi **tre icone che pulsano**:
-- **🏥 Farmacia**: medicinali, terapie, visite, tessera sanitaria.
+- **🩺 Salute**: medicinali, terapie, visite, tessera sanitaria.
 - **📁 I miei documenti**: carta d'identità, patente, tessera sanitaria con le scadenze.
 - **🧰 Utilità**: app e siti utili, come Velocity Music.
 
@@ -156,7 +156,7 @@ Toccane una per aprirla; per tornare tocca **← Torna alla dispensa**. In ogni 
     ],
 
     "farmacia": [
-        ("🚀 A cosa serve la Farmacia",
+        ("🚀 A cosa serve Salute",
          """Qui tieni in ordine i **medicinali di casa** e le **scadenze**, le **terapie**, le **visite**, i **vaccini**, il tuo **dottore** e la tua **scheda sanitaria**.
 
 L'app ti **ricorda** e organizza quello che inserisci tu. **Non dà consigli medici** e non cambia le terapie: per dosi e cure segui sempre il medico o il farmacista.""",
@@ -255,7 +255,7 @@ Il capo famiglia, nello stesso modulo, può attivare anche il riepilogo della fa
 Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
          "report completo stampare esportare scaricare dati personali copia pdf json"),
         ("📤 Esportare e inviare (PDF, email, WhatsApp…)",
-         """1. In alto nella Farmacia apri **📤 Esporta e invia**. Scegli **di chi** e **cosa** (medicinali, terapie, prescrizioni, visite, vaccini, documenti, scheda sanitaria, dispensa, lista della spesa).
+         """1. In alto in Salute apri **📤 Esporta e invia**. Scegli **di chi** e **cosa** (medicinali, terapie, prescrizioni, visite, vaccini, documenti, scheda sanitaria, dispensa, lista della spesa).
 2. Scegli il **formato** (PDF, Excel o file da stampare) e tocca **📦 Prepara i file**.
 3. Poi scegli come inviarli: **📤 Telefono** (si apre Condividi: WhatsApp, Gmail, Telegram, Drive…), **✉️ Email** (direttamente dall'app), **💬 WhatsApp** (riepilogo scritto), **✈️ Telegram** (nella tua chat con il bot), **📱 SMS** o **📋 Copia**.
 4. Ogni documento, medicinale, prescrizione e visita ha anche il suo tasto **📤 Invia**, con le sue foto.
@@ -263,6 +263,66 @@ Contiene dati sanitari: non condividerlo con chi non deve vederlo.""",
 
 Solo per chi gestisce l'app: per mandare email e Telegram direttamente dall'app, in Streamlit apri Manage app, poi Settings, poi Secrets, e aggiungi EMAIL_USER, EMAIL_PASSWORD e TELEGRAM_TOKEN (gli stessi valori degli avvisi). Contiene dati sanitari: controlla bene a chi invii.""",
          "invio inviare mandare condividere whatsapp email posta telegram sms pdf excel stampare esportare condividi allegato file"),
+        ("🗑️ Eliminare un medicinale",
+         """Certamente. Ecco come fare, un passo alla volta:
+1. Apri **Salute** e resta nella scheda **💊 Medicinali** (in basso).
+2. Trova il medicinale che vuoi togliere e **toccane la scheda**: si apre il dettaglio.
+3. In fondo al dettaglio tocca **🗑️ Elimina**.
+4. Se il medicinale è usato in qualche terapia, l'app te lo dice: puoi scegliere se eliminare **anche quelle terapie** (consigliato) oppure tenerle.
+5. Tocca **Sì, elimina** per confermare, oppure **Annulla** se ci hai ripensato.
+
+Se non trovi il medicinale, scrivi il suo nome nella casella di ricerca in alto nell'elenco.""",
+         "togliere eliminare cancellare rimuovere medicinale medicina farmaco integratore elimina"),
+        ("✏️ Modificare un medicinale",
+         """Per correggere un medicinale (nome, scadenza, quantità, categoria…):
+1. Apri **Salute** → **💊 Medicinali** e **tocca la scheda** del medicinale.
+2. In fondo al dettaglio tocca **✏️ Modifica**.
+3. Cambia quello che serve e tocca **Salva**.
+
+Per cambiare solo il **foglio illustrativo** tocca invece **✏️ Cambia il foglio illustrativo** nel dettaglio.""",
+         "modificare cambiare correggere aggiornare medicinale scadenza quantità sbagliato"),
+        ("🗑️ Eliminare o correggere una terapia",
+         """1. Apri **Salute** e vai nella scheda **📅 Terapie**.
+2. Sulla **scheda della terapia** trovi due pulsanti: **Elimina** e **Modifica**.
+3. Con **Elimina** la terapia sparisce con i suoi promemoria (ti chiedo di confermare); con **Modifica** cambi giorni, orari o note.
+
+Se vuoi solo fermare i promemoria per un po', apri **Modifica** e cambia lo **stato** in «sospesa».""",
+         "terapia eliminare togliere cancellare modificare sospendere promemoria assunzioni"),
+        ("🗑️ Eliminare una prescrizione",
+         """1. Apri **Salute** → scheda **📝 Prescrizioni**.
+2. **Tocca la prescrizione**: si apre il dettaglio.
+3. In fondo tocca **🗑️ Elimina** e conferma con **Sì, elimina**.
+
+Per togliere **solo la foto o il PDF** della ricetta, nel dettaglio tocca **👁️ Mostra la ricetta** e poi **🗑️ Togli questo file**.""",
+         "prescrizione ricetta eliminare togliere cancellare rimuovere file foto pdf"),
+        ("🗑️ Eliminare una visita o un esame",
+         """1. Apri **Salute** → scheda **🩺 Visite**.
+2. Sulla **scheda della visita** tocca **Elimina** e conferma. Con **Modifica** invece correggi i dati o aggiungi i referti.""",
+         "visita esame referto eliminare togliere cancellare modificare"),
+        ("🗑️ Eliminare o correggere una vaccinazione",
+         """1. Apri **Salute** → scheda **💉 Vaccini**.
+2. Sulla **scheda della vaccinazione** tocca **Elimina** (con conferma) oppure **Modifica** per cambiare data o richiamo.""",
+         "vaccino vaccinazione eliminare togliere cancellare modificare richiamo"),
+        ("🗑️ Togliere una persona (profilo)",
+         """1. Apri **Salute** e scegli la persona nel menu **👤 Profilo**.
+2. Apri **👥 Gestisci profili** e scorri in fondo.
+3. Spunta **Elimina il profilo…** (vedi quanti medicinali, terapie, visite e documenti ha) e tocca **Elimina profilo**.
+
+Attenzione: si eliminano anche tutti i dati di quella persona. Per cambiare solo il nome o il gruppo sanguigno usa **Salva nome e gruppo**.""",
+         "profilo persona eliminare togliere cancellare rimuovere nome gruppo sanguigno"),
+        ("📤 Inviare o condividere un documento, una ricetta, un medicinale…",
+         """Ogni scheda ha il suo tasto **📤 Invia** (o **Invia**), dentro il dettaglio:
+1. **Tocca la scheda** del documento, medicinale, prescrizione o visita.
+2. Tocca **📤 Invia questo… (email, WhatsApp…)**.
+3. Scegli **📤 Telefono** per aprire il menu «Condividi» del telefono (WhatsApp, Gmail, Telegram…), **✉️ Email** per mandarla dall'app, o **💬 WhatsApp**, **✈️ Telegram**, **📱 SMS**, **📋 Copia**.
+
+Per mandare **tutto insieme** (PDF o Excel) usa **📤 Esporta e invia** in alto in Salute.""",
+         "inviare condividere mandare spedire whatsapp email telegram sms documento ricetta medicinale visita"),
+        ("↩️ Ho eliminato qualcosa per sbaglio",
+         """Mi dispiace. Nell'app non c'è un cestino: l'eliminazione è definitiva.
+Però i dati sono salvati con la **cronologia** su GitHub, quindi molto spesso si possono **ritrovare**: chiedilo a chi gestisce l'app (l'amministratore) dicendo cosa hai tolto e più o meno quando.
+La prossima volta, prima di eliminare, **leggi con calma la conferma**: «Annulla» lascia tutto com'è.""",
+         "recuperare ripristinare ritrovare eliminato per sbaglio cestino perso cancellato"),
     ],
 
     "utilita": [
@@ -274,7 +334,7 @@ Sotto il pulsante c'è il **nome** dell'app: toccandolo si apre il **bugiardino*
 Per ora ci sono **Velocity Music** (il play azzurro) e **Wimbi** (il papero con le cuffie); altre utilità si aggiungeranno qui.""",
          "utilità utilita pagina app pulsanti avviare raccolta siti cos'è a cosa serve"),
         ("▶️ Come avviare un'app",
-         """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Farmacia e I miei documenti).
+         """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Salute e I miei documenti).
 2. Tocca il **grande pulsante** con il simbolo ▶️: l'app si apre in una nuova scheda del browser.
 3. Per tornare qui, chiudi quella scheda o torna indietro.""",
          "avviare aprire avvio play pulsante app link velocity music musica"),
@@ -329,7 +389,7 @@ Per un **PDF** o altre pagine usa il campo **«Altri file»** sotto il modulo.""
 - 🔴 **Rosso, secondo avviso**: scade entro 3 mesi. Compare un riquadro d'allarme.
 - ⚫ **Scaduto**: da rinnovare subito.
 
-In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nella Farmacia, in **Scegli come ricevere gli avvisi**), gli avvisi arrivano anche lì.""",
+In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in Salute, in **Scegli come ricevere gli avvisi**), gli avvisi arrivano anche lì.""",
          "colori scadenza avvisi arancione rosso scaduto sei mesi tre mesi rinnovare allarme telegram email"),
         ("🔎 Cercare e filtrare i documenti",
          """Sopra l'elenco c'è il campo **Cerca**: scrivi il tipo, il numero, l'ente o una nota. Accanto scegli una **categoria** per vedere solo quelli.""",
@@ -354,7 +414,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa nell
 # aggiunge qui il suo codice (e la traduzione nei file guida_xx.py; se manca, in quella lingua si vede l'italiano).
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_account d_aiuto".split(),
-    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio".split(),
+    "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_sbaglio".split(),
     "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }
@@ -375,7 +435,7 @@ UI_IT = {
     "dlg_asst": "**🤖 Assistente digitale** (il robottino che parla e ti aiuta)",
     "dlg_on": "✅ Attiva", "dlg_off": "⛔ Disattiva",
     "info_help": "Tocca per leggere come si usa questa sezione", "info_fallback": "ℹ️ Informazioni e guida",
-    "sez_dispensa": "🏠 Dispensa", "sez_farmacia": "🏥 Farmacia", "sez_documenti": "📁 I miei documenti", "sez_utilita": "🧰 Utilità",
+    "sez_dispensa": "🏠 Dispensa", "sez_farmacia": "🩺 Salute", "sez_documenti": "📁 I miei documenti", "sez_utilita": "🧰 Utilità",
     # --- assistente digitale
     "a_aria": "Assistente digitale", "a_rileggi": "📖 Spiegami questa pagina", "a_giro": "🧭 Giro guidato dell'app",
     "a_novita": "🆕 Cosa c'è di nuovo", "a_mic": "🎤 Fai una domanda", "a_indietro": "◀ Indietro", "a_avanti": "Avanti ▶", "a_fine": "Fine",
@@ -614,9 +674,9 @@ div.hero::after{width:180px !important;height:158px !important;top:-10px !import
 _NOVITA = [
     ("2026-10-28", "🤖", "Assistente digitale", "Il robottino rotondo in basso a destra: toccalo e ti spiega l'app a voce, anche con il microfono"),
     ("2026-10-27", "🦆", "Nuova utilità: Wimbi", "Home → Utilità → il papero con le cuffie; tocca la scritta verde per il bugiardino"),
-    ("2026-10-27", "🧰", "Nuova pagina «Utilità»", "Home → terza icona azzurra «Utilità», accanto a Farmacia e I miei documenti"),
+    ("2026-10-27", "🧰", "Nuova pagina «Utilità»", "Home → terza icona azzurra «Utilità», accanto a Salute e I miei documenti"),
     ("2026-10-27", "ℹ️", "Guida in ogni pagina", "Pulsante rosso «Clicca per informazioni» in alto, con spiegazioni e ricerca"),
-    ("2026-10-27", "🪪", "Tessera sanitaria e fascicolo", "Farmacia → badge azzurro accanto alla dottoressa"),
+    ("2026-10-27", "🪪", "Tessera sanitaria e fascicolo", "Salute → badge azzurro accanto alla dottoressa"),
     ("2026-10-27", "📷", "Documenti: foto e lettura automatica", "I miei documenti → «Aggiungi un documento»"),
 ]
 
@@ -648,3 +708,39 @@ def pulsante_info(sezione):
                             help=_u("info_help"), width="stretch")
     if premuto:
         _dialogo_info(sezione)
+
+
+# ---- L'azione (cosa si vuole fare) e l'oggetto (su cosa) di ogni voce: servono all'assistente per capire le domande.
+_META_GUIDA = {
+    "f_el_med": ("elimina", "medicinale"), "f_mod_med": ("modifica", "medicinale"), "f_el_ter": ("elimina", "terapia"),
+    "f_el_pre": ("elimina", "prescrizione"), "f_el_vis": ("elimina", "visita"), "f_el_vac": ("elimina", "vaccino"),
+    "f_el_prof": ("elimina", "profilo"), "f_condividi": ("condividi", None), "f_sbaglio": ("recupera", None),
+    "f_medicinale": ("aggiungi", "medicinale"), "f_terapie": ("aggiungi", "terapia"), "f_prescrizioni": ("aggiungi", "prescrizione"),
+    "f_visite": ("aggiungi", "visita"), "f_vaccini": ("aggiungi", "vaccino"), "f_invio": ("condividi", None),
+    "x_modificare": ("modifica", "documento"), "f_report": ("esporta", None),
+}
+# ---- Le parole (inizi di parola) con cui si riconoscono azioni e oggetti nelle domande.
+_INTENTI = {
+    "az": {
+        "elimina": ["elimin", "togli", "tolg", "rimuov", "cancell", "butt", "non voglio piu", "levar"],
+        "aggiungi": ["aggiung", "inserisc", "inserir", "mett", "nuov", "registr", "carico", "caricar", "salvar"],
+        "modifica": ["modific", "cambi", "corregg", "sistem", "aggiorn", "sbagliat"],
+        "vedi": ["vedere", "vedo", "mostr", "dove", "trov", "apri", "apro", "legg", "consult", "guard", "visualizz"],
+        "condividi": ["condivid", "invia", "inviar", "invio", "mand", "spedi", "whatsapp", "mail", "telegram", "sms"],
+        "esporta": ["esport", "scaric", "stamp", "pdf", "excel"],
+        "recupera": ["recuper", "ripristin", "ritrov", "per sbaglio", "cestino", "=persa", "=perso", "=persi", "=perse"],
+    },
+    "og": {
+        "medicinale": ["medicin", "farmac", "pillol", "compress", "pastigli", "integrator"],
+        "terapia": ["terapi", "assunzion", "dose", "dosi"],
+        "prescrizione": ["prescrizion", "ricett", "impegnativ"],
+        "visita": ["visit", "esam", "refert"],
+        "vaccino": ["vaccin", "richiam"],
+        "documento": ["document", "patent", "tesser", "passaport", "identit"],
+        "foto": ["foto", "fotograf", "immagin"],
+        "bugiardino": ["bugiardin", "foglietto", "foglio illustr"],
+        "profilo": ["profil", "persona", "familiar"],
+        "avviso": ["avvis", "notific", "promemori"],
+        "prodotto": ["prodott", "dispens", "scort"],
+    },
+}
