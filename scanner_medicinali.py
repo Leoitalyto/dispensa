@@ -129,7 +129,7 @@ def sm_interpreta(codici):
     r = {"aic": "", "gtin": "", "ean": "", "scadenza": "", "lotto": "", "seriale": "", "letti": []}
     for formato, testo in codici or []:
         r["letti"].append(f"{formato}: {testo[:60]}")
-        f = formato.lower().replace(" ", "")
+        f = formato.lower().replace(" ", "").replace("_", "").replace("-", "")
         if "datamatrix" in f or "gs1" in f or testo.startswith("(01)") or re.match(r"^01\d{14}", testo):
             campi = sm_gs1(testo)
             if campi.get("01"):
@@ -157,6 +157,95 @@ def sm_interpreta(codici):
             if re.fullmatch(r"\d{8,13}", testo.strip()) and not r["ean"]:
                 r["ean"] = testo.strip()
     return r
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Il testo stampato sulla scatola: «SCAD. 03/2028», «LOT AB1234» (per le scatole senza DataMatrix)
+# ---------------------------------------------------------------------------------------------------------------------
+_RE_PAROLA_SCAD = r"(?:SCAD(?:ENZA)?\.?|EXP(?:IRY)?\.?(?:\s*DATE)?|USE\s*BY|DA\s*USARE\s*ENTRO|VALIDO\s*FINO\s*AL?|BEST\s*BEFORE)"
+_RE_DATA = r"(?:(\d{1,2})\s*[./\-]\s*)?(\d{1,2})\s*[./\-]\s*(\d{4}|\d{2})\b"
+_RE_DATA_ISO = r"(\d{4})\s*[./\-]\s*(\d{1,2})(?:\s*[./\-]\s*(\d{1,2}))?"
+
+
+def _cifre(t):
+    """Sistema gli errori tipici di lettura nelle cifre (O→0, I/l→1, S→5, B→8) dentro un pezzo di testo di una data."""
+    return (t or "").translate(str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1", "|": "1", "S": "5", "B": "8"}))
+
+
+def _data_da_pezzi(g1, m, a, anno_minimo=2000):
+    """(giorno o None, mese, anno) → data. Senza giorno vale l'ultimo giorno del mese (come sulle scatole)."""
+    try:
+        mese, anno = int(m), int(a)
+        anno = anno + 2000 if anno < 100 else anno
+        if not (1 <= mese <= 12 and anno_minimo <= anno <= 2060):
+            return None
+        giorno = int(g1) if g1 else calendar.monthrange(anno, mese)[1]
+        return date(anno, mese, min(giorno, calendar.monthrange(anno, mese)[1]))
+    except (ValueError, TypeError):
+        return None
+
+
+def sm_analizza_testo(testo, oggi=None):
+    """Dal testo letto dalla scatola: {'scadenza': ISO o '', 'lotto': ''}. Cerca dopo «SCAD./EXP./USE BY…»; senza parola chiave prende
+    la data più lontana tra quelle plausibili (le altre sono di solito la produzione)."""
+    oggi = oggi or date.today()
+    righe = [re.sub(r"[ \t]+", " ", r).strip() for r in (testo or "").replace("\r", "\n").split("\n")]
+    t = "\n".join(righe)
+    scadenza = None
+    for m in re.finditer(_RE_PAROLA_SCAD + r"\s*[:.\-]?\s*([0-9OoIl|SB]{1,2}\s*[./\-]\s*)?([0-9OoIl|SB]{1,2}\s*[./\-]\s*[0-9OoIl|SB]{2,4})", t, re.I):
+        pezzo = _cifre(((m.group(1) or "") + m.group(2)))
+        d = re.search(_RE_DATA, pezzo)
+        if d:
+            cand = _data_da_pezzi(d.group(1), d.group(2), d.group(3), oggi.year - 3)
+            if cand and (scadenza is None or cand > scadenza):
+                scadenza = cand
+    if scadenza is None:
+        m = re.search(_RE_PAROLA_SCAD + r"\s*[:.\-]?\s*" + _RE_DATA_ISO, t, re.I)
+        if m:
+            scadenza = _data_da_pezzi(m.group(3), m.group(2), m.group(1), oggi.year - 3)
+    if scadenza is None:                                      # nessuna parola chiave: la data più lontana ma plausibile
+        candidate = []
+        for d in re.finditer(_RE_DATA, t):
+            if d.group(1) is None and len(d.group(3)) == 4:      # MM/AAAA
+                cand = _data_da_pezzi(None, d.group(2), d.group(3), oggi.year - 1)
+                if cand and cand <= date(oggi.year + 10, 12, 31):
+                    candidate.append(cand)
+        if candidate:
+            scadenza = max(candidate)
+    lotto = ""
+    m = re.search(r"\b(?:LOT(?:TO)?|BATCH|L)\b\.?\s*[:.\-]?\s*([A-Z0-9]{3,14})\b", t, re.I)
+    if m and re.search(r"\d", m.group(1)):
+        lotto = m.group(1).upper()
+    return {"scadenza": scadenza.isoformat() if scadenza else "", "lotto": lotto}
+
+
+def sm_ocr_scatola(dati):
+    """Legge il testo della scatola con Tesseract (se c'è) e ne ricava scadenza e lotto. {} se non si capisce niente o manca Tesseract."""
+    if "_doc_ocr_lingue" not in globals() or not _doc_ocr_lingue():
+        return {}
+    import time
+    import cv2
+    from PIL import Image, ImageOps
+    try:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+    except Exception:
+        return {}
+    img.thumbnail((2200, 2200))
+    grigio = np.array(img.convert("L"))
+    soglia = cv2.adaptiveThreshold(cv2.medianBlur(grigio, 3), 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 12)
+    varianti = [(img, "11"), (Image.fromarray(soglia), "11"), (Image.fromarray(soglia), "6"), (Image.fromarray(grigio), "6")]
+    inizio, testi, migliore = time.time(), [], {}
+    for immagine, psm in varianti:
+        if testi and time.time() - inizio > 40:
+            break
+        try:
+            testi.append(_doc_tesseract(immagine, psm))
+        except Exception:
+            continue
+        migliore = sm_analizza_testo("\n".join(testi))
+        if migliore.get("scadenza") and migliore.get("lotto"):
+            break
+    return {k: v for k, v in migliore.items() if v}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -266,14 +355,173 @@ def sm_data_it(iso):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Scansione in diretta con la fotocamera (BarcodeDetector del browser: Chrome su Android): niente foto da caricare
+# ---------------------------------------------------------------------------------------------------------------------
+_JS_SCAN = r"""
+(function () {
+  var w = window, d = w.document;
+  try {
+    if (w.__scanDirAttivo) return;
+    w.__scanDirAttivo = true;
+    var MSG = __MSG__;
+    function invia(chiave, valore) {
+      var inp = d.querySelector('input[aria-label="scan-diretta-' + chiave + '"]');
+      if (!inp) return;
+      var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+      setter.call(inp, valore);
+      inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+      inp.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+      inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+    }
+    function chiudi(ov) {
+      try { var v = ov.querySelector('video'); if (v && v.srcObject) v.srcObject.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      if (ov.parentNode) ov.parentNode.removeChild(ov);
+    }
+    function avvia(chiave) {
+      var ov = d.createElement('div'); ov.id = 'scan-diretta';
+      ov.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:#000;z-index:100003;display:flex;flex-direction:column';
+      ov.innerHTML = '<video playsinline muted style="flex:1;width:100%;min-height:0;object-fit:cover"></video>' +
+        '<div style="position:absolute;left:12%;right:12%;top:30%;height:34%;border:3px solid #3ddc97;border-radius:18px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)"></div>' +
+        '<div id="scan-stato" style="position:absolute;left:0;right:0;top:14px;text-align:center;color:#fff;font:600 16px/1.3 sans-serif;padding:0 70px;text-shadow:0 1px 4px #000"></div>' +
+        '<button id="scan-chiudi" style="position:absolute;right:12px;top:10px;width:48px;height:48px;border-radius:24px;border:0;background:#fff;font:700 22px sans-serif">✖</button>' +
+        '<div style="position:absolute;left:0;right:0;bottom:22px;text-align:center;color:#fff;font:600 14px sans-serif;text-shadow:0 1px 4px #000;padding:0 20px">' + MSG.consiglio + '</div>';
+      d.body.appendChild(ov);
+      var stato = ov.querySelector('#scan-stato'), video = ov.querySelector('video'), fermo = false;
+      stato.textContent = MSG.cerco;
+      ov.querySelector('#scan-chiudi').onclick = function () { fermo = true; chiudi(ov); };
+      w.navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080}}, audio: false}).then(function (stream) {
+        video.srcObject = stream;
+        try { var tr = stream.getVideoTracks()[0]; tr.applyConstraints({advanced: [{focusMode: 'continuous'}]}).catch(function () {}); } catch (e) {}
+        var pr = video.play(); if (pr && pr.catch) pr.catch(function () {});
+        w.BarcodeDetector.getSupportedFormats().then(function (sup) {
+          var voluti = ['data_matrix', 'code_39', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'qr_code'];
+          var formati = voluti.filter(function (f) { return sup.indexOf(f) >= 0; });
+          var det = new w.BarcodeDetector({formats: formati.length ? formati : undefined});
+          var trovati = {}, primo = 0;
+          (function giro() {
+            if (fermo) return;
+            det.detect(video).then(function (res) {
+              (res || []).forEach(function (r) { if (r.rawValue) { trovati[r.format + '|' + r.rawValue] = [r.format, r.rawValue]; } });
+              var chiavi = Object.keys(trovati);
+              if (chiavi.length && !primo) { primo = Date.now(); stato.textContent = MSG.letto; }
+              var haDM = chiavi.some(function (k) { return k.indexOf('data_matrix') === 0; });
+              var haAltro = chiavi.some(function (k) { return k.indexOf('data_matrix') !== 0; });
+              if (chiavi.length && ((haDM && haAltro) || Date.now() - primo > 2500)) {
+                fermo = true; chiudi(ov);
+                try { if (w.navigator.vibrate) w.navigator.vibrate(90); } catch (e) {}
+                invia(chiave, JSON.stringify(chiavi.map(function (k) { return trovati[k]; })) + '|' + Date.now());
+                return;
+              }
+              w.setTimeout(giro, 160);
+            }).catch(function () { w.setTimeout(giro, 400); });
+          })();
+        });
+      }).catch(function (err) { fermo = true; chiudi(ov); invia(chiave, 'errore|' + ((err && err.name) || 'camera') + '|' + Date.now()); });
+    }
+    d.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('[class*="st-key-scandiretta_"] button') : null;
+      if (!b) return;
+      var c = b.closest('[class*="st-key-scandiretta_"]');
+      var m = (c.className || '').match(/st-key-scandiretta_(\S+)/);
+      if (!m) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if (!w.BarcodeDetector || !w.navigator.mediaDevices || !w.navigator.mediaDevices.getUserMedia) { invia(m[1], 'errore|nonsupp|' + Date.now()); return; }
+      avvia(m[1]);
+    }, true);
+  } catch (err) { /* resta la scelta di scattare una foto */ }
+})();
+"""
+
+_MSG_SCAN = {"cerco": "Inquadra il codice…", "letto": "Letto! Tengo ancora un attimo…",
+             "consiglio": "Avvicinati al quadratino (DataMatrix) o alle barre, con buona luce. Se hai due codici, inquadrali uno dopo l'altro."}
+
+
+def _sm_pagina_js(codice):
+    import json as _json
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\\\"stApp\\\"],.stApp,[data-testid=\\\"stAppViewContainer\\\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
+              "var s=P.document.createElement('script');s.textContent=" + _json.dumps(codice) + ";P.document.head.appendChild(s);})();</script>")
+    try:
+        st.html(pagina, unsafe_allow_javascript=True)
+    except Exception:
+        pass
+    try:
+        if hasattr(st, "iframe"):
+            st.iframe(pagina, height=1)
+        else:
+            import streamlit.components.v1 as _comp_sm
+            _comp_sm.html(pagina, height=0)
+    except Exception:
+        pass
+
+
+def sm_inietta_scansione():
+    if st.session_state.get("_sm_js"):
+        return
+    st.session_state["_sm_js"] = True
+    import json as _json
+    _sm_pagina_js(_JS_SCAN.replace("__MSG__", _json.dumps(_MSG_SCAN, ensure_ascii=False)))
+
+
+def sm_leggi_risposta_live(valore):
+    """Il testo mandato dal browser dopo la scansione in diretta: lista di (formato, testo) oppure ('errore', motivo)."""
+    import json as _json
+    corpo = str(valore or "").rpartition("|")[0] or str(valore or "")
+    if corpo.startswith("errore|"):
+        return "errore", corpo.split("|", 1)[1]
+    try:
+        return "ok", [(str(f), str(t)) for f, t in _json.loads(corpo)]
+    except Exception:
+        return "errore", "risposta non valida"
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Il pezzo di schermata
 # ---------------------------------------------------------------------------------------------------------------------
+def sm_prepara(codici, dati_foto, conosciuti):
+    """Dai codici letti (e, se c'è la foto, dal testo stampato) al dizionario da ricopiare nel modulo. Aggiunge '_errore' se non si capisce niente."""
+    info = sm_interpreta(codici or [])
+    pref = {"scadenza": info["scadenza"], "lotto": info["lotto"], "aic": info["aic"], "gtin": info["gtin"], "ean": info["ean"],
+            "_letti": info["letti"], "_origine": "", "_da_testo": False}
+    if dati_foto and (not pref["scadenza"] or not pref["lotto"]):          # scatola senza DataMatrix: provo a leggere la data scritta
+        try:
+            ocr = sm_ocr_scatola(dati_foto)
+        except Exception:
+            ocr = {}
+        if ocr.get("scadenza") and not pref["scadenza"]:
+            pref["scadenza"], pref["_da_testo"] = ocr["scadenza"], True
+        if ocr.get("lotto") and not pref["lotto"]:
+            pref["lotto"] = ocr["lotto"]
+    if not any(pref[k] for k in ("scadenza", "lotto", "aic", "gtin", "ean")):
+        return {"_errore": "non vedo né un codice né una data di scadenza"}
+    noto = sm_trova_in_memoria(conosciuti, info)
+    if noto:
+        pref.update({k: noto.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
+        pref["_origine"] = "casa"
+    elif info["aic"]:
+        with st.spinner("Cerco il medicinale nell'elenco AIFA…"):
+            try:
+                aifa = sm_cerca_aifa(info["aic"])
+            except Exception:
+                aifa = None
+        if aifa:
+            pref.update({k: aifa.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
+            pref["_origine"] = "aifa"
+    return pref
+
+
 def sm_blocco(elenco_conosciuti, chiave="scanmed"):
-    """«📷 Inquadra la scatola»: legge i codici da una foto e ritorna i dati da ricopiare nel modulo (dizionario, può essere vuoto).
+    """«Inquadra la scatola»: scansione in diretta, oppure foto (scattata o scelta). Ritorna i dati da ricopiare nel modulo (dizionario, può essere vuoto).
     elenco_conosciuti = medicinali già conosciuti dalla famiglia (dizionari con nome, principio, dosaggio, forma, aic, gtin)."""
+    sm_inietta_scansione()
+    with st.container(key="scandiretta_" + chiave):
+        st.button("🎥 Scansiona in diretta", key=f"scandiretta_btn_{chiave}", type="primary", width="stretch")
+    with st.container(key="nascosti_live_" + chiave):
+        valore_live = st.text_input(f"scan-diretta-{chiave}", key=f"{chiave}_live", label_visibility="collapsed")
     with st.container(key="azioni_foto_" + chiave):
         c_cam, c_gal = st.columns(2, gap="small")
-        premuto_cam = c_cam.button("📷 Inquadra la scatola", key=f"scatta_{chiave}", width="stretch")
+        premuto_cam = c_cam.button("📷 Scatta una foto", key=f"scatta_{chiave}", width="stretch")
         premuto_gal = c_gal.button("📁 Scegli una foto", key=f"galleria_{chiave}", width="stretch")
     with st.container(key="nascosti_" + chiave):
         f_cam = st.file_uploader("camera", type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}")
@@ -284,8 +532,21 @@ def sm_blocco(elenco_conosciuti, chiave="scanmed"):
         st.session_state[f"{chiave}_fall_gal"] = True
     fall_cam = st.camera_input("Inquadra la scatola", key=f"camfall_{chiave}") if st.session_state.get(f"{chiave}_fall_cam") else None
     fall_gal = st.file_uploader("Scegli una foto", type=["jpg", "jpeg", "png", "webp"], key=f"galfall_{chiave}") if st.session_state.get(f"{chiave}_fall_gal") else None
-    st.caption("Inquadra il **quadratino** (DataMatrix) o le **barre** sulla scatola, da vicino e con buona luce: leggo scadenza, lotto e codice.")
+    st.caption("Tocca **Scansiona in diretta** e inquadra il **quadratino** (DataMatrix) o le **barre**, da vicino e con buona luce. "
+               "Se il telefono non la permette, scatta una foto: leggo anche la scadenza scritta sulla scatola.")
 
+    # --- scansione in diretta
+    if valore_live and valore_live != st.session_state.get(f"{chiave}_live_visto"):
+        st.session_state[f"{chiave}_live_visto"] = valore_live
+        esito, dati = sm_leggi_risposta_live(valore_live)
+        if esito == "errore":
+            motivo = {"nonsupp": "questo browser non permette la scansione in diretta: scatta una foto", "NotAllowedError": "non hai dato il permesso alla fotocamera",
+                      "NotFoundError": "non trovo la fotocamera", "NotReadableError": "la fotocamera è usata da un'altra app"}.get(dati, dati)
+            st.session_state["sm_prefill"] = {"_errore": motivo}
+        else:
+            st.session_state["sm_prefill"] = sm_prepara(dati, None, elenco_conosciuti)
+
+    # --- foto (scattata o scelta)
     viste = st.session_state.setdefault(f"{chiave}_viste", {})
     ultima = st.session_state.get(f"{chiave}_ultima")
     candidati = {"cam": f_cam, "gal": f_gal, "fcam": fall_cam, "fgal": fall_gal}
@@ -299,38 +560,18 @@ def sm_blocco(elenco_conosciuti, chiave="scanmed"):
             ultima = nome
     st.session_state[f"{chiave}_ultima"] = ultima
     file = candidati.get(ultima) or next((f for f in candidati.values() if f is not None), None)
-
-    risultato = st.session_state.get("sm_prefill") or {}
     if file is not None:
         ident_f = getattr(file, "file_id", None) or f"{file.name}{file.size}"
         if st.session_state.get("sm_elaborata") != ident_f:           # ogni foto si legge una volta sola
             st.session_state["sm_elaborata"] = ident_f
-            with st.spinner("Leggo il codice…"):
-                codici = sm_leggi_codici(file.getvalue())
-            if codici is None:
-                st.session_state["sm_prefill"] = {"_errore": "manca la libreria di lettura (riga «zxing-cpp» in requirements.txt)"}
-            elif not codici:
-                st.session_state["sm_prefill"] = {"_errore": "non vedo nessun codice nella foto"}
-            else:
-                info = sm_interpreta(codici)
-                pref = {"scadenza": info["scadenza"], "lotto": info["lotto"], "aic": info["aic"], "gtin": info["gtin"], "ean": info["ean"],
-                        "_letti": info["letti"], "_origine": ""}
-                noto = sm_trova_in_memoria(elenco_conosciuti, info)
-                if noto:
-                    pref.update({k: noto.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
-                    pref["_origine"] = "casa"
-                elif info["aic"]:
-                    with st.spinner("Cerco il medicinale nell'elenco AIFA…"):
-                        try:
-                            aifa = sm_cerca_aifa(info["aic"])
-                        except Exception:
-                            aifa = None
-                    if aifa:
-                        pref.update({k: aifa.get(k, "") for k in ("nome", "marca", "principio", "dosaggio", "forma")})
-                        pref["_origine"] = "aifa"
-                st.session_state["sm_prefill"] = pref
-            risultato = st.session_state["sm_prefill"]
+            dati = file.getvalue()
+            with st.spinner("Leggo il codice e la scadenza…"):
+                codici = sm_leggi_codici(dati)
+                if codici is None:
+                    codici = []
+                st.session_state["sm_prefill"] = sm_prepara(codici, dati, elenco_conosciuti)
 
+    risultato = st.session_state.get("sm_prefill") or {}
     if risultato:
         if risultato.get("_errore"):
             st.warning(f"⚠️ Non ci sono riuscito: {risultato['_errore']}. Riprova più vicino e con più luce, oppure compila a mano.")
@@ -343,10 +584,10 @@ def sm_blocco(elenco_conosciuti, chiave="scanmed"):
             if risultato.get("ean") and not risultato.get("aic"):
                 righe.append(f"EAN {risultato['ean']}")
             if risultato.get("scadenza"):
-                righe.append(f"scadenza {sm_data_it(risultato['scadenza'])}")
+                righe.append(f"scadenza {sm_data_it(risultato['scadenza'])}" + (" (letta dal testo: controllala)" if risultato.get("_da_testo") else ""))
             if risultato.get("lotto"):
                 righe.append(f"lotto {risultato['lotto']}")
-            st.success("📦 Letto dalla scatola: " + " · ".join(righe) if righe else "📦 Codice letto.")
+            st.success("📦 Letto dalla scatola: " + " · ".join(righe))
             if risultato.get("_origine") == "casa":
                 st.info(f"✅ Lo conosco: **{risultato.get('nome', '')}** è già in casa. Ho ricopiato nome, principio attivo, dosaggio e forma.")
             elif risultato.get("_origine") == "aifa":

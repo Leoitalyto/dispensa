@@ -2050,6 +2050,9 @@ def _fa_med_dettaglio_corpo(med_id, pid):
                 else:
                     st.download_button("📄 Apri il PDF: " + a_["nome"], dati_a, file_name=a_["nome"], mime="application/pdf",
                                        width="stretch", key="fa_dettfogl_dl_" + a_["id"])
+    if not ha_foglio:
+        st.link_button("🔎 Cerca il foglio illustrativo online", "https://www.google.com/search?q=" + _up.quote_plus(
+            f'"{" ".join(x for x in (m.get("nome", ""), m.get("dosaggio", ""), m.get("forma", "")) if x)}" foglio illustrativo filetype:pdf'), width="stretch")
     if st.button("✏️ Cambia il foglio illustrativo" if ha_foglio else "➕ Aggiungi il foglio illustrativo", key=f"fa_fogl_dett_{med_id}", width="stretch"):
         st.session_state["fa_modulo_foglio"] = {"pid": m.get("profilo", pid), "med_id": med_id}
         st.rerun()
@@ -2426,6 +2429,40 @@ def _fa_dialogo_foglio(m):
                "L'app non valuta se un medicinale va bene per una malattia.")
 
 
+class _FileDaLink:
+    """Un file scaricato da un link, fatto per sembrare un file caricato (così si salva come gli altri allegati)."""
+    def __init__(self, nome, dati):
+        self.name, self.type, self._dati, self.size = nome, "application/pdf", dati, len(dati)
+
+    def getvalue(self):
+        return self._dati
+
+
+def _fa_scarica_pdf(url, nome_base="Foglio illustrativo"):
+    """Scarica un PDF da un link. Ritorna (file, None) oppure (None, motivo). Solo https, solo PDF, massimo 8 MB."""
+    import urllib.parse as _urlp
+    import requests as _rq
+    url = re.sub(r"^http://", "https://", _fa_url_https(url), flags=re.I)         # solo collegamenti sicuri
+    if not url.lower().startswith("https://"):
+        return None, "il link non è valido"
+    try:
+        with _rq.get(url, stream=True, timeout=(10, 40), headers={"User-Agent": "DispensaFamiglia/1.0 (https://github.com/Leoitalyto/dispensa)"}) as r:
+            if r.status_code != 200:
+                return None, f"il sito risponde con l'errore {r.status_code}"
+            dati = b""
+            for pezzo in r.iter_content(65536):
+                dati += pezzo
+                if len(dati) > MAX_PDF:
+                    return None, "il file è troppo grande (massimo 8 MB)"
+    except Exception as e:
+        return None, f"non riesco a collegarmi ({type(e).__name__})"
+    if not dati.startswith(b"%PDF"):
+        return None, "questo link non è un PDF: è una pagina del sito. Aprila e cerca il pulsante «scarica il PDF» o «foglio illustrativo»"
+    nome = _urlp.unquote(_urlp.urlparse(url).path.rsplit("/", 1)[-1]) or nome_base
+    nome = re.sub(r"[^\w .\-()]", "_", nome)
+    return _FileDaLink(nome if nome.lower().endswith(".pdf") else nome + ".pdf", dati), None
+
+
 def _fa_modulo_foglio(pid, med_id):
     _fa_ctx("farmacia:medicinale")
     f = _fa_dati()
@@ -2439,11 +2476,17 @@ def _fa_modulo_foglio(pid, med_id):
     st.subheader(f"📖 Foglio illustrativo di {m.get('nome', '')}")
 
     st.markdown("**1️⃣ Trova il foglio illustrativo**")
-    cerca = _up.quote_plus(" ".join(x for x in ("foglio illustrativo", m.get("nome", ""), m.get("principio", "")) if x) + " AIFA")
+    nome_ricerca = " ".join(x for x in (m.get("nome", ""), m.get("dosaggio", ""), m.get("forma", "")) if x)
+    q_pdf = _up.quote_plus(f'"{nome_ricerca}" foglio illustrativo filetype:pdf')
+    q_gen = _up.quote_plus(f"{nome_ricerca} foglio illustrativo AIFA")
     c1, c2 = st.columns(2, gap="small")
-    c1.link_button("🏛️ Cerca sul sito AIFA", "https://medicinali.aifa.gov.it/", width="stretch")
-    c2.link_button("🔎 Cerca con Google", "https://www.google.com/search?q=" + cerca, width="stretch")
-    st.caption(f"Sul sito AIFA scrivi «{m.get('nome', '')}» e scarica il foglio illustrativo.")
+    c1.link_button("📄 Cerca il PDF (Google)", "https://www.google.com/search?q=" + q_pdf, width="stretch")
+    c2.link_button("🔎 Cerca nel web", "https://www.google.com/search?q=" + q_gen, width="stretch")
+    if m.get("aic"):
+        st.link_button("🔢 Cerca per codice AIC " + m["aic"], "https://www.google.com/search?q=" + _up.quote_plus(f"AIC {m['aic']} foglio illustrativo"), width="stretch")
+    st.link_button("🏛️ Sito ufficiale AIFA Medicinali", "https://medicinali.aifa.gov.it/", width="stretch")
+    st.caption(f"Sul sito AIFA scrivi «{m.get('nome', '')}»: il foglio illustrativo si scarica da lì. "
+               "Trovato il PDF, tieni premuto sul link, tocca «Copia indirizzo del link» e incollalo qui sotto: lo scarico io e lo tengo nell'app.")
 
     st.markdown("**2️⃣ Scaricalo, oppure fotografa il foglietto della scatola**")
     st.markdown("**3️⃣ Caricalo qui**")
@@ -2451,6 +2494,27 @@ def _fa_modulo_foglio(pid, med_id):
                                 type=["pdf", "jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
     link = st.text_input("Oppure incolla qui il link del foglio illustrativo", value=m.get("foglio_link", ""),
                          key="fa_fogl_link_" + med_id, placeholder="https://…")
+    if link.strip() and st.button("⬇ Scarica il PDF da questo link e tienilo nell'app", key="fa_fogl_scarica_" + med_id, width="stretch"):
+        with st.spinner("Scarico il PDF…"):
+            file_pdf, motivo = _fa_scarica_pdf(link, f"Foglio illustrativo {m.get('nome', '')}")
+        if motivo:
+            st.error(f"Non ci sono riuscito: {motivo}.")
+        else:
+            try:
+                nuovi_pdf = _fa_salva_files([file_pdf])
+
+                def _aggiungi(f_, nuovi=nuovi_pdf, url=_fa_url_https(link)):
+                    for x in f_["medicinali"]:
+                        if x["id"] == med_id:
+                            x["foglio"] = (x.get("foglio") or []) + nuovi
+                            x["foglio_link"] = url
+                _fa_salva(_aggiungi, "Farmacia: foglio illustrativo")
+            except Exception as e:
+                st.error(f"Non sono riuscito a salvarlo: {e}")
+            else:
+                st.session_state.pop("fa_modulo_foglio", None)
+                st.session_state["fa_msg"] = f"✅ Foglio illustrativo di {m.get('nome', '')} scaricato e salvato nell'app."
+                st.rerun()
 
     if m.get("foglio"):
         st.markdown("**Già allegato:**")

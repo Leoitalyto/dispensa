@@ -134,7 +134,7 @@ Tu peux réutiliser une photo déjà enregistrée depuis l'**archive des photos*
 
 Pour tout voir d'un médicament, **touche sa fiche** : le détail s'ouvre avec la **notice**, la grande photo, les traitements liés et les boutons **✏️ Modifica** et **🗑️ Elimina**.
 
-Pour gagner du temps touche **📷 Inquadra la scatola** (Scanner la boîte) : l'appli lit le petit carré (DataMatrix) ou les barres et remplit péremption, lot et code. Si le médicament est déjà à la maison elle copie aussi nom et dosage ; s'il est nouveau, écris le nom une seule fois et la prochaine fois elle le reconnaît.""",
+Pour gagner du temps touche **🎥 Scansiona in diretta** (Scanner en direct) et vise le petit carré (DataMatrix) ou les barres de la boîte : l'appli remplit péremption, lot et code. Si le téléphone ne le permet pas, prends une photo : je lis aussi la date de péremption écrite sur la boîte. Si le médicament est déjà à la maison elle copie aussi nom et dosage ; s'il est nouveau, écris le nom une seule fois et la prochaine fois elle le reconnaît.""",
         "medicament medicaments ajouter boite photo peremption principe actif dosage notice archive"),
     "f_scadenze": ("🎨 Péremptions et allergies aux médicaments",
         """- 🟠 **Orange** : périme dans moins de 2 mois. 🔴 **Rouge** : dans moins de 1 mois. ⚫ **Périmé** : à jeter correctement.

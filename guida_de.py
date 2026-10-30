@@ -134,7 +134,7 @@ Du kannst ein bereits gespeichertes Foto aus dem **Fotoarchiv** wiederverwenden.
 
 Um alles zu einem Medikament zu sehen, **tippe auf seine Karte**: das Detail öffnet sich mit dem **Beipackzettel**, dem großen Foto, den verknüpften Therapien und den Knöpfen **✏️ Modifica** und **🗑️ Elimina**.
 
-Um Zeit zu sparen tippe auf **📷 Inquadra la scatola** (Packung scannen): die App liest das kleine Quadrat (DataMatrix) oder die Striche und füllt Ablaufdatum, Charge und Code aus. Ist das Medikament schon im Haus, kopiert sie auch Namen und Dosierung; ist es neu, schreibe den Namen einmal und beim nächsten Mal erkennt sie es.""",
+Um Zeit zu sparen tippe auf **🎥 Scansiona in diretta** (Live scannen) und richte die Kamera auf das kleine Quadrat (DataMatrix) oder die Striche der Packung: die App füllt Ablaufdatum, Charge und Code aus. Erlaubt das Handy es nicht, mache ein Foto: ich lese auch das auf der Packung gedruckte Ablaufdatum. Ist das Medikament schon im Haus, kopiert sie auch Namen und Dosierung; ist es neu, schreibe den Namen einmal und beim nächsten Mal erkennt sie es.""",
         "medikament medikamente arznei hinzufugen packung foto ablaufdatum wirkstoff dosierung beipackzettel archiv"),
     "f_scadenze": ("🎨 Ablaufdaten und Medikamentenallergien",
         """- 🟠 **Orange**: läuft in weniger als 2 Monaten ab. 🔴 **Rot**: in weniger als 1 Monat. ⚫ **Abgelaufen**: richtig entsorgen.

@@ -134,7 +134,7 @@ Puedes reutilizar una foto ya guardada desde el **archivo de fotos**. Al medicam
 
 Para ver todo de un medicamento, **toca su ficha**: se abre el detalle con el **prospecto**, la foto grande, las terapias vinculadas y los botones **✏️ Modifica** y **🗑️ Elimina**.
 
-Para ahorrar tiempo toca **📷 Inquadra la scatola** (Escanear la caja): la app lee el cuadradito (DataMatrix) o las barras y rellena caducidad, lote y código. Si el medicamento ya está en casa copia también nombre y dosis; si es nuevo escribe el nombre una sola vez y la próxima vez lo reconoce.""",
+Para ahorrar tiempo toca **🎥 Scansiona in diretta** (Escanear en directo) y enfoca el cuadradito (DataMatrix) o las barras de la caja: la app rellena caducidad, lote y código. Si el teléfono no lo permite, haz una foto: leo también la caducidad escrita en la caja. Si el medicamento ya está en casa copia también nombre y dosis; si es nuevo escribe el nombre una sola vez y la próxima vez lo reconoce.""",
         "medicamento medicamentos farmaco añadir envase foto caducidad principio activo dosis prospecto archivo"),
     "f_scadenze": ("🎨 Caducidades y alergias a fármacos",
         """- 🟠 **Naranja**: caduca en menos de 2 meses. 🔴 **Rojo**: en menos de 1 mes. ⚫ **Caducado**: tirar de forma correcta.
