@@ -1036,25 +1036,25 @@ Tocca **🗑️ Elimina** per toglierlo (ti chiedo conferma). **📤 Invia** lo 
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("casa", "c_cosa")
 
-if "icona_farmacia" in globals() and "_casa_icona_prima" not in globals():
-    _casa_icona_prima = icona_farmacia
+def casa_pulsante():
+    """L'icona di Casa nella riga della Home, tra «I miei documenti» e «Utilità» (la chiama un piccolo aggancio in icona_farmacia). Ritorna True se è stata toccata.
+    Le quattro icone stanno tutte sulla stessa riga: per questo qui si rimpiccioliscono un po' (80 px) e si regola la scritta degli avvisi sotto «I miei documenti»."""
+    uri_c = _fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""
+    if not uri_c:
+        return False
+    sc = ca_scadenze(_ca_dati(), oggi())
+    n_av = len(sc["garanzie"]) + len(sc["manutenzioni"])
+    st.markdown("<style>@keyframes ca-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
+                "50%{transform:scale(1.06);filter:drop-shadow(0 0 14px rgba(255,193,7,.95))}}"
+                + _css_icona("casa_icona", uri_c, "1/1", "ca-battito", 2.4, 80)
+                + ".st-key-azioni_icone .st-key-fa_icona button,.st-key-azioni_icone .st-key-doc_icona button,.st-key-azioni_icone .st-key-ut_icona button,"
+                  ".st-key-azioni_icone .st-key-casa_icona button{width:80px}"
+                  ".st-key-azioni_icone div[style*='width:112px']{width:80px !important;font-size:.6rem !important}</style>", unsafe_allow_html=True)
+    premuto = st.button("Casa", key="casa_icona", help="Apri Casa: beni, manuali e manutenzioni")
+    if n_av:
+        st.markdown(f"<div style='width:80px;text-align:center;font-weight:800;font-size:.6rem;color:#e65100'>⚠️ {n_av} da controllare</div>", unsafe_allow_html=True)
+    return premuto
 
-    def icona_farmacia():                                           # noqa: F811 — la Home: sotto le icone già presenti compare quella di Casa
-        _casa_icona_prima()
-        uri_c = _fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""
-        if not uri_c:
-            return
-        n_av = len(ca_scadenze(_ca_dati(), oggi())["garanzie"]) + len(ca_scadenze(_ca_dati(), oggi())["manutenzioni"])
-        st.markdown("<style>.st-key-azioni_icone_casa{margin-top:-4px}@keyframes ca-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
-                    "50%{transform:scale(1.06);filter:drop-shadow(0 0 14px rgba(255,193,7,.95))}}" + _css_icona("casa_icona", uri_c, "1/1", "ca-battito", 2.4, 112) + "</style>",
-                    unsafe_allow_html=True)
-        with st.container(key="azioni_icone_casa"):
-            if st.button("Casa", key="casa_icona", help="Apri Casa: beni, manuali e manutenzioni"):
-                st.session_state["sezione_home"] = "casa"
-                st.session_state["farmacia_aperta"] = True
-                st.rerun()
-            if n_av:
-                st.markdown(f"<div style='width:112px;text-align:center;font-weight:800;font-size:.72rem;color:#e65100'>⚠️ {n_av} da controllare</div>", unsafe_allow_html=True)
 
 if "schermata_farmacia" in globals() and "_casa_schermata_prima" not in globals():
     _casa_schermata_prima = schermata_farmacia

@@ -7,6 +7,15 @@ _cartella = os.path.dirname(os.path.abspath(__file__))
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
+    "farmacia.py": [
+        # Home: l'icona «Casa» sulla stessa riga delle altre, tra «I miei documenti» e «Utilità» (casa_pulsante è in casa.py)
+        ('        c1, c2, c3 = st.columns(3, gap="small")\n        premuto_u = False\n        with c3:\n            if uri_u:\n',
+         '        c1, c2, c3, c4 = st.columns(4, gap="small")\n        premuto_u = False\n        premuto_c = False\n'
+         '        with c3:\n            if "casa_pulsante" in globals():\n                premuto_c = casa_pulsante()\n'
+         '        with c4:\n            if uri_u:\n'),
+        ('    if premuto_u:\n',
+         '    if premuto_c:\n        st.session_state["sezione_home"] = "casa"\n        st.session_state["farmacia_aperta"] = True\n        st.rerun()\n    if premuto_u:\n'),
+    ],
     "parte3.py": [
         # tabella: colonna «Acquisto»
         ('                t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",\n',
