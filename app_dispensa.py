@@ -8,6 +8,9 @@ _cartella = os.path.dirname(os.path.abspath(__file__))
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
     "farmacia.py": [
+        # Home: gli stili dell'icona «Casa» e le misure delle quattro icone si aggiungono allo stile già scritto (casa_css è in casa.py)
+        ('    css += "</style>"\n    st.markdown(css, unsafe_allow_html=True)\n    with st.container(key="azioni_icone"):\n',
+         '    css += (casa_css() if "casa_css" in globals() else "")\n    css += "</style>"\n    st.markdown(css, unsafe_allow_html=True)\n    with st.container(key="azioni_icone"):\n'),
         # Home: l'icona «Casa» sulla stessa riga delle altre, tra «I miei documenti» e «Utilità» (casa_pulsante è in casa.py)
         ('        c1, c2, c3 = st.columns(3, gap="small")\n        premuto_u = False\n        with c3:\n            if uri_u:\n',
          '        c1, c2, c3, c4 = st.columns(4, gap="small")\n        premuto_u = False\n        premuto_c = False\n'

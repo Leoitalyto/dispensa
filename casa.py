@@ -1036,20 +1036,25 @@ Tocca **🗑️ Elimina** per toglierlo (ti chiedo conferma). **📤 Invia** lo 
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("casa", "c_cosa")
 
-def casa_pulsante():
-    """L'icona di Casa nella riga della Home, tra «I miei documenti» e «Utilità» (la chiama un piccolo aggancio in icona_farmacia). Ritorna True se è stata toccata.
-    Le quattro icone stanno tutte sulla stessa riga: per questo qui si rimpiccioliscono un po' (80 px) e si regola la scritta degli avvisi sotto «I miei documenti»."""
+def casa_css():
+    """Gli stili dell'icona di Casa e le misure comuni alle quattro icone della Home. Si aggiungono allo stile che icona_farmacia scrive già (un piccolo aggancio):
+    così nella colonna di Casa c'è soltanto il pulsante e l'icona sta alla stessa altezza delle altre."""
     uri_c = _fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""
     if not uri_c:
+        return ""
+    return ("@keyframes ca-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}50%{transform:scale(1.06);filter:drop-shadow(0 0 14px rgba(255,193,7,.95))}}"
+            + _css_icona("casa_icona", uri_c, "1/1", "ca-battito", 2.4, 80)
+            + ".st-key-azioni_icone .st-key-fa_icona button,.st-key-azioni_icone .st-key-doc_icona button,.st-key-azioni_icone .st-key-ut_icona button,"
+              ".st-key-azioni_icone .st-key-casa_icona button{width:80px}"
+              ".st-key-azioni_icone div[style*='width:112px']{width:80px !important;font-size:.6rem !important}")
+
+
+def casa_pulsante():
+    """L'icona di Casa nella riga della Home, tra «I miei documenti» e «Utilità» (la chiama un piccolo aggancio in icona_farmacia). Ritorna True se è stata toccata."""
+    if not (_fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""):
         return False
     sc = ca_scadenze(_ca_dati(), oggi())
     n_av = len(sc["garanzie"]) + len(sc["manutenzioni"])
-    st.markdown("<style>@keyframes ca-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"
-                "50%{transform:scale(1.06);filter:drop-shadow(0 0 14px rgba(255,193,7,.95))}}"
-                + _css_icona("casa_icona", uri_c, "1/1", "ca-battito", 2.4, 80)
-                + ".st-key-azioni_icone .st-key-fa_icona button,.st-key-azioni_icone .st-key-doc_icona button,.st-key-azioni_icone .st-key-ut_icona button,"
-                  ".st-key-azioni_icone .st-key-casa_icona button{width:80px}"
-                  ".st-key-azioni_icone div[style*='width:112px']{width:80px !important;font-size:.6rem !important}</style>", unsafe_allow_html=True)
     premuto = st.button("Casa", key="casa_icona", help="Apri Casa: beni, manuali e manutenzioni")
     if n_av:
         st.markdown(f"<div style='width:80px;text-align:center;font-weight:800;font-size:.6rem;color:#e65100'>⚠️ {n_av} da controllare</div>", unsafe_allow_html=True)
