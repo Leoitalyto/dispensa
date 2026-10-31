@@ -16,35 +16,95 @@ _STATI_DA_CHIUDERE = ("fa_modulo_med", "fa_modulo_foglio", "fa_modulo_dottore", 
 
 _JS_PULIZIA = r"""
 (function () {
-  var w = window, d = w.document;
+  var w = window;
   try {
     if (w.__navPulizia) return;
     w.__navPulizia = true;
-    var giri = 0;
-    function nascondi() {
-      var els = d.querySelectorAll('a, button, div, span');
+    var giri = 0, osservati = [], nascosti = [], spenta = false;
+    function documenti() {                                   // la pagina dell'app e, se si può, quella che la contiene (dove Streamlit Cloud mette «Manage app»)
+      var lista = [];
+      [w, w.parent, w.top].forEach(function (x) {
+        try { if (x && x.document && x.document.body && lista.indexOf(x.document) < 0) lista.push(x.document); } catch (e) { /* pagina di un altro sito: non si tocca */ }
+      });
+      return lista;
+    }
+    function radiceApp(d) {                                  // l'app: nella sua pagina è .stApp; in quella esterna è il riquadro (iframe) che la contiene
+      try {
+        if (d === w.document) return d.querySelector('.stApp, [data-testid="stApp"]');
+        var f = d.querySelectorAll('iframe');
+        for (var i = 0; i < f.length; i++) { try { if (f[i].contentWindow === w) return f[i]; } catch (e) {} }
+        return f[0] || null;
+      } catch (e) { return null; }
+    }
+    function contiene(a, b) { try { return !!(a && b && (a === b || a.contains(b))); } catch (e) { return true; } }
+    function piccolo(x, fin) {                               // un elemento è «piccolo» se occupa poco schermo: la linguetta sì, la pagina intera no
+      try {
+        var r = x.getBoundingClientRect();
+        return r.width <= 0.8 * (fin.innerWidth || 1000) && r.height <= 0.25 * (fin.innerHeight || 1000);
+      } catch (e) { return false; }
+    }
+    function nascondi(d, fin) {
+      var radice = radiceApp(d);
+      var els = d.querySelectorAll('a, button, div, span, p');
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
-        if (el.children.length > 4) continue;
+        if (el.childElementCount > 0) continue;               // solo gli elementi «foglia»: costa pochissimo e non confonde i contenitori con la scritta
         var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (t !== 'Manage app') continue;
-        var x = el;                                           // risalgo fino all'elemento fisso in basso (la linguetta intera)
-        for (var k = 0; k < 8 && x && x !== d.body; k++) {
+        if (contiene(el, radice)) continue;
+        var scelto = null, x = el;                            // salgo fino alla linguetta intera, ma mi fermo prima di tutto ciò che è grande o che contiene l'app
+        for (var k = 0; k < 8 && x && x !== d.body && x !== d.documentElement; k++) {
+          if (contiene(x, radice) || !piccolo(x, fin)) break;
+          scelto = x;
           var pos = '';
-          try { pos = w.getComputedStyle(x).position; } catch (e) {}
+          try { pos = fin.getComputedStyle(x).position; } catch (e) {}
           if (pos === 'fixed' || pos === 'sticky') break;
           x = x.parentElement;
         }
-        if (x && x !== d.body) { x.style.setProperty('display', 'none', 'important'); w.__navNascosta = (w.__navNascosta || 0) + 1; }
-        else { el.style.setProperty('display', 'none', 'important'); }
+        if (!scelto) scelto = el;
+        if (nascosti.indexOf(scelto) < 0) {
+          scelto.style.setProperty('display', 'none', 'important');
+          nascosti.push(scelto);
+          w.__navNascosta = (w.__navNascosta || 0) + 1;
+          try { w.document.documentElement.setAttribute('data-nav-ok', '1'); } catch (e) {}
+        }
       }
     }
-    nascondi();
-    var attesa = null;
-    new w.MutationObserver(function () {
-      if (attesa) return;
-      attesa = w.setTimeout(function () { attesa = null; if (giri++ < 400) nascondi(); }, 700);
-    }).observe(d.body, {childList: true, subtree: true});
+    function controllo() {                                   // rete di sicurezza: se l'app sparisce dopo aver nascosto qualcosa, rimetto tutto a posto e mi fermo per sempre
+      var guasto = false;
+      documenti().forEach(function (d) {
+        try {
+          var r = radiceApp(d);
+          if (r) { var q = r.getBoundingClientRect(); if (q.height < 40 && nascosti.length) guasto = true; }
+        } catch (e) {}
+      });
+      if (guasto) {
+        spenta = true;
+        nascosti.forEach(function (x) { try { x.style.removeProperty('display'); } catch (e) {} });
+        try { w.document.documentElement.removeAttribute('data-nav-ok'); } catch (e) {}
+        w.__navSpenta = true;
+      }
+    }
+    function tutti() {
+      if (spenta) return;
+      documenti().forEach(function (d) {
+        var fin = d.defaultView || w;
+        try { nascondi(d, fin); } catch (e) {}
+        if (osservati.indexOf(d) < 0) {                       // controllo anche le pagine che compaiono dopo
+          osservati.push(d);
+          var attesa = null;
+          try {
+            new fin.MutationObserver(function () {
+              if (attesa || spenta) return;
+              attesa = fin.setTimeout(function () { attesa = null; if (giri++ < 400) { try { nascondi(d, fin); } catch (e) {} } }, 1200);
+            }).observe(d.body, {childList: true, subtree: true});
+          } catch (e) {}
+        }
+      });
+      w.setTimeout(controllo, 400);
+    }
+    tutti();
+    w.setInterval(function () { if (!spenta && giri++ < 400) tutti(); }, 4000);   // in più, un controllo ogni tanto (la linguetta può comparire a caricamento finito)
   } catch (err) { /* se non si può, resta com'è */ }
 })();
 """
@@ -69,8 +129,23 @@ def _nav_pagina_js(codice):
         pass
 
 
+_CSS_ANGOLO_LIBERO = """<style>
+@media (max-width: 700px){
+  html:not([data-nav-ok]) [role="tablist"]{left:12px !important;transform:none !important;width:calc(100vw - 24px - 150px) !important}
+}
+</style>"""
+
+
 def nav_pulisci_interfaccia():
-    """Nasconde la linguetta «Manage app» (una volta per sessione)."""
+    """Nasconde la linguetta «Manage app» (una volta per sessione). Finché non ci riesce, per l'amministratore (l'unico che la vede) la barra delle schede
+    in basso resta più stretta e lascia libero l'angolo a destra, così nessuna scheda è coperta."""
+    try:                                                       # interruttore di emergenza: NAV_PULIZIA = "no" nei Secrets spegne tutto senza caricare file
+        if str(st.secrets.get("NAV_PULIZIA", "")).strip().lower() in ("no", "off", "0", "false", "spento"):
+            return
+    except Exception:
+        pass
+    if (st.session_state.get("sess") or {}).get("admin"):
+        st.markdown(_CSS_ANGOLO_LIBERO, unsafe_allow_html=True)
     if st.session_state.get("_nav_js"):
         return
     st.session_state["_nav_js"] = True
