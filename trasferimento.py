@@ -268,6 +268,68 @@ def _tr_nome_unico(nome, esistenti):
     return candidato
 
 
+def _tr_data_ok(v):
+    try:
+        return date.fromisoformat(str(v)) and str(v)[:10]
+    except (ValueError, TypeError):
+        return None
+
+
+def _tr_valida(cat, rec):
+    """Controlla e sistema una voce arrivata da un file esterno: i campi di testo diventano testo, le liste liste, le date devono essere vere.
+    Se manca qualcosa che l'app dà per scontato (la data di una visita, il nome di una vaccinazione…) la voce viene scartata (None):
+    così un file sbagliato o malevolo non può far crollare le schermate di Salute."""
+    r = dict(rec)
+    testi = {"medicinali": ("nome", "marca", "principio", "dosaggio", "forma", "unita", "note", "categoria"),
+             "terapie": ("nome_med", "quantita", "stato", "note"),
+             "prescrizioni": ("tipo", "prescritto", "medico", "codice", "stato", "note"),
+             "visite": ("categoria", "ora", "medico", "motivo", "controlli", "note"),
+             "vaccinazioni": ("nome", "dose", "note"),
+             "documenti": ("tipo", "numero", "ente", "note")}.get(cat, ())
+    for k in testi:
+        if k in r and r[k] is not None and not isinstance(r[k], str):
+            r[k] = str(r[k])
+    if cat == "medicinali":
+        if not str(r.get("nome", "")).strip():
+            return None
+        try:
+            r["quantita"] = float(r.get("quantita", 1) or 0)
+        except (TypeError, ValueError):
+            r["quantita"] = 1.0
+        for k in ("scadenza", "acquisto"):
+            if r.get(k) is not None:
+                r[k] = _tr_data_ok(r[k])
+    elif cat == "terapie":
+        r["inizio"] = _tr_data_ok(r.get("inizio"))
+        if not r["inizio"]:
+            return None
+        r["fine"] = _tr_data_ok(r.get("fine")) if r.get("fine") else None
+        r["orari"] = [o for o in (r.get("orari") or []) if isinstance(o, str) and re.fullmatch(r"\d{1,2}:\d{2}", o)] if isinstance(r.get("orari"), list) else []
+        r["giorni"] = [g for g in (r.get("giorni") or []) if isinstance(g, int) and 0 <= g <= 6] if isinstance(r.get("giorni"), list) else []
+        r.setdefault("quantita", "")
+    elif cat == "visite":
+        r["data"] = _tr_data_ok(r.get("data"))
+        if not r["data"]:
+            return None
+        if r.get("prossimo"):
+            r["prossimo"] = _tr_data_ok(r["prossimo"])
+    elif cat == "vaccinazioni":
+        r["data"] = _tr_data_ok(r.get("data"))
+        if not r["data"] or not str(r.get("nome", "")).strip():
+            return None
+        if r.get("richiamo"):
+            r["richiamo"] = _tr_data_ok(r["richiamo"])
+    elif cat == "prescrizioni":
+        for k in ("data", "valida_fino"):
+            if r.get(k):
+                r[k] = _tr_data_ok(r[k]) or ""
+    elif cat == "documenti":
+        for k in ("rilascio", "scadenza"):
+            if r.get(k):
+                r[k] = _tr_data_ok(r[k])
+    return r
+
+
 def tr_costruisci_import(f_dest, pacchetto, salta_duplicati=True, oggi=None):
     """Prepara l'importazione SENZA scrivere niente. Ritorna (nuovi_file {id: (nome, mime, byte, sha)}, modifica(f), riepilogo).
     modifica(f) aggiunge a f (i dati di Salute di chi importa) schede, voci e allegati; non tocca e non cancella nulla di esistente."""
@@ -275,7 +337,7 @@ def tr_costruisci_import(f_dest, pacchetto, salta_duplicati=True, oggi=None):
     man, payload, files = pacchetto["manifest"], pacchetto["payload"], pacchetto["files"]
     id_mitt, nome_mitt = str((man.get("mittente") or {}).get("id", "")), str((man.get("mittente") or {}).get("nome", "")) or "sconosciuto"
     nuovi_file, aggiunte = {}, []
-    riepilogo = {"mittente": nome_mitt, "profili_nuovi": [], "profili_aggiornati": [], "importati": {k: 0 for k in TR_CATEGORIE}, "saltati": 0, "file": 0, "byte": 0}
+    riepilogo = {"mittente": nome_mitt, "profili_nuovi": [], "profili_aggiornati": [], "importati": {k: 0 for k in TR_CATEGORIE}, "saltati": 0, "scartati": 0, "file": 0, "byte": 0}
     nomi_esistenti = [p.get("nome", "") for p in (f_dest.get("profili") or [])]
 
     def nuovo_rif(vecchio):
@@ -317,7 +379,10 @@ def tr_costruisci_import(f_dest, pacchetto, salta_duplicati=True, oggi=None):
                     if existing:
                         mappa[cat][oid] = existing["id"]
                     continue
-                nuovo = copy.deepcopy(rec)
+                nuovo = _tr_valida(cat, copy.deepcopy(rec))
+                if nuovo is None:                                           # voce incompleta o rovinata: non si importa
+                    riepilogo["scartati"] += 1
+                    continue
                 nid = uuid.uuid4().hex[:10]
                 mappa[cat][oid] = nid
                 nuovo["id"], nuovo["profilo"] = nid, pid
@@ -570,7 +635,8 @@ def _tr_importa():
     if esito:
         st.success("✅ Importato. " + (f"Nuove schede: {', '.join(esito['profili_nuovi'])}. " if esito["profili_nuovi"] else "")
                    + (f"Aggiornate: {', '.join(esito['profili_aggiornati'])}. " if esito["profili_aggiornati"] else "")
-                   + " · ".join(f"{TR_CATEGORIE[k]} {n}" for k, n in esito["importati"].items() if n) + (f" · già presenti e saltati: {esito['saltati']}" if esito["saltati"] else ""))
+                   + " · ".join(f"{TR_CATEGORIE[k]} {n}" for k, n in esito["importati"].items() if n) + (f" · già presenti e saltati: {esito['saltati']}" if esito["saltati"] else "")
+                   + (f" · ⚠️ non importate perché incomplete: {esito['scartati']}" if esito.get("scartati") else ""))
         st.button("Apri Salute", key="tr_apri_salute", width="stretch", on_click=nav_vai, args=("salute",))
 
 

@@ -26,6 +26,7 @@ import uuid
 import streamlit as st
 
 FD_PERCORSO = "famiglia/dispensa.json"
+FD_INDICE = "condivisioni.json"        # un solo file con «chi ha condiviso con chi» (per non dover leggere la dispensa di tutti ad ogni schermata)
 FD_RUOLI = {"amministratore": "👑 Amministratore", "collaboratore": "✏️ Collaboratore", "visualizzatore": "👁️ Visualizzatore"}
 FD_RUOLI_ASSEGNABILI = ["visualizzatore", "collaboratore"]
 _FD_SERVIZIO = ("rev", "mod_da", "mod_il")
@@ -123,25 +124,26 @@ def fd_nome_di(uid):
 
 
 def fd_condivise_con_me():
-    """Le dispense di altre persone condivise con me: [(uid, nome, ruolo)]."""
+    """Le dispense di altre persone condivise con me: [(uid, nome, ruolo)]. L'elenco viene dall'indice (un solo file); il ruolo vero lo decide sempre il file del proprietario."""
     sess = st.session_state.get("sess") or {}
     mio = sess.get("uid")
     if not mio or mio == "prova":
         return []
     try:
-        utenti = leggi_utenti()
+        indice = carica_dati(crea_archivio(), FD_INDICE).get("per_proprietario", {})
+        attivi = {u["id"] for u in leggi_utenti() if u.get("attivo", True)} | {"admin"}
     except Exception:
         return []
     risultato = []
-    for uid in ["admin"] + [u["id"] for u in utenti if u.get("attivo", True)]:
-        if uid == mio:
+    for proprietario, ospiti in (indice.items() if isinstance(indice, dict) else []):
+        if proprietario == mio or proprietario not in attivi or not isinstance(ospiti, dict) or mio not in ospiti:
             continue
         try:
-            r = fd_ruolo_condivisione(carica_dati(crea_archivio(), f"dispense/{uid}.json"), mio)
+            r = fd_ruolo_condivisione(carica_dati(crea_archivio(), f"dispense/{proprietario}.json"), mio)
         except Exception:
             r = None
         if r:
-            risultato.append((uid, fd_nome_di(uid), r))
+            risultato.append((proprietario, fd_nome_di(proprietario), r))
     return risultato
 
 
@@ -383,6 +385,15 @@ def fd_condividi_ui():
             nuova = {u: v for u, v in scelte.items() if v in FD_RUOLI_ASSEGNABILI}
             try:
                 salva(lambda d: d.__setitem__("condivisione", nuova), "Condivisione della dispensa")
+                mio_id = sess.get("uid")
+
+                def _indice(d, nuova=nuova, mio_id=mio_id):
+                    per = d.setdefault("per_proprietario", {})
+                    if nuova:
+                        per[mio_id] = dict(nuova)
+                    else:
+                        per.pop(mio_id, None)
+                salva_file(FD_INDICE, _indice, "Condivisioni: aggiornate")
                 st.session_state["messaggio"] = "✅ Condivisione salvata."
                 st.rerun()
             except Exception as e:
@@ -493,6 +504,10 @@ def fd_nascondi_modifiche(attivo):
     """Ai visualizzatori nasconde i pulsanti che modificano (Elimina, Modifica, Aggiungi alla lista…) e le schede Aggiungi e Gestisci; agli altri li rimostra."""
     if "_nav_pagina_js" not in globals():
         return
+    if st.session_state.get("_fd_sl") == attivo or (st.session_state.get("_fd_sl") is None and not attivo):
+        st.session_state["_fd_sl"] = attivo                       # niente da cambiare: non si aggiunge nulla alla pagina
+        return
+    st.session_state["_fd_sl"] = attivo
     _nav_pagina_js(_FD_JS_SOLA_LETTURA.replace("__ATTIVO__", "true" if attivo else "false"))
 
 
