@@ -8,6 +8,23 @@ _cartella = os.path.dirname(os.path.abspath(__file__))
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
     "farmacia.py": [
+        # Avvisi: canale WhatsApp (gratuito, a scelta) e avvisi di Casa nel modulo «Scegli come ricevere gli avvisi»
+        ('    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")\n',
+         '    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")\n    wa_num, wa_key = str(d.get("avviso_whatsapp") or ""), str(d.get("avviso_whatsapp_chiave") or "")\n'),
+        ('    if "sms" in canali and sms:\n        attivi.append(f"💬 SMS {html.escape(sms)}")\n',
+         '    if "sms" in canali and sms:\n        attivi.append(f"💬 SMS {html.escape(sms)}")\n    if "whatsapp" in canali and wa_num:\n        attivi.append(f"🟢 WhatsApp {html.escape(wa_num)}")\n    if attivi and d.get("avvisi_casa"):\n        attivi.append("🏡 Avvisi di Casa (garanzie e manutenzioni) attivi")\n'),
+        ('            v_sm = st.text_input("Numero di cellulare", value=sms, placeholder="es. 333 1234567")\n',
+         '            v_sm = st.text_input("Numero di cellulare", value=sms, placeholder="es. 333 1234567")\n            c_wa = st.checkbox("🟢 WhatsApp (gratuito, con CallMeBot)", value="whatsapp" in canali)\n            v_wa = st.text_input("Numero di WhatsApp", value=wa_num, placeholder="es. 333 1234567 oppure +39 333 1234567")\n            k_wa = st.text_input("Chiave personale di CallMeBot", value=wa_key, placeholder="la ricevi da CallMeBot su WhatsApp")\n            st.caption("Come avere la chiave: apri https://www.callmebot.com/blog/free-api-whatsapp-messages/ , salva il contatto che indica, scrivigli su WhatsApp «I allow callmebot to send me messages» e ti risponde con la tua chiave. Se non arriva entro 2 minuti riprova dopo 24 ore. È un servizio esterno gratuito e non ufficiale: per gli avvisi importanti tieni anche Telegram o l\'email.")\n'),
+        ('            ok = st.form_submit_button("Salva")\n        st.caption("Gli avvisi arrivano quando mancano',
+         '            casa_av = st.checkbox("🏡 Avvisami anche delle garanzie e delle manutenzioni di Casa", value=bool(d.get("avvisi_casa")))\n            ok = st.form_submit_button("Salva")\n        st.caption("Gli avvisi arrivano quando mancano'),
+        ('    if ok:\n        v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\\s.\\-]", "", v_sm)\n',
+         '    if ok:\n        v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\\s.\\-]", "", v_sm)\n        v_wa, k_wa = re.sub(r"[\\s.\\-()]", "", v_wa), k_wa.strip()\n        if v_wa.startswith("00"):\n            v_wa = "+" + v_wa[2:]\n        if v_wa and re.fullmatch(r"3\\d{8,9}", v_wa):                 # cellulare italiano scritto senza prefisso\n            v_wa = "+39" + v_wa\n'),
+        ('        elif (c_tg and not v_tg) or (c_ml and not v_ml) or (c_sm and not v_sm):\n',
+         '        elif v_wa and not re.fullmatch(r"\\+\\d{8,15}", v_wa):\n            errore = "Il numero di WhatsApp deve avere il prefisso, per esempio +39 333 1234567."\n        elif (c_tg and not v_tg) or (c_ml and not v_ml) or (c_sm and not v_sm) or (c_wa and not (v_wa and k_wa)):\n'),
+        ('        scelti = [n for n, c in (("telegram", c_tg), ("email", c_ml), ("sms", c_sm)) if c]\n',
+         '        scelti = [n for n, c in (("telegram", c_tg), ("email", c_ml), ("sms", c_sm), ("whatsapp", c_wa)) if c]\n'),
+        ('                     "telegram_privacy": bool(privacy), "avvisi_dosi": bool(dosi)}\n',
+         '                     "telegram_privacy": bool(privacy), "avvisi_dosi": bool(dosi),\n                     "avviso_whatsapp": v_wa, "avviso_whatsapp_chiave": k_wa, "avvisi_casa": bool(casa_av)}\n'),
         # Home: gli stili dell'icona «Casa» e le misure delle quattro icone si aggiungono allo stile già scritto (casa_css è in casa.py)
         ('    css += "</style>"\n    st.markdown(css, unsafe_allow_html=True)\n    with st.container(key="azioni_icone"):\n',
          '    css += (casa_css() if "casa_css" in globals() else "")\n    css += "</style>"\n    st.markdown(css, unsafe_allow_html=True)\n    with st.container(key="azioni_icone"):\n'),

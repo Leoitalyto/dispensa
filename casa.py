@@ -1025,7 +1025,10 @@ Puoi **modificare** o **eliminare** il bene: scegli se tenere o eliminare i suoi
          "bene beni inventario aggiungere collegare garanzia scheda caldaia documenti collegati"),
         ("🔧 Registrare una manutenzione",
          """In **🔧 Manutenzioni** tocca **➕ Registra una manutenzione o un intervento**: scegli il bene, la data, cosa è stato fatto, la ditta, il costo e, se vuoi, il **prossimo controllo**.
-In cima alla pagina Casa compaiono gli avvisi di **garanzie** in scadenza e **manutenzioni** in arrivo o in ritardo.""",
+In cima alla pagina Casa compaiono gli avvisi di **garanzie** in scadenza e **manutenzioni** in arrivo o in ritardo.
+
+**Avvisi sul telefono (a scelta):** in **Salute → 🔔 Scegli come ricevere gli avvisi** scegli i canali (**Telegram**, **email**, **SMS** o **WhatsApp**) e spunta **🏡 Avvisami anche delle garanzie e delle manutenzioni di Casa**. Le garanzie arrivano a 60, 30, 14, 7, 1 giorno e il giorno stesso; le manutenzioni a 30, 14, 7, 1 giorno e il giorno stesso, e ogni lunedì se sono in ritardo.
+**WhatsApp** è gratuito ma serve la tua **chiave personale di CallMeBot**: la spiegazione è nello stesso riquadro. Gli **SMS** sono a pagamento (servizio Twilio configurato dall'amministratore).""",
          "manutenzione intervento controllo caldaia tecnico ditta prossimo controllo scadenza garanzia"),
         ("✏️ Correggere o eliminare un documento",
          """Nell'elenco dei documenti tocca **✏️ Correggi** per cambiare tipo, categoria, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
