@@ -8,6 +8,9 @@ _cartella = os.path.dirname(os.path.abspath(__file__))
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
     "parte3.py": [
+        # tabella: colonna «Acquisto»
+        ('                t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",\n',
+         '                t("Scadenza"): data_it(r.get("scadenza")), "Acquisto": data_it(r.get("acquisto")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",\n'),
         # scheda «Statistiche» (statistiche.py), prima di Info
         ('+ [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/info: " + t("Info")])',
          '+ [":material/shopping_cart: " + t("Spesa"), _nome_messaggi, ":material/bar_chart: " + t("Statistiche")] + ([":material/history: " + t("Storico")] if ("fd_attivo" in globals() and fd_attivo()) else []) + [":material/info: " + t("Info")])'),

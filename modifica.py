@@ -103,3 +103,15 @@ def apri_modifica(rid):
             st.rerun()
 
     st.dialog("✏️ " + t("Modifica prodotto"))(_finestra)()
+
+
+# la scheda del prodotto mostra la data di acquisto (se è stata indicata)
+_scheda_html_senza_acquisto = scheda_html
+
+
+def scheda_html(r, data_oggi, mie):
+    h = _scheda_html_senza_acquisto(r, data_oggi, mie)
+    chiusura = "</div></div>"
+    if r.get("acquisto") and h.endswith(chiusura):
+        return h[:-len(chiusura)] + f"<div class='nota'>🛍️ Acquistato il {data_it(r['acquisto'])}</div>" + chiusura
+    return h
