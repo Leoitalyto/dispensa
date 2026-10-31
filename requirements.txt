@@ -8,3 +8,4 @@ onnxruntime
 reportlab
 zxing-cpp
 cryptography
+pypdf
