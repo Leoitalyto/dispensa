@@ -879,6 +879,27 @@ def ca_trova_doppioni(docs, ric, sha, escludi_id=None):
     return out
 
 
+_CA_MESI_TXT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+
+
+def _ca_testo_date(d):
+    """Tutte le date e gli importi di un documento scritti in più modi, per la ricerca: «09/06/2026», «06/2026», «giugno 2026», «2026-06», «43,01»."""
+    out = []
+    for k in ("data_doc", "scadenza_doc", "periodo_da", "periodo_a", "pagata_il"):
+        v = d.get(k)
+        try:
+            x = date.fromisoformat(str(v)[:10])
+        except (ValueError, TypeError):
+            continue
+        out += [x.strftime("%d/%m/%Y"), x.strftime("%m/%Y"), x.isoformat(), x.strftime("%Y-%m"), f"{_CA_MESI_TXT[x.month - 1]} {x.year}", str(x.year)]
+    try:
+        if d.get("importo"):
+            out += [f"{float(d['importo']):.2f}", f"{float(d['importo']):.2f}".replace(".", ",")]
+    except ValueError:
+        pass
+    return " ".join(out)
+
+
 def ca_cerca_documenti(docs, testo="", argomento=""):
     """Le fatture/bollette/polizze (e ogni documento con un importo) già archiviate che corrispondono a quello che si scrive (ente, numero, importo, data, argomento…), le non pagate per prime."""
     toks = [t_ for t_ in _ca_norm(testo).split() if t_]
@@ -2829,7 +2850,7 @@ def _ca_tab_manuali(c):
         st.info("Non hai ancora archiviato nessun documento. Carica qui sopra il primo: un manuale, una bolletta, una fattura, una polizza…")
         return
     st.markdown(f"#### 📚 I tuoi documenti ({len(docs)})")
-    cerca = st.text_input("Cerca", key="ca_cerca", placeholder="ente, titolo, numero, marca, modello…", label_visibility="collapsed")
+    cerca = st.text_input("Cerca", key="ca_cerca", placeholder="ente, numero, importo, data (es. giugno 2026)…", label_visibility="collapsed")
     presenti = [a_ for a_ in CA_ARGOMENTI if any(_ca_argomento_di(d) == a_ for d in docs)]       # (le ricevute collegate contano dentro la loro bolletta)
     f1, f2 = st.columns(2, gap="small")
     farg = f1.selectbox("Argomento", [""] + presenti, format_func=lambda x: "📂 Tutti gli argomenti" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x} ({sum(1 for d in docs if _ca_argomento_di(d) == x)})", key="ca_farg")
@@ -2850,7 +2871,7 @@ def _ca_tab_manuali(c):
         if fbene and fbene != "__nessuno__" and d.get("bene_id") != fbene:
             continue
         parenti = [d] + ca_ricevute_di(docs, d["id"])
-        if q and not any(q in _ca_norm(" ".join(str(x.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura"))) for x in parenti):
+        if q and not any(q in _ca_norm(" ".join(str(x.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura")) + " " + _ca_testo_date(x)) for x in parenti):
             continue
         if d.get("collegato_a") and any(x.get("id") == d["collegato_a"] for x in docs):          # ricevuta collegata: si vede dentro la sua bolletta
             continue
