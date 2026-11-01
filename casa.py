@@ -19,7 +19,9 @@ Caricato da app_dispensa.py dopo navigazione.py e trasferimento.py."""
 import base64
 import hashlib
 import io
+import json
 import re
+import urllib.parse
 import uuid
 from datetime import date, datetime
 
@@ -720,6 +722,161 @@ def _ca_mime(nome, tipo, dati):
     return {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(est, tipo or "application/octet-stream")
 
 
+_CA_JS_PDF = r"""
+(function () {
+  var w = window, doc = w.document;
+  if (w.__caPdfAttivo) return;
+  w.__caPdfAttivo = true;
+  var CHUNK = 3 * 200 * 1024, MAX = __MAX__, ultimo = null, occupato = false, consegnati = {};
+  function stato(testo, errore) {
+    var el = doc.querySelector('[data-ca-stato]');
+    if (el) { el.textContent = testo; el.style.color = errore ? '#b71c1c' : '#0f766e'; }
+  }
+  function campo() { return doc.querySelector('input[aria-label="ca-pdf-trasf"]'); }
+  function ack() { var e = doc.querySelector('[data-ca-ack]'); return e ? e.getAttribute('data-ca-ack') : ''; }
+  function scrivi(valore) {
+    var inp = campo();
+    if (!inp) return false;
+    var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, valore);
+    inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+    ['keydown', 'keypress', 'keyup'].forEach(function (t) {
+      inp.dispatchEvent(new w.KeyboardEvent(t, {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+    });
+    inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+    return true;
+  }
+  function pausa(ms) { return new Promise(function (r) { w.setTimeout(r, ms); }); }
+  function leggi(file) {
+    return new Promise(function (ok, ko) {
+      var r = new w.FileReader();
+      r.onload = function () { ok(r.result); };
+      r.onerror = function () { ko(r.error || new Error('lettura non riuscita')); };
+      r.readAsArrayBuffer(file);
+    });
+  }
+  function b64(buf, da, a) {
+    var u = new Uint8Array(buf, da, a - da), s = '', passo = 0x8000;
+    for (var i = 0; i < u.length; i += passo) s += String.fromCharCode.apply(null, u.subarray(i, Math.min(i + passo, u.length)));
+    return w.btoa(s);
+  }
+  async function manda(file) {
+    if (occupato) return;
+    occupato = true;
+    try {
+      if (file.size > MAX) { stato('Il file è troppo grande (massimo 8 MB). Per i manuali più grandi usa il link al sito del produttore.', true); return; }
+      if (!campo()) { stato('Non trovo il punto di invio nella pagina: ricarica la pagina e riprova.', true); return; }
+      stato('Leggo il file…');
+      var buf = await leggi(file);
+      var n = Math.max(1, Math.ceil(buf.byteLength / CHUNK)), id = Date.now().toString(36), nome = encodeURIComponent(file.name || 'documento');
+      for (var i = 0; i < n; i++) {
+        var parte = b64(buf, i * CHUNK, Math.min(buf.byteLength, (i + 1) * CHUNK)), voluto = id + ':' + i, riuscito = false;
+        for (var tent = 0; tent < 3 && !riuscito; tent++) {
+          if (!scrivi(id + '|' + i + '|' + n + '|' + nome + '|' + parte)) { stato('Non trovo il punto di invio nella pagina: ricarica la pagina e riprova.', true); return; }
+          for (var k = 0; k < 60; k++) {
+            await pausa(500);
+            if (ack() === voluto || ack() === id + ':fine') { riuscito = true; break; }
+          }
+        }
+        if (!riuscito) { stato('Il trasferimento si è interrotto: riprova, oppure usa uno degli altri metodi qui sotto.', true); return; }
+        stato('Invio del file… ' + Math.round(((i + 1) / n) * 100) + '%');
+      }
+      stato('✅ File ricevuto: ' + (file.name || 'documento'));
+    } catch (e) {
+      stato('Non sono riuscito a leggere il file: ' + (e && e.message ? e.message : e), true);
+    } finally { occupato = false; }
+  }
+  function consegna(inp) {
+    var f = inp && inp.files && inp.files[0];
+    if (!f) return;
+    var chiave = f.name + '|' + f.size + '|' + f.lastModified;
+    if (consegnati[chiave]) return;
+    consegnati[chiave] = true;
+    manda(f);
+  }
+  doc.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-ca-pdf]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    consegnati = {};
+    var inp = doc.createElement('input');
+    inp.type = 'file';
+    inp.style.display = 'none';                                  /* nessun filtro: il telefono mostra TUTTI i file */
+    inp.addEventListener('change', function () { consegna(inp); });
+    inp.addEventListener('input', function () { consegna(inp); });
+    doc.body.appendChild(inp);                                   /* resta nella pagina: se il telefono la sospende durante la scelta, il file si recupera */
+    ultimo = inp;
+    stato('Scegli il file dal telefono…');
+    inp.click();
+  }, true);
+  function ricontrolla() { if (ultimo) w.setTimeout(function () { consegna(ultimo); }, 700); }
+  doc.addEventListener('visibilitychange', function () { if (!doc.hidden) ricontrolla(); });
+  w.addEventListener('focus', ricontrolla);
+  w.addEventListener('pageshow', ricontrolla);
+})();
+""".replace("__MAX__", str(8 * 1024 * 1024))
+
+
+def _ca_avvia_trasferimento():
+    """Mette nella pagina il programma che porta il file dal telefono all'app (stesso sistema usato per la fotocamera)."""
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
+              "var s=P.document.createElement('script');s.textContent=" + json.dumps(_CA_JS_PDF) + ";P.document.head.appendChild(s);})();</script>")
+    try:
+        st.html(pagina, unsafe_allow_javascript=True)
+    except Exception:
+        pass
+    try:
+        if hasattr(st, "iframe"):
+            st.iframe(pagina, height=1)
+        else:
+            import streamlit.components.v1 as _comp_ca
+            _comp_ca.html(pagina, height=0)
+    except Exception:
+        pass
+
+
+def _ca_trasf_ricevi():
+    """Raccoglie i pezzi del file mandati dalla pagina. Quando sono tutti, il file diventa il documento da leggere. Ritorna (conferma per la pagina, errore)."""
+    v = st.session_state.get("ca_trasf_in") or ""
+    if v and v != st.session_state.get("ca_trasf_visto"):
+        st.session_state["ca_trasf_visto"] = v
+        try:
+            pid, i, n, nome_u, dati_b64 = v.split("|", 4)
+            i, n = int(i), int(n)
+            if not (0 <= i < n <= 40) or not re.fullmatch(r"[A-Za-z0-9]{1,16}", pid):
+                raise ValueError("pacchetto non valido")
+            raccolta = st.session_state.setdefault("ca_trasf_parti", {})
+            if raccolta.get("id") != pid:
+                raccolta.clear()
+                raccolta.update({"id": pid, "parti": {}})
+            raccolta["parti"][i] = dati_b64
+            st.session_state["ca_trasf_ack"], st.session_state["ca_trasf_err"] = f"{pid}:{i}", ""
+            if all(k in raccolta["parti"] for k in range(n)):
+                dati = b"".join(base64.b64decode(raccolta["parti"][k]) for k in range(n))                  # ogni pezzo si decodifica da solo: va bene qualsiasi misura
+                nome = urllib.parse.unquote(nome_u)[:120] or "documento"
+                st.session_state["ca_bozza_in"] = {"nome": nome, "mime": _ca_mime(nome, "", dati), "dati": dati, "link": ""}
+                st.session_state.pop("ca_bozza", None)
+                st.session_state["ca_trasf_ack"] = f"{pid}:fine"
+                raccolta.clear()
+        except Exception as e:
+            st.session_state["ca_trasf_err"] = f"Il trasferimento non è andato a buon fine ({e}). Riprova."
+    return st.session_state.get("ca_trasf_ack", ""), st.session_state.get("ca_trasf_err", "")
+
+
+def _ca_url_diretto(url):
+    """Trasforma i link di condivisione di Google Drive e Dropbox nel link che scarica davvero il file."""
+    m = re.search(r"drive\.google\.com/file/d/([A-Za-z0-9_-]+)", url) or re.search(r"drive\.google\.com/(?:open|uc)\?(?:[^#]*&)?id=([A-Za-z0-9_-]+)", url)
+    if m:
+        return f"https://drive.google.com/uc?export=download&id={m.group(1)}"
+    if "dropbox.com" in url:
+        url = url.replace("dl=0", "dl=1")
+        if "dl=1" not in url:
+            url += ("&" if "?" in url else "?") + "dl=1"
+    return url
+
+
 _CA_CSS_FOTO = """<style>
 [class*="st-key-nascosti_cadoc"]{display:none !important}
 [class*="st-key-azioni_foto_cadoc"] [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:nowrap !important;gap:10px !important}
@@ -728,6 +885,9 @@ _CA_CSS_FOTO = """<style>
  border:2px solid rgba(13,148,136,.45) !important;box-shadow:0 4px 0 rgba(0,100,90,.25);padding-left:6px;padding-right:6px}
 [class*="st-key-scatta_cadoc"] button{background:linear-gradient(135deg,#00a98f,#0288d1) !important;color:#fff !important;border:0 !important}
 [class*="st-key-scatta_cadoc"] button p{color:#fff !important}
+.ca-pdf-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:72px;border-radius:999px;background:linear-gradient(135deg,#f59e0b,#ef6c00);color:#fff;
+ font-weight:900;font-size:1.1rem;cursor:pointer;box-shadow:0 5px 0 rgba(150,70,0,.35);text-align:center;padding:8px 14px;user-select:none}
+.ca-pdf-stato{margin:6px 2px 10px;font-weight:700;color:#0f766e;font-size:.95rem;min-height:1.3em}
 </style>"""
 _CA_TIPI_FOTO = ["jpg", "jpeg", "png", "webp"]
 
@@ -789,19 +949,33 @@ def _ca_tab_manuali(c):
     with st.container(key="nascosti_" + chiave_f):
         f_cam = st.file_uploader("camera", type=_CA_TIPI_FOTO, key=f"fotocam_{chiave_f}")
         f_gal = st.file_uploader("galleria", type=_CA_TIPI_FOTO, key=f"fotogal_{chiave_f}")
-    st.markdown("**📄 Oppure carica un PDF già nel telefono**")
-    up_pdf = st.file_uploader("PDF", type=["pdf"], key=f"ca_up_{n}", label_visibility="collapsed")
+    st.markdown("**📄 Oppure carica un PDF o un file già nel telefono**")
+    _ca_avvia_trasferimento()
+    ack_t, err_t = _ca_trasf_ricevi()
+    with st.container(key="nascosti_cadoc_tr"):
+        st.text_input("ca-pdf-trasf", key="ca_trasf_in", label_visibility="collapsed")
+    st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='1'>📎 Scegli il PDF o il file</div>"
+                f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if ack_t.endswith(':fine') else 'Tocca il pulsante arancione e scegli il file: lo vedi tutto, anche se ha un nome strano.')}</div>"
+                f"<span data-ca-ack='{ack_t}' style='display:none'></span>", unsafe_allow_html=True)
+    with st.expander("📂 Altro metodo: il campo di caricamento normale (solo PDF)"):
+        up_pdf = st.file_uploader("PDF", type=["pdf"], key=f"ca_up_{n}", label_visibility="collapsed")
     with st.expander("🛟 Il PDF o la foto non si caricano? Prova da qui"):
         st.caption("Qui il telefono ti fa scegliere **qualsiasi file**, anche uno senza estensione o con un nome strano (per esempio scaricato da WhatsApp o da una mail): "
                    "controllo io dentro il file se è un PDF o una foto. Tocca il campo e scegli **Fotocamera**, **File** o **Documenti**.")
         f_soc = st.file_uploader("Scegli qualsiasi file", key=f"ca_soc_{n}", label_visibility="collapsed")
+    with st.expander("🔎 Cosa ha ricevuto l'app finora (per capire dove si ferma)"):
+        def _rx(fl):
+            return f"ricevuto «{fl.name}» ({fl.size // 1024} KB)" if fl is not None else "niente"
+        st.caption(f"Fotocamera: {_rx(f_cam)} · Galleria: {_rx(f_gal)} · Campo PDF: {_rx(up_pdf)} · Qualsiasi file: {_rx(f_soc)} · "
+                   f"Pulsante arancione: {('file ricevuto' if ack_t.endswith(':fine') else ('in arrivo (pezzo ' + ack_t.split(':')[-1] + ')' if ack_t else 'niente'))}" + (f" · ⚠️ {err_t}" if err_t else ""))
     up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf}, chiave_f)
     with st.expander("🔗 …oppure prendi il manuale da un link"):
+        st.caption("Va bene anche il link di **Google Drive** o **Dropbox**. Attenzione: perché funzioni il file deve essere condiviso con «chiunque abbia il link»: dopo averlo caricato qui, **togli la condivisione**.")
         url = st.text_input("Indirizzo del PDF", key=f"ca_url_{n}", placeholder="https://…/manuale.pdf")
         if st.button("⬇ Scarica e leggi", key=f"ca_url_btn_{n}") and url.strip():
             if "_fa_scarica_pdf" in globals():
                 with st.spinner("Scarico il PDF…"):
-                    f, errore = _fa_scarica_pdf(url.strip(), "Manuale")
+                    f, errore = _fa_scarica_pdf(_ca_url_diretto(url.strip()), "Manuale")
                 if f is None:
                     st.error("Non riesco: " + str(errore))
                 else:
@@ -1146,7 +1320,7 @@ Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
 3. Leggo il documento e ti propongo **tipo, categoria, apparecchio, marca, modello, numero di serie, data e lingua**. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
 4. **Controlla e correggi** quello che non va, scegli a quale **bene** collegarlo (o crea un nuovo bene) e tocca **✅ Conferma e archivia**.
 
-Puoi **scattare una foto** (tasto «📷 Scatta foto», che apre la fotocamera posteriore), prenderla **dalla galleria** o caricare un **PDF**. Il **file originale resta com'è**, identico (una foto enorme viene ridotta, e viene segnato). Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
+Puoi **scattare una foto** (tasto «📷 Scatta foto», che apre la fotocamera posteriore), prenderla **dalla galleria**, oppure toccare il pulsante arancione **«📎 Scegli il PDF o il file»**: il telefono ti fa scegliere qualsiasi file, anche con un nome strano. Se qualcosa non va, il riquadro **«🔎 Cosa ha ricevuto l'app finora»** dice a che punto si ferma. Un PDF si può anche prendere da un **link** (anche di Google Drive o Dropbox). Il **file originale resta com'è**, identico (una foto enorme viene ridotta, e viene segnato). Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
          "archiviare manuale manuali caricare pdf foto scansione riconoscimento marca modello numero di serie conferma"),
         ("🏠 Aggiungere e collegare un bene",
          """In **🏠 Beni** tocca **➕ Aggiungi un bene** e compila nome, categoria, marca, modello, numero di serie, dove si trova, data di acquisto e garanzia.
