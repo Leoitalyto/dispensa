@@ -1678,3 +1678,48 @@ try:                                                                 # lasciando
         _STATI_DA_CHIUDERE = list(_STATI_DA_CHIUDERE) + ["sp_modulo"]
 except Exception:
     pass
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# la guida «Informazioni» della Salute: le novità (solo italiano, le altre lingue a lavoro finito)
+# ---------------------------------------------------------------------------------------------------------------------
+_SP_GUIDA = [
+    ("s_emerg", "🆘 Dati per l'emergenza e scheda per il medico",
+     """Ogni persona ha, sotto i riquadri, quattro pulsanti colorati.
+**🆘 Dati per l'emergenza**: scrivi la data di nascita, gli **impianti** (pacemaker, bypass, stent, protesi), le terapie importanti (**anticoagulanti**, insulina…), le **allergie** (anche a cibi e lattice) e **chi chiamare**. Tocca **💾 Salva**.
+**📄 Scheda per il medico**: l'app mette insieme tutto quello che sa della persona e lo scrive in una scheda: in alto gli **avvisi rossi** (allergie, impianti, terapie importanti), poi un racconto in breve, le patologie, gli interventi, le terapie, i vaccini, le visite, i documenti e gli ultimi valori. Si aggiorna da sola. La scarichi in **HTML o PDF** o la **invii** (email, WhatsApp, Telegram).
+In fondo c'è l'elenco **📝 Per rendere la scheda più utile**: ti dice cosa manca.
+Le informazioni sono quelle che inserisci tu: la scheda non è certificata da un medico. Non esce nessun dato dall'app, a meno che tu attivi la sintesi con intelligenza artificiale (facoltativa, solo con il consenso, senza nome e dati che identificano la persona).""",
+     "emergenza scheda medico allergie pacemaker bypass anticoagulanti impianti protesi contatto pdf esporta racconto"),
+    ("s_docsan", "🗂️ Documenti sanitari: li leggo io, tu confermi",
+     """1. Apri **Salute** e tocca **🗂️ Documenti sanitari**.
+2. Tocca **Scegli i documenti** e carica uno o più PDF o foto (referti, esami, ecografie, ricette, lettere di dimissione, certificati).
+3. L'app li legge e ti propone **di chi è**, **che documento è**, la **data**, il **medico**, la **struttura** e, per le ricette, il **codice** e la **validità**. I pallini dicono quanto è sicura: 🟢 sicuro, 🟡 abbastanza, 🟠 poco.
+4. **Controlli, correggi** e tocchi **✅ Conferma e archivia**. Se il documento sembra già archiviato, ti avviso prima.
+Poi li ritrovi per tipo, con **🔍 Cerca**, **👁️ Vedi / scarica**, **✏️ Correggi**, **📤 Invia** e **🗑️ Elimina**.
+Se un documento ti arriva per email: in **Casa → Documenti → 📥 Posta in arrivo** tocca **🩺 È un documento sanitario**.""",
+     "documenti sanitari referto esame analisi ecografia ricetta dimissione certificato carica leggi archivia posta"),
+    ("s_medici", "👩‍⚕️ Medici e riferimenti (anche il pediatra)",
+     """Tocca **👩‍⚕️ Medici e riferimenti**. In alto trovi il **medico di base** (la sua scheda completa è quella di prima). Sotto puoi aggiungere con **➕ Aggiungi un riferimento**: **pediatra**, specialisti, dentista, fisioterapista…, con studio, telefono, email, indirizzo, orari e sostituto.
+Su ognuno: **📞 Chiama**, **✉️ Scrivi**, **✏️ Modifica**, **🗑️ Togli**, **📤 Invia**. Per un bambino l'app ti ricorda di aggiungere il pediatra.""",
+     "medici pediatra specialista dentista rubrica telefono orari riferimenti"),
+    ("s_bimbo", "👶 Percorso del bambino",
+     """Per un bambino, nei **🆘 Dati per l'emergenza** spunta **È un bambino o una bambina**: compare **👶 Percorso del bambino**.
+Ha sei schede: **📏 Crescita** (peso e altezza con il grafico), **🧩 Tappe** (primo sorriso, primi passi, prime parole…), **🍼 Alimentazione**, **🤒 Malattie**, **🦷 Denti**, **🏥 Ricoveri**. Ogni voce si modifica e si toglie.
+Le **visite dal pediatra** e i **vaccini** si segnano nelle schede 🩺 Visite e 💉 Vaccini. In fondo scarichi o invii il **libretto** (HTML o PDF).""",
+     "bambino bimbo crescita peso altezza tappe pediatra libretto denti malattie febbre"),
+    ("s_param", "📈 Parametri e valori",
+     """Tocca **📈 Parametri e valori** e scrivi pressione (massima e minima), glicemia, peso, febbre, battiti, saturazione, colesterolo… con la **data**. Scegli quale valore guardare: vedi l'ultimo e il **grafico nel tempo**. Scarichi la tabella (HTML o PDF) o la invii.
+L'app non dice se un valore va bene o no: chiedilo al medico.""",
+     "parametri pressione glicemia peso febbre colesterolo grafico diario valori"),
+    ("s_ctrl", "⏰ Controlli periodici",
+     """Tocca **⏰ Controlli periodici** e aggiungi dentista, vista, esami del sangue, antinfluenzale… scrivendo **l'ultima volta** e **ogni quanti mesi**. Ti dico quando tocca (🟢 lontano, 🟠 vicino, 🔴 in ritardo) e, con **🔔 Avvisami**, ti avviso sul telefono: **30, 7 e 1 giorno prima**, il giorno stesso e ogni lunedì se sei in ritardo.
+**✅ Fatto oggi** mette la data di oggi e calcola la prossima. I tempi giusti dipendono da te: chiedi al medico.""",
+     "controlli periodici dentista vista vaccino antinfluenzale promemoria avviso scadenza"),
+    ("s_tess", "🪪 Tessera, fascicolo sanitario e i documenti scaricati",
+     """Tocca il riquadro **Tessera sanitaria · Fascicolo sanitario**. Sotto le tre voci (**fascicolo sanitario elettronico**, **vaccinazioni**, **spese sanitarie detraibili**) c'è il **link** da salvare e, sotto, **📎 Il documento scaricato**: carichi il PDF o la foto che hai già scaricato dal sito, poi lo **vedi**, lo **scarichi**, lo **invii** o lo **togli**.""",
+     "tessera sanitaria fascicolo sanitario elettronico vaccinazioni spese detraibili documento scaricato pdf"),
+]
+if "_GUIDE" in globals() and "farmacia" in _GUIDE and "_ID_GUIDA" in globals() and "s_emerg" not in _ID_GUIDA.get("farmacia", []) and len(_GUIDE["farmacia"]) == len(_ID_GUIDA.get("farmacia", [])):
+    _GUIDE["farmacia"] = list(_GUIDE["farmacia"]) + [(t_, c_, k_) for _i, t_, c_, k_ in _SP_GUIDA]
+    _ID_GUIDA["farmacia"] = list(_ID_GUIDA["farmacia"]) + [x[0] for x in _SP_GUIDA]
