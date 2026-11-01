@@ -35,7 +35,7 @@ _CA_TIPI_MANUALI = {"Manuale d'uso", "Manuale di installazione", "Manuale di man
 CA_LINGUE = {"it": "Italiano", "en": "Inglese", "de": "Tedesco", "fr": "Francese", "es": "Spagnolo", "": "Non so"}
 CA_STANZE = ["Cucina", "Soggiorno", "Camera da letto", "Bagno", "Ingresso", "Studio", "Lavanderia", "Garage", "Cantina", "Giardino", "Terrazzo", "Tutta la casa", "Altro"]
 CA_TIPI_MANUTENZIONE = ["Controllo", "Manutenzione ordinaria", "Manutenzione straordinaria", "Riparazione", "Pulizia o sostituzione filtri", "Altro"]
-_CA_MIME = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+_CA_MIME = {"application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain"}
 _CA_MAX_BYTE = 8 * 1024 * 1024
 CA_CATEGORIE = {
     "Riscaldamento e acqua calda": ["Caldaia", "Scaldabagno", "Stufa o camino", "Pompa di calore", "Termostato e cronotermostato", "Radiatori e termosifoni"],
@@ -155,6 +155,13 @@ def _ca_ocr_pdf(dati, max_pagine=3):
 def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
     """(testo, info). Dai PDF con testo si legge il testo; dalle foto e dalle scansioni, se c'è, con l'OCR. info = {pagine, titolo, data_meta, scansione, metodo}."""
     info = {"pagine": None, "titolo": "", "data_meta": None, "scansione": False, "metodo": ""}
+    if mime == "text/plain":                                                  # il testo di un messaggio di posta (senza allegati)
+        try:
+            testo = (dati or b"").decode("utf-8")
+        except UnicodeDecodeError:
+            testo = (dati or b"").decode("latin-1", "replace")
+        info["metodo"], info["testo_p1"] = "testo del messaggio", testo[:6000]
+        return testo[:max_car], info
     if mime == "application/pdf":
         try:                                                                  # 1) PyMuPDF, se c'è: tiene meglio in ordine righe, colonne e tabelle
             try:
@@ -418,8 +425,13 @@ _CA_ENTI = [
     ("Poste Assicura", ["poste assicura"]), ("Linear", ["linear assicurazioni"]), ("Genertel", ["genertel"]), ("Direct Line", ["direct line"]),
     ("Agenzia delle Entrate", ["agenzia delle entrate"]),
 ]
-_CA_RE_RICEVUTA = (r"ricevuta di pagamento|quietanza|esito (?:del )?pagamento|pagamento (?:effettuato|eseguito|riuscito|completato|andato a buon fine)|ricevuta (?:pagopa|telematica|di versamento|del bonifico)|"
-                   r"contabile|bonifico (?:eseguito|disposto|istantaneo)|attestazione di pagamento|conferma (?:di|del) pagamento|ordine di bonifico|payment receipt|transazione (?:eseguita|completata)")
+# frasi che dicono con certezza «questa è la prova di un pagamento»…
+_CA_RE_RICEVUTA_FORTE = (r"ricevuta di pagamento|quietanza|esito (?:del )?pagamento|pagamento (?:effettuato|eseguito|riuscito|completato|andato a buon fine)|ricevuta (?:pagopa|telematica|di versamento|del bonifico)|"
+                         r"contabile|bonifico (?:eseguito|disposto|istantaneo)|attestazione di pagamento|conferma (?:di|del) pagamento|ordine di bonifico|payment receipt|transazione (?:eseguita|completata)")
+# …e frasi che compaiono anche DENTRO una bolletta («metodo di pagamento: addebito diretto»): valgono solo per un testo breve (uno screenshot) senza i segni di una bolletta
+_CA_RE_RICEVUTA_DEBOLE = r"pagat[oa] in data|pagat[oa] il|addebito diretto|addebito effettuato|addebitato il|pagamento ricevuto|pagamento registrato|saldat[oa]|regolarmente pagat|bolletta pagata|fattura pagata"
+_CA_RE_SEGNI_BOLLETTA = (r"totale da pagare|importo da pagare|periodo di fatturazione|periodo di riferimento|importo dovuto|dovrai pagare|da pagare entro|imponibile|potenza impegnata|kwh|smc|\bpod\b|\bpdr\b|"
+                         r"scadenza|data fattura|numero fattura|consumo fatturato")
 _CA_FORMA_LEGALE = r"(?:S\.?\s?p\.?\s?A\.?|S\.?\s?r\.?\s?l\.?|S\.?\s?c\.?\s?a\.?\s?r\.?\s?l\.?|S\.?\s?n\.?\s?c\.?|S\.?\s?a\.?\s?s\.?|Soc(?:ieta|ietà)?\.?\s+Coop(?:erativa)?\.?)"
 _CA_MESI_ABB = {"gen": 1, "feb": 2, "mar": 3, "apr": 4, "mag": 5, "giu": 6, "lug": 7, "ago": 8, "set": 9, "ott": 10, "nov": 11, "dic": 12}
 _CA_RE_DATA = r"(\d{1,2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{4}|\d{2})\b|(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\.?\s+(\d{4})\b"
@@ -531,7 +543,8 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
     arg, punti_a, p_luce, p_gas = ca_leggi_argomento(t, nome_file)
     ha_importo = bool(re.search(_CA_RE_IMPORTO, t))                           # (il simbolo € non si pretende: la lettura ottica lo sbaglia spesso)
     ha_scadenza = bool(re.search(r"scadenza|scade|entro il|da pagare", tn))
-    e_ricevuta = bool(re.search(_CA_RE_RICEVUTA, tn)) and ha_importo and not re.search(r"totale da pagare|importo da pagare|periodo di fatturazione|importo dovuto", tn)
+    e_ricevuta = ha_importo and ((bool(re.search(_CA_RE_RICEVUTA_FORTE, tn)) and not re.search(r"totale da pagare|importo da pagare|periodo di fatturazione|importo dovuto|dovrai pagare|imponibile", tn))
+                                 or (bool(re.search(_CA_RE_RICEVUTA_DEBOLE, tn)) and len(t) < 700 and not re.search(_CA_RE_SEGNI_BOLLETTA, tn)))
     e_utenza = bool(t) and (arg not in _CA_ARG_APPARECCHIO) and ((punti_f >= 7 and forti >= 1) or (arg and punti_a >= 8 and ha_importo and ha_scadenza) or e_ricevuta)
     if not e_utenza:
         return {"e_utenza": False, "campi": {}}
@@ -572,6 +585,10 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
                 break
     if v:
         metti("importo", _ca_importo_str(v.group(1)), "alta" if et != "totale" else "media")
+    elif tipo == "Ricevuta di pagamento":                                       # screenshot senza etichette: se nel testo c'è UN solo importo, è quello
+        importi = sorted({_ca_importo_str(x) for x in re.findall(_CA_RE_IMPORTO, t)})
+        if len(importi) == 1:
+            metti("importo", importi[0], "media")
     # --- numero del documento: dopo l'etichetta, il primo «pezzo» con cifre che non sia una data («Numero fattura elettronica valida ai fini fiscali: KE-26-D92452D9-006»)
     def _numero_dopo(rx, finestra, min_cifre):
         for m in re.finditer(rx, t, re.I):
@@ -588,7 +605,7 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
     # --- data di emissione (per una ricevuta: la data del PAGAMENTO)
     emessa = None
     if tipo == "Ricevuta di pagamento":
-        v, _ = _ca_dopo(t, ["data pagamento", "data del pagamento", "data operazione", "data esecuzione", "data di esecuzione", "data valuta", "eseguito il", "pagato il", "effettuato il", "data"], _CA_RE_DATA, 50)
+        v, _ = _ca_dopo(t, ["pagato in data", "pagata in data", "data pagamento", "data del pagamento", "data operazione", "data esecuzione", "data di esecuzione", "data valuta", "eseguito il", "pagato il", "pagata il", "addebitato il", "data addebito", "ricevuto il", "effettuato il", "data"], _CA_RE_DATA, 50)
         emessa = _ca_data_da_match(v) if v else None
         if emessa:
             metti("data_doc", emessa.isoformat(), "alta")
@@ -697,34 +714,55 @@ def ca_stato_pagamento(d, docs, oggi_):
     return ("scaduta", -g) if g < 0 else ("da_pagare", g)
 
 
-def ca_proponi_bolletta(docs, campi, escludi_id=None):
-    """La bolletta (ancora non pagata) a cui sembra riferirsi una ricevuta: (id, motivi) oppure (None, [])."""
+def ca_candidate_bollette(docs, campi, escludi_id=None):
+    """Le bollette ancora NON pagate che potrebbero essere quelle di una ricevuta o di uno screenshot di pagamento, dalla più probabile: [{id, punti, esatto, motivi}]."""
     v = lambda k: (campi.get(k) or {}).get("valore", "") if isinstance(campi.get(k), dict) else (campi.get(k) or "")
     num, ente = _ca_norm(v("numero_doc")), _ca_norm(v("ente"))
     try:
         imp = float(v("importo")) if v("importo") else None
     except ValueError:
         imp = None
-    migliore, punti_m, motivi_m = None, 0, []
+    out = []
     for b in docs:
         if b.get("tipo") not in _CA_TIPI_PAGABILI or b.get("id") == escludi_id or ca_ricevute_di(docs, b.get("id")) or b.get("pagata_il"):
             continue
-        p, motivi = 0, []
+        p, motivi, esatto = 0, [], False
         if num and _ca_norm(b.get("numero_doc")) == num:
             p += 6; motivi.append("stesso numero di fattura")
         try:
             if imp is not None and b.get("importo") and abs(float(b["importo"]) - imp) < 0.005:
-                p += 4; motivi.append("stesso importo")
+                p += 4; esatto = True; motivi.append("stesso importo")
         except ValueError:
             pass
         eb = _ca_norm(b.get("ente"))
         if ente and eb and ente == eb:
-            p += 3; motivi.append("stesso ente")
+            p += 3; motivi.append("stessa azienda")
         elif ente and eb and (ente in eb or eb in ente):
-            p += 2; motivi.append("ente simile")
-        if p > punti_m:
-            migliore, punti_m, motivi_m = b.get("id"), p, motivi
-    return (migliore, motivi_m) if punti_m >= 6 else (None, [])
+            p += 2; motivi.append("azienda simile")
+        out.append({"id": b["id"], "punti": p, "esatto": esatto or bool(num and _ca_norm(b.get("numero_doc")) == num), "motivi": motivi, "ordine": _ca_ordine(b)})
+    try:
+        pag = date.fromisoformat(v("data_doc"))
+    except (ValueError, TypeError):
+        pag = None
+    if pag:
+        for x in out:
+            b = next((y for y in docs if y.get("id") == x["id"]), {})
+            rif = _data(b.get("scadenza_doc")) or _data(b.get("data_doc"))
+            x["vicino"] = -abs((pag - rif).days) if rif else -9999
+    out.sort(key=lambda x: (x["esatto"], x["punti"], x.get("vicino", 0), x["ordine"]), reverse=True)
+    return out
+
+
+def ca_proponi_bolletta(docs, campi, escludi_id=None):
+    """La bolletta a cui sembra riferirsi una ricevuta: (id, motivi) oppure (None, []). Una sola bolletta con lo stesso importo basta."""
+    cand = ca_candidate_bollette(docs, campi, escludi_id)
+    if not cand:
+        return None, []
+    m = cand[0]
+    esatte = [x for x in cand if x["esatto"]]
+    if m["punti"] >= 6 or (m["esatto"] and len(esatte) == 1):
+        return m["id"], m["motivi"]
+    return None, []
 
 
 def _ca_etichetta_bolletta(b):
@@ -805,6 +843,10 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
                 metti("importo", _ca_importo_str(imp.group(1)), "media", "testo")
         else:
             metti("ente", marca, "media" if marca else "bassa", "testo" if marca and marca.lower() in (testo or "").lower() else "nome del file")
+            if testo and len(testo) < 700 and not tipo_v:
+                importi = sorted({_ca_importo_str(x) for x in re.findall(_CA_RE_IMPORTO, testo)})
+                if len(importi) == 1:
+                    metti("importo", importi[0], "bassa", "testo")
     return {"testo_ok": bool(testo), "info": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in info.items()}, "campi": campi, "testo_inizio": (testo or "")[:400]}
 
 
@@ -910,6 +952,8 @@ def _ca_eredita_dalla_bolletta(c, fin):
             fin["argomento"] = b.get("argomento") or fin.get("argomento", "")
         if not fin.get("ente"):
             fin["ente"] = b.get("ente") or ""
+        if not fin.get("importo") and b.get("importo"):
+            fin["importo"] = b["importo"]
 
 
 def _ca_modificati(campi_prop, fin, presenti=None):
@@ -1127,6 +1171,9 @@ def _ca_anteprima(nome, mime, dati):
     if (mime or "").startswith("image/"):
         st.image(dati, width="stretch")
         return
+    if mime == "text/plain":
+        st.text((dati or b"").decode("utf-8", "replace")[:5000])
+        return
     try:
         try:
             import pymupdf as _mu
@@ -1296,6 +1343,8 @@ def _ca_mime(nome, tipo, dati):
     if testa[:4] == b"RIFF" and testa[8:12] == b"WEBP":
         return "image/webp"
     est = str(nome or "").lower().rsplit(".", 1)[-1]
+    if est == "txt" and not testa.startswith((b"%PDF", b"\xff\xd8", b"\x89PNG")):
+        return "text/plain"
     return {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(est, tipo or "application/octet-stream")
 
 
@@ -1573,6 +1622,113 @@ def _ca_riduci_foto(nome, dati, massimo=None):
     return None
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# POSTA IN ARRIVO: i file arrivati per email (inoltrati a «…+casa@gmail.com» o con l'etichetta «Casa») li mette nell'archivio il programma posta.py, ogni poche ore;
+# qui si vedono, si leggono e si archiviano come tutti gli altri documenti.
+# ---------------------------------------------------------------------------------------------------------------------
+_CA_INDIRIZZO_POSTA = "leoitalyto+casa@gmail.com"
+
+
+def _ca_posta_percorso():
+    return f"posta/{st.session_state['sess']['uid']}.json"
+
+
+def _ca_posta_leggi():
+    try:
+        d = carica_dati(crea_archivio(), _ca_posta_percorso()) or {}
+        return [x for x in d.get("items", []) if isinstance(x, dict) and x.get("file_id")]
+    except Exception:
+        return []
+
+
+def _ca_posta_togli(pid, cancella_file=False):
+    """Toglie un elemento dalla posta in arrivo (e, se serve, cancella il file arrivato)."""
+    trovato = {}
+
+    def _fn(d):
+        resto = []
+        for x in d.get("items", []):
+            if x.get("id") == pid:
+                trovato.update(x)
+            else:
+                resto.append(x)
+        d["items"] = resto
+    salva_file(_ca_posta_percorso(), _fn, "Posta: elemento tolto")
+    if cancella_file and trovato.get("file_id") and "_fa_cancella_files" in globals():
+        _fa_cancella_files([trovato["file_id"]])
+
+
+def _ca_posta_riquadro(c):
+    """Il riquadro «📥 Posta in arrivo» in cima alla scheda Documenti."""
+    items = _ca_posta_leggi()
+    titolo = f"📥 Posta in arrivo: {len(items)} da archiviare" if items else "📥 Posta in arrivo (nessun file nuovo)"
+    with st.expander(titolo, expanded=bool(items)):
+        for it in items[:15]:
+            kb = max(1, int(it.get("dimensione") or 0) // 1024)
+            st.markdown(f"<div class='ca-card'><b>📎 {_ca_testo(it.get('nome') or 'file')}</b> · {kb} KB<br><span style='font-size:.85rem'>da {_ca_testo(it.get('da') or '?')}"
+                        + (f" · «{_ca_testo(it.get('oggetto'))}»" if it.get("oggetto") else "") + (f" · {_ca_data_it(str(it.get('data_mail') or '')[:10])}" if it.get("data_mail") else "") + "</span></div>", unsafe_allow_html=True)
+            q1, q2 = st.columns(2, gap="small")
+            if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", type="primary"):
+                car = _fa_inv_allegati([{"id": it["file_id"], "nome": it.get("nome"), "mime": it.get("mime")}]) if "_fa_inv_allegati" in globals() else []
+                if not car:
+                    st.error("Non riesco ad aprire questo file: toccalo di nuovo fra poco, oppure scartalo.")
+                else:
+                    nome_, mime_, dati_ = car[0]
+                    st.session_state["ca_bozza_in"] = {"nome": nome_, "mime": _ca_mime(nome_, mime_, dati_), "dati": dati_, "link": "", "file_id": it["file_id"], "posta_id": it["id"]}
+                    st.session_state.pop("ca_bozza", None)
+                    st.rerun()
+            if q2.button("🗑️ Scarta", key=f"ca_po_no_{it['id']}", width="stretch"):
+                try:
+                    _ca_posta_togli(it["id"], cancella_file=True)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Non sono riuscito: {e}")
+        if len(items) > 15:
+            st.caption(f"…e altri {len(items) - 15}: archivia questi per vedere i prossimi.")
+        st.markdown(f"**Come ci mandi un documento dalla posta:** inoltralo (o scrivi, allegando il file) a **{_CA_INDIRIZZO_POSTA}**, oppure dalle app dei fornitori tocca **Condividi → Gmail** e usa quell'indirizzo. "
+                    "Anche i messaggi con l'etichetta Gmail **«Casa»** arrivano qui. Il programma controlla la posta alcune volte al giorno.")
+        st.link_button("🔄 Controlla la posta adesso", "https://github.com/Leoitalyto/dispensa-dati/actions/workflows/posta.yml", width="stretch")
+        st.caption("Si apre GitHub: tocca **Run workflow** e poi **Run workflow**; dopo circa un minuto torna qui e ricarica la pagina.")
+
+
+def _ca_val_da_ric(ric, **extra):
+    """I dati di una lettura, nella forma del modulo (per archiviare in un tocco)."""
+    v = {k: (ric["campi"].get(k) or {}).get("valore", "") for k in _CAMPI_DOC}
+    v.update({"bene_id": "", "link": "", "note": "", "titolo": ""})
+    v["tipo"] = v.get("tipo") or "Ricevuta di pagamento"
+    v["categoria"] = v.get("categoria") or "Altro"
+    v.update(extra)
+    return v
+
+
+def _ca_archivia(sorgente, sha, ric, bozza, val, n):
+    """Archivia il documento (originale intatto + dati letti + classificazione + conferma). Ritorna il messaggio da mostrare. Se il file viene dalla posta è già nell'archivio: non si ricopia."""
+    nid = sorgente.get("file_id") or uuid.uuid4().hex[:12]
+    if not sorgente.get("file_id"):
+        _ca_scrivi_file(nid, sorgente["nome"], sorgente["mime"], sorgente["dati"])                   # 1) l'originale, intatto
+    ora, utente = _ca_ora(), (st.session_state.get("sess") or {}).get("nome", "")
+    rif = {"id": nid, "nome": sorgente["nome"], "mime": sorgente["mime"], "sha256": sha, "dimensione": len(sorgente["dati"]), **({"ridotta": True} if sorgente.get("ridotta") else {})}
+    proposta = {k: (ric["campi"].get(k) or {}).get("valore", "") for k in ("tipo", "categoria", "sottocategoria")}
+    proposta["bene_id"] = (bozza or {}).get("bene") or ""
+
+    def _fn(cc, val=val, ora=ora, utente=utente, rif=rif, proposta=proposta, ric=ric, sorg=sorgente):
+        v = dict(val)
+        if v.get("bene_id") == "__nuovo__":                                                          # nuovo bene dai dati confermati
+            nb = ca_nuovo_bene(cc, {"nome": " ".join(x for x in (v["sottocategoria"], v["marca"], v["modello"]) if x) or v["titolo"] or "Nuovo bene", "categoria": v["categoria"],
+                                    "sottocategoria": v["sottocategoria"], "marca": v["marca"], "modello": v["modello"], "seriale": v["seriale"]}, ora)
+            v["bene_id"] = nb["id"]
+        v["link"] = v.get("link") or sorg.get("link", "")
+        ca_aggiungi_documento(cc, rif, ric, proposta, v, utente, ora)
+    _ca_salva(_fn, "Casa: documento archiviato")
+    if sorgente.get("posta_id") and "_ca_posta_togli" in globals():
+        _ca_posta_togli(sorgente["posta_id"], cancella_file=False)
+    st.session_state["ca_giro"] = n + 1
+    for k in ("ca_bozza", "ca_bozza_in"):
+        st.session_state.pop(k, None)
+    return (f"✅ Documento archiviato in «{val.get('argomento') or 'Altro'}»" + (f" › «{val['ente']}»" if val.get("ente") else "")
+            + (" e collegato alla sua bolletta" if val.get("collegato_a") else "") + ", con il file originale: lo ritrovi nella scheda Documenti.")
+
+
 def _ca_tab_manuali(c):
     beni = c.get("beni", [])
     nomi = {b["id"]: b.get("nome", "") for b in beni}
@@ -1580,6 +1736,7 @@ def _ca_tab_manuali(c):
     st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
                "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
     n = st.session_state.get("ca_giro", 0)
+    _ca_posta_riquadro(c)
     chiave_f = f"cadoc{n}"
     if "_fa_assicura_fotocamera" in globals():                                  # la fotocamera posteriore è la stessa di Salute e della dispensa
         try:
@@ -1677,44 +1834,90 @@ def _ca_tab_manuali(c):
                     st.caption("📷 Questo PDF era una **scansione**: l'ho letto come una foto (solo le prime pagine). Lettere e numeri possono essere sbagliati, soprattutto **modello e numero di serie**: controllali.")
             if sorgente["mime"].startswith("image/"):
                 st.image(sorgente["dati"], width=240)
-            ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), c.get("documenti", []), bozza.get("bolletta"), bozza.get("motivi_b"))
-            c1, c2 = st.columns(2)
-            if c2.button("✖ Scarta", key="ca_scarta", width="stretch"):
-                st.session_state["ca_giro"] = n + 1
-                st.session_state.pop("ca_bozza", None)
-                st.session_state.pop("ca_bozza_in", None)
-                st.rerun()
-            if ok:
-                try:
-                    nid = uuid.uuid4().hex[:12]
-                    _ca_scrivi_file(nid, sorgente["nome"], sorgente["mime"], sorgente["dati"])              # 1) l'originale, intatto
-                    ora, utente = _ca_ora(), (st.session_state.get("sess") or {}).get("nome", "")
-                    rif = {"id": nid, "nome": sorgente["nome"], "mime": sorgente["mime"], "sha256": sha, "dimensione": len(sorgente["dati"]), **({"ridotta": True} if sorgente.get("ridotta") else {})}
-                    proposta = {k: (ric["campi"].get(k) or {}).get("valore", "") for k in ("tipo", "categoria", "sottocategoria")}
-                    proposta["bene_id"] = bozza.get("bene") or ""
-
-                    def _fn(cc, val=val, ora=ora, utente=utente, rif=rif, proposta=proposta, ric=ric, sorg=sorgente):
-                        v = dict(val)
-                        if v["bene_id"] == "__nuovo__":                                                     # nuovo bene dai dati confermati
-                            nb = ca_nuovo_bene(cc, {"nome": " ".join(x for x in (v["sottocategoria"], v["marca"], v["modello"]) if x) or v["titolo"] or "Nuovo bene", "categoria": v["categoria"],
-                                                    "sottocategoria": v["sottocategoria"], "marca": v["marca"], "modello": v["modello"], "seriale": v["seriale"]}, ora)
-                            v["bene_id"] = nb["id"]
-                        v["link"] = v["link"] or sorg.get("link", "")
-                        ca_aggiungi_documento(cc, rif, ric, proposta, v, utente, ora)
-                    _ca_salva(_fn, "Casa: documento archiviato")
-                    st.session_state["ca_giro"] = n + 1
-                    st.session_state.pop("ca_bozza", None)
-                    st.session_state.pop("ca_bozza_in", None)
-                    st.session_state["messaggio"] = f"✅ Documento archiviato in «{val.get('argomento') or 'Altro'}»" + (f" › «{val['ente']}»" if val.get("ente") else "") + ", con il file originale: lo ritrovi nella scheda Documenti."
+            # ---- prova di pagamento (ricevuta, bonifico, screenshot dell'app del fornitore): si propone subito a quale bolletta collegarla
+            docs_c = c.get("documenti", [])
+            tipo_ric = (ric["campi"].get("tipo") or {}).get("valore", "")
+            cand = ca_candidate_bollette(docs_c, ric["campi"])
+            esatte = [x for x in cand if x["esatto"]]
+            rapido = bool(cand) and (tipo_ric == "Ricevuta di pagamento" or (bool(esatte) and tipo_ric in ("", "Altro"))) and not st.session_state.get(f"ca_scelgo_io_{n}")
+            if rapido:
+                imp_r = (ric["campi"].get("importo") or {}).get("valore", "")
+                dat_r = (ric["campi"].get("data_doc") or {}).get("valore", "")
+                st.markdown("#### 💶 Sembra la prova di un pagamento" + (f": € {ca_importo_fmt(imp_r)}" if imp_r else "") + (f", del {_ca_data_it(dat_r)}" if dat_r else ""))
+                if esatte:
+                    st.success(f"Ho trovato {len(esatte)} {'bolletta' if len(esatte) == 1 else 'bollette'} non pagat{'a' if len(esatte) == 1 else 'e'} con lo stesso importo" + (": è questa?" if len(esatte) == 1 else ": quale è?"))
+                else:
+                    st.info("Non trovo una bolletta con questo importo. Scegli tu a quale collegarla, oppure archiviala da sola.")
+                bmap = {b_["id"]: b_ for b_ in docs_c}
+                ordine_o = [x["id"] for x in esatte] + [x["id"] for x in cand if not x["esatto"]][:8]
+                def _et(i):
+                    if i == "__nessuna__":
+                        return "— Nessuna di queste: la archivio da sola —"
+                    b_ = bmap[i]
+                    return f"{_CA_ICONE_ARG.get(_ca_argomento_di(b_), '')} {_ca_etichetta_bolletta(b_)}" + (" ✅ stesso importo" if i in [x['id'] for x in esatte] else "")
+                scelta = st.radio("A quale bolletta la collego?", ordine_o + ["__nessuna__"], format_func=_et, key=f"ca_q_scelta_{n}")
+                q1, q2 = st.columns(2, gap="small")
+                if q1.button("✅ Collega e archivia" if scelta != "__nessuna__" else "📥 Archivia da sola", key=f"ca_q_ok_{n}", type="primary", width="stretch"):
+                    try:
+                        st.session_state["messaggio"] = _ca_archivia(sorgente, sha, ric, bozza, _ca_val_da_ric(ric, collegato_a="" if scelta == "__nessuna__" else scelta), n)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Non sono riuscito a salvare: {e}")
+                if q2.button("✋ Scelgo io (modulo completo)", key=f"ca_q_io_{n}", width="stretch"):
+                    st.session_state[f"ca_scelgo_io_{n}"] = True
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Non sono riuscito a salvare: {e}")
+                if st.button("✖ Scarta", key="ca_scarta_q", width="stretch"):
+                    if sorgente.get("posta_id") and "_ca_posta_togli" in globals():
+                        _ca_posta_togli(sorgente["posta_id"], cancella_file=True)
+                    st.session_state["ca_giro"] = n + 1
+                    for k in ("ca_bozza", "ca_bozza_in"):
+                        st.session_state.pop(k, None)
+                    st.rerun()
+            else:
+                ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), docs_c, bozza.get("bolletta"), bozza.get("motivi_b"))
+                c1, c2 = st.columns(2)
+                if c2.button("✖ Scarta", key="ca_scarta", width="stretch"):
+                    if sorgente.get("posta_id") and "_ca_posta_togli" in globals():
+                        _ca_posta_togli(sorgente["posta_id"], cancella_file=True)
+                    st.session_state["ca_giro"] = n + 1
+                    for k in ("ca_bozza", "ca_bozza_in"):
+                        st.session_state.pop(k, None)
+                    st.rerun()
+                if ok:
+                    try:
+                        st.session_state["messaggio"] = _ca_archivia(sorgente, sha, ric, bozza, val, n)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Non sono riuscito a salvare: {e}")
     # ---- correzione e cancellazione
     cid = st.session_state.get("ca_correggi")
     if cid:
         d = next((x for x in c.get("documenti", []) if x["id"] == cid), None)
         if d:
             st.markdown(f"##### ✏️ Correggi: {_ca_testo(d.get('titolo'))}")
+            if st.button("🔄 Rileggi il file e completa i dati mancanti", key=f"ca_rileggi_{cid}", width="stretch",
+                         help="Rilegge il file con il lettore aggiornato e riempie SOLO i campi ancora vuoti: quello che hai già scritto o corretto non si tocca."):
+                f_ = d.get("file") or {}
+                car = _ca_leggi_file(f_) if f_.get("id") else []
+                if not car:
+                    st.warning("Il file originale non è disponibile.")
+                else:
+                    nome_, mime_, dati_ = car[0]
+                    testo_, info_ = ca_estrai_testo(nome_, mime_, dati_)
+                    ric_ = ca_riconosci(nome_, mime_, dati_, testo_, info_)
+                    nuovi = {k: v["valore"] for k, v in ric_["campi"].items() if k in _CAMPI_CONTROLLATI and v.get("valore") and not d.get(k) and not (k == "argomento" and d.get(k) == "Altro")}
+                    def _riempi(cc, nuovi=nuovi, cid=cid):
+                        x = next((y for y in cc.get("documenti", []) if y.get("id") == cid), None)
+                        if x is not None and nuovi:
+                            vecchio_auto = ca_titolo_auto(x)
+                            x.update(nuovi)
+                            if x.get("titolo") in ("", vecchio_auto):
+                                x["titolo"] = ca_titolo_auto(x) or x.get("titolo", "")
+                    if nuovi:
+                        _ca_salva(_riempi, "Casa: dati completati rileggendo il file")
+                    st.session_state["messaggio"] = ("🔄 Ho completato: " + ", ".join(nuovi)) if nuovi else "🔄 Ho riletto il file: non c'era niente da aggiungere."
+                    st.session_state.pop("ca_correggi", None)
+                    st.rerun()
             ok, val = _ca_form_documento(f"ca_form_cor_{cid}", d, beni, bollette=c.get("documenti", []))
             if st.button("Annulla", key="ca_cor_annulla"):
                 st.session_state.pop("ca_correggi", None)
@@ -2001,7 +2204,7 @@ Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
 3. Leggo il documento e capisco **di cosa parla** (Luce, Gas, Acqua, Telefono e Internet, Rifiuti, Condominio, Assicurazioni, Manuali…). Per una **bolletta o fattura** ti propongo **chi l'ha emessa, importo, numero, data, periodo, scadenza e codici** (cliente, POD, PDR…); per un **manuale** categoria, marca, modello e numero di serie. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
 4. **Controlla e correggi** quello che non va. Le bollette di solito **non si collegano a un bene**; i manuali sì (o crei un nuovo bene). Poi tocca **✅ Conferma e archivia**.
 
-**Ricevuta di pagamento:** archiviala come gli altri documenti: ti propongo io a quale **bolletta** collegarla (stesso importo, stesso numero, stessa azienda). Una volta collegata, la ricevuta sta **dentro la sua bolletta** e la bolletta risulta **✅ Pagata**. Se hai pagato senza ricevuta, tocca **«✅ Segna come pagata»**. Le bollette in scadenza o scadute e non pagate compaiono tra gli avvisi in cima a Casa.
+**Ricevuta di pagamento:** può essere un PDF, una foto, un bonifico o anche lo **screenshot dell'app del fornitore** («Pagato in data…»). Caricala come gli altri documenti: leggo l'importo e la data e ti chiedo subito **a quale bolletta collegarla** (cerco prima quelle con lo stesso importo, di qualsiasi argomento) con un tocco su **✅ Collega e archivia**; se preferisci, **✋ Scelgo io** apre il modulo completo. Una volta collegata, la ricevuta sta **dentro la sua bolletta** e la bolletta risulta **✅ Pagata**. Se hai pagato senza ricevuta, tocca **«✅ Segna come pagata»**. Le bollette in scadenza o scadute e non pagate compaiono tra gli avvisi in cima a Casa.
 
 **Come ritrovi i documenti:** sono ordinati per **argomento** (💡 Luce, 🔥 Gas, 💧 Acqua…); dentro ogni argomento c'è una **linguetta per ogni azienda o ente** (per esempio «Enel Energia», «SMAT», «TIM»); dentro, i documenti dal **più recente** al più vecchio. Con **⬇ Apri / scarica** apri il file originale, con **👁️ Vedi qui** lo guardi nella pagina. Puoi cercare per nome, numero o importo e filtrare per argomento e anno.
 
@@ -2019,12 +2222,18 @@ In cima alla pagina Casa compaiono gli avvisi di **garanzie** in scadenza e **ma
 **Avvisi sul telefono (a scelta):** in **Salute → 🔔 Scegli come ricevere gli avvisi** scegli i canali (**Telegram**, **email**, **SMS** o **WhatsApp**) e spunta **🏡 Avvisami anche delle garanzie e delle manutenzioni di Casa**. Le garanzie arrivano a 60, 30, 14, 7, 1 giorno e il giorno stesso; le manutenzioni a 30, 14, 7, 1 giorno e il giorno stesso, e ogni lunedì se sono in ritardo.
 **WhatsApp** è gratuito ma serve la tua **chiave personale di CallMeBot**: la spiegazione è nello stesso riquadro. Gli **SMS** sono a pagamento (servizio Twilio configurato dall'amministratore).""",
          "manutenzione intervento controllo caldaia tecnico ditta prossimo controllo scadenza garanzia"),
+        ("📥 Mandare documenti dalla posta o dalle app dei fornitori",
+         f"""Inoltra un messaggio con un PDF o una foto (o scrivine uno, allegando il file) a **{_CA_INDIRIZZO_POSTA}**: il programma controlla la posta alcune volte al giorno e mette i file nel riquadro **📥 Posta in arrivo** della scheda Documenti. Lì tocchi **📖 Leggi e archivia** e il documento viene classificato come tutti gli altri.
+Dalle **app dei fornitori** (luce, gas, telefono…) tocca **Condividi** (o «Invia») sul PDF o sullo screenshot, scegli **Gmail** e come destinatario **{_CA_INDIRIZZO_POSTA}** (salvalo in rubrica come «Casa dispensa»).
+Anche i messaggi che metti nell'etichetta Gmail **«Casa»** arrivano qui. I messaggi senza allegati (per esempio «Abbiamo ricevuto il tuo pagamento…») diventano un file di testo, e si leggono lo stesso.
+**🔄 Controlla la posta adesso** apre GitHub per far partire subito il controllo (tocca **Run workflow**).""",
+         "posta email inoltrare gmail allegato condividere app fornitore bolletta screenshot casa dispensa"),
         ("✏️ Correggere o eliminare un documento",
          """Nell'elenco dei documenti tocca **✏️ Correggi** per cambiare argomento, azienda, importo, date, tipo, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
 Tocca **🗑️ Elimina** per toglierlo (ti chiedo conferma). **📤 Invia** lo manda per email, WhatsApp o Telegram.""",
          "correggere modificare eliminare cancellare documento manuale inviare condividere"),
     ])
-    _ID_GUIDA.setdefault("casa", ["c_cosa", "c_manuali", "c_beni", "c_manutenzioni", "c_correggi"])
+    _ID_GUIDA.setdefault("casa", ["c_cosa", "c_manuali", "c_beni", "c_manutenzioni", "c_posta", "c_correggi"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("casa", "c_cosa")
 
