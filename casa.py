@@ -705,6 +705,21 @@ def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, m
                 "bene_id": bene, "titolo": titolo, "link": link, "note": note}
 
 
+def _ca_mime(nome, tipo, dati):
+    """Che file è davvero, guardando com'è fatto dentro (non fidandosi del telefono, che a volte dichiara un tipo vuoto o sbagliato) e poi dall'estensione."""
+    testa = (dati or b"")[:1024]
+    if b"%PDF" in testa:
+        return "application/pdf"
+    if testa.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if testa.startswith(b"\x89PNG"):
+        return "image/png"
+    if testa[:4] == b"RIFF" and testa[8:12] == b"WEBP":
+        return "image/webp"
+    est = str(nome or "").lower().rsplit(".", 1)[-1]
+    return {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(est, tipo or "application/octet-stream")
+
+
 def _ca_tab_manuali(c):
     beni = c.get("beni", [])
     nomi = {b["id"]: b.get("nome", "") for b in beni}
@@ -726,7 +741,8 @@ def _ca_tab_manuali(c):
                     st.rerun()
     sorgente = None
     if up is not None:
-        sorgente = {"nome": up.name, "mime": up.type or "application/octet-stream", "dati": up.getvalue(), "link": ""}
+        _dati_up = up.getvalue()
+        sorgente = {"nome": up.name, "mime": _ca_mime(up.name, up.type, _dati_up), "dati": _dati_up, "link": ""}
     elif st.session_state.get("ca_bozza_in"):
         sorgente = st.session_state["ca_bozza_in"]
     if sorgente:
