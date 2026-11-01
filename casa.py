@@ -789,11 +789,12 @@ def _ca_tab_manuali(c):
     with st.container(key="nascosti_" + chiave_f):
         f_cam = st.file_uploader("camera", type=_CA_TIPI_FOTO, key=f"fotocam_{chiave_f}")
         f_gal = st.file_uploader("galleria", type=_CA_TIPI_FOTO, key=f"fotogal_{chiave_f}")
-    st.markdown("**📄 Oppure carica un PDF o un file già nel telefono**")
-    up_pdf = st.file_uploader("PDF, foto o scansione", type=["pdf"] + _CA_TIPI_FOTO, key=f"ca_up_{n}", label_visibility="collapsed")
-    with st.expander("🛟 La foto non arriva? Prova da qui"):
-        st.caption("Tocca il campo qui sotto e scegli **Fotocamera** per scattare, oppure una foto già presente nel telefono.")
-        f_soc = st.file_uploader("Scegli o scatta la foto", type=_CA_TIPI_FOTO, key=f"ca_soc_{n}", label_visibility="collapsed")
+    st.markdown("**📄 Oppure carica un PDF già nel telefono**")
+    up_pdf = st.file_uploader("PDF", type=["pdf"], key=f"ca_up_{n}", label_visibility="collapsed")
+    with st.expander("🛟 Il PDF o la foto non si caricano? Prova da qui"):
+        st.caption("Qui il telefono ti fa scegliere **qualsiasi file**, anche uno senza estensione o con un nome strano (per esempio scaricato da WhatsApp o da una mail): "
+                   "controllo io dentro il file se è un PDF o una foto. Tocca il campo e scegli **Fotocamera**, **File** o **Documenti**.")
+        f_soc = st.file_uploader("Scegli qualsiasi file", key=f"ca_soc_{n}", label_visibility="collapsed")
     up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf}, chiave_f)
     with st.expander("🔗 …oppure prendi il manuale da un link"):
         url = st.text_input("Indirizzo del PDF", key=f"ca_url_{n}", placeholder="https://…/manuale.pdf")
@@ -821,7 +822,7 @@ def _ca_tab_manuali(c):
         elif sorgente["mime"] in _CA_MIME and sorgente.get("ridotta"):
             st.info("📷 La foto era molto grande: l'ho **ridotta** per poterla archiviare. Il testo si legge lo stesso.")
         if sorgente["mime"] not in _CA_MIME:
-            st.error("Questo tipo di file non è ammesso: carica un PDF o una foto (JPG, PNG, WebP).")
+            st.error(f"Questo tipo di file non è ammesso: carica un PDF o una foto (JPG, PNG, WebP). Il file «{sorgente['nome']}» risulta di tipo «{sorgente['mime']}».")
         elif len(sorgente["dati"]) > _CA_MAX_BYTE:
             st.error("Il file è troppo grande (massimo 8 MB). Per i manuali più grandi usa il link al sito del produttore.")
         else:
