@@ -19,6 +19,7 @@ Caricato da app_dispensa.py dopo navigazione.py e trasferimento.py."""
 import base64
 import hashlib
 import io
+import html as _html_ca
 import json
 import re
 import urllib.parse
@@ -725,29 +726,33 @@ def _ca_mime(nome, tipo, dati):
 _CA_JS_PDF = r"""
 (function () {
   var w = window, doc = w.document;
-  if (w.__caPdfAttivo) return;
-  w.__caPdfAttivo = true;
-  var CHUNK = 3 * 200 * 1024, MAX = __MAX__, ultimo = null, occupato = false, consegnati = {};
+  if (w.__caPdfAttivo2) return;
+  w.__caPdfAttivo2 = true;
+  var T = w.__caTempi || {lettura: 12000, primoAck: 20000, ack: 30000, upl: 40000};
+  var CHUNK = 3 * 200 * 1024, MAX = __MAX__, ultimo = null, occupato = false, consegnati = {}, log = [];
+  var AIUTO = ' METODO SICURO: apri il PDF, fai uno screenshot di una pagina (o fotografalo) e usa «🖼️ Dalla galleria». Oppure caricalo su Google Drive, condividilo con «chiunque abbia il link» e incolla il link in «🔗 …oppure prendi il manuale da un link».';
+  function riga(t) {
+    try {
+      log.push(new Date().toLocaleTimeString() + '  ' + t);
+      var el = doc.querySelector('[data-ca-log]');
+      if (el) el.textContent = log.slice(-14).join('\n');
+    } catch (e) {}
+  }
   function stato(testo, errore) {
     var el = doc.querySelector('[data-ca-stato]');
     if (el) { el.textContent = testo; el.style.color = errore ? '#b71c1c' : '#0f766e'; }
+    riga(testo);
   }
   function campo() { return doc.querySelector('input[aria-label="ca-pdf-trasf"]'); }
   function ack() { var e = doc.querySelector('[data-ca-ack]'); return e ? e.getAttribute('data-ca-ack') : ''; }
-  function scrivi(valore) {
-    var inp = campo();
-    if (!inp) return false;
-    var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
-    setter.call(inp, valore);
-    inp.dispatchEvent(new w.Event('input', {bubbles: true}));
-    ['keydown', 'keypress', 'keyup'].forEach(function (t) {
-      inp.dispatchEvent(new w.KeyboardEvent(t, {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-    });
-    inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
-    return true;
-  }
   function pausa(ms) { return new Promise(function (r) { w.setTimeout(r, ms); }); }
-  function leggi(file) {
+  function conTempo(p, ms, nome) {
+    return new Promise(function (ok, ko) {
+      var t = w.setTimeout(function () { ko(new Error(nome + ': nessuna risposta dal telefono dopo ' + Math.round(ms / 1000) + ' secondi')); }, ms);
+      p.then(function (v) { w.clearTimeout(t); ok(v); }, function (e) { w.clearTimeout(t); ko(e); });
+    });
+  }
+  function leggiFR(file) {
     return new Promise(function (ok, ko) {
       var r = new w.FileReader();
       r.onload = function () { ok(r.result); };
@@ -755,35 +760,99 @@ _CA_JS_PDF = r"""
       r.readAsArrayBuffer(file);
     });
   }
+  async function leggiTutto(file) {
+    var errori = [], metodi = [
+      ['FileReader', function () { return leggiFR(file); }],
+      ['arrayBuffer', function () { return file.arrayBuffer(); }],
+      ['fetch', function () { return w.fetch(w.URL.createObjectURL(file)).then(function (r) { return r.arrayBuffer(); }); }]
+    ];
+    for (var m = 0; m < metodi.length; m++) {
+      try {
+        riga('lettura con ' + metodi[m][0] + '…');
+        var buf = await conTempo(Promise.resolve().then(metodi[m][1]), T.lettura, metodi[m][0]);
+        if (buf && buf.byteLength > 0) return buf;
+        errori.push(metodi[m][0] + ': file vuoto');
+      } catch (e) { errori.push(String(e && e.message ? e.message : e)); }
+    }
+    throw new Error(errori.join(' · '));
+  }
+  function scrivi(valore) {
+    var inp = campo();
+    if (!inp) return false;
+    var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+    try { inp.focus(); } catch (e) {}
+    setter.call(inp, valore);
+    inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+    ['keydown', 'keypress', 'keyup'].forEach(function (t) {
+      inp.dispatchEvent(new w.KeyboardEvent(t, {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+    });
+    try { inp.blur(); } catch (e) {}
+    inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+    return true;
+  }
   function b64(buf, da, a) {
     var u = new Uint8Array(buf, da, a - da), s = '', passo = 0x8000;
     for (var i = 0; i < u.length; i += passo) s += String.fromCharCode.apply(null, u.subarray(i, Math.min(i + passo, u.length)));
     return w.btoa(s);
   }
+  async function attendiAck(voluto, id, ms) {
+    var t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      await pausa(300);
+      var a = ack();
+      if (a === voluto || a === id + ':fine') return true;
+    }
+    return false;
+  }
+  /* CANALE 1: il file passa a pezzi dal collegamento della pagina */
+  async function canale1(buf, file) {
+    var n = Math.max(1, Math.ceil(buf.byteLength / CHUNK)), id = Date.now().toString(36), nome = encodeURIComponent(file.name || 'documento');
+    for (var i = 0; i < n; i++) {
+      var parte = b64(buf, i * CHUNK, Math.min(buf.byteLength, (i + 1) * CHUNK)), voluto = id + ':' + i, riuscito = false, tentativi = i === 0 ? 2 : 3;
+      for (var tent = 0; tent < tentativi && !riuscito; tent++) {
+        stato('② Invio all\'app, pezzo ' + (i + 1) + ' di ' + n + (tent ? ' (nuovo tentativo)' : '') + '…');
+        if (!scrivi(id + '|' + i + '|' + n + '|' + nome + '|' + parte)) { riga('punto di invio non trovato nella pagina'); return false; }
+        riuscito = await attendiAck(voluto, id, i === 0 ? T.primoAck : T.ack);
+      }
+      if (!riuscito) { riga('nessuna conferma dall\'app per il pezzo ' + (i + 1)); return false; }
+    }
+    return true;
+  }
+  /* CANALE 2: il file viene consegnato al normale campo di caricamento di Streamlit (lo stesso sistema della fotocamera) */
+  async function canale2(file) {
+    var dest = doc.querySelector('[class*="st-key-fotopdf_cadoc"] input[type="file"]'), a0 = ack();
+    if (!dest) { riga('campo di caricamento di riserva non trovato'); return false; }
+    try {
+      var dt = new w.DataTransfer(); dt.items.add(file); dest.files = dt.files;
+      dest.dispatchEvent(new w.Event('change', {bubbles: true}));
+    } catch (e) { riga('consegna al campo non riuscita: ' + (e && e.message ? e.message : e)); return false; }
+    stato('③ Provo l\'altro canale di invio…');
+    var t0 = Date.now();
+    while (Date.now() - t0 < T.upl) {
+      await pausa(300);
+      var a = ack();
+      if (a.indexOf('upl:') === 0 && a !== a0) return true;
+    }
+    return false;
+  }
   async function manda(file) {
     if (occupato) return;
     occupato = true;
     try {
-      if (file.size > MAX) { stato('Il file è troppo grande (massimo 8 MB). Per i manuali più grandi usa il link al sito del produttore.', true); return; }
-      if (!campo()) { stato('Non trovo il punto di invio nella pagina: ricarica la pagina e riprova.', true); return; }
-      stato('Leggo il file…');
-      var buf = await leggi(file);
-      var n = Math.max(1, Math.ceil(buf.byteLength / CHUNK)), id = Date.now().toString(36), nome = encodeURIComponent(file.name || 'documento');
-      for (var i = 0; i < n; i++) {
-        var parte = b64(buf, i * CHUNK, Math.min(buf.byteLength, (i + 1) * CHUNK)), voluto = id + ':' + i, riuscito = false;
-        for (var tent = 0; tent < 3 && !riuscito; tent++) {
-          if (!scrivi(id + '|' + i + '|' + n + '|' + nome + '|' + parte)) { stato('Non trovo il punto di invio nella pagina: ricarica la pagina e riprova.', true); return; }
-          for (var k = 0; k < 60; k++) {
-            await pausa(500);
-            if (ack() === voluto || ack() === id + ':fine') { riuscito = true; break; }
-          }
-        }
-        if (!riuscito) { stato('Il trasferimento si è interrotto: riprova, oppure usa uno degli altri metodi qui sotto.', true); return; }
-        stato('Invio del file… ' + Math.round(((i + 1) / n) * 100) + '%');
-      }
-      stato('✅ File ricevuto: ' + (file.name || 'documento'));
+      var kb = Math.max(1, Math.round(file.size / 1024));
+      riga('SCELTO: «' + (file.name || '?') + '» · ' + file.size + ' byte · tipo «' + (file.type || 'vuoto') + '»');
+      if (file.size === 0) { stato('❌ Il telefono dice che il file è VUOTO (0 KB): di solito è un file ancora «in nuvola» o non scaricato del tutto.' + AIUTO, true); return; }
+      if (file.size > MAX) { stato('❌ Il file è troppo grande (massimo 8 MB). Per i manuali più grandi usa il link al sito del produttore.', true); return; }
+      stato('① Leggo il file «' + (file.name || 'documento') + '» (' + kb + ' KB)…');
+      var buf;
+      try { buf = await leggiTutto(file); }
+      catch (e) { stato('❌ Il telefono non lascia leggere questo file al browser (' + e.message + ').' + AIUTO, true); return; }
+      riga('letto: ' + buf.byteLength + ' byte');
+      if (await canale1(buf, file)) { stato('✅ File ricevuto: ' + (file.name || 'documento')); return; }
+      if (await canale2(file)) { stato('✅ File ricevuto: ' + (file.name || 'documento')); return; }
+      stato('❌ Ho letto il file (' + kb + ' KB) ma non riesco a farlo arrivare all\'app, né dal primo né dal secondo canale.' + AIUTO, true);
     } catch (e) {
-      stato('Non sono riuscito a leggere il file: ' + (e && e.message ? e.message : e), true);
+      stato('❌ Errore imprevisto: ' + (e && e.message ? e.message : e) + '.' + AIUTO, true);
     } finally { occupato = false; }
   }
   function consegna(inp) {
@@ -879,6 +948,7 @@ def _ca_url_diretto(url):
 
 _CA_CSS_FOTO = """<style>
 [class*="st-key-nascosti_cadoc"]{display:none !important}
+[class*="st-key-ca_ricezione"]{position:absolute !important;left:-9999px !important;top:0 !important;width:1px !important;height:1px !important;overflow:hidden !important;opacity:0 !important}
 [class*="st-key-azioni_foto_cadoc"] [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:nowrap !important;gap:10px !important}
 [class*="st-key-azioni_foto_cadoc"] [data-testid="stColumn"],[class*="st-key-azioni_foto_cadoc"] [data-testid="column"]{min-width:0 !important;width:auto !important;flex:1 1 0 !important}
 [class*="st-key-scatta_cadoc"] button,[class*="st-key-galleria_cadoc"] button{min-height:64px;border-radius:999px !important;font-weight:800 !important;font-size:1.02rem;
@@ -949,14 +1019,18 @@ def _ca_tab_manuali(c):
     with st.container(key="nascosti_" + chiave_f):
         f_cam = st.file_uploader("camera", type=_CA_TIPI_FOTO, key=f"fotocam_{chiave_f}")
         f_gal = st.file_uploader("galleria", type=_CA_TIPI_FOTO, key=f"fotogal_{chiave_f}")
+        f_pdfx = st.file_uploader("canale2", key=f"fotopdf_{chiave_f}")                    # riserva del pulsante arancione: accetta qualsiasi file
     st.markdown("**📄 Oppure carica un PDF o un file già nel telefono**")
     _ca_avvia_trasferimento()
     ack_t, err_t = _ca_trasf_ricevi()
-    with st.container(key="nascosti_cadoc_tr"):
+    if f_pdfx is not None:                                                                     # il file è arrivato dal canale 2: lo si dice alla pagina
+        ack_t = _html_ca.escape(f"upl:{f_pdfx.name}:{f_pdfx.size}", quote=True)
+    with st.container(key="ca_ricezione"):
         st.text_input("ca-pdf-trasf", key="ca_trasf_in", label_visibility="collapsed")
     st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='1'>📎 Scegli il PDF o il file</div>"
-                f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if ack_t.endswith(':fine') else 'Tocca il pulsante arancione e scegli il file: lo vedi tutto, anche se ha un nome strano.')}</div>"
+                f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if (ack_t.endswith(':fine') or ack_t.startswith('upl:')) else 'Tocca il pulsante arancione e scegli il file: lo vedi tutto, anche se ha un nome strano.')}</div>"
                 f"<span data-ca-ack='{ack_t}' style='display:none'></span>", unsafe_allow_html=True)
+    st.caption("📸 **Metodo sicuro per un PDF:** aprilo, fai uno **screenshot** di una pagina (o fotografalo) e usa **«🖼️ Dalla galleria»**: la foto viene letta come il documento.")
     with st.expander("📂 Altro metodo: il campo di caricamento normale (solo PDF)"):
         up_pdf = st.file_uploader("PDF", type=["pdf"], key=f"ca_up_{n}", label_visibility="collapsed")
     with st.expander("🛟 Il PDF o la foto non si caricano? Prova da qui"):
@@ -966,9 +1040,10 @@ def _ca_tab_manuali(c):
     with st.expander("🔎 Cosa ha ricevuto l'app finora (per capire dove si ferma)"):
         def _rx(fl):
             return f"ricevuto «{fl.name}» ({fl.size // 1024} KB)" if fl is not None else "niente"
-        st.caption(f"Fotocamera: {_rx(f_cam)} · Galleria: {_rx(f_gal)} · Campo PDF: {_rx(up_pdf)} · Qualsiasi file: {_rx(f_soc)} · "
-                   f"Pulsante arancione: {('file ricevuto' if ack_t.endswith(':fine') else ('in arrivo (pezzo ' + ack_t.split(':')[-1] + ')' if ack_t else 'niente'))}" + (f" · ⚠️ {err_t}" if err_t else ""))
-    up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf}, chiave_f)
+        st.markdown("<pre data-ca-log='1' style='white-space:pre-wrap;font-size:.78rem;background:#eef7f5;border-radius:12px;padding:8px;margin:4px 0'>Qui compare il racconto passo passo del pulsante arancione: scegli un file e torna a guardare.</pre>", unsafe_allow_html=True)
+        st.caption(f"Fotocamera: {_rx(f_cam)} · Galleria: {_rx(f_gal)} · Campo PDF: {_rx(up_pdf)} · Qualsiasi file: {_rx(f_soc)} · Canale 2 del pulsante: {_rx(f_pdfx)} · "
+                   f"Pulsante arancione: {('file ricevuto' if (ack_t.endswith(':fine') or ack_t.startswith('upl:')) else ('in arrivo (pezzo ' + ack_t.split(':')[-1] + ')' if ack_t else 'niente'))}" + (f" · ⚠️ {err_t}" if err_t else ""))
+    up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf, "x": f_pdfx}, chiave_f)
     with st.expander("🔗 …oppure prendi il manuale da un link"):
         st.caption("Va bene anche il link di **Google Drive** o **Dropbox**. Attenzione: perché funzioni il file deve essere condiviso con «chiunque abbia il link»: dopo averlo caricato qui, **togli la condivisione**.")
         url = st.text_input("Indirizzo del PDF", key=f"ca_url_{n}", placeholder="https://…/manuale.pdf")
