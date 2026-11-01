@@ -418,6 +418,8 @@ _CA_ENTI = [
     ("Poste Assicura", ["poste assicura"]), ("Linear", ["linear assicurazioni"]), ("Genertel", ["genertel"]), ("Direct Line", ["direct line"]),
     ("Agenzia delle Entrate", ["agenzia delle entrate"]),
 ]
+_CA_RE_RICEVUTA = (r"ricevuta di pagamento|quietanza|esito (?:del )?pagamento|pagamento (?:effettuato|eseguito|riuscito|completato|andato a buon fine)|ricevuta (?:pagopa|telematica|di versamento|del bonifico)|"
+                   r"contabile|bonifico (?:eseguito|disposto|istantaneo)|attestazione di pagamento|conferma (?:di|del) pagamento|ordine di bonifico|payment receipt|transazione (?:eseguita|completata)")
 _CA_FORMA_LEGALE = r"(?:S\.?\s?p\.?\s?A\.?|S\.?\s?r\.?\s?l\.?|S\.?\s?c\.?\s?a\.?\s?r\.?\s?l\.?|S\.?\s?n\.?\s?c\.?|S\.?\s?a\.?\s?s\.?|Soc(?:ieta|ietà)?\.?\s+Coop(?:erativa)?\.?)"
 _CA_MESI_ABB = {"gen": 1, "feb": 2, "mar": 3, "apr": 4, "mag": 5, "giu": 6, "lug": 7, "ago": 8, "set": 9, "ott": 10, "nov": 11, "dic": 12}
 _CA_RE_DATA = r"(\d{1,2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{4}|\d{2})\b|(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\.?\s+(\d{4})\b"
@@ -496,7 +498,7 @@ def ca_leggi_ente(testo, testo_p1="", nome_file=""):
         if m:
             return "Comune di " + m.group(1), "media", "testo"
     stem = re.sub(r"[\d_\-\.]+", " ", nome_file or "").strip()
-    stem = re.sub(r"\b(fattura|bolletta|scansione|documento|allegato|copia|pdf|img|scan)\b", "", stem, flags=re.I).strip()
+    stem = re.sub(r"\b(fattura|bolletta|scansione|documento|allegato|copia|pdf|img|scan|ricevuta|pagamento|quietanza|bonifico|contabile|esito|senza|riferimenti|foto|immagine|whatsapp|image|screenshot|download|manuale|scontrino)\b", "", stem, flags=re.I).strip()
     if len(stem) >= 3:
         return stem[:40].title(), "bassa", "nome del file"
     return "", "bassa", ""
@@ -529,7 +531,8 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
     arg, punti_a, p_luce, p_gas = ca_leggi_argomento(t, nome_file)
     ha_importo = bool(re.search(_CA_RE_IMPORTO, t))                           # (il simbolo € non si pretende: la lettura ottica lo sbaglia spesso)
     ha_scadenza = bool(re.search(r"scadenza|scade|entro il|da pagare", tn))
-    e_utenza = bool(t) and (arg not in _CA_ARG_APPARECCHIO) and ((punti_f >= 7 and forti >= 1) or (arg and punti_a >= 8 and ha_importo and ha_scadenza))
+    e_ricevuta = bool(re.search(_CA_RE_RICEVUTA, tn)) and ha_importo and not re.search(r"totale da pagare|importo da pagare|periodo di fatturazione|importo dovuto", tn)
+    e_utenza = bool(t) and (arg not in _CA_ARG_APPARECCHIO) and ((punti_f >= 7 and forti >= 1) or (arg and punti_a >= 8 and ha_importo and ha_scadenza) or e_ricevuta)
     if not e_utenza:
         return {"e_utenza": False, "campi": {}}
     campi = {}
@@ -541,7 +544,7 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
     # --- tipo di documento
     if "polizza" in tn and arg == "Assicurazioni":
         tipo = "Polizza assicurativa"
-    elif re.search(r"ricevuta di pagamento|quietanza|esito del pagamento|pagamento effettuato", tn) and not re.search(r"totale da pagare|importo da pagare", tn):
+    elif e_ricevuta:
         tipo = "Ricevuta di pagamento"
     elif re.search(r"contratto di (?:fornitura|locazione|somministrazione)|condizioni generali di contratto", tn) and "fattura" not in tn and "bolletta" not in tn:
         tipo = "Contratto"
@@ -556,38 +559,51 @@ def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
             ente, aff_e, fonte_e = re.sub(r"\s+", " ", mc.group(1)).strip(" -–,."), "media", "testo"
     metti("ente", ente, aff_e, fonte_e)
     # --- importo (dal più sicuro al più generico)
-    et_imp = ["totale da pagare", "importo da pagare", "importo dovuto", "totale bolletta", "totale fattura", "totale documento", "totale importo", "importo totale",
+    et_imp = ["totale da pagare", "importo da pagare", "questo mese dovrai pagare", "dovrai pagare", "importo da versare", "saldo da pagare", "totale dovuto", "importo dovuto", "totale bolletta", "totale fattura", "totale documento", "totale importo", "importo totale",
               "totale complessivo", "totale del documento", "da pagare", "premio totale", "premio da pagare", "importo rata", "totale"]
+    if tipo == "Ricevuta di pagamento":
+        et_imp = ["importo pagato", "importo versato", "totale pagato", "importo del pagamento", "importo addebitato", "importo bonifico", "importo", "totale"]
     v, et = _ca_dopo(t, et_imp, _CA_RE_IMPORTO, 110)
     if not v:                                                               # alcuni documenti mettono l'importo PRIMA dell'etichetta
-        for et in et_imp[:6]:
+        for et in ("totale da pagare", "importo da pagare", "importo dovuto", "totale bolletta", "totale fattura", "totale documento", "importo pagato", "importo versato"):
             m = re.search(_CA_RE_IMPORTO + r"\s*(?:€|eur(?:o)?)?\s*\n?\s*" + _ca_etichetta(et), t, re.I)
             if m:
                 v = m
                 break
     if v:
         metti("importo", _ca_importo_str(v.group(1)), "alta" if et != "totale" else "media")
-    # --- numero del documento
-    for rx in (r"(?:fattura|bolletta|documento|avviso)\s*(?:elettronica\s*)?(?:n\s*[.°º]?|nr\.?|numero)\s*[:\-]?\s*([A-Z0-9][A-Z0-9/\-\.]{0,24})",
-               r"(?:numero|n\s*[.°º]|nr\.?)\s*(?:della\s*)?(?:fattura|bolletta|documento)\s*[:\-]?\s*([A-Z0-9][A-Z0-9/\-\.]{0,24})"):
-        m = re.search(rx, t, re.I)
-        if m and re.search(r"\d", m.group(1)) and not re.fullmatch(r"(?:del|data|dal|al)\.?", m.group(1), re.I):
-            metti("numero_doc", m.group(1).rstrip(".-/"), "alta")
-            break
-    # --- data di emissione
+    # --- numero del documento: dopo l'etichetta, il primo «pezzo» con cifre che non sia una data («Numero fattura elettronica valida ai fini fiscali: KE-26-D92452D9-006»)
+    def _numero_dopo(rx, finestra, min_cifre):
+        for m in re.finditer(rx, t, re.I):
+            for tok in re.findall(r"[A-Z0-9][A-Z0-9/\-\.]{1,24}", t[m.end(): m.end() + finestra], re.I):
+                tok = tok.rstrip(".-/")
+                if len(re.findall(r"\d", tok)) >= min_cifre and not re.fullmatch(r"\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}", tok) and not re.fullmatch(r"(?:19|20)\d{2}", tok):
+                    return tok
+        return ""
+    numero = (_numero_dopo(r"(?:numero|n\s*[.°º]|nr\.?)\s*(?:della\s*)?(?:fattura|bolletta|documento|avviso)", 95, 2)
+              or _numero_dopo(r"(?:fattura|bolletta|documento|avviso)\s*(?:elettronica\s*)?(?:n\s*[.°º]?|nr\.?|numero)", 70, 1)
+              or _numero_dopo(r"(?:fattura|bolletta)\s*[:\-]?\s*(?=[A-Z0-9/\-]*\d)", 30, 4))
+    if numero:
+        metti("numero_doc", numero, "alta")
+    # --- data di emissione (per una ricevuta: la data del PAGAMENTO)
     emessa = None
-    m = re.search(r"(?:fattura|bolletta|documento)[^\n]{0,70}?\bdel\s+(" + _CA_RE_DATA + ")", t, re.I)
+    if tipo == "Ricevuta di pagamento":
+        v, _ = _ca_dopo(t, ["data pagamento", "data del pagamento", "data operazione", "data esecuzione", "data di esecuzione", "data valuta", "eseguito il", "pagato il", "effettuato il", "data"], _CA_RE_DATA, 50)
+        emessa = _ca_data_da_match(v) if v else None
+        if emessa:
+            metti("data_doc", emessa.isoformat(), "alta")
+    m = re.search(r"(?:fattura|bolletta|documento)[^\n]{0,70}?\bdel\s+(" + _CA_RE_DATA + ")", t, re.I) if tipo != "Ricevuta di pagamento" else None
     if m:
         mm = re.search(_CA_RE_DATA, m.group(1))
         emessa = _ca_data_da_match(mm) if mm else None
-    if not emessa:
+    if not emessa and tipo != "Ricevuta di pagamento":
         v, _ = _ca_dopo(t, ["data emissione", "data di emissione", "emessa il", "emesso il", "data fattura", "data bolletta", "data documento", "emissione", "data"], _CA_RE_DATA, 40)
         emessa = _ca_data_da_match(v) if v else None
-    if emessa:
+    if emessa and tipo != "Ricevuta di pagamento":
         metti("data_doc", emessa.isoformat(), "alta")
     # --- scadenza di pagamento
     v, _ = _ca_dopo(t, ["data scadenza", "scadenza pagamento", "scade il", "da pagare entro il", "da pagare entro", "pagare entro il", "pagabile entro il", "scadenza", "entro il"], _CA_RE_DATA, 50)
-    sc = _ca_data_da_match(v) if v else None
+    sc = _ca_data_da_match(v) if (v and tipo != "Ricevuta di pagamento") else None
     if sc and (not emessa or sc >= emessa):
         metti("scadenza_doc", sc.isoformat(), "alta")
     # --- periodo
@@ -655,6 +671,65 @@ def ca_titolo_auto(d):
             parti.append("€ " + ca_importo_fmt(d["importo"]))
         return " · ".join(p for p in parti if p)[:140]
     return " ".join(x for x in (d.get("tipo"), d.get("marca"), d.get("modello")) if x)
+
+
+_CA_TIPI_PAGABILI = {"Bolletta o fattura", "Polizza assicurativa"}
+
+
+def ca_ricevute_di(docs, bid):
+    """Le ricevute di pagamento collegate a una bolletta, dalla più vecchia alla più recente."""
+    return sorted([x for x in docs if x.get("collegato_a") == bid], key=lambda x: (_ca_ordine(x), x.get("creato_il", "")))
+
+
+def ca_stato_pagamento(d, docs, oggi_):
+    """('pagata', data) · ('da_pagare', giorni) · ('scaduta', giorni) · None (se non è una bolletta o non ha scadenza)."""
+    if d.get("tipo") not in _CA_TIPI_PAGABILI:
+        return None
+    r = ca_ricevute_di(docs, d.get("id"))
+    if r:
+        return "pagata", (r[-1].get("data_doc") or d.get("pagata_il") or "")
+    if d.get("pagata_il"):
+        return "pagata", d["pagata_il"]
+    sc = _data(d.get("scadenza_doc"))
+    if not sc:
+        return None
+    g = (sc - oggi_).days
+    return ("scaduta", -g) if g < 0 else ("da_pagare", g)
+
+
+def ca_proponi_bolletta(docs, campi, escludi_id=None):
+    """La bolletta (ancora non pagata) a cui sembra riferirsi una ricevuta: (id, motivi) oppure (None, [])."""
+    v = lambda k: (campi.get(k) or {}).get("valore", "") if isinstance(campi.get(k), dict) else (campi.get(k) or "")
+    num, ente = _ca_norm(v("numero_doc")), _ca_norm(v("ente"))
+    try:
+        imp = float(v("importo")) if v("importo") else None
+    except ValueError:
+        imp = None
+    migliore, punti_m, motivi_m = None, 0, []
+    for b in docs:
+        if b.get("tipo") not in _CA_TIPI_PAGABILI or b.get("id") == escludi_id or ca_ricevute_di(docs, b.get("id")) or b.get("pagata_il"):
+            continue
+        p, motivi = 0, []
+        if num and _ca_norm(b.get("numero_doc")) == num:
+            p += 6; motivi.append("stesso numero di fattura")
+        try:
+            if imp is not None and b.get("importo") and abs(float(b["importo"]) - imp) < 0.005:
+                p += 4; motivi.append("stesso importo")
+        except ValueError:
+            pass
+        eb = _ca_norm(b.get("ente"))
+        if ente and eb and ente == eb:
+            p += 3; motivi.append("stesso ente")
+        elif ente and eb and (ente in eb or eb in ente):
+            p += 2; motivi.append("ente simile")
+        if p > punti_m:
+            migliore, punti_m, motivi_m = b.get("id"), p, motivi
+    return (migliore, motivi_m) if punti_m >= 6 else (None, [])
+
+
+def _ca_etichetta_bolletta(b):
+    return " · ".join(x for x in (b.get("ente") or "Senza ente", ("n. " + b["numero_doc"]) if b.get("numero_doc") else "", ("€ " + ca_importo_fmt(b["importo"])) if b.get("importo") else "",
+                                  _ca_data_it(b.get("data_doc")) if b.get("data_doc") else "") if x)
 
 
 def _ca_argomento_di(d):
@@ -782,7 +857,7 @@ def ca_ai_classifica(testo, base=None):
 # ---------------------------------------------------------------------------------------------------------------------
 _CAMPI_BENE = ("nome", "categoria", "sottocategoria", "marca", "modello", "seriale", "stanza", "acquisto", "garanzia_fino", "note")
 _CAMPI_DOC = ("tipo", "titolo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
-              "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "link", "note")
+              "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "collegato_a", "pagata_il", "link", "note")
 _CAMPI_CONTROLLATI = ("tipo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
                       "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua")
 
@@ -827,6 +902,16 @@ def ca_elimina_bene(c, bid, con_documenti=False):
     return file_da_togliere
 
 
+def _ca_eredita_dalla_bolletta(c, fin):
+    """Una ricevuta collegata a una bolletta prende da lei argomento ed ente (se non li ha), così sta nello stesso posto."""
+    b = next((x for x in c.get("documenti", []) if x.get("id") == fin.get("collegato_a")), None) if fin.get("collegato_a") else None
+    if b:
+        if fin.get("argomento") in ("", "Altro", None):
+            fin["argomento"] = b.get("argomento") or fin.get("argomento", "")
+        if not fin.get("ente"):
+            fin["ente"] = b.get("ente") or ""
+
+
 def _ca_modificati(campi_prop, fin, presenti=None):
     """I campi che chi usa l'app ha cambiato rispetto a ciò che aveva letto il programma (un campo lasciato vuoto o «Altro» non conta come correzione; un campo non indicato non conta)."""
     def uguale(k):
@@ -839,6 +924,7 @@ def ca_aggiungi_documento(c, file_ref, riconosciuto, proposta, finale, utente, o
     """Archivia un documento con i QUATTRO livelli separati: file originale · dati riconosciuti · classificazione proposta · conferma di chi usa l'app."""
     campi_prop = {k: (v.get("valore") if isinstance(v, dict) else v) for k, v in ((riconosciuto or {}).get("campi") or {}).items()}
     fin = _ca_pulisci(finale, _CAMPI_DOC)
+    _ca_eredita_dalla_bolletta(c, fin)
     modificati = _ca_modificati(campi_prop, fin, set(finale))
     doc = dict(fin)
     doc.update({
@@ -860,6 +946,7 @@ def ca_correggi_documento(c, did, finale, utente, ora):
         return None
     fin = _ca_pulisci(finale, _CAMPI_DOC)
     campi_prop = {k: (v.get("valore") if isinstance(v, dict) else v) for k, v in ((d.get("riconosciuto") or {}).get("campi") or {}).items()}
+    _ca_eredita_dalla_bolletta(c, fin)
     if fin.get("titolo") in ("", ca_titolo_auto(d), d.get("file", {}).get("nome", "")):          # il titolo era quello automatico: si riscrive con i dati corretti
         fin["titolo"] = ""
     d.update({k: fin[k] for k in _CAMPI_DOC if k in fin})
@@ -920,7 +1007,15 @@ def ca_scadenze(c, oggi_, giorni=60):
         d = _data(m.get("prossima"))
         if d and (d - oggi_).days <= giorni and m.get("bene_id") in nomi:
             manut.append((nomi[m["bene_id"]], m.get("descrizione") or m.get("tipo") or "Manutenzione", (d - oggi_).days))
-    return {"garanzie": sorted(garanzie, key=lambda x: x[1]), "manutenzioni": sorted(manut, key=lambda x: x[2])}
+    docs = c.get("documenti", [])
+    bollette = []                                                                    # bollette da pagare tra 10 giorni o già scadute (fino a 90 giorni fa) senza ricevuta
+    for d in docs:
+        sp = ca_stato_pagamento(d, docs, oggi_)
+        if sp and sp[0] == "da_pagare" and sp[1] <= 10:
+            bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", sp[1], d.get("importo")))
+        elif sp and sp[0] == "scaduta" and sp[1] <= 90:
+            bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", -sp[1], d.get("importo")))
+    return {"garanzie": sorted(garanzie, key=lambda x: x[1]), "manutenzioni": sorted(manut, key=lambda x: x[2]), "bollette": sorted(bollette, key=lambda x: x[1])}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1048,10 +1143,17 @@ def _ca_anteprima(nome, mime, dati):
         st.info("Qui l'anteprima non è disponibile: usa «⬇ Apri / scarica» per vedere il documento.")
 
 
-def _ca_riga_documento(d, beni_nomi, pre=""):
-    """Un documento in elenco: dati, apri/scarica, anteprima, invia, correggi, elimina."""
+def _ca_riga_documento(d, beni_nomi, pre="", docs=None):
+    """Un documento in elenco: dati, apri/scarica, anteprima, invia, correggi, elimina. Se è una bolletta, ci sono dentro anche le sue ricevute di pagamento."""
     f = d.get("file") or {}
     k = f"{pre}{d['id']}"
+    stato_p = ca_stato_pagamento(d, docs, oggi()) if docs is not None else None
+    chip_p = ""
+    if stato_p:
+        quando = {"pagata": lambda v: "✅ Pagata" + (f" il {_ca_data_it(v)}" if v else ""),
+                  "da_pagare": lambda g: "⏳ Da pagare " + ("oggi" if g == 0 else f"entro {g} giorni"),
+                  "scaduta": lambda g: f"⚠️ Scaduta da {g} giorni: non risulta pagata"}[stato_p[0]](stato_p[1])
+        chip_p = _ca_chip(quando, {"pagata": "ca-ok", "da_pagare": "ca-presto", "scaduta": "ca-scaduta"}[stato_p[0]])
     righe = []
     if d.get("importo"):
         righe.append("💶 <b>€ " + ca_importo_fmt(d["importo"]) + "</b>")
@@ -1066,7 +1168,7 @@ def _ca_riga_documento(d, beni_nomi, pre=""):
     app = " · ".join(x for x in (_ca_testo(d.get("marca")), _ca_testo(d.get("modello")), ("S/N " + _ca_testo(d.get("seriale"))) if d.get("seriale") else "") if x)
     cod = " · ".join(x for x in (("cliente " + _ca_testo(d.get("codice_cliente"))) if d.get("codice_cliente") else "", ("fornitura " + _ca_testo(d.get("codice_fornitura"))) if d.get("codice_fornitura") else "") if x)
     st.markdown(f"<div class='ca-card'><b>📄 {_ca_testo(d.get('titolo'))}</b><br>"
-                + _ca_chip(_ca_testo(d.get("tipo") or "Documento"))
+                + _ca_chip(_ca_testo(d.get("tipo") or "Documento")) + chip_p
                 + (_ca_chip("🏠 " + _ca_testo(beni_nomi.get(d.get("bene_id"), "")), "ca-ok") if beni_nomi.get(d.get("bene_id")) else "")
                 + ("<br><span style='font-size:.9rem'>" + " · ".join(righe) + "</span>" if righe else "")
                 + ("<br><span style='font-size:.85rem'>" + app + "</span>" if app else "")
@@ -1099,6 +1201,19 @@ def _ca_riga_documento(d, beni_nomi, pre=""):
         st.rerun()
     if caricato and aperto:
         _ca_anteprima(*caricato[0])
+    if stato_p and stato_p[0] != "pagata" and not d.get("pagata_il"):                           # bolletta pagata senza file di ricevuta
+        if st.button("✅ Segna come pagata (oggi)", key=f"ca_pag_{k}", width="stretch"):
+            _ca_salva(lambda cc: next((x.update({"pagata_il": date.today().isoformat()}) for x in cc.get("documenti", []) if x.get("id") == d["id"]), None), "Casa: bolletta segnata come pagata")
+            st.rerun()
+    elif d.get("pagata_il") and not ca_ricevute_di(docs or [], d["id"]):
+        if st.button("↩️ Togli «pagata»", key=f"ca_npag_{k}", width="stretch"):
+            _ca_salva(lambda cc: next((x.pop("pagata_il", None) for x in cc.get("documenti", []) if x.get("id") == d["id"]), None), "Casa: tolto «pagata»")
+            st.rerun()
+    if docs is not None:
+        for r in ca_ricevute_di(docs, d["id"]):
+            with st.container(border=True):
+                st.markdown("🧾 **Ricevuta di pagamento**" + (f" · {_ca_data_it(r['data_doc'])}" if r.get("data_doc") else "") + (f" · € {ca_importo_fmt(r['importo'])}" if r.get("importo") else ""))
+                _ca_riga_documento(r, beni_nomi, k + "r", None)
     if "_fa_inv_voce" in globals() and caricato:
         _fa_inv_voce(f"casa_{k}", "📤 Invia questo documento (email, WhatsApp…)", f"📄 {d.get('titolo', 'Documento')}",
                      [("Tipo", d.get("tipo")), ("Emesso da", d.get("ente")), ("Importo", ("€ " + ca_importo_fmt(d["importo"])) if d.get("importo") else ""), ("Numero", d.get("numero_doc")),
@@ -1108,7 +1223,7 @@ def _ca_riga_documento(d, beni_nomi, pre=""):
         st.caption(f"Confermato da {conf.get('da', '')} il {_ca_data_it(conf.get('il'))}" + (f" · corretti: {', '.join(conf['modificati'])}" if conf.get("modificati") else " · nessuna correzione"))
 
 
-def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, motivi=None):
+def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, motivi=None, bollette=None, proposta_bolletta=None, motivi_bolletta=None):
     """Il modulo «Controlla e conferma» (anche per correggere). Ritorna (inviato, valori)."""
     campi = (riconosciuto or {}).get("campi") or {}
     val = lambda k: (d or {}).get(k) if d else (campi.get(k) or {}).get("valore", "")
@@ -1144,6 +1259,16 @@ def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, m
             marca = c1.text_input("Marca" + aff("marca"), value=val("marca") or "")
             modello = c2.text_input("Modello" + aff("modello"), value=val("modello") or "")
             seriale = st.text_input("Numero di serie" + aff("seriale"), value=val("seriale") or "")
+        e_ricevuta = tipo == "Ricevuta di pagamento" or val("tipo") == "Ricevuta di pagamento"
+        with st.expander("💶 Pagamento: collega la ricevuta alla sua bolletta", expanded=bool(e_ricevuta or (d or {}).get("collegato_a"))):
+            bol = [b for b in (bollette or []) if b.get("tipo") in _CA_TIPI_PAGABILI and b.get("id") != (d or {}).get("id")]
+            opz_b = [""] + [b["id"] for b in bol]
+            att_b = (d or {}).get("collegato_a") if d else (proposta_bolletta or "")
+            nomi_b = {b["id"]: _ca_etichetta_bolletta(b) for b in bol}
+            collegato_a = st.selectbox("Questa è la ricevuta di pagamento della bolletta…" + (f" ({', '.join(motivi_bolletta)})" if motivi_bolletta and not d and proposta_bolletta else ""), opz_b,
+                                       index=opz_b.index(att_b) if att_b in opz_b else 0, format_func=lambda x: "— nessuna: non è una ricevuta, o la bolletta non c'è ancora —" if not x else nomi_b.get(x, x),
+                                       help="Così la ricevuta sta dentro la bolletta e questa risulta «pagata».")
+            pagata_il = st.date_input("Oppure: questa bolletta è già stata pagata il (senza ricevuta)", value=_data((d or {}).get("pagata_il")), format="DD/MM/YYYY")
         opz = ["__nuovo__", ""] + [b["id"] for b in beni]
         nomi = {b["id"]: f"{b.get('nome', '')} ({b.get('marca', '')} {b.get('modello', '')})".replace("( )", "").strip() for b in beni}
         corrente = (d or {}).get("bene_id") if d else (proposta_bene or ("__nuovo__" if (e_app and (val("marca") or val("modello"))) else ""))
@@ -1156,7 +1281,7 @@ def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, m
         ok = st.form_submit_button("✅ Conferma e archivia" if not d else "💾 Salva le correzioni", type="primary", width="stretch")
     return ok, {"argomento": argomento, "tipo": tipo, "ente": ente, "data_doc": data_doc, "lingua": lingua, "numero_doc": numero_doc, "importo": _ca_importo_da_testo(importo), "periodo_da": periodo_da,
                 "periodo_a": periodo_a, "scadenza_doc": scadenza_doc, "codice_cliente": codice_cliente, "codice_fornitura": codice_fornitura, "categoria": cat, "sottocategoria": sotto,
-                "marca": marca, "modello": modello, "seriale": seriale, "bene_id": bene, "titolo": titolo, "link": link, "note": note}
+                "marca": marca, "modello": modello, "seriale": seriale, "bene_id": bene, "collegato_a": collegato_a, "pagata_il": pagata_il, "titolo": titolo, "link": link, "note": note}
 
 
 def _ca_mime(nome, tipo, dati):
@@ -1538,7 +1663,8 @@ def _ca_tab_manuali(c):
                             if k in ("tipo", "categoria", "sottocategoria", "marca", "modello", "seriale", "lingua", "data_doc") and v and k not in ric["campi"]:
                                 ric["campi"][k] = {"valore": v, "affidabilita": "media", "fonte": "assistente intelligente"}
                     bene_id, punti, motivi = ca_proponi_bene(beni, ric["campi"])
-                bozza = {"sha": sha, "ric": ric, "bene": bene_id, "motivi": motivi}
+                    bol_id, motivi_b = ca_proponi_bolletta(c.get("documenti", []), ric["campi"]) if (ric["campi"].get("tipo") or {}).get("valore") == "Ricevuta di pagamento" else (None, [])
+                bozza = {"sha": sha, "ric": ric, "bene": bene_id, "motivi": motivi, "bolletta": bol_id, "motivi_b": motivi_b}
                 st.session_state["ca_bozza"] = bozza
             ric = bozza["ric"]
             if ric["info"].get("scansione"):
@@ -1551,7 +1677,7 @@ def _ca_tab_manuali(c):
                     st.caption("📷 Questo PDF era una **scansione**: l'ho letto come una foto (solo le prime pagine). Lettere e numeri possono essere sbagliati, soprattutto **modello e numero di serie**: controllali.")
             if sorgente["mime"].startswith("image/"):
                 st.image(sorgente["dati"], width=240)
-            ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"))
+            ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), c.get("documenti", []), bozza.get("bolletta"), bozza.get("motivi_b"))
             c1, c2 = st.columns(2)
             if c2.button("✖ Scarta", key="ca_scarta", width="stretch"):
                 st.session_state["ca_giro"] = n + 1
@@ -1589,7 +1715,7 @@ def _ca_tab_manuali(c):
         d = next((x for x in c.get("documenti", []) if x["id"] == cid), None)
         if d:
             st.markdown(f"##### ✏️ Correggi: {_ca_testo(d.get('titolo'))}")
-            ok, val = _ca_form_documento(f"ca_form_cor_{cid}", d, beni)
+            ok, val = _ca_form_documento(f"ca_form_cor_{cid}", d, beni, bollette=c.get("documenti", []))
             if st.button("Annulla", key="ca_cor_annulla"):
                 st.session_state.pop("ca_correggi", None)
                 st.rerun()
@@ -1627,7 +1753,7 @@ def _ca_tab_manuali(c):
         return
     st.markdown(f"#### 📚 I tuoi documenti ({len(docs)})")
     cerca = st.text_input("Cerca", key="ca_cerca", placeholder="ente, titolo, numero, marca, modello…", label_visibility="collapsed")
-    presenti = [a_ for a_ in CA_ARGOMENTI if any(_ca_argomento_di(d) == a_ for d in docs)]
+    presenti = [a_ for a_ in CA_ARGOMENTI if any(_ca_argomento_di(d) == a_ for d in docs)]       # (le ricevute collegate contano dentro la loro bolletta)
     f1, f2 = st.columns(2, gap="small")
     farg = f1.selectbox("Argomento", [""] + presenti, format_func=lambda x: "📂 Tutti gli argomenti" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x} ({sum(1 for d in docs if _ca_argomento_di(d) == x)})", key="ca_farg")
     fbene = f2.selectbox("Bene", ["", "__nessuno__"] + [b["id"] for b in beni], format_func=lambda x: "🏠 Tutti i beni" if not x else "non collegati" if x == "__nessuno__" else nomi.get(x, x), key="ca_fbene")
@@ -1644,7 +1770,10 @@ def _ca_tab_manuali(c):
             continue
         if fbene and fbene != "__nessuno__" and d.get("bene_id") != fbene:
             continue
-        if q and q not in _ca_norm(" ".join(str(d.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura"))):
+        parenti = [d] + ca_ricevute_di(docs, d["id"])
+        if q and not any(q in _ca_norm(" ".join(str(x.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura"))) for x in parenti):
+            continue
+        if d.get("collegato_a") and any(x.get("id") == d["collegato_a"] for x in docs):          # ricevuta collegata: si vede dentro la sua bolletta
             continue
         gruppi.setdefault(_ca_argomento_di(d), {}).setdefault(_ca_ente_di(d), []).append(d)
     if not gruppi:
@@ -1661,7 +1790,7 @@ def _ca_tab_manuali(c):
                 chiave_tutti = f"ca_tutti_{arg}_{ente}"
                 visibili = lista if st.session_state.get(chiave_tutti) else lista[:12]
                 for d in visibili:
-                    _ca_riga_documento(d, nomi, "m")
+                    _ca_riga_documento(d, nomi, "m", docs)
                 if len(lista) > len(visibili) and st.button(f"Mostra tutti i {len(lista)} documenti", key="b_" + chiave_tutti):
                     st.session_state[chiave_tutti] = True
                     st.rerun()
@@ -1840,6 +1969,8 @@ def schermata_casa():
         st.warning(f"🛡️ La garanzia di **{nome}** scade tra {g} giorni.")
     for nome, voce, g in sc["manutenzioni"][:3]:
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+    for nome, g, imp in sc.get("bollette", [])[:4]:
+        st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
     t1, t2, t3 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni"])
     with t1:
         _ca_tab_beni(c)
@@ -1869,6 +2000,8 @@ Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
 2. In **Archivia un documento** carica un **PDF**, una **foto** o una **scansione** (massimo 8 MB), oppure usa **🔗 prendi il manuale da un link**.
 3. Leggo il documento e capisco **di cosa parla** (Luce, Gas, Acqua, Telefono e Internet, Rifiuti, Condominio, Assicurazioni, Manuali…). Per una **bolletta o fattura** ti propongo **chi l'ha emessa, importo, numero, data, periodo, scadenza e codici** (cliente, POD, PDR…); per un **manuale** categoria, marca, modello e numero di serie. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
 4. **Controlla e correggi** quello che non va. Le bollette di solito **non si collegano a un bene**; i manuali sì (o crei un nuovo bene). Poi tocca **✅ Conferma e archivia**.
+
+**Ricevuta di pagamento:** archiviala come gli altri documenti: ti propongo io a quale **bolletta** collegarla (stesso importo, stesso numero, stessa azienda). Una volta collegata, la ricevuta sta **dentro la sua bolletta** e la bolletta risulta **✅ Pagata**. Se hai pagato senza ricevuta, tocca **«✅ Segna come pagata»**. Le bollette in scadenza o scadute e non pagate compaiono tra gli avvisi in cima a Casa.
 
 **Come ritrovi i documenti:** sono ordinati per **argomento** (💡 Luce, 🔥 Gas, 💧 Acqua…); dentro ogni argomento c'è una **linguetta per ogni azienda o ente** (per esempio «Enel Energia», «SMAT», «TIM»); dentro, i documenti dal **più recente** al più vecchio. Con **⬇ Apri / scarica** apri il file originale, con **👁️ Vedi qui** lo guardi nella pagina. Puoi cercare per nome, numero o importo e filtrare per argomento e anno.
 
@@ -1913,7 +2046,7 @@ def casa_pulsante():
     if not (_fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""):
         return False
     sc = ca_scadenze(_ca_dati(), oggi())
-    n_av = len(sc["garanzie"]) + len(sc["manutenzioni"])
+    n_av = len(sc["garanzie"]) + len(sc["manutenzioni"]) + len(sc.get("bollette", []))
     premuto = st.button("Casa", key="casa_icona", help="Apri Casa: beni, manuali e manutenzioni")
     if n_av:
         st.markdown(f"<div style='width:80px;text-align:center;font-weight:800;font-size:.6rem;color:#e65100'>⚠️ {n_av} da controllare</div>", unsafe_allow_html=True)
