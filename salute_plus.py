@@ -50,6 +50,7 @@ _SP_CSS = """<style>
 .st-key-sp_a_bambino button{background:linear-gradient(135deg,#ffa726,#d84315) !important}
 .st-key-sp_a_docsan button{background:linear-gradient(135deg,#7e57c2,#4527a0) !important}
 .st-key-sp_a_param button{background:linear-gradient(135deg,#26c6da,#00838f) !important}
+.st-key-sp_a_controlli button{background:linear-gradient(135deg,#ec407a,#ad1457) !important}
 .sp-card{background:rgba(255,255,255,.88);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b}
 .sp-alert{background:#ffebee;border:2px solid #c62828;border-radius:16px;padding:10px 14px;margin:8px 0;color:#7f0000;font-weight:700}
 </style>"""
@@ -296,7 +297,9 @@ def sp_riga_azioni(pid):
         d = st.button("👶 Percorso del bambino", key="sp_a_bambino", width="stretch") if _sp_e_bambino(p) else False
         e = st.button("🗂️ Documenti sanitari", key="sp_a_docsan", width="stretch")
         g = st.button("📈 Parametri e valori", key="sp_a_param", width="stretch")
-    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri")):
+        n_c = len(sp_controlli_scadenti(p))
+        h = st.button("⏰ Controlli periodici" + (f" · {n_c} da fare" if n_c else ""), key="sp_a_controlli", width="stretch")
+    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri"), (h, "controlli")):
         if premuto:
             st.session_state["sp_modulo"] = {"vista": vista, "pid": pid}
             st.rerun()
@@ -315,7 +318,7 @@ def _sp_intestazione(titolo, pid):
 
 def _sp_dispatch(m):
     vista, pid = m.get("vista"), m.get("pid")
-    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri}.get(vista, lambda _p: None)(pid)
+    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri, "controlli": sp_modulo_controlli}.get(vista, lambda _p: None)(pid)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1503,6 +1506,125 @@ def sp_modulo_parametri(pid):
     if "inv_voce" in globals():
         inv_voce(f"sp_param_{pid}", "📤 Invia i valori", f"Parametri di {p.get('nome', '')}", "\n".join(f"• {n}: {v_} {u} ({_sp_data_it(d_)})" for n, u, d_, v_ in sp_ultimi_parametri(p)),
                  lambda: ([(nome_file + ".pdf", "application/pdf", pdf)] if pdf else [(nome_file + ".html", "text/html", html_str.encode("utf-8"))]))
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 8) CONTROLLI PERIODICI (dentista, vista, vaccini…) con avviso
+# ---------------------------------------------------------------------------------------------------------------------
+_SP_IDEE_CONTROLLI = [("Visita dal dentista e igiene orale", 6), ("Visita pediatrica o bilancio di salute (bambini)", 6), ("Controllo della vista (oculista)", 24), ("Esami del sangue di controllo", 12),
+                      ("Controllo della pressione dal medico", 12), ("Vaccino antinfluenzale", 12), ("Richiamo antitetanico", 120), ("Visita cardiologica di controllo", 12),
+                      ("Controllo dei nei (dermatologo)", 12), ("Controllo della glicemia", 12), ("Pap test o HPV (donne)", 36), ("Mammografia (donne, secondo l'età)", 24),
+                      ("Ricerca del sangue occulto nelle feci (screening del colon)", 24), ("Controllo di un impianto o dispositivo (pacemaker, ecc.)", 12), ("Altro (lo scrivo io)", 12)]
+
+
+def sp_aggiungi_mesi(d, n):
+    m = d.month - 1 + int(n)
+    a, me = d.year + m // 12, m % 12 + 1
+    giorni = [31, 29 if (a % 4 == 0 and (a % 100 != 0 or a % 400 == 0)) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][me - 1]
+    return date(a, me, min(d.day, giorni))
+
+
+def sp_controllo_prossimo(c):
+    """La data del prossimo controllo: quella scritta a mano oppure l'ultimo fatto + ogni quanti mesi. None se non si può calcolare."""
+    try:
+        if c.get("prossimo"):
+            return date.fromisoformat(c["prossimo"])
+        if c.get("ultimo") and int(c.get("ogni_mesi") or 0) > 0:
+            return sp_aggiungi_mesi(date.fromisoformat(c["ultimo"]), int(c["ogni_mesi"]))
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def sp_controlli_scadenti(p, oggi_=None, entro=30):
+    """I controlli già scaduti o in scadenza entro N giorni: [(giorni, controllo)]."""
+    oggi_ = oggi_ or _sp_oggi()
+    out = []
+    for c in p.get("controlli", []):
+        pr = sp_controllo_prossimo(c)
+        if pr and (pr - oggi_).days <= entro:
+            out.append(((pr - oggi_).days, c))
+    return sorted(out, key=lambda x: x[0])
+
+
+def _sp_dialogo_togli_controllo(pid, cid, nome):
+    def _finestra():
+        st.warning(f"Togliere il promemoria **{_sp_e(nome)}**?")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglilo", key=f"sp_ct_si_{cid}", type="primary", width="stretch"):
+            _sp_salva_profilo(pid, lambda pr: pr.__setitem__("controlli", [x for x in pr.get("controlli", []) if x.get("id") != cid]), "Salute: controllo tolto")
+            st.rerun()
+        if s2.button("No, tienilo", key=f"sp_ct_no_{cid}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli il promemoria")(_finestra)()
+
+
+def _sp_form_controllo(pid, c=None):
+    c = c or {}
+    nomi = [x[0] for x in _SP_IDEE_CONTROLLI]
+    with st.form(f"sp_form_ctrl_{c.get('id', 'nuovo')}", border=False):
+        idea = st.selectbox("Che controllo è", nomi, index=nomi.index(c["nome"]) if c.get("nome") in nomi else (len(nomi) - 1 if c.get("nome") else 0))
+        libero = st.text_input("Se «Altro», scrivi quale", value=c.get("nome", "") if c.get("nome") not in nomi else "")
+        ogni = st.number_input("Ogni quanti mesi", min_value=1, max_value=240, value=int(c.get("ogni_mesi") or dict(_SP_IDEE_CONTROLLI).get(idea, 12)), step=1,
+                               help="Per esempio 6 = ogni sei mesi, 12 = ogni anno, 24 = ogni due anni. Chiedi al medico ogni quanto serve a te.")
+        c1, c2 = st.columns(2)
+        try:
+            u0 = date.fromisoformat(c["ultimo"]) if c.get("ultimo") else None
+        except ValueError:
+            u0 = None
+        ultimo = c1.date_input("L'ultima volta", value=u0, min_value=date(1990, 1, 1), max_value=_sp_oggi(), format="DD/MM/YYYY")
+        try:
+            p0 = date.fromisoformat(c["prossimo"]) if c.get("prossimo") else None
+        except ValueError:
+            p0 = None
+        prossimo = c2.date_input("Oppure: la prossima data già fissata", value=p0, format="DD/MM/YYYY")
+        avvisa = st.checkbox("🔔 Avvisami sul telefono quando si avvicina", value=c.get("avvisa", True))
+        note = st.text_input("Note", value=c.get("note", ""))
+        ok = st.form_submit_button("💾 Salva", type="primary", width="stretch")
+    if ok:
+        nome = libero.strip() if idea.startswith("Altro") else idea
+        if not nome:
+            st.error("Scrivi che controllo è.")
+            return
+        if not (ultimo or prossimo):
+            st.error("Scrivi l'ultima volta oppure la prossima data già fissata, così so quando avvisarti.")
+            return
+        nuovo = {"id": c.get("id") or uuid.uuid4().hex[:8], "nome": nome, "ogni_mesi": int(ogni), "ultimo": ultimo.isoformat() if ultimo else "", "prossimo": prossimo.isoformat() if prossimo else "",
+                 "avvisa": bool(avvisa), "note": note.strip()}
+        _sp_salva_profilo(pid, lambda pr, nv=nuovo: pr.__setitem__("controlli", [x for x in pr.get("controlli", []) if x.get("id") != nv["id"]] + [nv]), "Salute: controllo periodico")
+        st.session_state.pop("sp_ctrl_mod", None)
+        st.session_state["fa_msg"] = "✅ Promemoria salvato."
+        st.rerun()
+
+
+def sp_modulo_controlli(pid):
+    f, p = _sp_intestazione("⏰ Controlli periodici", pid)
+    st.caption("Dentista, vista, vaccini, esami di controllo… scrivi l'ultima volta e ogni quanti mesi: ti dico quando tocca e ti avviso sul telefono. "
+               "I tempi giusti dipendono da età, sesso e storia clinica, e da cosa offre la tua Regione: **chiedi al medico**; quelli proposti sono solo idee comuni.")
+    lista = list(p.get("controlli", []))
+    oggi_ = _sp_oggi()
+    for c in sorted(lista, key=lambda x: (sp_controllo_prossimo(x) or date(2999, 1, 1))):
+        pr = sp_controllo_prossimo(c)
+        g = (pr - oggi_).days if pr else None
+        stato = "⚪ senza data" if g is None else (f"🔴 in ritardo di {-g} giorni" if g < 0 else "🟠 oggi" if g == 0 else f"🟠 tra {g} giorni" if g <= 30 else f"🟢 tra {g} giorni")
+        righe = " · ".join(x for x in (f"ogni {c.get('ogni_mesi')} mesi" if c.get("ogni_mesi") else "", f"ultima volta {_sp_data_it(c['ultimo'])}" if c.get("ultimo") else "",
+                                      f"prossima {_sp_data_it(pr.isoformat())}" if pr else "", "🔔 avviso acceso" if c.get("avvisa", True) else "🔕 senza avviso") if x)
+        st.markdown(f"<div class='sp-card'><b>{_sp_e(c.get('nome'))}</b> · {stato}<br><small>{_sp_e(righe)}</small>" + (f"<br><small>{_sp_e(c.get('note'))}</small>" if c.get("note") else "") + "</div>", unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3, gap="small")
+        if b1.button("✅ Fatto oggi", key=f"sp_cf_{c['id']}", width="stretch"):
+            _sp_salva_profilo(pid, lambda pr_, cid=c["id"]: [x.update({"ultimo": oggi_.isoformat(), "prossimo": ""}) for x in pr_.get("controlli", []) if x.get("id") == cid], "Salute: controllo fatto")
+            st.session_state["fa_msg"] = "✅ Segnato come fatto oggi: calcolo la prossima data."
+            st.rerun()
+        if b2.button("✏️ Modifica", key=f"sp_ce_{c['id']}", width="stretch"):
+            st.session_state["sp_ctrl_mod"] = None if st.session_state.get("sp_ctrl_mod") == c["id"] else c["id"]
+            st.rerun()
+        if b3.button("🗑️ Togli", key=f"sp_ctt_{c['id']}", width="stretch"):
+            _sp_dialogo_togli_controllo(pid, c["id"], c.get("nome", ""))
+        if st.session_state.get("sp_ctrl_mod") == c["id"]:
+            _sp_form_controllo(pid, c)
+    with st.expander("➕ Aggiungi un controllo", expanded=not lista):
+        _sp_form_controllo(pid)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
