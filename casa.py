@@ -879,6 +879,70 @@ def ca_trova_doppioni(docs, ric, sha, escludi_id=None):
     return out
 
 
+def ca_cerca_documenti(docs, testo="", argomento=""):
+    """Le fatture/bollette/polizze (e ogni documento con un importo) già archiviate che corrispondono a quello che si scrive (ente, numero, importo, data, argomento…), le non pagate per prime."""
+    toks = [t_ for t_ in _ca_norm(testo).split() if t_]
+    out = []
+    for d in docs:
+        if d.get("tipo") in ("Ricevuta di pagamento", "Busta paga"):
+            continue
+        if not (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo")):
+            continue
+        if argomento and _ca_argomento_di(d) != argomento:
+            continue
+        try:
+            imp = f"{float(d['importo']):.2f}" if d.get("importo") else ""
+        except ValueError:
+            imp = str(d.get("importo") or "")
+        pagaglia = " ".join(str(x or "") for x in (d.get("ente"), d.get("titolo"), d.get("numero_doc"), _ca_argomento_di(d), d.get("tipo"), imp, imp.replace(".", ","), _ca_data_it(d.get("data_doc")) if d.get("data_doc") else "",
+                                                 d.get("data_doc"), d.get("periodo_a"), d.get("scadenza_doc"), d.get("codice_cliente"), d.get("codice_fornitura")))
+        hay = _ca_norm(pagaglia)
+        if all(t_ in hay for t_ in toks):
+            out.append(d)
+    return sorted(out, key=lambda d: (bool(ca_ricevute_di(docs, d.get("id")) or d.get("pagata_il")), -int(str(_ca_ordine(d) or "0000-00-00").replace("-", "")[:8] or 0)))
+
+
+def _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs):
+    """«🔗 Allega a una fattura già inserita»: si scrive il nome dell'ente (o numero, o importo) e la lista si restringe; il file diventa la ricevuta di pagamento di quella fattura."""
+    st.markdown("#### 🔗 Allega a una fattura già inserita")
+    st.caption("Scrivi il nome dell'ente (o il numero, o l'importo): la lista si restringe. Puoi anche scegliere la sezione. Il file diventa la **ricevuta di pagamento** di quella fattura e resta dentro di lei.")
+    sezioni = sorted({_ca_argomento_di(d) for d in docs if d.get("tipo") not in ("Ricevuta di pagamento", "Busta paga") and (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo"))})
+    cerca = st.text_input("🔍 Cerca", key=f"ca_allega_q_{n}", placeholder="es. Octopus, Enel, SMAT, 43,01, numero fattura…")
+    sez = st.selectbox("Sezione", [""] + sezioni, key=f"ca_allega_s_{n}", format_func=lambda x: "📂 Tutte le sezioni" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x}")
+    trovati = ca_cerca_documenti(docs, cerca, sez)
+    imp_r = (ric["campi"].get("importo") or {}).get("valore", "") if ric else ""
+    if imp_r and not cerca:                                                           # a ricerca vuota, quelle con lo stesso importo del file vanno in cima
+        def _stesso(d):
+            try:
+                return abs(float(d.get("importo") or 0) - float(imp_r)) < 0.005
+            except ValueError:
+                return False
+        trovati = sorted(trovati, key=lambda d: 0 if _stesso(d) else 1)
+    scelta = None
+    if not trovati:
+        st.info("Nessuna fattura corrisponde. Cambia le parole della ricerca o scegli «Tutte le sezioni».")
+    else:
+        st.caption(f"{len(trovati)} trovat{'a' if len(trovati) == 1 else 'e'}" + (f" (ti mostro le prime 25)" if len(trovati) > 25 else ""))
+        mappa = {d["id"]: d for d in trovati[:25]}
+
+        def _et(i):
+            d = mappa[i]
+            stato = "✅ già pagata" if (ca_ricevute_di(docs, i) or d.get("pagata_il")) else "⏳ da pagare"
+            return f"{_CA_ICONE_ARG.get(_ca_argomento_di(d), '')} {_ca_etichetta_bolletta(d)} · {stato}"
+        scelta = st.radio("Scegli la fattura", list(mappa), format_func=_et, key=f"ca_allega_r_{n}_{abs(hash((cerca, sez))) % 100000}")
+    a1, a2 = st.columns(2, gap="small")
+    if scelta and a1.button("✅ Allega come ricevuta di pagamento", key=f"ca_allega_ok_{n}", type="primary", width="stretch"):
+        try:
+            val = _ca_val_da_ric(ric, collegato_a=scelta, tipo="Ricevuta di pagamento", argomento="", ente="")
+            st.session_state["messaggio"] = _ca_archivia(sorgente, sha, ric, bozza, val, n)
+            st.rerun()
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+    if a2.button("↩️ Indietro", key=f"ca_allega_no_{n}", width="stretch"):
+        st.session_state.pop(f"ca_allega_{n}", None)
+        st.rerun()
+
+
 def _ca_etichetta_bolletta(b):
     return " · ".join(x for x in (b.get("ente") or "Senza ente", ("n. " + b["numero_doc"]) if b.get("numero_doc") else "", ("€ " + ca_importo_fmt(b["importo"])) if b.get("importo") else "",
                                   _ca_data_it(b.get("data_doc")) if b.get("data_doc") else "") if x)
@@ -2072,7 +2136,7 @@ def _ca_posta_riquadro(c):
                     _ca_anteprima(nome_v, mime_v, dati_v)
                     st.download_button("⬇ Salva il file nel telefono", dati_v, file_name=nome_v, mime=mime_v, key=f"ca_po_dl_{it['id']}", width="stretch")
 
-            def _apri_bozza(it=it, scelgo_io=False):
+            def _apri_bozza(it=it, scelgo_io=False, allega=False):
                 car = _fa_inv_allegati([{"id": it["file_id"], "nome": it.get("nome"), "mime": it.get("mime")}]) if "_fa_inv_allegati" in globals() else []
                 if not car:
                     st.error("Non riesco ad aprire questo file: toccalo di nuovo fra poco, oppure scartalo.")
@@ -2080,13 +2144,17 @@ def _ca_posta_riquadro(c):
                 nome_, mime_, dati_ = car[0]
                 st.session_state["ca_bozza_in"] = {"nome": nome_, "mime": _ca_mime(nome_, mime_, dati_), "dati": dati_, "link": "", "file_id": it["file_id"], "posta_id": it["id"]}
                 st.session_state.pop("ca_bozza", None)
+                if allega:
+                    st.session_state[f"ca_allega_{st.session_state.get('ca_giro', 0)}"] = True                      # si apre subito la ricerca della fattura a cui allegarlo
                 if scelgo_io:
                     st.session_state[f"ca_scelgo_io_{st.session_state.get('ca_giro', 0)}"] = True                  # niente proposte: si apre subito il modulo completo
                 st.rerun()
+            if st.button("🔗 Allega a una fattura già inserita", key=f"ca_po_all_{it['id']}", width="stretch", type="primary", help="Cerchi la fattura per nome dell'ente e le allegli questo file come ricevuta di pagamento."):
+                _apri_bozza(allega=True)
             if st.button("📂 Scelgo io dove metterlo", key=f"ca_po_io_{it['id']}", width="stretch", help="Apre il modulo: scegli tu argomento, azienda, bene, bolletta…"):
                 _apri_bozza(scelgo_io=True)
             q1, q2 = st.columns(2, gap="small")
-            if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", type="primary", help="Leggo io il documento e ti propongo dove metterlo: controlli e confermi."):
+            if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", help="Leggo io il documento e ti propongo dove metterlo: controlli e confermi."):
                 _apri_bozza()
             if q2.button("🗑️ Scarta", key=f"ca_po_no_{it['id']}", width="stretch"):
                 try:
@@ -2573,9 +2641,16 @@ def _ca_tab_manuali(c):
             docs_c = c.get("documenti", [])
             tipo_ric = (ric["campi"].get("tipo") or {}).get("valore", "")
             bloccato = bool(doppi) and not st.session_state.get(f"ca_dup_ok_{n}")
+            allega = bool(st.session_state.get(f"ca_allega_{n}")) and not bloccato
+            if allega:
+                _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs_c)
+            elif not bloccato and docs_c:
+                if st.button("🔗 Allega a una fattura già inserita", key=f"ca_allega_apri_{n}", width="stretch", help="Cerchi la fattura per nome dell'ente e le allegli questo file come ricevuta di pagamento."):
+                    st.session_state[f"ca_allega_{n}"] = True
+                    st.rerun()
             cand = ca_candidate_bollette(docs_c, ric["campi"])
             esatte = [x for x in cand if x["esatto"]]
-            rapido = (not bloccato) and bool(cand or bol_att) and (tipo_ric == "Ricevuta di pagamento" or bool(bol_att) or (bool(esatte) and tipo_ric in ("", "Altro"))) and not st.session_state.get(f"ca_scelgo_io_{n}") and not man_att
+            rapido = (not bloccato) and (not allega) and bool(cand or bol_att) and (tipo_ric == "Ricevuta di pagamento" or bool(bol_att) or (bool(esatte) and tipo_ric in ("", "Altro"))) and not st.session_state.get(f"ca_scelgo_io_{n}") and not man_att
             if rapido:
                 imp_r = (ric["campi"].get("importo") or {}).get("valore", "")
                 dat_r = (ric["campi"].get("data_doc") or {}).get("valore", "")
@@ -2611,7 +2686,7 @@ def _ca_tab_manuali(c):
                     for k in ("ca_bozza", "ca_bozza_in"):
                         st.session_state.pop(k, None)
                     st.rerun()
-            elif not bloccato:
+            elif not bloccato and not allega:
                 ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), docs_c, bozza.get("bolletta"), bozza.get("motivi_b"))
                 c1, c2 = st.columns(2)
                 if c2.button("✖ Scarta", key="ca_scarta", width="stretch"):
