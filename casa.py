@@ -905,7 +905,9 @@ def ca_cerca_documenti(docs, testo="", argomento=""):
 def _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs):
     """«🔗 Allega a una fattura già inserita»: si scrive il nome dell'ente (o numero, o importo) e la lista si restringe; il file diventa la ricevuta di pagamento di quella fattura."""
     st.markdown("#### 🔗 Allega a una fattura già inserita")
-    st.caption("Scrivi il nome dell'ente (o il numero, o l'importo): la lista si restringe. Puoi anche scegliere la sezione. Il file diventa la **ricevuta di pagamento** di quella fattura e resta dentro di lei.")
+    if not ((ric["campi"].get("importo") or {}).get("valore") or (ric["campi"].get("numero_doc") or {}).get("valore")):
+        st.info("Questo file non ha riferimenti che io riesca a leggere (nessun importo, nessun numero): dimmi tu a quale fattura appartiene. Cerca qui sotto per nome dell'ente.")
+    st.caption("Scrivi il nome dell'ente (o il numero, o l'importo) e premi Invio: la lista si restringe. Puoi anche scegliere la sezione. Il file diventa la **ricevuta di pagamento** di quella fattura e resta dentro di lei.")
     sezioni = sorted({_ca_argomento_di(d) for d in docs if d.get("tipo") not in ("Ricevuta di pagamento", "Busta paga") and (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo"))})
     cerca = st.text_input("🔍 Cerca", key=f"ca_allega_q_{n}", placeholder="es. Octopus, Enel, SMAT, 43,01, numero fattura…")
     sez = st.selectbox("Sezione", [""] + sezioni, key=f"ca_allega_s_{n}", format_func=lambda x: "📂 Tutte le sezioni" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x}")
@@ -938,8 +940,9 @@ def _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs):
             st.rerun()
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
-    if a2.button("↩️ Indietro", key=f"ca_allega_no_{n}", width="stretch"):
+    if a2.button("📂 Non è una ricevuta: scelgo io dove metterlo", key=f"ca_allega_no_{n}", width="stretch"):
         st.session_state.pop(f"ca_allega_{n}", None)
+        st.session_state[f"ca_allega_off_{n}"] = True
         st.rerun()
 
 
@@ -1409,6 +1412,77 @@ def _ca_anteprima(nome, mime, dati):
         st.info("Qui l'anteprima non è disponibile: usa «⬇ Apri / scarica» per vedere il documento.")
 
 
+def _ca_finestra_elimina_doc(d):
+    """Conferma in una finestra sopra la pagina (non in mezzo all'elenco, dove bisognerebbe cercarla scorrendo)."""
+    def _finestra():
+        st.warning(f"Eliminare questo documento?\n\n**{_ca_testo(d.get('titolo'))}**")
+        st.caption("Il file originale verrà cancellato." + (" Anche le ricevute collegate restano nell'archivio come documenti a sé." if d.get("tipo") in _CA_TIPI_PAGABILI else ""))
+        e1, e2 = st.columns(2, gap="small")
+        if e1.button("🗑️ Sì, elimina", key=f"ca_dlg_si_{d['id']}", type="primary", width="stretch"):
+            try:
+                ids = []
+                _ca_salva(lambda cc: ids.append(ca_elimina_documento(cc, d["id"])), "Casa: documento eliminato")
+                if "_fa_cancella_files" in globals():
+                    _fa_cancella_files([i for i in ids if i])
+                st.session_state["messaggio"] = "🗑️ Documento eliminato."
+                st.rerun()
+            except Exception as e:
+                st.error(f"Non sono riuscito: {e}")
+        if e2.button("No, tienilo", key=f"ca_dlg_no_{d['id']}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Elimina il documento")(_finestra)()
+
+
+def _ca_finestra_elimina_bene(b, n_docs):
+    def _finestra():
+        st.warning(f"Eliminare il bene «{_ca_testo(b.get('nome'))}»?")
+        con = st.radio(f"Cosa faccio dei suoi {n_docs} documenti?", ["Tienili (restano senza bene)", "Eliminali insieme al bene"], key=f"ca_dlg_rad_{b['id']}") if n_docs else "Tienili (restano senza bene)"
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, elimina", key=f"ca_dlg_bsi_{b['id']}", type="primary", width="stretch"):
+            try:
+                ids = []
+                _ca_salva(lambda cc: ids.extend(ca_elimina_bene(cc, b["id"], con.startswith("Eliminali"))), "Casa: bene eliminato")
+                if ids and "_fa_cancella_files" in globals():
+                    _fa_cancella_files(ids)
+                st.session_state.pop("ca_bene_aperto", None)
+                st.session_state["messaggio"] = "🗑️ Bene eliminato."
+                st.rerun()
+            except Exception as e:
+                st.error(f"Non sono riuscito: {e}")
+        if s2.button("No, tienilo", key=f"ca_dlg_bno_{b['id']}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Elimina il bene")(_finestra)()
+
+
+def _ca_finestra_elimina_manutenzione(m, nome_bene):
+    def _finestra():
+        st.warning(f"Eliminare questa manutenzione?\n\n**{_ca_data_it(m.get('data'))} · {_ca_testo(nome_bene)} · {_ca_testo(m.get('tipo'))}: {_ca_testo(m.get('descrizione'))}**")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, elimina", key=f"ca_dlg_msi_{m['id']}", type="primary", width="stretch"):
+            _ca_salva(lambda cc: cc.__setitem__("manutenzioni", [x for x in cc.get("manutenzioni", []) if x.get("id") != m["id"]]), "Casa: manutenzione eliminata")
+            st.session_state["messaggio"] = "🗑️ Manutenzione eliminata."
+            st.rerun()
+        if s2.button("No, tienila", key=f"ca_dlg_mno_{m['id']}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Elimina la manutenzione")(_finestra)()
+
+
+def _ca_finestra_scarta_posta(it):
+    def _finestra():
+        st.warning(f"Scartare questo file della posta in arrivo?\n\n**{_ca_testo(it.get('nome'))}**")
+        st.caption("Il file verrà cancellato dall'archivio.")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, scarta", key=f"ca_dlg_psi_{it['id']}", type="primary", width="stretch"):
+            try:
+                _ca_posta_togli(it["id"], cancella_file=True)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Non sono riuscito: {e}")
+        if s2.button("No, tienilo", key=f"ca_dlg_pno_{it['id']}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Scarta il file")(_finestra)()
+
+
 def _ca_pannello_pagamento(d, docs, k, stato_p):
     """Su ogni bolletta/fattura/polizza: segnare «pagata», come si è pagato, aggiungere la ricevuta. Tutto si può cambiare quando si vuole."""
     pagata = stato_p[0] == "pagata"
@@ -1521,8 +1595,7 @@ def _ca_riga_documento(d, beni_nomi, pre="", docs=None):
         st.session_state["ca_correggi"] = d["id"]
         st.rerun()
     if b4.button("🗑️ Elimina", key=f"ca_del_{k}", width="stretch"):
-        st.session_state["ca_elimina_doc"] = d["id"]
-        st.rerun()
+        _ca_finestra_elimina_doc(d)
     if caricato and aperto:
         _ca_anteprima(*caricato[0])
     if stato_p and docs is not None:
@@ -2157,11 +2230,7 @@ def _ca_posta_riquadro(c):
             if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", help="Leggo io il documento e ti propongo dove metterlo: controlli e confermi."):
                 _apri_bozza()
             if q2.button("🗑️ Scarta", key=f"ca_po_no_{it['id']}", width="stretch"):
-                try:
-                    _ca_posta_togli(it["id"], cancella_file=True)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Non sono riuscito: {e}")
+                _ca_finestra_scarta_posta(it)
         if len(items) > 15:
             st.caption(f"…e altri {len(items) - 15}: archivia questi per vedere i prossimi.")
         st.markdown(f"**Come ci mandi un documento dalla posta:** inoltralo (o scrivi, allegando il file) a **{_CA_INDIRIZZO_POSTA}**, oppure dalle app dei fornitori tocca **Condividi → Gmail** e usa quell'indirizzo. "
@@ -2641,7 +2710,9 @@ def _ca_tab_manuali(c):
             docs_c = c.get("documenti", [])
             tipo_ric = (ric["campi"].get("tipo") or {}).get("valore", "")
             bloccato = bool(doppi) and not st.session_state.get(f"ca_dup_ok_{n}")
-            allega = bool(st.session_state.get(f"ca_allega_{n}")) and not bloccato
+            senza_rif = not ((ric["campi"].get("importo") or {}).get("valore") or (ric["campi"].get("numero_doc") or {}).get("valore")
+                             or (ric["campi"].get("tipo") or {}).get("valore") not in ("", None, "Altro"))
+            allega = (bool(st.session_state.get(f"ca_allega_{n}")) or (senza_rif and bool(docs_c) and not st.session_state.get(f"ca_allega_off_{n}") and not man_att)) and not bloccato
             if allega:
                 _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs_c)
             elif not bloccato and docs_c:
@@ -2742,25 +2813,6 @@ def _ca_tab_manuali(c):
                     st.rerun()
                 except Exception as e:
                     st.error(f"Non sono riuscito a salvare: {e}")
-    did = st.session_state.get("ca_elimina_doc")
-    if did:
-        d = next((x for x in c.get("documenti", []) if x["id"] == did), None)
-        if d:
-            st.warning(f"Eliminare «{d.get('titolo')}»? Il file originale verrà cancellato.")
-            e1, e2 = st.columns(2)
-            if e1.button("🗑️ Sì, elimina", key="ca_del_si", type="primary", width="stretch"):
-                try:
-                    ids = []
-                    _ca_salva(lambda cc: ids.append(ca_elimina_documento(cc, did)), "Casa: documento eliminato")
-                    if "_fa_cancella_files" in globals():
-                        _fa_cancella_files([i for i in ids if i])
-                    st.session_state.pop("ca_elimina_doc", None)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Non sono riuscito: {e}")
-            if e2.button("No, tienilo", key="ca_del_no", width="stretch"):
-                st.session_state.pop("ca_elimina_doc", None)
-                st.rerun()
     # ---- l'archivio: per ARGOMENTO (Luce, Gas, Acqua…), dentro per ENTE (la compagnia, il negozio, la marca), dentro per DATA
     docs = c.get("documenti", [])
     st.divider()
@@ -2913,8 +2965,7 @@ def _ca_scheda_bene(c, b, nomi):
         st.session_state["ca_bene_mod"] = b["id"]
         st.rerun()
     if e2.button("🗑️ Elimina il bene", key=f"ca_eli_{b['id']}", width="stretch"):
-        st.session_state["ca_bene_elimina"] = b["id"]
-        st.rerun()
+        _ca_finestra_elimina_bene(b, len(docs))
     if st.session_state.get("ca_bene_mod") == b["id"]:
         ok, val = _ca_form_bene(f"ca_form_bene_mod_{b['id']}", b)
         if ok:
@@ -2924,24 +2975,6 @@ def _ca_scheda_bene(c, b, nomi):
                 st.rerun()
             except Exception as e:
                 st.error(f"Non sono riuscito a salvare: {e}")
-    if st.session_state.get("ca_bene_elimina") == b["id"]:
-        st.warning(f"Eliminare «{b.get('nome')}»? Scegli cosa fare dei suoi {len(docs)} documenti.")
-        con = st.radio("I documenti collegati", ["Tienili (restano senza bene)", "Eliminali insieme al bene"], key=f"ca_eli_rad_{b['id']}")
-        s1, s2 = st.columns(2)
-        if s1.button("🗑️ Elimina", key=f"ca_eli_si_{b['id']}", type="primary", width="stretch"):
-            try:
-                ids = []
-                _ca_salva(lambda cc: ids.extend(ca_elimina_bene(cc, b["id"], con.startswith("Eliminali"))), "Casa: bene eliminato")
-                if ids and "_fa_cancella_files" in globals():
-                    _fa_cancella_files(ids)
-                st.session_state.pop("ca_bene_elimina", None)
-                st.session_state.pop("ca_bene_aperto", None)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Non sono riuscito: {e}")
-        if s2.button("No", key=f"ca_eli_no_{b['id']}", width="stretch"):
-            st.session_state.pop("ca_bene_elimina", None)
-            st.rerun()
 
 
 def _ca_tab_manutenzioni(c):
@@ -2987,6 +3020,8 @@ def _ca_tab_manutenzioni(c):
             st.markdown(f"- {_ca_data_it(m.get('data'))} · **{_ca_testo(nomi.get(m.get('bene_id'), '?'))}** · {_ca_testo(m.get('tipo'))}: {_ca_testo(m.get('descrizione'))}"
                         + (f" · {_ca_testo(m.get('ditta'))}" if m.get("ditta") else "") + (f" · {_ca_testo(m.get('costo'))} €" if m.get("costo") else ""))
             dm = next((d for d in docs if d.get("id") == m.get("documento_id")), None)
+            if st.button("🗑️ Elimina questa manutenzione", key=f"ca_mdel_{m['id']}"):
+                _ca_finestra_elimina_manutenzione(m, nomi.get(m.get("bene_id"), "?"))
             with st.expander(("📎 Fattura: " + _ca_etichetta_bolletta(dm)) if dm else "📎 Aggiungi la fattura o il documento dell'intervento", expanded=False):
                 if dm:
                     _ca_riga_documento(dm, nomi, "mm" + m["id"], docs)
