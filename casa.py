@@ -1938,6 +1938,28 @@ def _ca_posta_togli(pid, cancella_file=False):
         _fa_cancella_files([trovato["file_id"]])
 
 
+def _ca_scorri_a(ancora, ident):
+    """Porta la pagina fino all'elemento con quell'id (una volta sola per documento aperto): così non devi cercare il modulo scorrendo."""
+    if st.session_state.get("ca_scorso") == ident:
+        return
+    st.session_state["ca_scorso"] = ident
+    codice = ("var a=0;function v(){var P=window;try{var d=window.parent.document;if(d&&d.querySelector('[data-testid=\"stApp\"],.stApp'))P=window.parent}catch(e){}"
+              "var e=P.document.getElementById(" + json.dumps(ancora) + ");if(e){e.scrollIntoView({behavior:'smooth',block:'start'});}else if(a++<12){setTimeout(v,300)}}setTimeout(v,350);")
+    pagina = "<script>(function(){" + codice + "})();</script>"
+    try:
+        st.html(pagina, unsafe_allow_javascript=True)
+    except Exception:
+        pass
+    try:
+        if hasattr(st, "iframe"):
+            st.iframe(pagina, height=1)
+        else:
+            import streamlit.components.v1 as _comp_sc
+            _comp_sc.html(pagina, height=0)
+    except Exception:
+        pass
+
+
 def _ca_batch_posta(items):
     """Legge e archivia da solo tutti i file della posta in arrivo. Ricevute: solo se la bolletta è sicura. Doppioni e documenti dubbi restano lì, per decidere tu. Ritorna l'esito."""
     esito = {"archiviati": [], "doppioni": [], "da_rivedere": [], "errori": []}
@@ -1989,6 +2011,9 @@ def _ca_posta_riquadro(c):
     titolo = f"📥 Posta in arrivo: {len(items)} da archiviare" if items else "📥 Posta in arrivo (nessun file nuovo)"
     esito = st.session_state.get("ca_batch_esito")
     with st.expander(titolo, expanded=bool(items) or bool(esito)):
+        aperto_ora = st.session_state.get("ca_bozza_in")
+        if aperto_ora and aperto_ora.get("posta_id"):
+            st.info(f"👇 Hai aperto «{_ca_testo(aperto_ora.get('nome'))}»: il documento con i suoi dati è qui sotto, ci vai in automatico (se non ti porta, scorri la pagina in basso).")
         if esito:
             st.success(f"🚀 Fatto: **{len(esito['archiviati'])}** archiviati" + (f", {len(esito['doppioni'])} già presenti" if esito["doppioni"] else "") + (f", {len(esito['da_rivedere'])} da controllare" if esito["da_rivedere"] else "")
                        + (f", {len(esito['errori'])} con errore" if esito["errori"] else "") + ".")
@@ -2029,16 +2054,40 @@ def _ca_posta_riquadro(c):
             kb = max(1, int(it.get("dimensione") or 0) // 1024)
             st.markdown(f"<div class='ca-card'><b>📎 {_ca_testo(it.get('nome') or 'file')}</b> · {kb} KB<br><span style='font-size:.85rem'>da {_ca_testo(it.get('da') or '?')}"
                         + (f" · «{_ca_testo(it.get('oggetto'))}»" if it.get("oggetto") else "") + (f" · {_ca_data_it(str(it.get('data_mail') or '')[:10])}" if it.get("data_mail") else "") + "</span></div>", unsafe_allow_html=True)
-            q1, q2 = st.columns(2, gap="small")
-            if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", type="primary"):
+            vedi_l = st.session_state.setdefault("ca_po_vedi", [])
+            aperto_p = it["id"] in vedi_l
+            if st.button("🙈 Chiudi" if aperto_p else "👁️ Vedi e scarica", key=f"ca_po_vedi_{it['id']}", width="stretch"):
+                if aperto_p:
+                    vedi_l.remove(it["id"])
+                else:
+                    vedi_l.append(it["id"])
+                st.rerun()
+            if aperto_p:
+                car_v = _fa_inv_allegati([{"id": it["file_id"], "nome": it.get("nome"), "mime": it.get("mime")}]) if "_fa_inv_allegati" in globals() else []
+                if not car_v:
+                    st.warning("Non riesco ad aprire questo file adesso: riprova fra poco.")
+                else:
+                    nome_v, mime_v, dati_v = car_v[0]
+                    mime_v = _ca_mime(nome_v, mime_v, dati_v)
+                    _ca_anteprima(nome_v, mime_v, dati_v)
+                    st.download_button("⬇ Salva il file nel telefono", dati_v, file_name=nome_v, mime=mime_v, key=f"ca_po_dl_{it['id']}", width="stretch")
+
+            def _apri_bozza(it=it, scelgo_io=False):
                 car = _fa_inv_allegati([{"id": it["file_id"], "nome": it.get("nome"), "mime": it.get("mime")}]) if "_fa_inv_allegati" in globals() else []
                 if not car:
                     st.error("Non riesco ad aprire questo file: toccalo di nuovo fra poco, oppure scartalo.")
-                else:
-                    nome_, mime_, dati_ = car[0]
-                    st.session_state["ca_bozza_in"] = {"nome": nome_, "mime": _ca_mime(nome_, mime_, dati_), "dati": dati_, "link": "", "file_id": it["file_id"], "posta_id": it["id"]}
-                    st.session_state.pop("ca_bozza", None)
-                    st.rerun()
+                    return
+                nome_, mime_, dati_ = car[0]
+                st.session_state["ca_bozza_in"] = {"nome": nome_, "mime": _ca_mime(nome_, mime_, dati_), "dati": dati_, "link": "", "file_id": it["file_id"], "posta_id": it["id"]}
+                st.session_state.pop("ca_bozza", None)
+                if scelgo_io:
+                    st.session_state[f"ca_scelgo_io_{st.session_state.get('ca_giro', 0)}"] = True                  # niente proposte: si apre subito il modulo completo
+                st.rerun()
+            if st.button("📂 Scelgo io dove metterlo", key=f"ca_po_io_{it['id']}", width="stretch", help="Apre il modulo: scegli tu argomento, azienda, bene, bolletta…"):
+                _apri_bozza(scelgo_io=True)
+            q1, q2 = st.columns(2, gap="small")
+            if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", type="primary", help="Leggo io il documento e ti propongo dove metterlo: controlli e confermi."):
+                _apri_bozza()
             if q2.button("🗑️ Scarta", key=f"ca_po_no_{it['id']}", width="stretch"):
                 try:
                     _ca_posta_togli(it["id"], cancella_file=True)
@@ -2455,6 +2504,9 @@ def _ca_tab_manuali(c):
     elif st.session_state.get("ca_bozza_in"):
         sorgente = st.session_state["ca_bozza_in"]
     if sorgente:
+        st.markdown("<div id='ca-doc-aperto'></div>", unsafe_allow_html=True)
+        st.markdown(f"#### 📖 Documento aperto: {_ca_testo(sorgente.get('nome'))}")
+        _ca_scorri_a("ca-doc-aperto", f"{sorgente.get('nome')}{len(sorgente.get('dati') or b'')}")
         if sorgente["mime"] in _CA_MIME and sorgente["mime"].startswith("image/") and len(sorgente["dati"]) > _CA_MAX_BYTE and not sorgente.get("ridotta"):
             rid = _ca_riduci_foto(sorgente["nome"], sorgente["dati"])
             if rid:
