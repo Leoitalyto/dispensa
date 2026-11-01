@@ -48,6 +48,8 @@ _SP_CSS = """<style>
 .st-key-sp_a_critici button{background:linear-gradient(135deg,#ef5350,#b71c1c) !important}
 .st-key-sp_a_scheda button{background:linear-gradient(135deg,#42a5f5,#0d47a1) !important}
 .st-key-sp_a_bambino button{background:linear-gradient(135deg,#ffa726,#d84315) !important}
+.st-key-sp_a_docsan button{background:linear-gradient(135deg,#7e57c2,#4527a0) !important}
+.st-key-sp_a_param button{background:linear-gradient(135deg,#26c6da,#00838f) !important}
 .sp-card{background:rgba(255,255,255,.88);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b}
 .sp-alert{background:#ffebee;border:2px solid #c62828;border-radius:16px;padding:10px 14px;margin:8px 0;color:#7f0000;font-weight:700}
 </style>"""
@@ -292,7 +294,9 @@ def sp_riga_azioni(pid):
         b = st.button("🆘 Dati per l'emergenza", key="sp_a_critici", width="stretch")
         c = st.button("📄 Scheda per il medico", key="sp_a_scheda", width="stretch")
         d = st.button("👶 Percorso del bambino", key="sp_a_bambino", width="stretch") if _sp_e_bambino(p) else False
-    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino")):
+        e = st.button("🗂️ Documenti sanitari", key="sp_a_docsan", width="stretch")
+        g = st.button("📈 Parametri e valori", key="sp_a_param", width="stretch")
+    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri")):
         if premuto:
             st.session_state["sp_modulo"] = {"vista": vista, "pid": pid}
             st.rerun()
@@ -311,7 +315,7 @@ def _sp_intestazione(titolo, pid):
 
 def _sp_dispatch(m):
     vista, pid = m.get("vista"), m.get("pid")
-    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino}.get(vista, lambda _p: None)(pid)
+    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri}.get(vista, lambda _p: None)(pid)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -480,7 +484,9 @@ def sp_raccogli(f, pid, oggi_=None):
             "patologie": _sp_righe(san.get("patologie")), "interventi": _sp_righe(san.get("interventi")), "storia": san.get("storia", ""), "famiglia": san.get("famiglia", ""), "altro": san.get("altro", ""),
             "terapie": terapie, "vaccini": [{"nome": v.get("nome", ""), "data": v.get("data", ""), "dose": v.get("dose", ""), "richiamo": v.get("richiamo", "")} for v in vacc],
             "visite": [{"data": v.get("data", ""), "categoria": v.get("categoria", ""), "medico": v.get("medico", "")} for v in vis[:8]], "medici": medici,
-            "bambino_dati": p.get("bambino") or {}, "oggi": oggi_.isoformat()}
+            "bambino_dati": p.get("bambino") or {}, "oggi": oggi_.isoformat(),
+            "parametri": [{"nome": n, "unita": u, "data": d_, "valore": v_} for n, u, d_, v_ in sp_ultimi_parametri(p)],
+            "docsan": [{"tipo": x.get("tipo", ""), "data": x.get("data", ""), "titolo": x.get("titolo", ""), "struttura": x.get("struttura", "")} for x in sorted(p.get("docsan", []), key=lambda x: x.get("data", ""), reverse=True)[:12]]}
 
 
 def sp_avvisi(d):
@@ -600,6 +606,8 @@ def sp_html_scheda(d, racconto, racconto_ai=None):
             f"<h2>Storia clinica di rilievo</h2><p>{e(d['storia']).replace(chr(10), '<br>') or '<i>non indicata</i>'}</p>"
             + (f"<h2>Familiarità</h2><p>{e(d['famiglia']).replace(chr(10), '<br>')}</p>" if d["famiglia"] else "")
             + f"<h2>Terapie in corso</h2>{terapie}<h2>Vaccinazioni</h2>{vacc}<h2>Ultime visite</h2>{visite}"
+            + (("<h2>Ultimi valori registrati</h2>" + lis([f"{x['nome']}: {x['valore']} {x['unita']} ({_sp_data_it(x['data'])})" for x in d["parametri"]])) if d.get("parametri") else "")
+            + (("<h2>Referti e documenti archiviati (ultimi)</h2>" + lis([f"{_sp_data_it(x['data'])} – {x['titolo']}" for x in d["docsan"]])) if d.get("docsan") else "")
             + (f"<h2>Altre informazioni</h2><p>{e(d['note'] + ' ' + d['altro']).strip()}</p>" if (d["note"] or d["altro"]) else "")
             + baby
             + "<p class='nota'>Documento creato dall'app «La nostra dispensa» con le informazioni inserite dall'utente: non è certificato da un medico e non sostituisce la documentazione clinica. "
@@ -945,6 +953,528 @@ def sp_modulo_bambino(pid):
         st.download_button("📕 Scarica il PDF", pdf, file_name=nome_file + ".pdf", mime="application/pdf", width="stretch")
     if "inv_voce" in globals():
         inv_voce(f"sp_bimbo_{pid}", "📤 Invia il libretto", f"Percorso di {p.get('nome', '')}", sp_racconto(d), lambda: ([(nome_file + ".pdf", "application/pdf", pdf)] if pdf else [(nome_file + ".html", "text/html", html_str.encode("utf-8"))]))
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 6) DOCUMENTI SANITARI: li leggo io, tu confermi
+# ---------------------------------------------------------------------------------------------------------------------
+_SP_TIPI_DOC = ["Esame di laboratorio", "Diagnostica per immagini", "Referto di visita", "Ricetta medica", "Ricovero e dimissione", "Certificato medico", "Vaccinazione",
+                "Piano terapeutico", "Esenzione o invalidità", "Altro"]
+_SP_ICONE_DOC = {"Esame di laboratorio": "🧪", "Diagnostica per immagini": "🩻", "Referto di visita": "🩺", "Ricetta medica": "📝", "Ricovero e dimissione": "🏥", "Certificato medico": "📜",
+                 "Vaccinazione": "💉", "Piano terapeutico": "📅", "Esenzione o invalidità": "🪪", "Altro": "📄"}
+_SP_PAROLE_DOC = {
+    "Esame di laboratorio": [("emocromo", 4), ("emocromocitometrico", 5), ("glicemia", 3), ("colesterolo", 3), ("creatinina", 3), ("azotemia", 3), ("transaminasi", 3), ("trigliceridi", 3), ("tsh", 3),
+                             ("valori di riferimento", 4), ("intervallo di riferimento", 4), ("analisi del sangue", 5), ("esami del sangue", 5), ("laboratorio analisi", 4), ("emoglobina", 3), ("referto di laboratorio", 5),
+                             ("campione", 1), ("prelievo", 2), ("urine", 2), ("piastrine", 2)],
+    "Diagnostica per immagini": [("radiografia", 5), ("ecografia", 5), ("ecocolordoppler", 5), ("tomografia", 5), ("tac ", 4), ("risonanza magnetica", 5), ("risonanza", 3), ("mammografia", 5), ("mineralometria", 5),
+                                 ("scintigrafia", 5), ("radiologia", 3), ("rx ", 3), ("ecocardiogramma", 5), ("elettrocardiogramma", 5), ("ecg", 3), ("moc ", 3), ("reperto", 2), ("quesito diagnostico", 4)],
+    "Referto di visita": [("visita specialistica", 5), ("visita cardiologica", 5), ("visita ", 2), ("anamnesi", 4), ("esame obiettivo", 4), ("conclusioni", 3), ("diagnosi", 3), ("terapia consigliata", 4),
+                          ("si consiglia", 2), ("controllo tra", 3), ("referto", 2), ("specialista", 2), ("ambulatorio", 1)],
+    "Ricetta medica": [("ricetta", 5), ("nre", 4), ("prescrizione", 3), ("ricetta dematerializzata", 6), ("promemoria", 2), ("codice autenticazione", 4), ("ssn", 2), ("esenzione", 1), ("prestazioni", 2), ("prescritto", 2)],
+    "Ricovero e dimissione": [("dimissione", 5), ("lettera di dimissione", 7), ("ricovero", 4), ("degenza", 4), ("decorso clinico", 5), ("reparto", 3), ("dimesso", 4), ("intervento chirurgico", 4), ("verbale di pronto soccorso", 6), ("pronto soccorso", 4)],
+    "Certificato medico": [("certificato medico", 7), ("si certifica", 5), ("certifico", 5), ("idoneità", 4), ("certificato di malattia", 6), ("certificato", 3), ("inabilità", 3)],
+    "Vaccinazione": [("vaccin", 4), ("certificato vaccinale", 7), ("lotto", 3), ("richiamo", 2), ("dose", 1)],
+    "Piano terapeutico": [("piano terapeutico", 8), ("posologia", 2), ("durata del trattamento", 4), ("centro prescrittore", 5), ("rinnovo", 1)],
+    "Esenzione o invalidità": [("esenzione ticket", 6), ("invalidità", 4), ("legge 104", 6), ("verbale di accertamento", 5), ("percentuale di invalidità", 6), ("handicap", 3), ("esenzione", 3)],
+}
+_SP_ESAMI = ["Emocromo", "Glicemia", "Colesterolo", "Esami del sangue", "Esame delle urine", "Radiografia", "Ecografia addominale", "Ecografia", "Ecocolordoppler", "Risonanza magnetica", "TAC", "Mammografia",
+             "Mineralometria ossea (MOC)", "Elettrocardiogramma", "Ecocardiogramma", "Holter", "Visita cardiologica", "Visita ortopedica", "Visita oculistica", "Visita dermatologica", "Visita ginecologica", "Visita neurologica",
+             "Visita otorinolaringoiatrica", "Visita urologica", "Visita pediatrica", "Visita fisiatrica", "Visita gastroenterologica", "Visita endocrinologica", "Visita pneumologica", "Pronto soccorso"]
+_SP_MESI_NOME = {m: i + 1 for i, m in enumerate(_SP_MESI)}
+_RE_DATA_SP = re.compile(r"(?<!\d)(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{4}|\d{2})(?!\d)")
+_RE_DATA_TXT_SP = re.compile(r"(?<!\d)(\d{1,2})\s+(" + "|".join(_SP_MESI) + r")\s+(\d{4})(?!\d)", re.I)
+
+
+def sp_tipo_da_testo(testo):
+    """(tipo, punteggio) dal testo: somma delle parole tipiche. Meno di 4 punti = non so."""
+    t = " " + re.sub(r"\s+", " ", (testo or "").lower()) + " "
+    punti = {tipo: sum(peso * min(t.count(par), 3) for par, peso in parole) for tipo, parole in _SP_PAROLE_DOC.items()}
+    tipo, p = max(punti.items(), key=lambda x: x[1])
+    if p < 5:
+        return "Altro", p
+    if tipo == "Vaccinazione" and punti["Esame di laboratorio"] > p:
+        return "Esame di laboratorio", punti["Esame di laboratorio"]
+    return tipo, p
+
+
+def _sp_date_nel_testo(testo, oggi_):
+    """[(data, contesto)] di tutte le date trovate."""
+    out = []
+    for m in _RE_DATA_SP.finditer(testo):
+        g, me, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        a = a + (2000 if a < 70 else 1900) if a < 100 else a
+        try:
+            out.append((date(a, me, g), testo[max(0, m.start() - 28): m.start()].lower()))
+        except ValueError:
+            continue
+    for m in _RE_DATA_TXT_SP.finditer(testo):
+        try:
+            out.append((date(int(m.group(3)), _SP_MESI_NOME[m.group(2).lower()], int(m.group(1))), testo[max(0, m.start() - 28): m.start()].lower()))
+        except (ValueError, KeyError):
+            continue
+    return out
+
+
+def sp_leggi_doc(testo, f=None, nome_file="", oggi_=None):
+    """Legge un documento sanitario. Ritorna {campo: {'valore', 'affidabilita', 'fonte'}}. Niente è definitivo: si conferma sempre."""
+    oggi_ = oggi_ or _sp_oggi()
+    t = testo or ""
+    campi = {}
+
+    def metti(k, v, aff, fonte="testo"):
+        if v:
+            campi[k] = {"valore": v, "affidabilita": aff, "fonte": fonte}
+    tipo, punti = sp_tipo_da_testo(t)
+    metti("tipo", tipo, "alta" if punti >= 12 else "media" if punti >= 7 else "bassa")
+    # data del documento
+    date_t = _sp_date_nel_testo(t, oggi_)
+    scelte = [d_ for d_, ctx in date_t if re.search(r"referto|prelievo|esame|visita|emissione|accettazione|data\b|erogazione|prescri|dimission", ctx) and not re.search(r"nat[oa]|nascita|scadenza|valid", ctx) and d_ <= oggi_]
+    if scelte:
+        metti("data", max(scelte).isoformat(), "alta")
+    else:
+        candidate = [d_ for d_, ctx in date_t if not re.search(r"nat[oa]|nascita|scadenza|valid", ctx) and d_ <= oggi_]
+        if candidate:
+            metti("data", max(candidate).isoformat(), "media")
+    # struttura e medico
+    righe = [x.strip() for x in t.splitlines() if x.strip()]
+    for r in righe[:25]:
+        if re.search(r"ospedale|asl\b|a\.s\.l|azienda sanitaria|azienda ospedaliera|laboratorio|poliambulatorio|clinica|centro (?:medico|diagnostico)|ambulatorio|istituto|presidio|studio medico|policlinico|croce", r, re.I) and 4 <= len(r) <= 80:
+            metti("struttura", re.sub(r"\s+", " ", r).strip(" -–,:"), "media")
+            break
+    mm = re.search(r"(?:medico|refertante|responsabile|specialista|dirigente medico|firmato da)[^\n]{0,25}?((?:Dott\.?(?:ssa)?|Dr\.?(?:ssa)?|Prof\.?(?:ssa)?)\s+[A-ZÀ-Ý][\wà-ÿ'’\.]+(?:\s+[A-ZÀ-Ý][\wà-ÿ'’]+){0,2})", t, re.I) \
+        or re.search(r"((?:Dott\.?(?:ssa)?|Dr\.?(?:ssa)?|Prof\.?(?:ssa)?)\s+[A-ZÀ-Ý][\wà-ÿ'’\.]+(?:\s+[A-ZÀ-Ý][\wà-ÿ'’]+){0,2})", t)
+    if mm:
+        metti("medico", re.sub(r"\s+", " ", mm.group(1)).strip(" .,;:"), "media")
+    # che esame o che visita
+    tl = t.lower()
+    for nome in _SP_ESAMI:
+        base = nome.lower().split(" (")[0]
+        if base in tl or (base.startswith("visita ") and base.replace("visita ", "visita ") in tl):
+            metti("esame", nome, "media")
+            break
+    # chi è il paziente: nome, codice fiscale
+    cfm = re.search(r"\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b", t.upper()) or re.search(r"[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]", re.sub(r"[^A-Z0-9]", "", t.upper()))
+    if cfm:
+        metti("cf", cfm.group(0), "alta")
+    pm = re.search(r"(?i:paziente|assistito|cognome e nome|nome e cognome|intestatario|sig\.?(?:ra)?)[ \t]*[:\-]?[ \t]*([A-ZÀ-Ý][A-Za-zÀ-ÿ'’]+(?:[ \t]+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’]+){0,3})", t)
+    if pm:
+        parole_p = pm.group(1).split()
+        while len(parole_p) > 1 and parole_p[-1].lower() in ("codice", "data", "nato", "nata", "il", "del", "residente", "luogo", "reparto", "ricovero", "tessera", "eta", "età", "sesso", "domicilio", "cf", "c.f."):
+            parole_p.pop()
+        metti("paziente", " ".join(parole_p), "media")
+    # ricetta
+    if tipo == "Ricetta medica":
+        nre = re.search(r"\b(?=[0-9A-Z]*\d)(?=[0-9A-Z]*[A-Z])[0-9A-Z]{15}\b", t.upper())
+        if nre:
+            metti("codice", nre.group(0), "media")
+        v = [d_ for d_, ctx in date_t if re.search(r"valid|scad|entro", ctx)]
+        if v:
+            metti("valida_fino", max(v).isoformat(), "media")
+    # a chi appartiene fra i profili
+    if f is not None:
+        pid, motivo = sp_proponi_profilo(f, campi.get("paziente", {}).get("valore", ""), campi.get("cf", {}).get("valore", ""))
+        if pid:
+            metti("profilo", pid, "alta" if motivo == "codice fiscale" else "media", motivo)
+    return campi
+
+
+def _sp_norm_nome(x):
+    import unicodedata
+    return re.sub(r"[^a-z ]", "", unicodedata.normalize("NFKD", str(x or "")).encode("ascii", "ignore").decode().lower()).split()
+
+
+def sp_proponi_profilo(f, paziente, cf):
+    """(id profilo, motivo) in base al codice fiscale o al nome letto; (None, '') se non lo so."""
+    profili = f.get("profili") or []
+    if cf:
+        for p in profili:
+            try:
+                if _fa_cf_del_profilo(f, p["id"]) == cf:
+                    return p["id"], "codice fiscale"
+            except Exception:
+                pass
+    parole = set(_sp_norm_nome(paziente))
+    if len(parole) >= 2:
+        for p in profili:
+            nome = set(_sp_norm_nome(p.get("nome")))
+            if nome and (nome <= parole or (len(nome & parole) >= 2)):
+                return p["id"], "nome"
+    return None, ""
+
+
+def sp_titolo_doc(d):
+    nome = d.get("esame") or ""
+    return " · ".join(x for x in (d.get("tipo", "Documento"), nome, d.get("struttura") if not nome else "", _sp_data_it(d.get("data"))) if x)
+
+
+def sp_trova_doppioni_doc(profilo, tipo, data, sha, struttura=""):
+    """Documenti già archiviati che sembrano lo stesso: [(doc, motivo)]."""
+    out = []
+    for d in profilo.get("docsan", []):
+        if sha and (d.get("file") or {}).get("sha") == sha:
+            out.append((d, "è lo stesso identico file"))
+        elif tipo and d.get("tipo") == tipo and data and d.get("data") == data and (not struttura or not d.get("struttura") or _sp_norm_nome(d["struttura"])[:2] == _sp_norm_nome(struttura)[:2]):
+            out.append((d, "stesso tipo e stessa data"))
+    return out
+
+
+class _SpUp:
+    """Un file già letto, fatto passare per «caricato» (serve a _fa_salva_files)."""
+    def __init__(self, nome, dati):
+        self.name, self._d = nome, dati
+
+    def getvalue(self):
+        return self._d
+
+
+def _sp_dialogo_togli_docsan(pid, did, titolo):
+    def _finestra():
+        st.warning(f"Eliminare questo documento?\n\n**{_sp_e(titolo)}**")
+        st.caption("Il file originale verrà cancellato.")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, elimina", key=f"sp_ds_del_si_{did}", type="primary", width="stretch"):
+            ids = []
+
+            def _fn(p):
+                for d in p.get("docsan", []):
+                    if d.get("id") == did and (d.get("file") or {}).get("id"):
+                        ids.append(d["file"]["id"])
+                p["docsan"] = [d for d in p.get("docsan", []) if d.get("id") != did]
+            _sp_salva_profilo(pid, _fn, "Salute: documento sanitario eliminato")
+            if ids:
+                _fa_cancella_files(ids)
+            st.session_state["fa_msg"] = "🗑️ Documento eliminato."
+            st.rerun()
+        if s2.button("No, tienilo", key=f"sp_ds_del_no_{did}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Elimina il documento")(_finestra)()
+
+
+def _sp_form_docsan(chiave, f, pid_corrente, v=None, riconosciuto=None, con_profilo=True):
+    """Il modulo di conferma (nuovo documento o correzione). Ritorna (ok, valori)."""
+    v = v or {}
+    riconosciuto = riconosciuto or {}
+
+    def val(k, d=""):
+        return v.get(k) or (riconosciuto.get(k) or {}).get("valore", d)
+
+    def aff(k):
+        a = (riconosciuto.get(k) or {}).get("affidabilita")
+        return {"alta": " 🟢", "media": " 🟡", "bassa": " 🟠"}.get(a, "")
+    profili = _fa_profili(f)
+    with st.form(chiave, border=False):
+        if con_profilo:
+            prop = (riconosciuto.get("profilo") or {}).get("valore")
+            pids = [p["id"] for p in profili]
+            att = prop if prop in pids else pid_corrente
+            profilo = st.selectbox("👤 Di chi è" + (aff("profilo") if prop else ""), pids, index=pids.index(att) if att in pids else 0, format_func=lambda i: next(p["nome"] for p in profili if p["id"] == i))
+        else:
+            profilo = pid_corrente
+        tipo_att = val("tipo") if val("tipo") in _SP_TIPI_DOC else "Altro"
+        tipo = st.selectbox("📂 Che documento è" + aff("tipo"), _SP_TIPI_DOC, index=_SP_TIPI_DOC.index(tipo_att), format_func=lambda x: f"{_SP_ICONE_DOC.get(x, '')} {x}")
+        esame = st.text_input("Che esame o che visita" + aff("esame"), value=val("esame"), placeholder="es. Emocromo, Ecografia addominale, Visita cardiologica")
+        c1, c2 = st.columns(2)
+        try:
+            d0 = date.fromisoformat(val("data")) if val("data") else None
+        except ValueError:
+            d0 = None
+        data = c1.date_input("Data" + aff("data"), value=d0, min_value=date(1950, 1, 1), max_value=_sp_oggi(), format="DD/MM/YYYY")
+        medico = c2.text_input("Medico" + aff("medico"), value=val("medico"))
+        struttura = st.text_input("Ospedale, laboratorio o studio" + aff("struttura"), value=val("struttura"))
+        c3, c4 = st.columns(2)
+        codice = c3.text_input("Codice ricetta (solo ricette)", value=val("codice"))
+        try:
+            v0 = date.fromisoformat(val("valida_fino")) if val("valida_fino") else None
+        except ValueError:
+            v0 = None
+        valida = c4.date_input("Valida fino al (solo ricette)", value=v0, format="DD/MM/YYYY")
+        titolo = st.text_input("Titolo (se vuoto lo scrivo io)", value=v.get("titolo", "") if v.get("titolo") and v.get("titolo") != sp_titolo_doc(v) else "")
+        note = st.text_area("Note (per esempio i valori da ricordare o l'esito)", value=v.get("note", ""), height=80)
+        ok = st.form_submit_button("✅ Conferma e archivia" if not v.get("id") else "💾 Salva le correzioni", type="primary", width="stretch")
+    return ok, {"profilo": profilo, "tipo": tipo, "esame": esame.strip(), "data": data.isoformat() if data else "", "medico": medico.strip(), "struttura": struttura.strip(),
+                "codice": codice.strip().upper(), "valida_fino": valida.isoformat() if valida else "", "titolo": titolo.strip(), "note": note.strip()}
+
+
+def _sp_archivia_docsan(pid, rif, val, riconosciuto, utente):
+    """Salva il documento nella cartella della persona scelta."""
+    doc = dict(val)
+    doc.pop("profilo", None)
+    doc.update({"id": uuid.uuid4().hex[:10], "file": rif, "creato_il": datetime.now().isoformat(timespec="seconds"), "riconosciuto": {k: v.get("valore") for k, v in (riconosciuto or {}).items()},
+                "conferma": {"da": utente, "il": datetime.now().isoformat(timespec="seconds")}})
+    doc["titolo"] = doc.get("titolo") or sp_titolo_doc(doc)
+
+    def _fn(p):
+        p["docsan"] = list(p.get("docsan", [])) + [doc]
+    _sp_salva_profilo(pid, _fn, "Salute: documento sanitario archiviato")
+    return doc
+
+
+def sp_modulo_docsan(pid):
+    f, p = _sp_intestazione("🗂️ Documenti sanitari", pid)
+    utente = (st.session_state.get("sess") or {}).get("nome", "")
+    st.caption("Carica un referto, un esame, una ricetta, una lettera di dimissione, un certificato… (PDF o foto). Lo leggo io e ti propongo di chi è, che documento è, la data, il medico e la struttura: **tu controlli e confermi**. "
+               "Se non riesco a leggerlo, lo compili tu.")
+    coda = st.session_state.setdefault("sp_ds_coda", [])
+    giro = st.session_state.get("sp_ds_giro", 0)
+    nuovi = st.file_uploader("📎 Scegli i documenti (puoi sceglierne più di uno)", type=TIPI_FILE, accept_multiple_files=True, key=f"sp_ds_up_{giro}")
+    if nuovi:
+        for up in nuovi:
+            dati = up.getvalue()
+            if not any(c["sha"] == hashlib.sha256(dati).hexdigest() for c in coda):
+                coda.append({"nome": up.name, "dati": dati, "sha": hashlib.sha256(dati).hexdigest()})
+        st.session_state["sp_ds_giro"] = giro + 1
+        st.rerun()
+    if coda:
+        c = coda[0]
+        st.markdown(f"#### 📖 Documento aperto: {_sp_e(c['nome'])}" + (f" (ne restano {len(coda) - 1} dopo questo)" if len(coda) > 1 else ""))
+        mime = _ca_mime(c["nome"], "", c["dati"]) if "_ca_mime" in globals() else ("application/pdf" if c["nome"].lower().endswith(".pdf") else "image/jpeg")
+        if mime.startswith("image/"):
+            st.image(c["dati"], width=260)
+        chiave_lettura = f"sp_ds_lett_{c['sha']}"
+        if chiave_lettura not in st.session_state:
+            with st.spinner("Leggo il documento…"):
+                try:
+                    testo, info = ca_estrai_testo(c["nome"], mime, c["dati"]) if "ca_estrai_testo" in globals() else ("", {})
+                except Exception:
+                    testo, info = "", {}
+                st.session_state[chiave_lettura] = (sp_leggi_doc(testo, f, c["nome"]) if testo.strip() else {}, bool(testo.strip()))
+        riconosciuto, letto = st.session_state[chiave_lettura]
+        if letto:
+            st.success("Ho letto il documento. I pallini: 🟢 sicuro, 🟡 abbastanza, 🟠 poco. **Controlla e correggi** quello che serve.")
+        else:
+            st.info("Non sono riuscito a leggere il testo (foto sfocata o scansione): compila tu i dati qui sotto.")
+        prop_pid = (riconosciuto.get("profilo") or {}).get("valore") or pid
+        pr_dest = next((x for x in _fa_profili(f) if x["id"] == prop_pid), p)
+        doppi = sp_trova_doppioni_doc(pr_dest, (riconosciuto.get("tipo") or {}).get("valore"), (riconosciuto.get("data") or {}).get("valore"), c["sha"], (riconosciuto.get("struttura") or {}).get("valore", ""))
+        if doppi and not st.session_state.get(f"sp_ds_dup_{c['sha']}"):
+            st.warning("⚠️ **Controlla: forse questo documento c'è già.**")
+            for dd, motivo in doppi[:3]:
+                st.markdown(f"<div class='sp-card'><b>📄 {_sp_e(dd.get('titolo'))}</b><br><small>{motivo}</small></div>", unsafe_allow_html=True)
+            q1, q2 = st.columns(2, gap="small")
+            if q1.button("📥 Archivia lo stesso", key="sp_ds_dup_si", width="stretch"):
+                st.session_state[f"sp_ds_dup_{c['sha']}"] = True
+                st.rerun()
+            if q2.button("✖ Non archiviare", key="sp_ds_dup_no", width="stretch"):
+                coda.pop(0)
+                st.rerun()
+        else:
+            ok, val = _sp_form_docsan("sp_ds_form_" + c["sha"][:10], f, pid, riconosciuto=riconosciuto)
+            b1, b2 = st.columns(2, gap="small")
+            if b1.button("⏭️ Salta (lo rivedo dopo)", key="sp_ds_salta", width="stretch") and len(coda) > 1:
+                coda.append(coda.pop(0))
+                st.rerun()
+            if b2.button("✖ Scarta questo", key="sp_ds_scarta", width="stretch"):
+                coda.pop(0)
+                st.rerun()
+            if ok:
+                try:
+                    rifs = _fa_salva_files([_SpUp(c["nome"], c["dati"])])
+                    rif = rifs[0] if rifs else {"id": "", "nome": c["nome"], "mime": mime, "sha": c["sha"]}
+                    dest = val["profilo"]
+                    _sp_archivia_docsan(dest, rif, val, riconosciuto, utente)
+                    coda.pop(0)
+                    nome_dest = next((x["nome"] for x in _fa_profili(f) if x["id"] == dest), "")
+                    st.session_state["fa_msg"] = f"✅ Documento archiviato nella cartella di {nome_dest}."
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Non sono riuscito a salvare: {ex}")
+    # ---- l'archivio della persona
+    docs = list(p.get("docsan", []))
+    st.divider()
+    st.markdown(f"#### 📚 I documenti di {p.get('nome', '')} ({len(docs)})")
+    if not docs:
+        st.info("Ancora nessun documento sanitario archiviato.")
+        return
+    cerca = st.text_input("🔍 Cerca", key=f"sp_ds_cerca_{pid}", placeholder="esame, medico, ospedale, data…", label_visibility="collapsed")
+    tipi_pres = sorted({d.get("tipo", "Altro") for d in docs})
+    ftipo = st.selectbox("Tipo", [""] + tipi_pres, key=f"sp_ds_ft_{pid}", format_func=lambda x: "📂 Tutti i tipi" if not x else f"{_SP_ICONE_DOC.get(x, '')} {x}")
+    q = _sp_norm_nome(cerca)
+    vedi = st.session_state.setdefault("sp_vedi", [])
+    for tipo in tipi_pres:
+        if ftipo and tipo != ftipo:
+            continue
+        lista = [d for d in docs if d.get("tipo", "Altro") == tipo and all(any(w in _sp_norm_nome(" ".join(str(d.get(k) or "") for k in ("titolo", "esame", "medico", "struttura", "note", "data")) + " " + _sp_data_it(d.get("data"))) for w in [t_]) for t_ in q)]
+        if not lista:
+            continue
+        st.markdown(f"##### {_SP_ICONE_DOC.get(tipo, '')} {tipo} · {len(lista)}")
+        for d in sorted(lista, key=lambda x: x.get("data", ""), reverse=True):
+            righe = " · ".join(x for x in (_sp_data_it(d.get("data")), d.get("medico", ""), d.get("struttura", ""), ("codice " + d["codice"]) if d.get("codice") else "") if x)
+            st.markdown(f"<div class='sp-card'><b>{_sp_e(d.get('titolo'))}</b><br><small>{_sp_e(righe)}</small>" + (f"<br><small>{_sp_e(d.get('note'))}</small>" if d.get("note") else "") + "</div>", unsafe_allow_html=True)
+            ref = d.get("file") or {}
+            c1, c2 = st.columns(2, gap="small")
+            if ref.get("id"):
+                aperto = ref["id"] in vedi
+                if c1.button("🙈 Chiudi" if aperto else "👁️ Vedi / scarica", key=f"sp_dsv_{d['id']}", width="stretch"):
+                    vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
+                    st.rerun()
+            if c2.button("✏️ Correggi", key=f"sp_dsc_{d['id']}", width="stretch"):
+                st.session_state["sp_ds_cor"] = None if st.session_state.get("sp_ds_cor") == d["id"] else d["id"]
+                st.rerun()
+            if ref.get("id") and ref["id"] in vedi:
+                _sp_mostra(ref)
+            e1, e2 = st.columns(2, gap="small")
+            with e1:
+                _fa_inv_voce(f"sp_ds_{d['id']}", "📤 Invia", f"{d.get('titolo')} – {p.get('nome', '')}", [("Data", _sp_data_it(d.get("data"))), ("Medico", d.get("medico")), ("Struttura", d.get("struttura")), ("Note", d.get("note"))], [ref] if ref.get("id") else [])
+            if e2.button("🗑️ Elimina", key=f"sp_dsd_{d['id']}", width="stretch"):
+                _sp_dialogo_togli_docsan(pid, d["id"], d.get("titolo"))
+            if st.session_state.get("sp_ds_cor") == d["id"]:
+                ok, val = _sp_form_docsan("sp_ds_cor_" + d["id"], f, pid, v=d, con_profilo=False)
+                if ok:
+                    def _fn(pr, did=d["id"], nv=val):
+                        for x in pr.get("docsan", []):
+                            if x.get("id") == did:
+                                vecchio_auto = sp_titolo_doc(x)
+                                x.update({k: v_ for k, v_ in nv.items() if k != "profilo"})
+                                if not nv.get("titolo") or nv.get("titolo") == vecchio_auto:
+                                    x["titolo"] = sp_titolo_doc(x)
+                    _sp_salva_profilo(pid, _fn, "Salute: documento sanitario corretto")
+                    st.session_state.pop("sp_ds_cor", None)
+                    st.session_state["fa_msg"] = "✅ Corretto."
+                    st.rerun()
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 7) PARAMETRI E VALORI NEL TEMPO (pressione, glicemia, peso, febbre, colesterolo…)
+# ---------------------------------------------------------------------------------------------------------------------
+_SP_PARAMETRI = {"Pressione": "mmHg", "Glicemia": "mg/dl", "Peso": "kg", "Temperatura": "°C", "Frequenza cardiaca": "battiti/min", "Saturazione": "%", "Colesterolo totale": "mg/dl",
+                 "Colesterolo LDL": "mg/dl", "Colesterolo HDL": "mg/dl", "Trigliceridi": "mg/dl", "Emoglobina glicata": "mmol/mol", "Creatinina": "mg/dl", "Altro": ""}
+
+
+def sp_svg_linee(serie, unita):
+    """Grafico a linee (SVG) di una o due serie: [(etichetta, colore, [(data_iso, valore)])]."""
+    serie = [(e_, c_, [(d_, v_) for d_, v_ in pts if v_ is not None]) for e_, c_, pts in serie]
+    serie = [x for x in serie if len(x[2]) >= 2]
+    if not serie:
+        return ""
+    tutti = [(date.fromisoformat(d_).toordinal(), v_) for _, _, pts in serie for d_, v_ in pts]
+    x0, x1, y0, y1 = min(x for x, _ in tutti), max(x for x, _ in tutti), min(y for _, y in tutti), max(y for _, y in tutti)
+    x1 = x1 if x1 > x0 else x0 + 1
+    y1 = y1 if y1 > y0 else y0 + 1
+    W, H, M = 330, 160, 30
+    px = lambda x: M + (x - x0) / (x1 - x0) * (W - 2 * M)
+    py = lambda y: H - M - (y - y0) / (y1 - y0) * (H - 2 * M)
+    parti = []
+    for i, (e_, c_, pts) in enumerate(serie):
+        xy = [(px(date.fromisoformat(d_).toordinal()), py(v_)) for d_, v_ in pts]
+        parti.append(f"<polyline points='{' '.join(f'{a:.1f},{b:.1f}' for a, b in xy)}' fill='none' stroke='{c_}' stroke-width='2'/>" + "".join(f"<circle cx='{a:.1f}' cy='{b:.1f}' r='3' fill='{c_}'/>" for a, b in xy)
+                     + f"<text x='{M + i * 90}' y='12' font-size='10' fill='{c_}'>{_h.escape(e_)}</text>")
+    d_prima, d_ultima = min(d_ for _, _, pts in serie for d_, _ in pts), max(d_ for _, _, pts in serie for d_, _ in pts)
+    return (f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:440px;background:#fff;border-radius:10px'>{''.join(parti)}"
+            f"<text x='4' y='{H - M + 12}' font-size='9' fill='#444'>min {y0:g} · max {y1:g} {_h.escape(unita)}</text><text x='{M}' y='{H - 6}' font-size='9' fill='#444'>{_sp_data_it(d_prima)}</text>"
+            f"<text x='{W - M - 52}' y='{H - 6}' font-size='9' fill='#444'>{_sp_data_it(d_ultima)}</text></svg>")
+
+
+def _sp_fmt_param(m):
+    if m.get("tipo") == "Pressione" and m.get("valore2"):
+        return f"{_sp_fmt_num(m.get('valore'))}/{_sp_fmt_num(m.get('valore2'))}"
+    return _sp_fmt_num(m.get("valore"))
+
+
+def sp_ultimi_parametri(p, n=1):
+    """Gli ultimi valori per tipo: [(nome, unita, data, valore)]."""
+    out = []
+    per_tipo = {}
+    for m in sorted(p.get("parametri", []), key=lambda x: x.get("data", "")):
+        per_tipo.setdefault(m.get("nome") or m.get("tipo"), []).append(m)
+    for nome, lista in per_tipo.items():
+        u = lista[-1].get("unita") or _SP_PARAMETRI.get(lista[-1].get("tipo"), "")
+        out.append((nome, u, lista[-1].get("data", ""), _sp_fmt_param(lista[-1])))
+    return out
+
+
+def _sp_dialogo_togli_param(pid, mid, testo):
+    def _finestra():
+        st.warning(f"Togliere questo valore?\n\n**{_sp_e(testo)}**")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglilo", key=f"sp_pt_si_{mid}", type="primary", width="stretch"):
+            _sp_salva_profilo(pid, lambda pr: pr.__setitem__("parametri", [x for x in pr.get("parametri", []) if x.get("id") != mid]), "Salute: valore tolto")
+            st.rerun()
+        if s2.button("No, tienilo", key=f"sp_pt_no_{mid}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli il valore")(_finestra)()
+
+
+def _sp_form_param(pid, m=None, tipo_pre=None):
+    m = m or {}
+    with st.form(f"sp_form_param_{m.get('id', 'nuovo')}", border=False):
+        tipi = list(_SP_PARAMETRI)
+        tipo = st.selectbox("Cosa hai misurato", tipi, index=tipi.index(m.get("tipo") or tipo_pre) if (m.get("tipo") or tipo_pre) in tipi else 0)
+        nome = st.text_input("Se «Altro», come si chiama", value=m.get("nome", "") if m.get("tipo") == "Altro" else "")
+        c1, c2 = st.columns(2)
+        try:
+            d0 = date.fromisoformat(m["data"]) if m.get("data") else _sp_oggi()
+        except ValueError:
+            d0 = _sp_oggi()
+        data = c1.date_input("Data", value=d0, min_value=date(1990, 1, 1), max_value=_sp_oggi(), format="DD/MM/YYYY")
+        val = c2.text_input("Valore (per la pressione: la massima)", value=_sp_fmt_num(m.get("valore")) if m.get("valore") else "")
+        val2 = st.text_input("Solo pressione: la minima", value=_sp_fmt_num(m.get("valore2")) if m.get("valore2") else "")
+        unita = st.text_input("Unità (se vuoi cambiarla)", value=m.get("unita", ""), placeholder="lascia vuoto per quella solita")
+        nota = st.text_input("Note (a digiuno, dopo la corsa, con la febbre…)", value=m.get("nota", ""))
+        ok = st.form_submit_button("💾 Salva", type="primary", width="stretch")
+    if ok:
+        n1, n2 = _sp_num(val), _sp_num(val2)
+        if n1 is None:
+            st.error("Scrivi il valore (un numero).")
+            return
+        if tipo == "Altro" and not nome.strip():
+            st.error("Scrivi come si chiama.")
+            return
+        nuovo = {"id": m.get("id") or uuid.uuid4().hex[:8], "tipo": tipo, "nome": (nome.strip() if tipo == "Altro" else tipo), "data": data.isoformat(), "valore": f"{n1:g}",
+                 "valore2": (f"{n2:g}" if (tipo == "Pressione" and n2 is not None) else ""), "unita": unita.strip(), "nota": nota.strip()}
+        _sp_salva_profilo(pid, lambda pr, nv=nuovo: pr.__setitem__("parametri", [x for x in pr.get("parametri", []) if x.get("id") != nv["id"]] + [nv]), "Salute: parametri")
+        st.session_state.pop("sp_param_mod", None)
+        st.session_state["fa_msg"] = "✅ Valore salvato."
+        st.rerun()
+
+
+def sp_modulo_parametri(pid):
+    f, p = _sp_intestazione("📈 Parametri e valori", pid)
+    st.caption("Pressione, glicemia, peso, febbre, colesterolo… con la data: vedi come cambiano nel tempo. Sono tuoi appunti: per capire se un valore va bene chiedi al medico.")
+    lista = list(p.get("parametri", []))
+    with st.expander("➕ Aggiungi un valore", expanded=not lista):
+        _sp_form_param(pid)
+    if not lista:
+        st.info("Ancora nessun valore registrato.")
+        return
+    nomi = sorted({m.get("nome") or m.get("tipo") for m in lista})
+    scelto = st.selectbox("Che valore vuoi vedere", nomi, key=f"sp_param_sel_{pid}")
+    voci = sorted([m for m in lista if (m.get("nome") or m.get("tipo")) == scelto], key=lambda x: x.get("data", ""))
+    unita = voci[-1].get("unita") or _SP_PARAMETRI.get(voci[-1].get("tipo"), "")
+    st.markdown(f"**Ultimo valore:** {_sp_fmt_param(voci[-1])} {unita} · {_sp_data_it(voci[-1].get('data'))}")
+    if voci[-1].get("tipo") == "Pressione":
+        svg = sp_svg_linee([("massima", "#c62828", [(m["data"], _sp_num(m.get("valore"))) for m in voci]), ("minima", "#1565c0", [(m["data"], _sp_num(m.get("valore2"))) for m in voci])], unita)
+    else:
+        svg = sp_svg_linee([(scelto, "#00796b", [(m["data"], _sp_num(m.get("valore"))) for m in voci])], unita)
+    if svg:
+        st.markdown(svg, unsafe_allow_html=True)
+    else:
+        st.caption("Con almeno due valori compare il grafico.")
+    for m in reversed(voci):
+        testo = f"{_sp_data_it(m.get('data'))} · {_sp_fmt_param(m)} {m.get('unita') or _SP_PARAMETRI.get(m.get('tipo'), '')}" + (f" · {m['nota']}" if m.get("nota") else "")
+        st.markdown(f"<div class='sp-card'>{_sp_e(testo)}</div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="small")
+        if c1.button("✏️ Modifica", key=f"sp_pe_{m['id']}", width="stretch"):
+            st.session_state["sp_param_mod"] = None if st.session_state.get("sp_param_mod") == m["id"] else m["id"]
+            st.rerun()
+        if c2.button("🗑️ Togli", key=f"sp_pt_{m['id']}", width="stretch"):
+            _sp_dialogo_togli_param(pid, m["id"], testo)
+        if st.session_state.get("sp_param_mod") == m["id"]:
+            _sp_form_param(pid, m)
+    righe = "".join(f"<tr><td>{_sp_data_it(m.get('data'))}</td><td>{_sp_e(m.get('nome') or m.get('tipo'))}</td><td>{_sp_e(_sp_fmt_param(m))} {_sp_e(m.get('unita') or _SP_PARAMETRI.get(m.get('tipo'), ''))}</td><td>{_sp_e(m.get('nota'))}</td></tr>"
+                    for m in sorted(lista, key=lambda x: (x.get("nome") or x.get("tipo") or "", x.get("data", ""))))
+    html_str = (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Parametri di {_sp_e(p.get('nome'))}</title><style>{_SP_STILE}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #999;padding:3px 5px}}</style></head>"
+                f"<body><h1>Parametri e valori · {_sp_e(p.get('nome'))}</h1><div class='box'>Aggiornato il {_sp_data_it(_sp_oggi().isoformat())}</div><table><tr><th>Data</th><th>Cosa</th><th>Valore</th><th>Note</th></tr>{righe}</table>"
+                "<p class='nota'>Appunti inseriti dall'utente, non certificati da un medico.</p></body></html>")
+    nome_file = f"parametri_{re.sub(r'[^A-Za-z0-9]+', '_', p.get('nome', '')) or 'persona'}_{_sp_oggi().isoformat()}"
+    st.download_button("📄 Scarica la tabella (da stampare o salvare come PDF)", html_str.encode("utf-8"), file_name=nome_file + ".html", mime="text/html", width="stretch")
+    pdf = sp_pdf_da_html(html_str)
+    if pdf:
+        st.download_button("📕 Scarica il PDF", pdf, file_name=nome_file + ".pdf", mime="application/pdf", width="stretch")
+    if "inv_voce" in globals():
+        inv_voce(f"sp_param_{pid}", "📤 Invia i valori", f"Parametri di {p.get('nome', '')}", "\n".join(f"• {n}: {v_} {u} ({_sp_data_it(d_)})" for n, u, d_, v_ in sp_ultimi_parametri(p)),
+                 lambda: ([(nome_file + ".pdf", "application/pdf", pdf)] if pdf else [(nome_file + ".html", "text/html", html_str.encode("utf-8"))]))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
