@@ -599,7 +599,7 @@ def sp_html_scheda(d, racconto, racconto_ai=None):
     ai = (f"<h2>Sintesi redatta con l'aiuto di un'intelligenza artificiale (da verificare)</h2><p>{e(racconto_ai['testo']).replace(chr(10), '<br>')}</p>") if racconto_ai and racconto_ai.get("testo") else ""
     baby = ""
     if d["bambino"] and d["bambino_dati"]:
-        baby = "<h2>Percorso del bambino</h2>" + sp_html_bambino_corpo(d["bambino_dati"])
+        baby = "<h2>Percorso del bambino</h2>" + sp_html_bambino_corpo(d["bambino_dati"], d["sesso"], d["nascita"])
     return (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Scheda per il medico – {e(d['nome'])}</title>"
             f"<style>{_SP_STILE}</style></head><body><h1>Scheda sanitaria per il medico</h1><div class='box'><b>{e(anag)}</b><br>Aggiornata il {_sp_data_it(d['oggi'])}</div>"
             + "".join(f"<div class='al'>{e(a)}</div>" for a in avv)
@@ -764,7 +764,7 @@ def sp_modulo_scheda(pid):
 # ---------------------------------------------------------------------------------------------------------------------
 # 5) PERCORSO DEL BAMBINO
 # ---------------------------------------------------------------------------------------------------------------------
-def sp_html_bambino_corpo(b):
+def sp_html_bambino_corpo(b, sesso="", nascita=""):
     e = _sp_e
     def tab(titolo, righe, intest):
         if not righe:
@@ -772,8 +772,10 @@ def sp_html_bambino_corpo(b):
         return (f"<h3>{titolo}</h3><table border='1' cellpadding='3' cellspacing='0' style='border-collapse:collapse;width:100%'><tr>" + "".join(f"<th>{e(x)}</th>" for x in intest) + "</tr>"
                 + "".join("<tr>" + "".join(f"<td>{e(c)}</td>" for c in r) + "</tr>" for r in righe) + "</table>")
     ms = sorted(b.get("misure", []), key=lambda x: x.get("data", ""))
-    return (tab("Crescita", [[_sp_data_it(m.get("data")), _sp_fmt_num(m.get("peso")), _sp_fmt_num(m.get("altezza")), _sp_fmt_num(m.get("cranio")), m.get("nota", "")] for m in ms],
-                ["Data", "Peso kg", "Altezza cm", "Cranio cm", "Note"])
+    con_perc = bool(sesso in ("Femmina", "Maschio") and nascita and "sp_perc_testo" in globals())
+    return (tab("Crescita", [[_sp_data_it(m.get("data")), _sp_fmt_num(m.get("peso")), _sp_fmt_num(m.get("altezza")), _sp_fmt_num(m.get("cranio")), m.get("nota", "")]
+                             + ([sp_perc_testo(sesso, nascita, m.get("data"), m).replace("percentile ", "")] if con_perc else []) for m in ms],
+                ["Data", "Peso kg", "Altezza cm", "Cranio cm", "Note"] + (["Percentili OMS"] if con_perc else []))
             + tab("Tappe", [[_sp_data_it(t.get("data")), t.get("tappa", ""), t.get("nota", "")] for t in sorted(b.get("tappe", []), key=lambda x: x.get("data", ""))], ["Quando", "Tappa", "Note"])
             + tab("Alimentazione", [[_sp_data_it(t.get("data")), t.get("cosa", ""), t.get("reazione", ""), t.get("nota", "")] for t in sorted(b.get("alimentazione", []), key=lambda x: x.get("data", ""))], ["Dal", "Cosa", "Reazioni", "Note"])
             + tab("Malattie e febbri", [[_sp_data_it(t.get("data")), t.get("cosa", ""), _sp_fmt_num(t.get("febbre")), t.get("terapia", ""), t.get("nota", "")] for t in sorted(b.get("malattie", []), key=lambda x: x.get("data", ""))],
@@ -793,10 +795,15 @@ _SP_SEZIONI_BAMBINO = {
 }
 
 
-def _sp_riassunto_voce(sez, v):
+def _sp_riassunto_voce(sez, v, p=None):
     if sez == "misure":
-        return " · ".join(x for x in ((f"⚖️ {_sp_fmt_num(v.get('peso'))} kg" if v.get("peso") else ""), (f"📏 {_sp_fmt_num(v.get('altezza'))} cm" if v.get("altezza") else ""),
+        base = " · ".join(x for x in ((f"⚖️ {_sp_fmt_num(v.get('peso'))} kg" if v.get("peso") else ""), (f"📏 {_sp_fmt_num(v.get('altezza'))} cm" if v.get("altezza") else ""),
                                       (f"🧠 cranio {_sp_fmt_num(v.get('cranio'))} cm" if v.get("cranio") else "")) if x) or "—"
+        if p is not None and (p.get("sp") or {}).get("nascita"):
+            perc = sp_perc_testo((p.get("sp") or {}).get("sesso", ""), (p.get("sp") or {})["nascita"], v.get("data"), v)
+            if perc:
+                base += f" · 📊 {perc}"
+        return base
     if sez == "tappe":
         return v.get("tappa", "")
     if sez == "malattie":
@@ -871,7 +878,7 @@ def _sp_editor_sezione(pid, p, sez, vuoto):
     if not voci:
         st.caption(vuoto)
     for v in voci:
-        testo = f"{_sp_data_it(v.get('data'))} · {_sp_riassunto_voce(sez, v)}"
+        testo = f"{_sp_data_it(v.get('data'))} · {_sp_riassunto_voce(sez, v, p)}"
         st.markdown(f"<div class='sp-card'>{_sp_e(testo)}" + (f"<br><small>{_sp_e(v.get('nota'))}</small>" if v.get("nota") else "") + "</div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
         if c1.button("✏️ Modifica", key=f"sp_b_e_{v['id']}", width="stretch"):
@@ -908,6 +915,125 @@ def sp_svg_crescita(misure, campo, unita):
             f"<text x='{M}' y='{H - 6}' font-size='9' fill='#444'>{_sp_data_it(pts[0][0])}</text><text x='{W - M - 52}' y='{H - 6}' font-size='9' fill='#444'>{_sp_data_it(pts[-1][0])}</text></svg>")
 
 
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CURVE DI CRESCITA OMS (da 0 a 5 anni) — tabelle ufficiali dell'Organizzazione Mondiale della Sanità, dalla libreria «pygrowup»
+# ---------------------------------------------------------------------------------------------------------------------
+try:
+    from pygrowup import Calculator as _SpCalc
+except Exception:                                                     # senza la libreria l'app funziona come prima, senza percentili
+    _SpCalc = None
+import math as _math
+
+_SP_Z_P = {"3°": -1.8808, "15°": -1.0364, "50°": 0.0, "85°": 1.0364, "97°": 1.8808}
+_SP_CAMPI_OMS = {"peso": ("wfa", "kg", 1.0, 30.0), "altezza": ("lhfa", "cm", 40.0, 125.0), "cranio": ("hcfa", "cm", 28.0, 56.0)}
+
+
+@st.cache_resource(show_spinner=False)
+def _sp_calcolatore():
+    return _SpCalc(adjust_height_data=False, adjust_weight_scores=False, include_cdc=False) if _SpCalc else None
+
+
+def sp_eta_mesi(nascita_iso, data_iso):
+    try:
+        return (date.fromisoformat(str(data_iso)[:10]) - date.fromisoformat(str(nascita_iso)[:10])).days / 30.4375
+    except (ValueError, TypeError):
+        return None
+
+
+def sp_z_oms(sesso, mesi, tipo, valore):
+    """Lo «z-score» OMS (quante deviazioni dalla media) di una misura; None se non si può calcolare (sesso mancante, oltre i 5 anni, valore assurdo)."""
+    c = _sp_calcolatore()
+    n = _sp_num(valore)
+    if c is None or sesso not in ("Femmina", "Maschio") or mesi is None or n is None or mesi < 0 or mesi > 60 or tipo not in _SP_CAMPI_OMS:
+        return None
+    f = getattr(c, _SP_CAMPI_OMS[tipo][0])
+    sx = "F" if sesso == "Femmina" else "M"
+    try:
+        a = int(mesi)
+        b = min(a + 1, 60)
+        za = float(f(n, a, sx))
+        zb = float(f(n, b, sx)) if b != a else za
+    except Exception:
+        return None
+    z = za + (zb - za) * (mesi - a)                                    # la libreria lavora a mesi interi: si interpola
+    return z if abs(z) <= 5 else None                                  # oltre 5 deviazioni la misura è quasi certamente sbagliata
+
+
+def sp_percentile(z):
+    return None if z is None else round(0.5 * (1 + _math.erf(z / _math.sqrt(2))) * 100)
+
+
+def sp_perc_testo(sesso, nascita, data, m):
+    """«percentile peso 28°, altezza 15°» per una misura registrata (stringa vuota se non calcolabile)."""
+    mesi = sp_eta_mesi(nascita, data)
+    out = []
+    for campo, etichetta in (("peso", "peso"), ("altezza", "altezza"), ("cranio", "cranio")):
+        p_ = sp_percentile(sp_z_oms(sesso, mesi, campo, m.get(campo))) if m.get(campo) else None
+        if p_ is not None:
+            out.append(f"{etichetta} {p_}°")
+    return ("percentile " + ", ".join(out)) if out else ""
+
+
+@st.cache_data(show_spinner=False)
+def sp_curve_oms(sesso, campo, fino_mesi):
+    """Le curve di riferimento OMS: {'3°': [(mese, valore)…], '15°': …, '50°': …, '85°': …, '97°': …} per 0..fino_mesi (massimo 60)."""
+    c = _sp_calcolatore()
+    if c is None or sesso not in ("Femmina", "Maschio"):
+        return {}
+    f = getattr(c, _SP_CAMPI_OMS[campo][0])
+    sx = "F" if sesso == "Femmina" else "M"
+    lo0, hi0 = _SP_CAMPI_OMS[campo][2], _SP_CAMPI_OMS[campo][3]
+    out = {k: [] for k in _SP_Z_P}
+    for mese in range(0, min(int(fino_mesi), 60) + 1):
+        for nome, z in _SP_Z_P.items():
+            lo, hi = lo0, hi0
+            try:
+                for _ in range(22):
+                    mid = (lo + hi) / 2
+                    if float(f(mid, mese, sx)) < z:
+                        lo = mid
+                    else:
+                        hi = mid
+            except Exception:
+                continue
+            out[nome].append((mese, round((lo + hi) / 2, 2)))
+    return out
+
+
+def sp_svg_oms(misure, campo, sesso, nascita):
+    """Il grafico con le curve di riferimento OMS (fascia 3°–97°, mediana) e i punti del bambino. '' se non si può."""
+    pts = []
+    for m in sorted(misure, key=lambda x: x.get("data", "")):
+        mesi = sp_eta_mesi(nascita, m.get("data"))
+        n = _sp_num(m.get(campo))
+        if mesi is not None and 0 <= mesi <= 60 and n is not None:
+            pts.append((mesi, n))
+    if not pts:
+        return ""
+    fino = min(60, int(max(x for x, _ in pts)) + 6)
+    curve = sp_curve_oms(sesso, campo, max(fino, 12))
+    if not curve or not curve.get("50°"):
+        return ""
+    unita = _SP_CAMPI_OMS[campo][1]
+    xs_max = max(m for m, _ in curve["97°"])
+    ys = [v for lista in curve.values() for _, v in lista] + [y for _, y in pts]
+    y0, y1 = min(ys), max(ys)
+    W, H, M = 340, 190, 32
+    px = lambda x: M + x / xs_max * (W - 2 * M)
+    py = lambda y: H - M - (y - y0) / (y1 - y0) * (H - 2 * M)
+    banda = " ".join(f"{px(m):.1f},{py(v):.1f}" for m, v in curve["97°"]) + " " + " ".join(f"{px(m):.1f},{py(v):.1f}" for m, v in reversed(curve["3°"]))
+    linee = "".join(f"<polyline points='{' '.join(f'{px(m):.1f},{py(v):.1f}' for m, v in curve[k])}' fill='none' stroke='{col}' stroke-width='{sw}' {dash}/>"
+                    for k, col, sw, dash in (("3°", "#7aa", 1, ""), ("15°", "#9bb", .7, "stroke-dasharray='3,3'"), ("50°", "#00796b", 1.6, "stroke-dasharray='5,3'"), ("85°", "#9bb", .7, "stroke-dasharray='3,3'"), ("97°", "#7aa", 1, "")))
+    etich = "".join(f"<text x='{W - M + 2}' y='{py(curve[k][-1][1]) + 3:.1f}' font-size='8' fill='#066'>{k}</text>" for k in ("3°", "50°", "97°"))
+    punti = " ".join(f"{px(x):.1f},{py(y):.1f}" for x, y in pts)
+    cerchi = "".join(f"<circle cx='{px(x):.1f}' cy='{py(y):.1f}' r='3.6' fill='#d84315'/>" for x, y in pts)
+    asse = "".join(f"<text x='{px(m):.1f}' y='{H - 10}' font-size='8' fill='#444' text-anchor='middle'>{m}</text>" for m in range(0, int(xs_max) + 1, 6 if xs_max <= 36 else 12))
+    return (f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:460px;background:#fff;border-radius:10px'>"
+            f"<polygon points='{banda}' fill='#cdeee6' opacity='.7'/>{linee}{etich}<polyline points='{punti}' fill='none' stroke='#d84315' stroke-width='2'/>{cerchi}{asse}"
+            f"<text x='4' y='11' font-size='10' fill='#333'>{campo} ({unita}) — curve OMS, età in mesi</text></svg>")
+
+
 def sp_modulo_bambino(pid):
     f, p = _sp_intestazione("👶 Percorso del bambino", pid)
     sp = p.get("sp") or {}
@@ -921,11 +1047,20 @@ def sp_modulo_bambino(pid):
     b = p.get("bambino") or {}
     with t1:
         misure = b.get("misure", [])
+        sesso_b, nasc_b = sp.get("sesso", ""), sp.get("nascita", "")
+        oms = bool(sesso_b in ("Femmina", "Maschio") and nasc_b and _SpCalc is not None)
+        if misure and not oms:
+            st.info("Per vedere le **curve di riferimento dell'OMS** (e i percentili) scrivi **data di nascita** e **sesso** in «🆘 Dati per l'emergenza»."
+                    + ("" if _SpCalc is not None else " (Le curve non sono disponibili su questo dispositivo.)"))
         for campo, unita in (("peso", "peso (kg)"), ("altezza", "altezza (cm)"), ("cranio", "circonferenza cranica (cm)")):
-            svg = sp_svg_crescita(misure, campo, unita)
+            svg = sp_svg_oms(misure, campo, sesso_b, nasc_b) if oms else ""
+            svg = svg or sp_svg_crescita(misure, campo, unita)
             if svg:
                 st.markdown(svg, unsafe_allow_html=True)
-        if len([m for m in misure if m.get("data")]) < 2:
+        if oms and misure:
+            st.caption("📊 L'area verde è la fascia tra il 3° e il 97° percentile delle curve OMS (0–5 anni); la linea tratteggiata è la mediana. Il percentile dice quanti bambini su 100 della stessa età e sesso "
+                       "pesano o misurano di meno. Sono numeri statistici, non un giudizio: **li interpreta il pediatra**, che guarda anche la crescita nel tempo.")
+        elif len([m for m in misure if m.get("data")]) < 2:
             st.caption("Aggiungi almeno due misure per vedere il grafico della crescita.")
         _sp_editor_sezione(pid, p, "misure", "Ancora nessuna misura. Aggiungi peso e altezza alla nascita e a ogni controllo.")
     with t2:
@@ -944,7 +1079,7 @@ def sp_modulo_bambino(pid):
         _sp_salva_profilo(pid, lambda pr, n=note.strip(): pr.__setitem__("bambino", dict(pr.get("bambino") or {}, note=n)), "Salute: note del bambino")
         st.rerun()
     d = sp_raccogli(f, pid)
-    corpo = sp_html_bambino_corpo(p.get("bambino") or {})
+    corpo = sp_html_bambino_corpo(p.get("bambino") or {}, sp.get("sesso", ""), sp.get("nascita", ""))
     svg = "".join(sp_svg_crescita((p.get("bambino") or {}).get("misure", []), c, u) for c, u in (("peso", "peso (kg)"), ("altezza", "altezza (cm)")))
     html_str = (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Percorso di {_sp_e(p.get('nome'))}</title><style>{_SP_STILE}h3{{font-size:11pt;margin:8pt 0 2pt}}</style></head>"
                 f"<body><h1>Percorso sanitario e di crescita · {_sp_e(p.get('nome'))}</h1><div class='box'>Aggiornato il {_sp_data_it(d['oggi'])}</div>{svg}{corpo}"

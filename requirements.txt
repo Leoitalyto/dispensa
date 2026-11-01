@@ -10,3 +10,4 @@ zxing-cpp
 cryptography
 pypdf
 pymupdf
+pygrowup
