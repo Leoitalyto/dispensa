@@ -470,7 +470,7 @@ def ca_aggiungi_documento(c, file_ref, riconosciuto, proposta, finale, utente, o
     doc = dict(fin)
     doc.update({
         "id": uuid.uuid4().hex[:10], "creato_il": ora,
-        "file": dict(file_ref, originale=True),
+        "file": dict(file_ref, originale=not file_ref.get("ridotta")),
         "riconosciuto": riconosciuto or {},
         "classificazione": dict(proposta or {}),
         "conferma": {"stato": "confermato", "da": utente, "il": ora, "modificati": modificati, "bene_proposto": (proposta or {}).get("bene_id") or ""},
@@ -720,6 +720,53 @@ def _ca_mime(nome, tipo, dati):
     return {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(est, tipo or "application/octet-stream")
 
 
+_CA_CSS_FOTO = """<style>
+[class*="st-key-nascosti_cadoc"]{display:none !important}
+[class*="st-key-azioni_foto_cadoc"] [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:nowrap !important;gap:10px !important}
+[class*="st-key-azioni_foto_cadoc"] [data-testid="stColumn"],[class*="st-key-azioni_foto_cadoc"] [data-testid="column"]{min-width:0 !important;width:auto !important;flex:1 1 0 !important}
+[class*="st-key-scatta_cadoc"] button,[class*="st-key-galleria_cadoc"] button{min-height:64px;border-radius:999px !important;font-weight:800 !important;font-size:1.02rem;
+ border:2px solid rgba(13,148,136,.45) !important;box-shadow:0 4px 0 rgba(0,100,90,.25);padding-left:6px;padding-right:6px}
+[class*="st-key-scatta_cadoc"] button{background:linear-gradient(135deg,#00a98f,#0288d1) !important;color:#fff !important;border:0 !important}
+[class*="st-key-scatta_cadoc"] button p{color:#fff !important}
+</style>"""
+_CA_TIPI_FOTO = ["jpg", "jpeg", "png", "webp"]
+
+
+def _ca_ultimo_file(candidati, chiave):
+    """Tra i campi di caricamento vale l'ULTIMO file arrivato (foto scattata, galleria, PDF…)."""
+    viste = st.session_state.setdefault(f"{chiave}_viste", {})
+    ultima = st.session_state.get(f"{chiave}_ultima")
+    for nome, fl in candidati.items():
+        if fl is None:
+            viste.pop(nome, None)
+            continue
+        ident = getattr(fl, "file_id", None) or f"{getattr(fl, 'name', '')}{getattr(fl, 'size', '')}"
+        if viste.get(nome) != ident:
+            viste[nome] = ident
+            ultima = nome
+    st.session_state[f"{chiave}_ultima"] = ultima
+    return candidati.get(ultima) or next((fl for fl in candidati.values() if fl is not None), None)
+
+
+def _ca_riduci_foto(nome, dati, massimo=None):
+    """Una foto più grande del limite (le fotocamere nuove arrivano a 10 MB e oltre) viene ridotta, così si può archiviare. Ritorna (nome, dati) oppure None se non riesce."""
+    massimo = massimo or (_CA_MAX_BYTE - 512 * 1024)
+    try:
+        from PIL import Image, ImageOps
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+        for lato in (3200, 2600, 2000, 1600):
+            for q in (88, 80, 70):
+                x = im.copy()
+                x.thumbnail((lato, lato))
+                b = io.BytesIO()
+                x.save(b, "JPEG", quality=q, optimize=True)
+                if b.tell() <= massimo:
+                    return re.sub(r"\.[A-Za-z0-9]{2,4}$", "", nome or "foto") + ".jpg", b.getvalue()
+    except Exception:
+        pass
+    return None
+
+
 def _ca_tab_manuali(c):
     beni = c.get("beni", [])
     nomi = {b["id"]: b.get("nome", "") for b in beni}
@@ -727,7 +774,27 @@ def _ca_tab_manuali(c):
     st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
                "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
     n = st.session_state.get("ca_giro", 0)
-    up = st.file_uploader("PDF, foto o scansione", type=["pdf", "jpg", "jpeg", "png", "webp"], key=f"ca_up_{n}", label_visibility="collapsed")
+    chiave_f = f"cadoc{n}"
+    if "_fa_assicura_fotocamera" in globals():                                  # la fotocamera posteriore è la stessa di Salute e della dispensa
+        try:
+            _fa_assicura_fotocamera()
+        except Exception:
+            pass
+    st.markdown(_CA_CSS_FOTO, unsafe_allow_html=True)
+    st.markdown("**📷 Fotografa il documento** — la copertina o la pagina con i dati dell'apparecchio")
+    with st.container(key="azioni_foto_" + chiave_f):
+        c_cam, c_gal = st.columns(2, gap="small")
+        c_cam.button("📷 Scatta foto", key=f"scatta_{chiave_f}", width="stretch")
+        c_gal.button("🖼️ Dalla galleria", key=f"galleria_{chiave_f}", width="stretch")
+    with st.container(key="nascosti_" + chiave_f):
+        f_cam = st.file_uploader("camera", type=_CA_TIPI_FOTO, key=f"fotocam_{chiave_f}")
+        f_gal = st.file_uploader("galleria", type=_CA_TIPI_FOTO, key=f"fotogal_{chiave_f}")
+    st.markdown("**📄 Oppure carica un PDF o un file già nel telefono**")
+    up_pdf = st.file_uploader("PDF, foto o scansione", type=["pdf"] + _CA_TIPI_FOTO, key=f"ca_up_{n}", label_visibility="collapsed")
+    with st.expander("🛟 La foto non arriva? Prova da qui"):
+        st.caption("Tocca il campo qui sotto e scegli **Fotocamera** per scattare, oppure una foto già presente nel telefono.")
+        f_soc = st.file_uploader("Scegli o scatta la foto", type=_CA_TIPI_FOTO, key=f"ca_soc_{n}", label_visibility="collapsed")
+    up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf}, chiave_f)
     with st.expander("🔗 …oppure prendi il manuale da un link"):
         url = st.text_input("Indirizzo del PDF", key=f"ca_url_{n}", placeholder="https://…/manuale.pdf")
         if st.button("⬇ Scarica e leggi", key=f"ca_url_btn_{n}") and url.strip():
@@ -746,6 +813,13 @@ def _ca_tab_manuali(c):
     elif st.session_state.get("ca_bozza_in"):
         sorgente = st.session_state["ca_bozza_in"]
     if sorgente:
+        if sorgente["mime"] in _CA_MIME and sorgente["mime"].startswith("image/") and len(sorgente["dati"]) > _CA_MAX_BYTE and not sorgente.get("ridotta"):
+            rid = _ca_riduci_foto(sorgente["nome"], sorgente["dati"])
+            if rid:
+                sorgente = dict(sorgente, nome=rid[0], mime="image/jpeg", dati=rid[1], ridotta=True)
+                st.info("📷 La foto era molto grande: l'ho **ridotta** per poterla archiviare. Il testo si legge lo stesso.")
+        elif sorgente["mime"] in _CA_MIME and sorgente.get("ridotta"):
+            st.info("📷 La foto era molto grande: l'ho **ridotta** per poterla archiviare. Il testo si legge lo stesso.")
         if sorgente["mime"] not in _CA_MIME:
             st.error("Questo tipo di file non è ammesso: carica un PDF o una foto (JPG, PNG, WebP).")
         elif len(sorgente["dati"]) > _CA_MAX_BYTE:
@@ -788,7 +862,7 @@ def _ca_tab_manuali(c):
                     nid = uuid.uuid4().hex[:12]
                     _ca_scrivi_file(nid, sorgente["nome"], sorgente["mime"], sorgente["dati"])              # 1) l'originale, intatto
                     ora, utente = _ca_ora(), (st.session_state.get("sess") or {}).get("nome", "")
-                    rif = {"id": nid, "nome": sorgente["nome"], "mime": sorgente["mime"], "sha256": sha, "dimensione": len(sorgente["dati"])}
+                    rif = {"id": nid, "nome": sorgente["nome"], "mime": sorgente["mime"], "sha256": sha, "dimensione": len(sorgente["dati"]), **({"ridotta": True} if sorgente.get("ridotta") else {})}
                     proposta = {k: (ric["campi"].get(k) or {}).get("valore", "") for k in ("tipo", "categoria", "sottocategoria")}
                     proposta["bene_id"] = bozza.get("bene") or ""
 
@@ -1071,7 +1145,7 @@ Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
 3. Leggo il documento e ti propongo **tipo, categoria, apparecchio, marca, modello, numero di serie, data e lingua**. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
 4. **Controlla e correggi** quello che non va, scegli a quale **bene** collegarlo (o crea un nuovo bene) e tocca **✅ Conferma e archivia**.
 
-Il **file originale resta com'è**, identico. Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
+Puoi **scattare una foto** (tasto «📷 Scatta foto», che apre la fotocamera posteriore), prenderla **dalla galleria** o caricare un **PDF**. Il **file originale resta com'è**, identico (una foto enorme viene ridotta, e viene segnato). Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
          "archiviare manuale manuali caricare pdf foto scansione riconoscimento marca modello numero di serie conferma"),
         ("🏠 Aggiungere e collegare un bene",
          """In **🏠 Beni** tocca **➕ Aggiungi un bene** e compila nome, categoria, marca, modello, numero di serie, dove si trova, data di acquisto e garanzia.
