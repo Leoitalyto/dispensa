@@ -2120,6 +2120,11 @@ def _ca_batch_posta(items):
                 esito["doppioni"].append((it, doppi[0]))
                 continue
             tipo = (ric["campi"].get("tipo") or {}).get("valore", "")
+            if "sp_tipo_da_testo" in globals() and testo:
+                tipo_s, punti_s = sp_tipo_da_testo(testo)
+                if tipo_s != "Altro" and punti_s >= 10 and tipo in ("", "Altro", "Lettera o comunicazione"):
+                    esito["da_rivedere"].append((it, f"sembra un documento sanitario ({tipo_s.lower()}): toccalo e scegli «🩺 È un documento sanitario»"))
+                    continue
             if not ric.get("testo_ok") or not tipo:
                 esito["da_rivedere"].append((it, "non sono riuscito a leggerlo con sicurezza"))
                 continue
@@ -2226,6 +2231,9 @@ def _ca_posta_riquadro(c):
                 _apri_bozza(allega=True)
             if st.button("📂 Scelgo io dove metterlo", key=f"ca_po_io_{it['id']}", width="stretch", help="Apre il modulo: scegli tu argomento, azienda, bene, bolletta…"):
                 _apri_bozza(scelgo_io=True)
+            if "sp_da_posta" in globals() and st.button("🩺 È un documento sanitario", key=f"ca_po_san_{it['id']}", width="stretch",
+                                                           help="Referti, esami, ricette, certificati: li leggo e li archivio nella cartella Salute della persona giusta."):
+                sp_da_posta(it)
             q1, q2 = st.columns(2, gap="small")
             if q1.button("📖 Leggi e archivia", key=f"ca_po_ok_{it['id']}", width="stretch", help="Leggo io il documento e ti propongo dove metterlo: controlli e confermi."):
                 _apri_bozza()

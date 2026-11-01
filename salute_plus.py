@@ -1210,6 +1210,27 @@ def _sp_archivia_docsan(pid, rif, val, riconosciuto, utente):
     return doc
 
 
+def sp_da_posta(it):
+    """Dalla «Posta in arrivo» di Casa: il file diventa un documento sanitario da leggere e confermare (si apre la pagina Documenti sanitari con quel file)."""
+    car = _fa_inv_allegati([{"id": it["file_id"], "nome": it.get("nome"), "mime": it.get("mime")}]) if "_fa_inv_allegati" in globals() else []
+    if not car:
+        st.error("Non riesco ad aprire questo file: riprova fra poco.")
+        return
+    nome, mime, dati = car[0]
+    coda = st.session_state.setdefault("sp_ds_coda", [])
+    sha = hashlib.sha256(dati).hexdigest()
+    if not any(c["sha"] == sha for c in coda):
+        coda.insert(0, {"nome": nome, "dati": dati, "sha": sha, "posta_id": it["id"]})
+    f = _fa_dati()
+    profili = _fa_profili(f)
+    pid = st.session_state.get("fa_profilo") if st.session_state.get("fa_profilo") in {x["id"] for x in profili} else profili[0]["id"]
+    for k in ("fa_modulo_med", "fa_modulo_foglio", "fa_modulo_dottore", "fa_modulo_sanitario", "fa_modulo_tessera", "sezione_home", "ca_bozza_in", "ca_bozza"):
+        st.session_state.pop(k, None)
+    st.session_state["farmacia_aperta"] = True
+    st.session_state["sp_modulo"] = {"vista": "docsan", "pid": pid}
+    st.rerun()
+
+
 def sp_modulo_docsan(pid):
     f, p = _sp_intestazione("🗂️ Documenti sanitari", pid)
     utente = (st.session_state.get("sess") or {}).get("nome", "")
@@ -1265,6 +1286,8 @@ def sp_modulo_docsan(pid):
                 coda.append(coda.pop(0))
                 st.rerun()
             if b2.button("✖ Scarta questo", key="sp_ds_scarta", width="stretch"):
+                if c.get("posta_id"):
+                    st.session_state["fa_msg"] = "ℹ️ Il file resta nella Posta in arrivo di Casa: lo trovi lì."
                 coda.pop(0)
                 st.rerun()
             if ok:
@@ -1273,6 +1296,11 @@ def sp_modulo_docsan(pid):
                     rif = rifs[0] if rifs else {"id": "", "nome": c["nome"], "mime": mime, "sha": c["sha"]}
                     dest = val["profilo"]
                     _sp_archivia_docsan(dest, rif, val, riconosciuto, utente)
+                    if c.get("posta_id") and "_ca_posta_togli" in globals():
+                        try:
+                            _ca_posta_togli(c["posta_id"], cancella_file=True)                              # il file è già nella cartella sanitaria: via la copia della posta
+                        except Exception:
+                            pass
                     coda.pop(0)
                     nome_dest = next((x["nome"] for x in _fa_profili(f) if x["id"] == dest), "")
                     st.session_state["fa_msg"] = f"✅ Documento archiviato nella cartella di {nome_dest}."
