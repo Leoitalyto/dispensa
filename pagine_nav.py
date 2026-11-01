@@ -60,12 +60,13 @@ _PN_JS = r"""
 (function () {
   var w = window, doc = w.document, lato = __LATO__;
   var vecchia = doc.getElementById('pn-su');
-  if (vecchia) { vecchia.setAttribute('data-lato', lato); vecchia.style[lato === 'sinistra' ? 'left' : 'right'] = '14px'; vecchia.style[lato === 'sinistra' ? 'right' : 'left'] = 'auto'; return; }
+  if (vecchia) { vecchia.setAttribute('data-lato', lato); vecchia.style[lato === 'sinistra' ? 'left' : 'right'] = '8px'; vecchia.style[lato === 'sinistra' ? 'right' : 'left'] = 'auto'; return; }
   var b = doc.createElement('button');
   b.id = 'pn-su'; b.type = 'button'; b.setAttribute('aria-label', 'Torna in cima'); b.setAttribute('data-lato', lato); b.textContent = '▲';
-  b.style.cssText = 'position:fixed;bottom:230px;width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.85);background:rgba(0,105,92,.72);color:#fff;font-size:20px;line-height:40px;'
-    + 'padding:0;z-index:99990;display:none;box-shadow:0 3px 10px rgba(0,0,0,.3);cursor:pointer;-webkit-tap-highlight-color:transparent';
-  b.style[lato === 'sinistra' ? 'left' : 'right'] = '14px';
+  b.style.cssText = 'position:fixed;bottom:250px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(0,105,92,.55);color:#fff;font-size:15px;line-height:30px;opacity:.55;'
+    + 'padding:0;z-index:99990;display:none;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .15s';
+  b.addEventListener('touchstart', function () { b.style.opacity = '1'; }, {passive: true});
+  b.style[lato === 'sinistra' ? 'left' : 'right'] = '8px';
   doc.body.appendChild(b);
   function contenitori() {
     var c = [doc.querySelector('[data-testid="stMain"]'), doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]'), doc.scrollingElement, doc.documentElement, doc.body];
