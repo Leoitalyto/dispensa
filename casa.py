@@ -1277,12 +1277,12 @@ def ca_scadenze(c, oggi_, giorni=60):
         if d and (d - oggi_).days <= giorni and m.get("bene_id") in nomi:
             manut.append((nomi[m["bene_id"]], m.get("descrizione") or m.get("tipo") or "Manutenzione", (d - oggi_).days))
     docs = c.get("documenti", [])
-    bollette = []                                                                    # bollette da pagare tra 10 giorni o già scadute (fino a 90 giorni fa) senza ricevuta
+    bollette = []                                                                    # bollette da pagare tra 10 giorni o già scadute (fino a un anno fa) senza ricevuta
     for d in docs:
         sp = ca_stato_pagamento(d, docs, oggi_)
         if sp and sp[0] == "da_pagare" and sp[1] is not None and sp[1] <= 10:
             bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", sp[1], d.get("importo")))
-        elif sp and sp[0] == "scaduta" and sp[1] <= 90:
+        elif sp and sp[0] == "scaduta" and sp[1] <= 365:
             bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", -sp[1], d.get("importo")))
     return {"garanzie": sorted(garanzie, key=lambda x: x[1]), "manutenzioni": sorted(manut, key=lambda x: x[2]), "bollette": sorted(bollette, key=lambda x: x[1])}
 
