@@ -29,7 +29,9 @@ from datetime import date, datetime
 import streamlit as st
 
 CA_TIPI = ["Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto",
-           "Dichiarazione di conformità", "Istruzioni di montaggio", "Fattura o scontrino", "Documentazione di un intervento", "Altro"]
+           "Dichiarazione di conformità", "Istruzioni di montaggio", "Fattura o scontrino", "Documentazione di un intervento",
+           "Bolletta o fattura", "Contratto", "Polizza assicurativa", "Ricevuta di pagamento", "Lettera o comunicazione", "Altro"]
+_CA_TIPI_MANUALI = {"Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto", "Dichiarazione di conformità", "Istruzioni di montaggio"}
 CA_LINGUE = {"it": "Italiano", "en": "Inglese", "de": "Tedesco", "fr": "Francese", "es": "Spagnolo", "": "Non so"}
 CA_STANZE = ["Cucina", "Soggiorno", "Camera da letto", "Bagno", "Ingresso", "Studio", "Lavanderia", "Garage", "Cantina", "Giardino", "Terrazzo", "Tutta la casa", "Altro"]
 CA_TIPI_MANUTENZIONE = ["Controllo", "Manutenzione ordinaria", "Manutenzione straordinaria", "Riparazione", "Pulizia o sostituzione filtri", "Altro"]
@@ -154,7 +156,35 @@ def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
     """(testo, info). Dai PDF con testo si legge il testo; dalle foto e dalle scansioni, se c'è, con l'OCR. info = {pagine, titolo, data_meta, scansione, metodo}."""
     info = {"pagine": None, "titolo": "", "data_meta": None, "scansione": False, "metodo": ""}
     if mime == "application/pdf":
-        try:
+        try:                                                                  # 1) PyMuPDF, se c'è: tiene meglio in ordine righe, colonne e tabelle
+            try:
+                import pymupdf as _mu
+            except Exception:
+                import fitz as _mu
+            doc = _mu.open(stream=dati, filetype="pdf")
+            info["pagine"] = doc.page_count
+            try:
+                meta = doc.metadata or {}
+                info["titolo"] = str(meta.get("title") or "").strip()
+                m = re.match(r"D:(\d{4})(\d{2})(\d{2})", str(meta.get("creationDate") or ""))
+                if m:
+                    info["data_meta"] = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                pass
+            parti = []
+            for i in range(min(max_pagine, doc.page_count)):
+                try:
+                    parti.append(doc[i].get_text("text", sort=True) or "")
+                except Exception:
+                    parti.append("")
+            doc.close()
+            testo = "\n".join(parti)[:max_car]
+            if len(re.sub(r"\s+", "", testo)) >= 40:
+                info["metodo"], info["testo_p1"] = "testo del PDF", (parti[0] if parti else "")[:6000]
+                return testo, info
+        except Exception:
+            pass
+        try:                                                                  # 2) pypdf
             import pypdf
             r = pypdf.PdfReader(io.BytesIO(dati))
             info["pagine"] = len(r.pages)
@@ -173,7 +203,7 @@ def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
                 except Exception:
                     continue
             testo = "\n".join(parti)[:max_car]
-            info["metodo"] = "testo del PDF"
+            info["metodo"], info["testo_p1"] = "testo del PDF", (parti[0] if parti else "")[:6000]
             if len(re.sub(r"\s+", "", testo)) < 40:
                 ocr = _ca_ocr_pdf(dati)                                      # PDF senza testo = scansione: si prova a leggerlo come una foto
                 if len(re.sub(r"\s+", "", ocr)) >= 40:
@@ -222,7 +252,9 @@ def ca_tipo(testo, nome_file=""):
     migliore, punti_m = "", 0
     for tipo, parole in _CA_TIPI_PAROLE:
         punti = sum(t.count(_ca_norm(p)) for p in parole)
-        if punti > punti_m:
+        if tipo == "Fattura o scontrino":
+            punti = max(0, punti - 1)                                         # una sola parola «fattura» non basta: nei manuali compare per ricordare di conservarla
+        if punti > punti_m or (punti == punti_m and punti and tipo.startswith("Manuale")):
             migliore, punti_m = tipo, punti
     if migliore:
         return migliore, ("alta" if punti_m >= 3 else "media")
@@ -337,6 +369,311 @@ def ca_data(testo, data_meta=None, anni_validi=(1990, 2100)):
     return None, "", "bassa"
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# BOLLETTE, FATTURE E DOCUMENTI DI CASA (non solo manuali): chi li ha emessi, di cosa parlano, quanto, quando, per quale periodo
+# ---------------------------------------------------------------------------------------------------------------------
+CA_ARGOMENTI = ["Luce", "Gas", "Luce e Gas", "Acqua", "Telefono e Internet", "Rifiuti (TARI)", "Condominio", "Assicurazioni", "Tasse e imposte",
+                "Contratti, affitto e mutuo", "Interventi e riparazioni", "Acquisti e garanzie", "Manuali e istruzioni", "Altro"]
+_CA_ICONE_ARG = {"Luce": "💡", "Gas": "🔥", "Luce e Gas": "💡🔥", "Acqua": "💧", "Telefono e Internet": "📞", "Rifiuti (TARI)": "🗑️", "Condominio": "🏢", "Assicurazioni": "🛡️",
+                 "Tasse e imposte": "🏛️", "Contratti, affitto e mutuo": "📝", "Interventi e riparazioni": "🛠️", "Acquisti e garanzie": "🧾", "Manuali e istruzioni": "📚", "Altro": "📁"}
+_CA_ARG_APPARECCHIO = {"Manuali e istruzioni", "Acquisti e garanzie"}
+_CA_TIPI_UTENZA = ["Bolletta o fattura", "Contratto", "Polizza assicurativa", "Ricevuta di pagamento", "Lettera o comunicazione"]
+
+# parole che fanno capire l'argomento: (parola, peso)
+_CA_PAROLE_ARG = {
+    "Luce": [("energia elettrica", 3), ("kwh", 3), (" pod ", 4), ("potenza impegnata", 3), ("potenza disponibile", 2), ("bolletta luce", 4), ("fattura luce", 4), ("fornitura di energia elettrica", 4),
+             ("servizio elettrico", 2), ("mercato libero dell'energia elettrica", 3), ("energia attiva", 2), ("trasporto dell'energia elettrica", 3)],
+    "Gas": [("gas naturale", 3), ("smc", 3), (" pdr ", 4), ("bolletta gas", 4), ("fattura gas", 4), ("gas metano", 3), ("fornitura di gas", 4), ("potere calorifico", 3), ("metri cubi", 1), ("coefficiente c", 2)],
+    "Acqua": [("servizio idrico", 4), ("acquedotto", 3), ("fognatura", 3), ("depurazione", 3), ("acqua potabile", 3), ("consumo di acqua", 3), ("bolletta acqua", 4), ("fattura acqua", 4), ("idrico integrato", 4)],
+    "Telefono e Internet": [("linea fissa", 3), ("fibra", 2), ("adsl", 3), ("ftth", 3), ("internet", 2), ("giga", 2), ("traffico", 2), ("numero di telefono", 3), ("telefonia", 3), ("chiamate", 2), ("canone mensile", 1), ("sim ", 1), ("offerta mobile", 2)],
+    "Rifiuti (TARI)": [("tari", 5), ("tassa rifiuti", 5), ("tariffa rifiuti", 5), ("rifiuti", 3), ("igiene urbana", 4), ("raccolta differenziata", 2)],
+    "Condominio": [("condominio", 4), ("condominiale", 4), ("amministratore di condominio", 4), ("millesimi", 4), ("quota condominiale", 4), ("rendiconto condominiale", 4)],
+    "Assicurazioni": [("polizza", 4), ("assicurazione", 3), ("premio", 2), ("massimale", 3), ("contraente", 3), ("assicurato", 3), ("rc auto", 3), ("rca", 2)],
+    "Tasse e imposte": [("imu", 5), ("tasi", 5), ("f24", 4), ("agenzia delle entrate", 3), ("imposta", 2), ("tributo", 2), ("bollo auto", 3), ("canone rai", 4), ("cartella esattoriale", 5), ("agenzia delle entrate-riscossione", 5)],
+    "Contratti, affitto e mutuo": [("contratto di locazione", 5), ("canone di locazione", 4), ("affitto", 3), ("locatore", 3), ("conduttore", 3), ("mutuo", 4), ("rata del mutuo", 4), ("piano di ammortamento", 4)],
+    "Interventi e riparazioni": [("intervento", 2), ("riparazione", 3), ("sostituzione", 2), ("manodopera", 3), ("assistenza tecnica", 3), ("idraulico", 3), ("elettricista", 3), ("manutenzione", 2), ("tecnico", 1), ("ricambi", 2)],
+    "Acquisti e garanzie": [("scontrino", 4), ("ricevuta fiscale", 3), ("documento commerciale", 4), ("garanzia", 1), ("acquisto", 1)],
+}
+# parole che dicono «questa è una bolletta / fattura / avviso di pagamento»: (parola, peso); le «forti» da sole fanno quasi una fattura
+_CA_PAROLE_FATTURA = [("fattura", 2), ("bolletta", 2), ("totale da pagare", 3), ("importo da pagare", 3), ("importo dovuto", 3), ("totale fattura", 3), ("totale bolletta", 3), ("totale documento", 3),
+                      ("periodo di fatturazione", 3), ("codice cliente", 2), ("numero cliente", 2), ("imponibile", 3), ("iva", 1), ("avviso di pagamento", 3), ("bollettino", 2), ("pagopa", 2),
+                      ("scadenza", 1), ("modalita di pagamento", 2), ("addebito", 1), ("partita iva", 1), ("codice fiscale", 1), ("importo", 1), ("rata", 1), ("premio", 1), ("canone", 1)]
+_CA_FATTURA_FORTI = ("totale da pagare", "importo da pagare", "importo dovuto", "totale fattura", "totale bolletta", "totale documento", "periodo di fatturazione", "imponibile",
+                     "avviso di pagamento", "fattura n", "bolletta n", "numero fattura", "n. fattura", "rata", "premio", "canone di locazione")
+
+# gli enti (aziende, comuni, assicurazioni…) che compaiono più spesso: (nome da mostrare, [pezzi di testo senza accenti])
+_CA_ENTI = [
+    ("Enel Energia", ["enel energia"]), ("Servizio Elettrico Nazionale", ["servizio elettrico nazionale"]), ("Plenitude (Eni)", ["plenitude", "eni gas e luce", "eni gas e luce"]),
+    ("A2A Energia", ["a2a energia", "a2a"]), ("Edison Energia", ["edison energia", "edison"]), ("Hera Comm", ["hera comm", "gruppo hera"]), ("Iren Mercato", ["iren mercato"]),
+    ("Acea Energia", ["acea energia"]), ("E.ON Energia", ["e.on energia", "eon energia", "e.on "]), ("Sorgenia", ["sorgenia"]), ("Illumia", ["illumia"]), ("Engie", ["engie"]),
+    ("Axpo", ["axpo"]), ("Dolomiti Energia", ["dolomiti energia"]), ("Alperia", ["alperia"]), ("Estra", ["estra energie", "estra "]), ("AGSM AIM", ["agsm aim", "agsm"]),
+    ("Green Network", ["green network"]), ("Wekiwi", ["wekiwi"]), ("Octopus Energy", ["octopus energy"]), ("Pulsee", ["pulsee"]), ("Enel", ["enel "]),
+    ("SMAT (Torino)", ["smat", "societa metropolitana acque torino"]), ("Acea Ato 2", ["acea ato"]), ("Acquedotto Pugliese", ["acquedotto pugliese"]), ("Publiacqua", ["publiacqua"]),
+    ("Veritas", ["veritas"]), ("MM (Milano)", ["metropolitana milanese"]), ("Gaia", ["gaia s.p.a", "gaia spa"]), ("CAP Holding", ["cap holding"]), ("Abbanoa", ["abbanoa"]),
+    ("TIM", ["telecom italia", "tim s.p.a", " tim "]), ("Vodafone", ["vodafone"]), ("WindTre", ["windtre", "wind tre"]), ("Iliad", ["iliad"]), ("Fastweb", ["fastweb"]),
+    ("Tiscali", ["tiscali"]), ("PosteMobile", ["postemobile", "poste mobile"]), ("Sky Italia", ["sky italia"]), ("Linkem", ["linkem"]), ("EOLO", ["eolo "]),
+    ("AMIAT (Torino)", ["amiat"]), ("Iren Ambiente", ["iren ambiente"]), ("AMA (Roma)", ["azienda municipale ambiente"]),
+    ("Generali", ["generali italia", "assicurazioni generali"]), ("UnipolSai", ["unipolsai", "unipol sai"]), ("Allianz", ["allianz"]), ("AXA", ["axa assicurazioni", "axa italia"]),
+    ("Reale Mutua", ["reale mutua"]), ("Zurich", ["zurich"]), ("Cattolica Assicurazioni", ["cattolica assicurazioni"]), ("Vittoria Assicurazioni", ["vittoria assicurazioni"]),
+    ("Poste Assicura", ["poste assicura"]), ("Linear", ["linear assicurazioni"]), ("Genertel", ["genertel"]), ("Direct Line", ["direct line"]),
+    ("Agenzia delle Entrate", ["agenzia delle entrate"]),
+]
+_CA_FORMA_LEGALE = r"(?:S\.?\s?p\.?\s?A\.?|S\.?\s?r\.?\s?l\.?|S\.?\s?c\.?\s?a\.?\s?r\.?\s?l\.?|S\.?\s?n\.?\s?c\.?|S\.?\s?a\.?\s?s\.?|Soc(?:ieta|ietà)?\.?\s+Coop(?:erativa)?\.?)"
+_CA_MESI_ABB = {"gen": 1, "feb": 2, "mar": 3, "apr": 4, "mag": 5, "giu": 6, "lug": 7, "ago": 8, "set": 9, "ott": 10, "nov": 11, "dic": 12}
+_CA_RE_DATA = r"(\d{1,2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{4}|\d{2})\b|(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\.?\s+(\d{4})\b"
+_CA_RE_IMPORTO = r"(?:€|eur(?:o)?\.?)?\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,6},\d{2})(?!\d)"
+
+
+def _ca_data_da_match(m):
+    """Da un risultato di _CA_RE_DATA a un oggetto data (oppure None)."""
+    try:
+        if m.group(1):
+            g, mo, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        else:
+            g, a = int(m.group(4)), int(m.group(6))
+            n = m.group(5).lower()
+            mo = _CA_MESI_NOMI.get(n) or _CA_MESI_ABB.get(n[:3])
+        a = a + 2000 if a < 100 else a
+        if not (2000 <= a <= 2100):
+            return None
+        return date(a, mo, g)
+    except (ValueError, TypeError):
+        return None
+
+
+def _ca_etichetta(et):
+    return re.escape(et).replace(r"\ ", r"\s+")
+
+
+def _ca_dopo(testo, etichette, regex_valore, finestra=90):
+    """Il primo valore che compare DOPO una delle etichette (nell'ordine dato, dalla più sicura alla meno sicura). Ritorna (match, etichetta) o (None, '')."""
+    for et in etichette:
+        for m in re.finditer(_ca_etichetta(et), testo, re.I):
+            v = re.search(regex_valore, testo[m.end(): m.end() + finestra], re.I)
+            if v:
+                return v, et
+    return None, ""
+
+
+def _ca_importo_str(s):
+    """«1.234,56» → «1234.56»."""
+    return s.replace(".", "").replace(",", ".")
+
+
+def ca_importo_fmt(valore):
+    """«1234.56» → «1.234,56»."""
+    try:
+        x = float(str(valore).replace(",", "."))
+    except (ValueError, TypeError):
+        return str(valore or "")
+    s = f"{x:,.2f}"
+    return s.replace(",", "§").replace(".", ",").replace("§", ".")
+
+
+def ca_leggi_ente(testo, testo_p1="", nome_file=""):
+    """(ente, affidabilità, fonte): chi ha emesso il documento."""
+    p1 = _ca_norm(" " + (testo_p1 or (testo or "")[:3500]) + " ")
+    tutto = _ca_norm(" " + (testo or "") + " ")
+    migliore, punti_m = "", 0
+    for nome, pezzi in _CA_ENTI:
+        punti = 0
+        for z in pezzi:
+            zn = _ca_norm(z)
+            punti += 3 * p1.count(zn) + tutto.count(zn)
+            if zn.strip() and p1[:500].find(zn) >= 0:
+                punti += 8                                                  # in cima alla prima pagina: è quasi sempre l'intestazione
+        if punti > punti_m:
+            migliore, punti_m = nome, punti
+    if migliore and punti_m >= 3:
+        return migliore, ("alta" if punti_m >= 8 else "media"), "testo"
+    prime = [r.strip() for r in (testo_p1 or testo or "").splitlines()[:45] if r.strip()]
+    for riga in prime:                                                      # ragione sociale: «A2A Energia S.p.A.», «Rossi Impianti S.r.l.»…
+        m = re.search(r"([A-Z][\w&.'’\-]*(?:\s+[A-Za-zÀ-ÿ&.'’\-]+){0,5}?)\s*,?\s+(" + _CA_FORMA_LEGALE + r")(?![\w])", riga)
+        if m and len(m.group(1)) >= 3:
+            return re.sub(r"\s+", " ", m.group(1) + " " + m.group(2)).strip(" -–,"), "media", "testo"
+    for riga in prime:
+        m = re.search(r"\bComune\s+di\s+([A-ZÀ-Ý][\wà-ÿ'’\-]+(?:\s+[A-ZÀ-Ý][\wà-ÿ'’\-]+){0,2})", riga)
+        if m:
+            return "Comune di " + m.group(1), "media", "testo"
+    stem = re.sub(r"[\d_\-\.]+", " ", nome_file or "").strip()
+    stem = re.sub(r"\b(fattura|bolletta|scansione|documento|allegato|copia|pdf|img|scan)\b", "", stem, flags=re.I).strip()
+    if len(stem) >= 3:
+        return stem[:40].title(), "bassa", "nome del file"
+    return "", "bassa", ""
+
+
+def ca_leggi_argomento(testo, nome_file=""):
+    """(argomento, punti, punti_luce, punti_gas): di che cosa parla la bolletta o il documento."""
+    t = " " + _ca_norm((nome_file or "") + " " + (testo or "")) + " "
+    punti = {}
+    for arg, parole in _CA_PAROLE_ARG.items():
+        p = 0
+        for parola, peso in parole:
+            p += peso * min(t.count(_ca_norm(parola)), 6)
+        punti[arg] = p
+    if punti["Luce"] >= 6 and punti["Gas"] >= 6 and min(punti["Luce"], punti["Gas"]) * 2 >= max(punti["Luce"], punti["Gas"]):
+        return "Luce e Gas", punti["Luce"] + punti["Gas"], punti["Luce"], punti["Gas"]
+    arg = max(punti, key=lambda k: punti[k])
+    if punti[arg] < 4:
+        return "", 0, punti["Luce"], punti["Gas"]
+    return arg, punti[arg], punti["Luce"], punti["Gas"]
+
+
+def ca_leggi_utenza(testo, testo_p1="", nome_file=""):
+    """Legge una bolletta, una fattura, un avviso di pagamento, una polizza…
+    Ritorna {'e_utenza': bool, 'campi': {nome: {'valore', 'affidabilita', 'fonte'}}}. NON salva niente."""
+    t = testo or ""
+    tn = " " + _ca_norm(t) + " "
+    punti_f = sum(peso * min(tn.count(_ca_norm(p)), 4) for p, peso in _CA_PAROLE_FATTURA)
+    forti = sum(1 for p in _CA_FATTURA_FORTI if _ca_norm(p) in tn)
+    arg, punti_a, p_luce, p_gas = ca_leggi_argomento(t, nome_file)
+    ha_importo = bool(re.search(_CA_RE_IMPORTO, t))                           # (il simbolo € non si pretende: la lettura ottica lo sbaglia spesso)
+    ha_scadenza = bool(re.search(r"scadenza|scade|entro il|da pagare", tn))
+    e_utenza = bool(t) and (arg not in _CA_ARG_APPARECCHIO) and ((punti_f >= 7 and forti >= 1) or (arg and punti_a >= 8 and ha_importo and ha_scadenza))
+    if not e_utenza:
+        return {"e_utenza": False, "campi": {}}
+    campi = {}
+
+    def metti(k, valore, aff, fonte="testo"):
+        if valore:
+            campi[k] = {"valore": valore, "affidabilita": aff, "fonte": fonte}
+    p1 = testo_p1 or t[:5000]
+    # --- tipo di documento
+    if "polizza" in tn and arg == "Assicurazioni":
+        tipo = "Polizza assicurativa"
+    elif re.search(r"ricevuta di pagamento|quietanza|esito del pagamento|pagamento effettuato", tn) and not re.search(r"totale da pagare|importo da pagare", tn):
+        tipo = "Ricevuta di pagamento"
+    elif re.search(r"contratto di (?:fornitura|locazione|somministrazione)|condizioni generali di contratto", tn) and "fattura" not in tn and "bolletta" not in tn:
+        tipo = "Contratto"
+    else:
+        tipo = "Bolletta o fattura"
+    metti("tipo", tipo, "alta" if forti >= 2 else "media")
+    metti("argomento", arg or "Altro", ("alta" if punti_a >= 12 else "media") if arg else "bassa")
+    ente, aff_e, fonte_e = ca_leggi_ente(t, p1, nome_file)
+    if arg == "Condominio":
+        mc = re.search(r"\b(Condominio\s+[A-Za-zÀ-ÿ0-9][^\n]{3,50})", p1 + "\n" + t)
+        if mc:
+            ente, aff_e, fonte_e = re.sub(r"\s+", " ", mc.group(1)).strip(" -–,."), "media", "testo"
+    metti("ente", ente, aff_e, fonte_e)
+    # --- importo (dal più sicuro al più generico)
+    et_imp = ["totale da pagare", "importo da pagare", "importo dovuto", "totale bolletta", "totale fattura", "totale documento", "totale importo", "importo totale",
+              "totale complessivo", "totale del documento", "da pagare", "premio totale", "premio da pagare", "importo rata", "totale"]
+    v, et = _ca_dopo(t, et_imp, _CA_RE_IMPORTO, 110)
+    if not v:                                                               # alcuni documenti mettono l'importo PRIMA dell'etichetta
+        for et in et_imp[:6]:
+            m = re.search(_CA_RE_IMPORTO + r"\s*(?:€|eur(?:o)?)?\s*\n?\s*" + _ca_etichetta(et), t, re.I)
+            if m:
+                v = m
+                break
+    if v:
+        metti("importo", _ca_importo_str(v.group(1)), "alta" if et != "totale" else "media")
+    # --- numero del documento
+    for rx in (r"(?:fattura|bolletta|documento|avviso)\s*(?:elettronica\s*)?(?:n\s*[.°º]?|nr\.?|numero)\s*[:\-]?\s*([A-Z0-9][A-Z0-9/\-\.]{0,24})",
+               r"(?:numero|n\s*[.°º]|nr\.?)\s*(?:della\s*)?(?:fattura|bolletta|documento)\s*[:\-]?\s*([A-Z0-9][A-Z0-9/\-\.]{0,24})"):
+        m = re.search(rx, t, re.I)
+        if m and re.search(r"\d", m.group(1)) and not re.fullmatch(r"(?:del|data|dal|al)\.?", m.group(1), re.I):
+            metti("numero_doc", m.group(1).rstrip(".-/"), "alta")
+            break
+    # --- data di emissione
+    emessa = None
+    m = re.search(r"(?:fattura|bolletta|documento)[^\n]{0,70}?\bdel\s+(" + _CA_RE_DATA + ")", t, re.I)
+    if m:
+        mm = re.search(_CA_RE_DATA, m.group(1))
+        emessa = _ca_data_da_match(mm) if mm else None
+    if not emessa:
+        v, _ = _ca_dopo(t, ["data emissione", "data di emissione", "emessa il", "emesso il", "data fattura", "data bolletta", "data documento", "emissione", "data"], _CA_RE_DATA, 40)
+        emessa = _ca_data_da_match(v) if v else None
+    if emessa:
+        metti("data_doc", emessa.isoformat(), "alta")
+    # --- scadenza di pagamento
+    v, _ = _ca_dopo(t, ["data scadenza", "scadenza pagamento", "scade il", "da pagare entro il", "da pagare entro", "pagare entro il", "pagabile entro il", "scadenza", "entro il"], _CA_RE_DATA, 50)
+    sc = _ca_data_da_match(v) if v else None
+    if sc and (not emessa or sc >= emessa):
+        metti("scadenza_doc", sc.isoformat(), "alta")
+    # --- periodo
+    m = re.search(r"(?:periodo(?:\s+di)?\s*(?:fatturazione|consumo|competenza|riferimento)?|competenza|relativ[ao]\s+al\s+periodo)[^\d]{0,45}(?P<d1>" + _CA_RE_DATA + r")\s*(?:-|–|a|al|fino\s+al)\s*(?P<d2>" + _CA_RE_DATA + ")", p1 + "\n" + t, re.I)
+    if not m:
+        m = re.search(r"\bdal\s+(?P<d1>" + _CA_RE_DATA + r")\s+al\s+(?P<d2>" + _CA_RE_DATA + ")", p1 + "\n" + t, re.I)
+    if m:
+        a1, a2 = re.search(_CA_RE_DATA, m.group("d1")), re.search(_CA_RE_DATA, m.group("d2"))
+        d1 = _ca_data_da_match(a1) if a1 else None
+        d2 = _ca_data_da_match(a2) if a2 else None
+        if d1 and d2 and d1 <= d2:
+            metti("periodo_da", d1.isoformat(), "alta")
+            metti("periodo_a", d2.isoformat(), "alta")
+    # --- codici
+    m = re.search(r"\bIT\s?\d{3}\s?E\s?\d{8}\b", t)
+    if m:
+        pdr, _ = _ca_dopo(t, ["pdr", "punto di riconsegna"], r"\b(\d{14})\b", 40)
+        metti("codice_fornitura", re.sub(r"\s", "", m.group(0)) + (" · PDR " + pdr.group(1) if pdr else ""), "alta")
+    else:
+        v, _ = _ca_dopo(t, ["pdr", "punto di riconsegna"], r"\b(\d{14})\b", 40)
+        if v:
+            metti("codice_fornitura", v.group(1), "alta")
+        else:
+            v, _ = _ca_dopo(t, ["numero di telefono", "numero linea", "linea fissa", "numero telefonico"], r"(\+?\d[\d\s/]{7,14}\d)", 40)
+            if v:
+                metti("codice_fornitura", re.sub(r"\s+", " ", v.group(1)).strip(), "media")
+            else:
+                v, _ = _ca_dopo(t, ["codice utenza", "id fornitura", "codice fornitura", "matricola contatore", "numero polizza", "n. polizza", "polizza n"], r"([A-Z0-9][A-Z0-9\-/\.]{4,20})", 40)
+                if v and re.search(r"\d", v.group(1)):
+                    metti("codice_fornitura", v.group(1).rstrip(".-/"), "media")
+    v, _ = _ca_dopo(t, ["codice cliente", "numero cliente", "cod. cliente", "codice contratto", "numero contratto", "contratto n", "codice anagrafica", "n. cliente"], r"([A-Z0-9][A-Z0-9\-/]{4,19})", 45)
+    if v and re.search(r"\d", v.group(1)):
+        metti("codice_cliente", v.group(1).rstrip("-/"), "alta")
+    lingua, aff = ca_lingua(t)
+    metti("lingua", lingua, aff)
+    return {"e_utenza": True, "campi": campi}
+
+
+_CA_NEGOZI = ["MediaWorld", "Unieuro", "Euronics", "Expert", "Trony", "Leroy Merlin", "Brico", "Bricocenter", "Ikea", "Amazon", "ePRICE", "Conforama", "Mondo Convenienza",
+              "Esselunga", "Coop", "Conad", "Carrefour", "Lidl", "Decathlon", "Castorama", "OBI", "Brico io", "Auchan"]
+
+
+def ca_leggi_negozio(testo, testo_p1=""):
+    """Il negozio che ha emesso uno scontrino o una fattura di acquisto."""
+    p1 = _ca_norm(" " + (testo_p1 or testo or "")[:1500] + " ")
+    for n in _CA_NEGOZI:
+        if " " + _ca_norm(n) in p1 or _ca_norm(n) + " " in p1:
+            return n
+    for riga in [r.strip() for r in (testo_p1 or testo or "").splitlines()[:6] if r.strip()]:
+        if 3 <= len(riga) <= 40 and not re.search(r"\d{3,}|totale|scontrino|fattura|ricevuta|documento", riga, re.I) and re.search(r"[A-Za-zÀ-ÿ]{3}", riga):
+            return riga.title() if riga.isupper() else riga
+    return ""
+
+
+def ca_titolo_auto(d):
+    """Il titolo che si scrive da solo, se non ne viene dato uno: «Luce · Enel Energia · Fattura n. 123 del 12/03/2026 · € 87,35»."""
+    arg, ente = d.get("argomento") or "", d.get("ente") or ""
+    if arg and arg not in _CA_ARG_APPARECCHIO and (ente or d.get("importo") or d.get("numero_doc")):
+        parti = [arg, ente]
+        tipo = {"Rifiuti (TARI)": "Avviso di pagamento", "Tasse e imposte": "Avviso di pagamento", "Condominio": "Rata condominiale"}.get(arg) or \
+               {"Bolletta o fattura": "Fattura", "Polizza assicurativa": "Polizza", "Ricevuta di pagamento": "Ricevuta"}.get(d.get("tipo"), d.get("tipo") or "Documento")
+        corpo = tipo + (f" n. {d['numero_doc']}" if d.get("numero_doc") else "") + (f" del {_ca_data_it(d['data_doc'])}" if d.get("data_doc") else "")
+        parti.append(corpo)
+        if d.get("importo"):
+            parti.append("€ " + ca_importo_fmt(d["importo"]))
+        return " · ".join(p for p in parti if p)[:140]
+    return " ".join(x for x in (d.get("tipo"), d.get("marca"), d.get("modello")) if x)
+
+
+def _ca_argomento_di(d):
+    """L'argomento di un documento, anche vecchio (archiviato prima che esistesse questo campo)."""
+    a = d.get("argomento")
+    if a in CA_ARGOMENTI:
+        return a
+    return "Acquisti e garanzie" if d.get("tipo") == "Fattura o scontrino" else ("Manuali e istruzioni" if d.get("tipo") in _CA_TIPI_MANUALI else "Altro")
+
+
+def _ca_ente_di(d):
+    return (d.get("ente") or d.get("marca") or "").strip() or "Senza indicazione"
+
+
+def _ca_ordine(d):
+    """Per ordinare: la data del documento (o, se manca, quella di archiviazione)."""
+    return (d.get("data_doc") or str(d.get("creato_il") or "")[:10] or "0000-00-00")
+
+
 def ca_riconosci(nome, mime, dati, testo=None, info=None):
     """Legge un documento e propone i dati. Ritorna {'testo_ok', 'info', 'campi': {nome: {'valore', 'affidabilita', 'fonte'}}, 'testo_inizio'}. NON salva niente."""
     if testo is None:
@@ -370,6 +707,29 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
     sotto_v = campi.get("sottocategoria", {}).get("valore", "")
     nome_prop = " ".join(x for x in (sotto_v if sotto_v and sotto_v != "Altro" else "", marca, modello) if x).strip()
     metti("nome_apparecchio", nome_prop or stem[:60], "media" if nome_prop else "bassa", "testo" if nome_prop else "nome del file")
+    # --- è una bolletta, una fattura, un avviso di pagamento, una polizza? Allora NON è un apparecchio: si leggono ente, importo, numero, date, periodo e codici
+    ut = ca_leggi_utenza(testo, info.get("testo_p1") or "", stem) if testo else {"e_utenza": False, "campi": {}}
+    if ut["e_utenza"]:
+        campi = {}
+        for k, v in ut["campi"].items():
+            metti(k, v["valore"], v["affidabilita"], v["fonte"])
+        if "data_doc" not in campi:
+            dd, fonte_d, aff_d = ca_data(testo, info.get("data_meta"))
+            metti("data_doc", dd.isoformat() if dd else "", aff_d, fonte_d)
+    else:
+        tipo_v = (campi.get("tipo") or {}).get("valore", "")
+        metti("argomento", "Acquisti e garanzie" if tipo_v == "Fattura o scontrino" else "Manuali e istruzioni", "media" if tipo_v else "bassa", "testo")
+        if tipo_v == "Fattura o scontrino":
+            negozio = ca_leggi_negozio(testo, info.get("testo_p1") or "")
+            if negozio:
+                metti("ente", negozio, "media", "testo")
+            else:
+                metti("ente", marca, "bassa", "nome del file")
+            imp, _ = _ca_dopo(testo, ["totale complessivo", "totale da pagare", "importo pagato", "totale euro", "totale"], _CA_RE_IMPORTO, 60)
+            if imp:
+                metti("importo", _ca_importo_str(imp.group(1)), "media", "testo")
+        else:
+            metti("ente", marca, "media" if marca else "bassa", "testo" if marca and marca.lower() in (testo or "").lower() else "nome del file")
     return {"testo_ok": bool(testo), "info": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in info.items()}, "campi": campi, "testo_inizio": (testo or "")[:400]}
 
 
@@ -421,8 +781,10 @@ def ca_ai_classifica(testo, base=None):
 # Dati (funzioni pure: lavorano su un dizionario «casa»)
 # ---------------------------------------------------------------------------------------------------------------------
 _CAMPI_BENE = ("nome", "categoria", "sottocategoria", "marca", "modello", "seriale", "stanza", "acquisto", "garanzia_fino", "note")
-_CAMPI_DOC = ("tipo", "titolo", "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "link", "note")
-_CAMPI_CONTROLLATI = ("tipo", "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua")
+_CAMPI_DOC = ("tipo", "titolo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
+              "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "link", "note")
+_CAMPI_CONTROLLATI = ("tipo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
+                      "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua")
 
 
 def ca_vuoto():
@@ -465,11 +827,19 @@ def ca_elimina_bene(c, bid, con_documenti=False):
     return file_da_togliere
 
 
+def _ca_modificati(campi_prop, fin, presenti=None):
+    """I campi che chi usa l'app ha cambiato rispetto a ciò che aveva letto il programma (un campo lasciato vuoto o «Altro» non conta come correzione; un campo non indicato non conta)."""
+    def uguale(k):
+        a, b = str(campi_prop.get(k) or ""), str(fin.get(k) or "")
+        return a == b or (not a and b in ("", "Altro"))
+    return [k for k in _CAMPI_CONTROLLATI if (presenti is None or k in presenti) and not uguale(k)]
+
+
 def ca_aggiungi_documento(c, file_ref, riconosciuto, proposta, finale, utente, ora):
     """Archivia un documento con i QUATTRO livelli separati: file originale · dati riconosciuti · classificazione proposta · conferma di chi usa l'app."""
     campi_prop = {k: (v.get("valore") if isinstance(v, dict) else v) for k, v in ((riconosciuto or {}).get("campi") or {}).items()}
     fin = _ca_pulisci(finale, _CAMPI_DOC)
-    modificati = [k for k in _CAMPI_CONTROLLATI if str(campi_prop.get(k) or "") != fin.get(k, "")]
+    modificati = _ca_modificati(campi_prop, fin, set(finale))
     doc = dict(fin)
     doc.update({
         "id": uuid.uuid4().hex[:10], "creato_il": ora,
@@ -478,7 +848,7 @@ def ca_aggiungi_documento(c, file_ref, riconosciuto, proposta, finale, utente, o
         "classificazione": dict(proposta or {}),
         "conferma": {"stato": "confermato", "da": utente, "il": ora, "modificati": modificati, "bene_proposto": (proposta or {}).get("bene_id") or ""},
     })
-    doc["titolo"] = doc["titolo"] or " ".join(x for x in (doc["tipo"], doc["marca"], doc["modello"]) if x) or (file_ref.get("nome") or "Documento")
+    doc["titolo"] = doc["titolo"] or ca_titolo_auto(doc) or (file_ref.get("nome") or "Documento")
     c.setdefault("documenti", []).append(doc)
     return doc
 
@@ -490,10 +860,12 @@ def ca_correggi_documento(c, did, finale, utente, ora):
         return None
     fin = _ca_pulisci(finale, _CAMPI_DOC)
     campi_prop = {k: (v.get("valore") if isinstance(v, dict) else v) for k, v in ((d.get("riconosciuto") or {}).get("campi") or {}).items()}
+    if fin.get("titolo") in ("", ca_titolo_auto(d), d.get("file", {}).get("nome", "")):          # il titolo era quello automatico: si riscrive con i dati corretti
+        fin["titolo"] = ""
     d.update({k: fin[k] for k in _CAMPI_DOC if k in fin})
-    d["titolo"] = d["titolo"] or " ".join(x for x in (d["tipo"], d["marca"], d["modello"]) if x) or (d.get("file") or {}).get("nome", "Documento")
+    d["titolo"] = d["titolo"] or ca_titolo_auto(d) or (d.get("file") or {}).get("nome", "Documento")
     conf = d.setdefault("conferma", {})
-    conf.update({"stato": "confermato", "da": utente, "il": ora, "modificati": [k for k in _CAMPI_CONTROLLATI if str(campi_prop.get(k) or "") != d.get(k, "")]})
+    conf.update({"stato": "confermato", "da": utente, "il": ora, "modificati": _ca_modificati(campi_prop, d, set(finale))})
     conf["correzioni"] = int(conf.get("correzioni", 0) or 0) + 1
     return d
 
@@ -642,32 +1014,95 @@ def _ca_form_bene(chiave, b=None):
                 "acquisto": acq, "garanzia_fino": gar, "note": note}
 
 
+def _ca_importo_da_testo(x):
+    """«€ 1.234,56» o «87.35» → «1234.56» (se non è un numero, si tiene com'è scritto)."""
+    x = str(x or "").replace("€", "").replace("EUR", "").replace("eur", "").strip().replace(" ", "")
+    if not x:
+        return ""
+    if "," in x:
+        x = x.replace(".", "").replace(",", ".")
+    try:
+        return f"{float(x):.2f}"
+    except ValueError:
+        return x
+
+
+def _ca_anteprima(nome, mime, dati):
+    """Fa vedere il documento nella pagina: la foto intera, oppure le prime pagine del PDF."""
+    if (mime or "").startswith("image/"):
+        st.image(dati, width="stretch")
+        return
+    try:
+        try:
+            import pymupdf as _mu
+        except Exception:
+            import fitz as _mu
+        doc = _mu.open(stream=dati, filetype="pdf")
+        n = doc.page_count
+        for i in range(min(3, n)):
+            st.image(doc[i].get_pixmap(dpi=100, alpha=False).tobytes("png"), caption=f"Pagina {i + 1} di {n}", width="stretch")
+        if n > 3:
+            st.caption(f"Ti mostro le prime 3 pagine su {n}: per il resto usa «Apri / scarica».")
+        doc.close()
+    except Exception:
+        st.info("Qui l'anteprima non è disponibile: usa «⬇ Apri / scarica» per vedere il documento.")
+
+
 def _ca_riga_documento(d, beni_nomi, pre=""):
-    """Un documento in elenco: dati, apri/scarica, invia, correggi, elimina."""
+    """Un documento in elenco: dati, apri/scarica, anteprima, invia, correggi, elimina."""
     f = d.get("file") or {}
-    st.markdown(f"<div class='ca-card'><b>📄 {_ca_testo(d.get('titolo'))}</b><br>"
-                + _ca_chip(_ca_testo(d.get("tipo") or "Documento")) + (_ca_chip("🏠 " + _ca_testo(beni_nomi.get(d.get("bene_id"), "")), "ca-ok") if beni_nomi.get(d.get("bene_id")) else _ca_chip("non collegato", "ca-scaduta"))
-                + "<br><span style='font-size:.85rem'>" + " · ".join(x for x in (_ca_testo(d.get("marca")), _ca_testo(d.get("modello")), ("S/N " + _ca_testo(d.get("seriale"))) if d.get("seriale") else "",
-                                                                                   _ca_data_it(d.get("data_doc")), CA_LINGUE.get(d.get("lingua"), "")) if x) + "</span></div>", unsafe_allow_html=True)
     k = f"{pre}{d['id']}"
-    b1, b2, b3 = st.columns(3, gap="small")
+    righe = []
+    if d.get("importo"):
+        righe.append("💶 <b>€ " + ca_importo_fmt(d["importo"]) + "</b>")
+    if d.get("numero_doc"):
+        righe.append("n. " + _ca_testo(d["numero_doc"]))
+    if d.get("data_doc"):
+        righe.append("del " + _ca_data_it(d["data_doc"]))
+    if d.get("periodo_da") and d.get("periodo_a"):
+        righe.append("periodo " + _ca_data_it(d["periodo_da"]) + " → " + _ca_data_it(d["periodo_a"]))
+    if d.get("scadenza_doc"):
+        righe.append("scadenza " + _ca_data_it(d["scadenza_doc"]))
+    app = " · ".join(x for x in (_ca_testo(d.get("marca")), _ca_testo(d.get("modello")), ("S/N " + _ca_testo(d.get("seriale"))) if d.get("seriale") else "") if x)
+    cod = " · ".join(x for x in (("cliente " + _ca_testo(d.get("codice_cliente"))) if d.get("codice_cliente") else "", ("fornitura " + _ca_testo(d.get("codice_fornitura"))) if d.get("codice_fornitura") else "") if x)
+    st.markdown(f"<div class='ca-card'><b>📄 {_ca_testo(d.get('titolo'))}</b><br>"
+                + _ca_chip(_ca_testo(d.get("tipo") or "Documento"))
+                + (_ca_chip("🏠 " + _ca_testo(beni_nomi.get(d.get("bene_id"), "")), "ca-ok") if beni_nomi.get(d.get("bene_id")) else "")
+                + ("<br><span style='font-size:.9rem'>" + " · ".join(righe) + "</span>" if righe else "")
+                + ("<br><span style='font-size:.85rem'>" + app + "</span>" if app else "")
+                + ("<br><span style='font-size:.8rem;opacity:.85'>" + cod + "</span>" if cod else "")
+                + (("<br><span style='font-size:.8rem;opacity:.85'>" + CA_LINGUE.get(d.get("lingua"), "") + "</span>") if d.get("lingua") and CA_LINGUE.get(d.get("lingua")) else "")
+                + "</div>", unsafe_allow_html=True)
     caricato = _ca_leggi_file(f) if f.get("id") else []
+    vedi = st.session_state.setdefault("ca_vedi", [])
+    aperto = d["id"] in vedi
+    b1, b2 = st.columns(2, gap="small")
     if caricato:
         nome, mime, dati = caricato[0]
         b1.download_button("⬇ Apri / scarica", dati, file_name=nome, mime=mime, key=f"ca_dl_{k}", width="stretch")
+        if b2.button("🙈 Chiudi l'anteprima" if aperto else "👁️ Vedi qui", key=f"ca_pv_{k}", width="stretch"):
+            if aperto:
+                vedi.remove(d["id"])
+            else:
+                vedi.append(d["id"])
+            st.rerun()
     elif d.get("link"):
         b1.link_button("🔗 Apri il link", d["link"], width="stretch")
-    if b2.button("✏️ Correggi", key=f"ca_cor_{k}", width="stretch"):
+    else:
+        b1.caption("⚠️ Il file non è più disponibile.")
+    b3, b4 = st.columns(2, gap="small")
+    if b3.button("✏️ Correggi", key=f"ca_cor_{k}", width="stretch"):
         st.session_state["ca_correggi"] = d["id"]
         st.rerun()
-    if b3.button("🗑️ Elimina", key=f"ca_del_{k}", width="stretch"):
+    if b4.button("🗑️ Elimina", key=f"ca_del_{k}", width="stretch"):
         st.session_state["ca_elimina_doc"] = d["id"]
         st.rerun()
-    if caricato and caricato[0][1].startswith("image/"):
-        st.image(caricato[0][2], width="stretch")
+    if caricato and aperto:
+        _ca_anteprima(*caricato[0])
     if "_fa_inv_voce" in globals() and caricato:
         _fa_inv_voce(f"casa_{k}", "📤 Invia questo documento (email, WhatsApp…)", f"📄 {d.get('titolo', 'Documento')}",
-                     [("Tipo", d.get("tipo")), ("Marca", d.get("marca")), ("Modello", d.get("modello")), ("Numero di serie", d.get("seriale"))], [f])
+                     [("Tipo", d.get("tipo")), ("Emesso da", d.get("ente")), ("Importo", ("€ " + ca_importo_fmt(d["importo"])) if d.get("importo") else ""), ("Numero", d.get("numero_doc")),
+                      ("Scadenza", _ca_data_it(d.get("scadenza_doc")) if d.get("scadenza_doc") else ""), ("Marca", d.get("marca")), ("Modello", d.get("modello")), ("Numero di serie", d.get("seriale"))], [f])
     conf = d.get("conferma") or {}
     if conf:
         st.caption(f"Confermato da {conf.get('da', '')} il {_ca_data_it(conf.get('il'))}" + (f" · corretti: {', '.join(conf['modificati'])}" if conf.get("modificati") else " · nessuna correzione"))
@@ -680,32 +1115,48 @@ def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, m
     def aff(k):
         c = campi.get(k) or {}
         return f" {_CA_AFF.get(c.get('affidabilita'), '')}" if c and not d else ""
+    arg_v = val("argomento") if val("argomento") in CA_ARGOMENTI else (_ca_argomento_di(d) if d else "Altro")
+    e_app = arg_v in _CA_ARG_APPARECCHIO
     with st.form(chiave, border=False):
-        tipo_v = val("tipo") if val("tipo") in CA_TIPI else "Manuale d'uso"
+        argomento = st.selectbox("Argomento: dove lo ritroverai" + aff("argomento"), CA_ARGOMENTI, index=CA_ARGOMENTI.index(arg_v), format_func=lambda a: f"{_CA_ICONE_ARG.get(a, '')} {a}")
+        tipo_v = val("tipo") if val("tipo") in CA_TIPI else ("Manuale d'uso" if e_app else "Bolletta o fattura")
         tipo = st.selectbox("Che documento è" + aff("tipo"), CA_TIPI, index=CA_TIPI.index(tipo_v))
-        cats = list(CA_CATEGORIE)
-        cat = st.selectbox("Categoria" + aff("categoria"), cats, index=cats.index(val("categoria")) if val("categoria") in cats else len(cats) - 1)
-        sotto = st.text_input("Che apparecchio è" + aff("sottocategoria"), value=val("sottocategoria") or "")
-        c1, c2 = st.columns(2)
-        marca = c1.text_input("Marca" + aff("marca"), value=val("marca") or "")
-        modello = c2.text_input("Modello" + aff("modello"), value=val("modello") or "")
-        seriale = st.text_input("Numero di serie" + aff("seriale"), value=val("seriale") or "")
+        ente = st.text_input("Chi lo ha emesso (azienda, ente, negozio o marca)" + aff("ente"), value=val("ente") or "", help="Con questo nome i documenti si raggruppano: tutte le bollette di «Enel Energia» stanno insieme.")
         c3, c4 = st.columns(2)
         data_doc = c3.date_input("Data del documento" + aff("data_doc"), value=_data(val("data_doc")), format="DD/MM/YYYY")
         lingue = list(CA_LINGUE)
         lingua = c4.selectbox("Lingua" + aff("lingua"), lingue, index=lingue.index(val("lingua")) if val("lingua") in lingue else lingue.index(""), format_func=lambda x: CA_LINGUE[x])
+        with st.expander("🧾 Dati della bolletta o della fattura", expanded=not e_app):
+            c5, c6 = st.columns(2)
+            numero_doc = c5.text_input("Numero del documento" + aff("numero_doc"), value=val("numero_doc") or "")
+            importo = c6.text_input("Importo totale in € (es. 87,35)" + aff("importo"), value=ca_importo_fmt(val("importo")) if val("importo") else "")
+            c7, c8 = st.columns(2)
+            periodo_da = c7.date_input("Periodo: dal" + aff("periodo_da"), value=_data(val("periodo_da")), format="DD/MM/YYYY")
+            periodo_a = c8.date_input("Periodo: al" + aff("periodo_a"), value=_data(val("periodo_a")), format="DD/MM/YYYY")
+            scadenza_doc = st.date_input("Scadenza del pagamento" + aff("scadenza_doc"), value=_data(val("scadenza_doc")), format="DD/MM/YYYY")
+            codice_cliente = st.text_input("Codice cliente o contratto" + aff("codice_cliente"), value=val("codice_cliente") or "")
+            codice_fornitura = st.text_input("Codice della fornitura (POD luce, PDR gas, telefono, polizza…)" + aff("codice_fornitura"), value=val("codice_fornitura") or "")
+        with st.expander("🔧 Dati dell'apparecchio (per manuali, garanzie e acquisti)", expanded=e_app):
+            cats = list(CA_CATEGORIE)
+            cat = st.selectbox("Categoria" + aff("categoria"), cats, index=cats.index(val("categoria")) if val("categoria") in cats else len(cats) - 1)
+            sotto = st.text_input("Che apparecchio è" + aff("sottocategoria"), value=val("sottocategoria") or "")
+            c1, c2 = st.columns(2)
+            marca = c1.text_input("Marca" + aff("marca"), value=val("marca") or "")
+            modello = c2.text_input("Modello" + aff("modello"), value=val("modello") or "")
+            seriale = st.text_input("Numero di serie" + aff("seriale"), value=val("seriale") or "")
         opz = ["__nuovo__", ""] + [b["id"] for b in beni]
         nomi = {b["id"]: f"{b.get('nome', '')} ({b.get('marca', '')} {b.get('modello', '')})".replace("( )", "").strip() for b in beni}
-        corrente = (d or {}).get("bene_id") if d else (proposta_bene or "__nuovo__")
+        corrente = (d or {}).get("bene_id") if d else (proposta_bene or ("__nuovo__" if (e_app and (val("marca") or val("modello"))) else ""))
         etic = {"__nuovo__": "➕ Crea un nuovo bene con questi dati", "": "— Non collegare a nessun bene —"}
-        bene = st.selectbox("Collega a questo bene" + (f" ({', '.join(motivi)})" if motivi and not d and proposta_bene else ""), opz, index=opz.index(corrente) if corrente in opz else 1,
-                            format_func=lambda x: etic.get(x) or nomi.get(x, x))
-        titolo = st.text_input("Titolo", value=(d or {}).get("titolo", "") if d else "", placeholder="se lo lasci vuoto lo scrivo io")
-        link = st.text_input("Link al manuale online (facoltativo)", value=(d or {}).get("link", "") if d else "")
+        bene = st.selectbox("Collega a un bene dell'inventario (facoltativo)" + (f" ({', '.join(motivi)})" if motivi and not d and proposta_bene else ""), opz, index=opz.index(corrente) if corrente in opz else 1,
+                            format_func=lambda x: etic.get(x) or nomi.get(x, x), help="Le bollette di solito non vanno collegate a un bene: restano nel loro argomento.")
+        titolo = st.text_input("Titolo", value=(d or {}).get("titolo", "") if d else "", placeholder="se lo lasci vuoto lo scrivo io (argomento, ente, numero, data, importo)")
+        link = st.text_input("Link al documento online (facoltativo)", value=(d or {}).get("link", "") if d else "")
         note = st.text_input("Note (facoltative)", value=(d or {}).get("note", "") if d else "")
         ok = st.form_submit_button("✅ Conferma e archivia" if not d else "💾 Salva le correzioni", type="primary", width="stretch")
-    return ok, {"tipo": tipo, "categoria": cat, "sottocategoria": sotto, "marca": marca, "modello": modello, "seriale": seriale, "data_doc": data_doc, "lingua": lingua,
-                "bene_id": bene, "titolo": titolo, "link": link, "note": note}
+    return ok, {"argomento": argomento, "tipo": tipo, "ente": ente, "data_doc": data_doc, "lingua": lingua, "numero_doc": numero_doc, "importo": _ca_importo_da_testo(importo), "periodo_da": periodo_da,
+                "periodo_a": periodo_a, "scadenza_doc": scadenza_doc, "codice_cliente": codice_cliente, "codice_fornitura": codice_fornitura, "categoria": cat, "sottocategoria": sotto,
+                "marca": marca, "modello": modello, "seriale": seriale, "bene_id": bene, "titolo": titolo, "link": link, "note": note}
 
 
 def _ca_mime(nome, tipo, dati):
@@ -1000,7 +1451,7 @@ def _ca_riduci_foto(nome, dati, massimo=None):
 def _ca_tab_manuali(c):
     beni = c.get("beni", [])
     nomi = {b["id"]: b.get("nome", "") for b in beni}
-    st.markdown("#### ➕ Archivia un manuale o un documento")
+    st.markdown("#### ➕ Archivia un documento: manuale, bolletta, fattura, polizza…")
     st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
                "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
     n = st.session_state.get("ca_giro", 0)
@@ -1128,7 +1579,7 @@ def _ca_tab_manuali(c):
                     st.session_state["ca_giro"] = n + 1
                     st.session_state.pop("ca_bozza", None)
                     st.session_state.pop("ca_bozza_in", None)
-                    st.session_state["messaggio"] = "✅ Documento archiviato, con il file originale."
+                    st.session_state["messaggio"] = f"✅ Documento archiviato in «{val.get('argomento') or 'Altro'}»" + (f" › «{val['ente']}»" if val.get("ente") else "") + ", con il file originale: lo ritrovi nella scheda Documenti."
                     st.rerun()
                 except Exception as e:
                     st.error(f"Non sono riuscito a salvare: {e}")
@@ -1168,28 +1619,52 @@ def _ca_tab_manuali(c):
             if e2.button("No, tienilo", key="ca_del_no", width="stretch"):
                 st.session_state.pop("ca_elimina_doc", None)
                 st.rerun()
-    # ---- elenco
+    # ---- l'archivio: per ARGOMENTO (Luce, Gas, Acqua…), dentro per ENTE (la compagnia, il negozio, la marca), dentro per DATA
     docs = c.get("documenti", [])
     st.divider()
     if not docs:
-        st.info("Non hai ancora archiviato nessun documento. Carica qui sopra il primo manuale.")
+        st.info("Non hai ancora archiviato nessun documento. Carica qui sopra il primo: un manuale, una bolletta, una fattura, una polizza…")
         return
     st.markdown(f"#### 📚 I tuoi documenti ({len(docs)})")
-    cerca = st.text_input("Cerca", key="ca_cerca", placeholder="nome, marca, modello, numero di serie…", label_visibility="collapsed")
+    cerca = st.text_input("Cerca", key="ca_cerca", placeholder="ente, titolo, numero, marca, modello…", label_visibility="collapsed")
+    presenti = [a_ for a_ in CA_ARGOMENTI if any(_ca_argomento_di(d) == a_ for d in docs)]
     f1, f2 = st.columns(2, gap="small")
-    ftipo = f1.selectbox("Tipo", [""] + CA_TIPI, format_func=lambda x: x or "📑 Tutti i tipi", key="ca_ftipo")
+    farg = f1.selectbox("Argomento", [""] + presenti, format_func=lambda x: "📂 Tutti gli argomenti" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x} ({sum(1 for d in docs if _ca_argomento_di(d) == x)})", key="ca_farg")
     fbene = f2.selectbox("Bene", ["", "__nessuno__"] + [b["id"] for b in beni], format_func=lambda x: "🏠 Tutti i beni" if not x else "non collegati" if x == "__nessuno__" else nomi.get(x, x), key="ca_fbene")
+    anni = sorted({(_ca_ordine(d) or "")[:4] for d in docs if (_ca_ordine(d) or "")[:4].isdigit()}, reverse=True)
+    fanno = st.selectbox("Anno", [""] + anni, format_func=lambda x: "📅 Tutti gli anni" if not x else x, key="ca_fanno") if len(anni) > 1 else ""
     q = _ca_norm(cerca)
-    for d in sorted(docs, key=lambda x: x.get("creato_il", ""), reverse=True):
-        if ftipo and d.get("tipo") != ftipo:
+    gruppi = {}
+    for d in docs:
+        if farg and _ca_argomento_di(d) != farg:
+            continue
+        if fanno and not _ca_ordine(d).startswith(fanno):
             continue
         if fbene == "__nessuno__" and d.get("bene_id"):
             continue
         if fbene and fbene != "__nessuno__" and d.get("bene_id") != fbene:
             continue
-        if q and q not in _ca_norm(" ".join(str(d.get(k) or "") for k in ("titolo", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria"))):
+        if q and q not in _ca_norm(" ".join(str(d.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura"))):
             continue
-        _ca_riga_documento(d, nomi, "m")
+        gruppi.setdefault(_ca_argomento_di(d), {}).setdefault(_ca_ente_di(d), []).append(d)
+    if not gruppi:
+        st.info("Nessun documento corrisponde alla ricerca.")
+        return
+    for arg in [a_ for a_ in CA_ARGOMENTI if a_ in gruppi]:
+        enti = gruppi[arg]
+        st.markdown(f"### {_CA_ICONE_ARG.get(arg, '')} {arg} · {sum(len(v) for v in enti.values())}")
+        for ente, lista in sorted(enti.items(), key=lambda kv: max(_ca_ordine(x) for x in kv[1]), reverse=True):
+            lista.sort(key=_ca_ordine, reverse=True)
+            ultimo = _ca_data_it(lista[0].get("data_doc")) if lista[0].get("data_doc") else ""
+            etichetta = f"🏢 {ente} · {len(lista)} document{'o' if len(lista) == 1 else 'i'}" + (f" · ultimo {ultimo}" if ultimo else "")
+            with st.expander(etichetta, expanded=bool(q) or len(enti) == 1 or bool(farg)):
+                chiave_tutti = f"ca_tutti_{arg}_{ente}"
+                visibili = lista if st.session_state.get(chiave_tutti) else lista[:12]
+                for d in visibili:
+                    _ca_riga_documento(d, nomi, "m")
+                if len(lista) > len(visibili) and st.button(f"Mostra tutti i {len(lista)} documenti", key="b_" + chiave_tutti):
+                    st.session_state[chiave_tutti] = True
+                    st.rerun()
 
 
 def _ca_tab_beni(c):
@@ -1246,7 +1721,7 @@ def _ca_scheda_bene(c, b, nomi):
         for d in docs:
             _ca_riga_documento(d, nomi, "b")
     else:
-        st.caption("Nessun documento collegato: caricane uno nella scheda «Manuali» e scegli questo bene.")
+        st.caption("Nessun documento collegato: caricane uno nella scheda «Documenti» e scegli questo bene.")
     liberi = [d for d in c.get("documenti", []) if not d.get("bene_id")]
     if liberi:
         sc = st.selectbox("Collega un documento già archiviato", [""] + [d["id"] for d in liberi], key=f"ca_coll_{b['id']}",
@@ -1365,7 +1840,7 @@ def schermata_casa():
         st.warning(f"🛡️ La garanzia di **{nome}** scade tra {g} giorni.")
     for nome, voce, g in sc["manutenzioni"][:3]:
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
-    t1, t2, t3 = st.tabs(["🏠 Beni", "📚 Manuali", "🔧 Manutenzioni"])
+    t1, t2, t3 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni"])
     with t1:
         _ca_tab_beni(c)
     with t2:
@@ -1385,15 +1860,17 @@ if "_NOMI_SEZIONI" in globals():                                    # la guida d
     _NOMI_SEZIONI.setdefault("casa", "🏡 Casa")
     _GUIDE.setdefault("casa", [
         ("🏡 Cos'è la sezione Casa",
-         """La sezione **Casa** raccoglie **i beni della tua casa** (caldaia, climatizzatori, elettrodomestici, TV, allarmi, impianti), **i loro manuali e documenti** e **le manutenzioni**.
-Ha tre schede in basso: **🏠 Beni**, **📚 Manuali**, **🔧 Manutenzioni**.
+         """La sezione **Casa** raccoglie **i beni della tua casa** (caldaia, climatizzatori, elettrodomestici, TV, allarmi, impianti), **tutti i documenti di casa** (manuali, garanzie, bollette di luce, gas e acqua, fatture, polizze…) e **le manutenzioni**.
+Ha tre schede in basso: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni**.
 Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
          "casa abitazione beni inventario caldaia lavatrice manuali manutenzioni sezione"),
-        ("📚 Archiviare un manuale",
-         """1. Apri **Casa** e tocca la scheda **📚 Manuali**.
-2. In **Archivia un manuale o un documento** carica un **PDF**, una **foto** o una **scansione** (massimo 8 MB), oppure usa **🔗 prendi il manuale da un link**.
-3. Leggo il documento e ti propongo **tipo, categoria, apparecchio, marca, modello, numero di serie, data e lingua**. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
-4. **Controlla e correggi** quello che non va, scegli a quale **bene** collegarlo (o crea un nuovo bene) e tocca **✅ Conferma e archivia**.
+        ("📚 Archiviare un documento (manuale, bolletta, fattura…)",
+         """1. Apri **Casa** e tocca la scheda **📚 Documenti**.
+2. In **Archivia un documento** carica un **PDF**, una **foto** o una **scansione** (massimo 8 MB), oppure usa **🔗 prendi il manuale da un link**.
+3. Leggo il documento e capisco **di cosa parla** (Luce, Gas, Acqua, Telefono e Internet, Rifiuti, Condominio, Assicurazioni, Manuali…). Per una **bolletta o fattura** ti propongo **chi l'ha emessa, importo, numero, data, periodo, scadenza e codici** (cliente, POD, PDR…); per un **manuale** categoria, marca, modello e numero di serie. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
+4. **Controlla e correggi** quello che non va. Le bollette di solito **non si collegano a un bene**; i manuali sì (o crei un nuovo bene). Poi tocca **✅ Conferma e archivia**.
+
+**Come ritrovi i documenti:** sono ordinati per **argomento** (💡 Luce, 🔥 Gas, 💧 Acqua…); dentro ogni argomento c'è una **linguetta per ogni azienda o ente** (per esempio «Enel Energia», «SMAT», «TIM»); dentro, i documenti dal **più recente** al più vecchio. Con **⬇ Apri / scarica** apri il file originale, con **👁️ Vedi qui** lo guardi nella pagina. Puoi cercare per nome, numero o importo e filtrare per argomento e anno.
 
 Puoi **scattare una foto** (tasto «📷 Scatta foto», che apre la fotocamera posteriore), prenderla **dalla galleria**, oppure toccare il pulsante arancione **«📎 Scegli il PDF o il file»**: il telefono ti fa scegliere qualsiasi file, anche con un nome strano. Se qualcosa non va, il riquadro **«🔎 Cosa ha ricevuto l'app finora»** dice a che punto si ferma. Un PDF si può anche prendere da un **link** (anche di Google Drive o Dropbox). Il **file originale resta com'è**, identico (una foto enorme viene ridotta, e viene segnato). Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
          "archiviare manuale manuali caricare pdf foto scansione riconoscimento marca modello numero di serie conferma"),
@@ -1410,7 +1887,7 @@ In cima alla pagina Casa compaiono gli avvisi di **garanzie** in scadenza e **ma
 **WhatsApp** è gratuito ma serve la tua **chiave personale di CallMeBot**: la spiegazione è nello stesso riquadro. Gli **SMS** sono a pagamento (servizio Twilio configurato dall'amministratore).""",
          "manutenzione intervento controllo caldaia tecnico ditta prossimo controllo scadenza garanzia"),
         ("✏️ Correggere o eliminare un documento",
-         """Nell'elenco dei documenti tocca **✏️ Correggi** per cambiare tipo, categoria, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
+         """Nell'elenco dei documenti tocca **✏️ Correggi** per cambiare argomento, azienda, importo, date, tipo, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
 Tocca **🗑️ Elimina** per toglierlo (ti chiedo conferma). **📤 Invia** lo manda per email, WhatsApp o Telegram.""",
          "correggere modificare eliminare cancellare documento manuale inviare condividere"),
     ])
