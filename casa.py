@@ -122,6 +122,31 @@ def _ca_norm(t):
 # ---------------------------------------------------------------------------------------------------------------------
 # Lettura del testo
 # ---------------------------------------------------------------------------------------------------------------------
+def _ca_ocr_pdf(dati, max_pagine=3):
+    """Per i PDF che sono solo immagini (scansioni): trasforma le prime pagine in immagini e le legge con l'OCR, come una foto. Ritorna il testo (vuoto se non riesce)."""
+    if not ("_doc_ocr_lingue" in globals() and "_doc_tesseract" in globals() and _doc_ocr_lingue()):
+        return ""
+    try:
+        try:
+            import pymupdf as _mu
+        except Exception:
+            import fitz as _mu
+        from PIL import Image
+        doc = _mu.open(stream=dati, filetype="pdf")
+        parti = []
+        for i in range(min(max_pagine, doc.page_count)):
+            pix = doc[i].get_pixmap(dpi=170, alpha=False)
+            im = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            im.thumbnail((2400, 2400))
+            parti.append(_doc_tesseract(im, "6"))
+            if i == 0:                                                       # la prima pagina (copertina, dati dell'apparecchio) si legge con due metodi
+                parti.append(_doc_tesseract(im, "11"))
+        doc.close()
+        return "\n".join(parti)
+    except Exception:
+        return ""
+
+
 def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
     """(testo, info). Dai PDF con testo si legge il testo; dalle foto e dalle scansioni, se c'è, con l'OCR. info = {pagine, titolo, data_meta, scansione, metodo}."""
     info = {"pagine": None, "titolo": "", "data_meta": None, "scansione": False, "metodo": ""}
@@ -147,10 +172,18 @@ def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
             testo = "\n".join(parti)[:max_car]
             info["metodo"] = "testo del PDF"
             if len(re.sub(r"\s+", "", testo)) < 40:
+                ocr = _ca_ocr_pdf(dati)                                      # PDF senza testo = scansione: si prova a leggerlo come una foto
+                if len(re.sub(r"\s+", "", ocr)) >= 40:
+                    info["metodo"], info["ocr_pdf"] = "lettura del PDF scansionato (OCR)", True
+                    return ocr[:max_car], info
                 info["scansione"] = True
                 return "", info
             return testo, info
         except Exception:
+            ocr = _ca_ocr_pdf(dati)
+            if len(re.sub(r"\s+", "", ocr)) >= 40:
+                info["metodo"], info["ocr_pdf"] = "lettura del PDF scansionato (OCR)", True
+                return ocr[:max_car], info
             info["scansione"] = True
             return "", info
     if "_doc_ocr_lingue" in globals() and "_doc_tesseract" in globals() and _doc_ocr_lingue():
@@ -309,8 +342,12 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
     stem = re.sub(r"\.[A-Za-z0-9]{2,4}$", "", nome or "").replace("_", " ").replace("-", " ")
     campi = {}
 
+    ocr = "OCR" in str(info.get("metodo") or "")
+
     def metti(k, valore, aff, fonte):
         if valore:
+            if ocr and fonte != "nome del file":                             # la lettura ottica sbaglia più facilmente (lettere e numeri scambiati): un gradino di sicurezza in meno
+                aff = {"alta": "media", "media": "bassa"}.get(aff, aff)
             campi[k] = {"valore": valore, "affidabilita": aff, "fonte": fonte}
     tipo, aff = ca_tipo(testo, stem)
     metti("tipo", tipo, aff, "testo" if testo else "nome del file")
@@ -672,8 +709,8 @@ def _ca_tab_manuali(c):
     beni = c.get("beni", [])
     nomi = {b["id"]: b.get("nome", "") for b in beni}
     st.markdown("#### ➕ Archivia un manuale o un documento")
-    st.caption("Carica un PDF, una foto o una scansione: leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie. "
-               "**Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
+    st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
+               "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
     n = st.session_state.get("ca_giro", 0)
     up = st.file_uploader("PDF, foto o scansione", type=["pdf", "jpg", "jpeg", "png", "webp"], key=f"ca_up_{n}", label_visibility="collapsed")
     with st.expander("🔗 …oppure prendi il manuale da un link"):
@@ -719,6 +756,8 @@ def _ca_tab_manuali(c):
                 st.info("Non sono riuscito a leggere testo dal file: controlla e completa tu i dati qui sotto.")
             else:
                 st.success("Ho letto il documento. I pallini mostrano quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa. **Controlla e correggi** quello che serve.")
+                if ric["info"].get("ocr_pdf"):
+                    st.caption("📷 Questo PDF era una **scansione**: l'ho letto come una foto (solo le prime pagine). Lettere e numeri possono essere sbagliati, soprattutto **modello e numero di serie**: controllali.")
             if sorgente["mime"].startswith("image/"):
                 st.image(sorgente["dati"], width=240)
             ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"))
@@ -1016,7 +1055,7 @@ Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
 3. Leggo il documento e ti propongo **tipo, categoria, apparecchio, marca, modello, numero di serie, data e lingua**. I pallini dicono quanto sono sicuro: 🟢 alta, 🟡 media, 🟠 bassa.
 4. **Controlla e correggi** quello che non va, scegli a quale **bene** collegarlo (o crea un nuovo bene) e tocca **✅ Conferma e archivia**.
 
-Il **file originale resta com'è**, identico. Se il PDF è una scansione senza testo, compili tu i dati.""",
+Il **file originale resta com'è**, identico. Un PDF fatto con lo scanner (solo immagini) viene letto come una foto, ma solo le **prime 3 pagine**: lettere e numeri possono essere sbagliati, quindi **controlla soprattutto modello e numero di serie**. Se non riesco a leggerlo, compili tu i dati.""",
          "archiviare manuale manuali caricare pdf foto scansione riconoscimento marca modello numero di serie conferma"),
         ("🏠 Aggiungere e collegare un bene",
          """In **🏠 Beni** tocca **➕ Aggiungi un bene** e compila nome, categoria, marca, modello, numero di serie, dove si trova, data di acquisto e garanzia.
