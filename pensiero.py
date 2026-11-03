@@ -224,28 +224,196 @@ _PENSIERI = [
     ("Aiutati, che il ciel t'aiuta.", "Proverbio", "Saggezza popolare"),
     ("L'unione fa la forza.", "Proverbio", "Saggezza popolare"),
     ("Meglio un uovo oggi che una gallina domani.", "Proverbio", "Saggezza popolare"),
+    # --- seconda raccolta
+    ("Tutto scorre.", "Eraclito", "Filosofia"),
+    ("La virtù sta nel mezzo.", "Aristotele", "Filosofia"),
+    ("Il meravigliarsi è il tratto distintivo del filosofo.", "Platone", "Filosofia"),
+    ("La morte non è nulla per noi.", "Epicuro", "Filosofia"),
+    ("Se vuoi essere amato, ama.", "Seneca", "Filosofia"),
+    ("Non è povero chi ha poco, ma chi desidera molto.", "Seneca", "Filosofia"),
+    ("L'ostacolo sulla via diventa la via.", "Marco Aurelio", "Filosofia"),
+    ("La vita dei morti sta nella memoria dei vivi.", "Cicerone", "Storia"),
+    ("Viviamo, mia Lesbia, e amiamo.", "Catullo", "Poesia"),
+    ("Ricordati di conservare l'animo sereno nelle avversità.", "Orazio", "Poesia"),
+    ("Il tempo divora ogni cosa.", "Ovidio", "Poesia"),
+    ("Nulla nasce dal nulla.", "Lucrezio", "Filosofia"),
+    ("Poca favilla gran fiamma seconda.", "Dante Alighieri", "Poesia"),
+    ("E quindi uscimmo a riveder le stelle.", "Dante Alighieri", "Poesia"),
+    ("L'amor che move il sole e l'altre stelle.", "Dante Alighieri", "Poesia"),
+    ("Quant'è bella giovinezza, che si fugge tuttavia! Chi vuol esser lieto, sia: di doman non c'è certezza.", "Lorenzo de' Medici", "Poesia"),
+    ("Amai trite parole che non uno osava.", "Umberto Saba", "Poesia"),
+    ("Ostinato rigore.", "Leonardo da Vinci", "Arte e scienza"),
+    ("Il moto è causa d'ogni vita.", "Leonardo da Vinci", "Arte e scienza"),
+    ("La situazione politica in Italia è grave, ma non è seria.", "Ennio Flaiano", "Letteratura"),
+    ("Conoscere per deliberare.", "Luigi Einaudi", "Politica"),
+    ("La più grande cosa del mondo è sapere essere di se stessi.", "Michel de Montaigne", "Filosofia"),
+    ("Il buon senso è la cosa meglio distribuita del mondo.", "René Descartes", "Filosofia"),
+    ("Il migliore dei mondi possibili.", "Gottfried W. Leibniz", "Filosofia"),
+    ("La vita oscilla come un pendolo tra il dolore e la noia.", "Arthur Schopenhauer", "Filosofia"),
+    ("L'angoscia è la vertigine della libertà.", "Søren Kierkegaard", "Filosofia"),
+    ("Diventa ciò che sei.", "Friedrich Nietzsche", "Filosofia"),
+    ("Meglio essere un Socrate insoddisfatto che un porco soddisfatto.", "John Stuart Mill", "Filosofia"),
+    ("I filosofi hanno soltanto interpretato il mondo; si tratta di cambiarlo.", "Karl Marx", "Filosofia"),
+    ("Ai fatti stessi!", "Edmund Husserl", "Filosofia"),
+    ("Il più profondo principio della natura umana è il desiderio di essere apprezzato.", "William James", "Filosofia"),
+    ("La filosofia occidentale è una serie di note a margine a Platone.", "Alfred N. Whitehead", "Filosofia"),
+    ("Tre passioni, semplici ma irresistibilmente forti, hanno governato la mia vita: il desiderio d'amore, la ricerca della conoscenza e una insopportabile pietà per le sofferenze dell'umanità.", "Bertrand Russell", "Filosofia"),
+    ("L'uomo è l'unica creatura che rifiuta di essere ciò che è.", "Albert Camus", "Filosofia"),
+    ("L'attenzione è la forma più rara e più pura della generosità.", "Simone Weil", "Filosofia"),
+    ("È verità universalmente riconosciuta che uno scapolo in possesso di un'ingente fortuna debba aver bisogno di una moglie.", "Jane Austen", "Letteratura"),
+    ("Non sono un uccello, e nessuna rete mi imprigiona: sono un essere umano libero, con una volontà indipendente.", "Charlotte Brontë, Jane Eyre", "Letteratura"),
+    ("Io accuso.", "Émile Zola", "Letteratura"),
+    ("Attendere e sperare.", "Alexandre Dumas, Il conte di Montecristo", "Letteratura"),
+    ("Il sapere si può comunicare, la saggezza no.", "Hermann Hesse, Siddharta", "Letteratura"),
+    ("Due anime, ahimè, abitano nel mio petto.", "Johann Wolfgang Goethe, Faust", "Letteratura"),
+    ("Aprile è il più crudele dei mesi.", "T. S. Eliot", "Poesia"),
+    ("Così continuiamo a remare, barche controcorrente, risospinti senza posa nel passato.", "F. Scott Fitzgerald, Il grande Gatsby", "Letteratura"),
+    ("Tutto ciò che vediamo o immaginiamo non è che un sogno entro un sogno.", "Edgar Allan Poe", "Poesia"),
+    ("Contengo moltitudini.", "Walt Whitman", "Poesia"),
+    ("Due strade divergevano in un bosco, e io… io presi quella meno battuta: e ciò ha fatto tutta la differenza.", "Robert Frost", "Poesia"),
+    ("Confesso che ho vissuto.", "Pablo Neruda", "Letteratura"),
+    ("Tutto vale la pena se l'anima non è piccola.", "Fernando Pessoa", "Poesia"),
+    ("Se puoi guardare, vedi. Se puoi vedere, osserva.", "José Saramago, Saggio sulla cecità", "Letteratura"),
+    ("Ho provato. Ho fallito. Non importa. Riprova. Fallisci ancora. Fallisci meglio.", "Samuel Beckett", "Letteratura"),
+    ("Coloro che non credono nella magia non la troveranno mai.", "Roald Dahl", "Letteratura"),
+    ("Nulla è troppo bello per essere vero, se è in accordo con le leggi della natura.", "Michael Faraday", "Scienza"),
+    ("Dubitare di tutto o credere a tutto sono due soluzioni ugualmente comode, che ci dispensano entrambe dal riflettere.", "Henri Poincaré", "Scienza"),
+    ("Dobbiamo sapere, e sapremo.", "David Hilbert", "Scienza"),
+    ("Possiamo vedere solo poco davanti a noi, ma vediamo molto di ciò che c'è da fare.", "Alan Turing", "Scienza"),
+    ("La scienza è più di un corpo di conoscenze: è un modo di pensare.", "Carl Sagan", "Scienza"),
+    ("L'oscurità non può scacciare l'oscurità: solo la luce può farlo. L'odio non può scacciare l'odio: solo l'amore può farlo.", "Martin Luther King", "Storia"),
+    ("Un governo del popolo, dal popolo, per il popolo.", "Abraham Lincoln", "Storia"),
+    ("Libera Chiesa in libero Stato.", "Camillo Benso, conte di Cavour", "Storia"),
+    ("Obbedisco.", "Giuseppe Garibaldi", "Storia"),
+    ("Qui si fa l'Italia o si muore.", "Giuseppe Garibaldi", "Storia"),
+    ("Pensiero e azione.", "Giuseppe Mazzini", "Storia"),
+    ("Fatta l'Italia, bisogna fare gli italiani.", "Massimo d'Azeglio", "Storia"),
+    ("Il colore è un mezzo per esercitare un'influenza diretta sull'anima.", "Wassily Kandinsky", "Arte e scienza"),
+    ("Torniamo all'antico e sarà un progresso.", "Giuseppe Verdi", "Arte e scienza"),
+    ("Chi dorme non piglia pesci.", "Proverbio", "Saggezza popolare"),
+    ("Non è tutto oro quel che luccica.", "Proverbio", "Saggezza popolare"),
+    ("Chi trova un amico trova un tesoro.", "Proverbio", "Saggezza popolare"),
+    ("Il tempo è galantuomo.", "Proverbio", "Saggezza popolare"),
+    ("La fretta è cattiva consigliera.", "Proverbio", "Saggezza popolare"),
+    ("Chi semina vento raccoglie tempesta.", "Proverbio", "Saggezza popolare"),
+    ("Tutte le strade portano a Roma.", "Proverbio", "Saggezza popolare"),
+    ("Gli faremo un'offerta che non potrà rifiutare.", "Il padrino (1972)", "Cinema"),
+    ("Si può fare!", "Frankenstein Junior (1974)", "Cinema"),
+    ("Dove andiamo, non c'è bisogno di strade.", "Ritorno al futuro (1985)", "Cinema"),
+    ("Verso l'infinito e oltre!", "Toy Story (1995)", "Cinema"),
+    ("Continua a nuotare.", "Alla ricerca di Nemo (2003)", "Cinema"),
+    ("La vita trova sempre la sua strada.", "Jurassic Park (1993)", "Cinema"),
+    ("Com'è umano lei!", "Fantozzi (1975)", "Cinema"),
+    ("E.T. telefono casa.", "E.T. l'extra-terrestre (1982)", "Cinema"),
+    ("Sono il re del mondo!", "Titanic (1997)", "Cinema"),
 ]
 
-_ICONE = {"Filosofia": "🏛️", "Saggezza antica": "🏺", "Storia": "📜", "Teatro": "🎭", "Poesia": "🪶", "Letteratura": "📖", "Saggezza d'Oriente": "🪷", "Arte e scienza": "🎨",
+_ICONE = {"I miei pensieri": "✍️", "Filosofia": "🏛️", "Saggezza antica": "🏺", "Storia": "📜", "Teatro": "🎭", "Poesia": "🪶", "Letteratura": "📖", "Saggezza d'Oriente": "🪷", "Arte e scienza": "🎨",
           "Politica": "⚖️", "Scienza": "🔭", "Educazione": "🎓", "Impegno civile": "🕊️", "Innovazione": "💡", "Saggezza popolare": "🌾", "Cinema": "🎬"}
 
 
-def pensiero_indice(giorno, spostamento=0):
+def pensiero_indice(giorno, spostamento=0, n=None):
     """Quale frase tocca in un giorno: un ordine mescolato che le fa passare tutte prima di ripetere."""
-    n = len(_PENSIERI)
+    n = n or len(_PENSIERI)
     return ((giorno.toordinal() + int(spostamento)) * 7919 + 13) % n
 
 
-def pensiero_del_giorno(giorno=None, spostamento=0):
+def pensiero_miei():
+    """Le frasi aggiunte da te: [{id, t, a}]."""
+    try:
+        return [x for x in (_ca_dati().get("pensieri_miei") or []) if isinstance(x, dict) and str(x.get("t") or "").strip()]
+    except Exception:
+        return []
+
+
+def pensiero_tutti(miei=None):
+    miei = pensiero_miei() if miei is None else miei
+    return list(_PENSIERI) + [(x["t"], x.get("a") or "Una frase che ti piace", "I miei pensieri") for x in miei]
+
+
+def pensiero_del_giorno(giorno=None, spostamento=0, miei=None):
     giorno = giorno or (oggi() if "oggi" in globals() else date.today())
-    return _PENSIERI[pensiero_indice(giorno, spostamento)]
+    tutti = pensiero_tutti(miei)
+    return tutti[pensiero_indice(giorno, spostamento, len(tutti))]
+
+
+def pensiero_leggi_righe(testo):
+    """Da un testo incollato (una frase per riga, «frase — autore») alle frasi: [(frase, autore)]. Toglie virgolette e numerazioni; scarta righe vuote o troppo lunghe."""
+    import re
+    out = []
+    for riga in str(testo or "").splitlines():
+        r = riga.strip()
+        r = re.sub(r"^\s*(?:\d{1,3}[\.\)]|[-•*])\s+", "", r).strip()                         # «1. », «- », «• »
+        if len(r) < 8:
+            continue
+        autore = ""
+        m = re.match(r"^(.*\S)\s+[—–-]\s+([^—–-]{2,70})$", r) or re.match(r"^(.*\S)\s*\(([^()]{2,70})\)$", r)
+        if m:
+            r, autore = m.group(1).strip(), m.group(2).strip()
+        r = r.strip("«»\"“”' ").strip()
+        if 8 <= len(r) <= 450:
+            out.append((r, autore.strip(" ,.;")))
+    return out
+
+
+def _pe_dialogo_togli(ids):
+    def _finestra():
+        st.warning(f"Togliere {len(ids)} {'frase' if len(ids) == 1 else 'frasi'} dai tuoi pensieri?")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglile", key="pe_togli_si", type="primary", width="stretch"):
+            _ca_salva(lambda cc: cc.__setitem__("pensieri_miei", [x for x in cc.get("pensieri_miei", []) if x.get("id") not in ids]), "Pensieri: tolti")
+            st.session_state.pop("pe_togli_sel", None)
+            st.rerun()
+        if s2.button("No, tienile", key="pe_togli_no", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli i miei pensieri")(_finestra)()
+
+
+def _pe_aggiungi_cb():
+    """Al tocco del pulsante: aggiunge le frasi scritte (senza doppioni) e svuota la casella."""
+    import uuid
+    miei = pensiero_miei()
+    anteprima = pensiero_leggi_righe(st.session_state.get("pe_nuove", ""))
+    esistenti = {x["t"].strip().lower() for x in miei} | {f.strip().lower() for f, _, _ in _PENSIERI}
+    nuove, saltate = [], 0
+    for fr, au in anteprima:
+        if fr.lower() in esistenti:
+            saltate += 1
+            continue
+        esistenti.add(fr.lower())
+        nuove.append({"id": uuid.uuid4().hex[:8], "t": fr, "a": au})
+    if nuove:
+        _ca_salva(lambda cc, nv=nuove: cc.__setitem__("pensieri_miei", list(cc.get("pensieri_miei", [])) + nv), "Pensieri: aggiunti")
+    st.session_state["pe_nuove"] = ""
+    st.session_state["pe_msg"] = f"✅ Aggiunte {len(nuove)} frasi." + (f" ({saltate} c'erano già: le ho saltate.)" if saltate else "")
+
+
+def pensiero_miei_pannello():
+    """«✍️ I miei pensieri»: incolli le frasi che ti piacciono (anche da Aphorism.it, frasi.net o dai libri) ed entrano nella rotazione."""
+    import uuid
+    miei = pensiero_miei()
+    with st.expander(f"✍️ I miei pensieri ({len(miei)}) · aggiungi le frasi che ti piacciono"):
+        st.caption("Incolla qui **una o più frasi, una per riga**. Per indicare l'autore scrivi **«frase — autore»** (con un trattino lungo o corto). Entrano subito nella rotazione del pensiero del giorno. "
+                   "Puoi copiarle da **Aphorism.it**, **frasi.net**, da un libro o da dove vuoi.")
+        testo = st.text_area("Frasi", key="pe_nuove", height=130, placeholder="La vita è ciò che accade mentre sei impegnato a fare altri progetti — John Lennon\nChi ha un perché abbastanza forte… — Nietzsche", label_visibility="collapsed")
+        anteprima = pensiero_leggi_righe(testo)
+        if testo.strip():
+            st.caption(f"Ho riconosciuto **{len(anteprima)}** {'frase' if len(anteprima) == 1 else 'frasi'}.")
+        st.button("💾 Aggiungi alla raccolta", key="pe_aggiungi", type="primary", width="stretch", disabled=not anteprima, on_click=_pe_aggiungi_cb)
+        if st.session_state.get("pe_msg"):
+            st.success(st.session_state.pop("pe_msg"))
+        if miei:
+            scelte = st.multiselect("Togli alcune delle mie frasi", [x["id"] for x in miei], key="pe_togli_sel", format_func=lambda i: next((f"{x['t'][:60]}…" if len(x['t']) > 60 else x['t']) + (f" — {x['a']}" if x.get("a") else "") for x in miei if x["id"] == i))
+            if scelte and st.button("🗑️ Togli le selezionate", key="pe_togli_btn", width="stretch"):
+                _pe_dialogo_togli(set(scelte))
 
 
 def pensiero_scheda(giorno=None):
     """La scheda del pensiero nella Home."""
     giorno = giorno or (oggi() if "oggi" in globals() else date.today())
     spost = st.session_state.get("pensiero_altro", 0)
-    frase, autore, ambito = pensiero_del_giorno(giorno, spost)
+    miei = pensiero_miei()
+    frase, autore, ambito = pensiero_del_giorno(giorno, spost, miei)
     st.markdown(
         "<style>.pg-card{background:linear-gradient(135deg,#ede7f6 0%,#d1c4e9 55%,#b39ddb 100%);border-radius:22px;padding:14px 18px 12px;margin:10px 0 8px;color:#311b92;"
         "box-shadow:0 6px 18px rgba(49,27,146,.18);border:2px solid rgba(255,255,255,.7)}"
@@ -261,3 +429,5 @@ def pensiero_scheda(giorno=None):
     if "inv_voce" in globals():
         with c2:
             inv_voce("pensiero_invia", "📤 Invia", "Pensiero del giorno", f"«{frase}»\n— {autore}", [])
+    if "_ca_dati" in globals() and "_ca_salva" in globals():
+        pensiero_miei_pannello()

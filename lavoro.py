@@ -189,7 +189,7 @@ def lv_tab_buste(c):
     st.markdown("#### ➕ Carica una busta paga")
     st.caption("Carica il **PDF**, una **foto** o una **scansione** della busta paga: leggo mese, **lordo**, **netto** e **trattenute** e te li propongo. **Controlli, correggi e confermi tu.** Il file resta com'è.")
     up = _ca_pannello_caricamento(n)
-    _ca_flusso_documento(c, [], n, up, None, None, lavoro=True)
+    _ca_flusso_documento(c, [], n, up, None, None, lavoro=True, finestra=True)
     if "_ca_busta_a_mano" in globals():
         _ca_busta_a_mano()
     _ca_correzione(c, [])
@@ -243,6 +243,163 @@ def lv_tab_grafici(c):
     lv_esporta([d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"], "📤 Invia il riepilogo anno per anno", "grafici")
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# 🤝 SINDACATO · CAF · PATRONATO … la rubrica del lavoro
+# ---------------------------------------------------------------------------------------------------------------------
+_LV_TIPI = {"Sindacato": ("🤝", "#1565c0"), "CAF": ("🧾", "#2e7d32"), "Patronato": ("🛡️", "#6a1b9a"), "Consulente del lavoro": ("💼", "#ef6c00"), "Commercialista": ("📊", "#00838f"),
+            "Avvocato": ("⚖️", "#4e342e"), "INPS": ("🏛️", "#37474f"), "Agenzia delle Entrate": ("🏦", "#455a64"), "Altro": ("📌", "#757575")}
+
+
+def _lv_badge(tipo, altro=""):
+    icona, col = _LV_TIPI.get(tipo, _LV_TIPI["Altro"])
+    testo = (altro or tipo) if tipo == "Altro" else tipo
+    return f"<span style='background:{col};color:#fff;border-radius:999px;padding:3px 12px;font-weight:800;font-size:.8rem'>{icona} {_h.escape(testo)}</span>"
+
+
+def _lv_tel(t):
+    return "".join(ch for ch in str(t or "") if ch.isdigit() or ch == "+")
+
+
+def _lv_wa(cell):
+    """Il numero per WhatsApp (con il prefisso del paese, senza + né spazi): un cellulare italiano «333 1234567» diventa 393331234567. '' se non sembra un cellulare."""
+    d = "".join(ch for ch in str(cell or "") if ch.isdigit())
+    if str(cell or "").strip().startswith("00"):
+        d = d[2:]
+    if not d:
+        return ""
+    if str(cell or "").strip().startswith("+") or str(cell or "").strip().startswith("00"):
+        return d
+    if d.startswith("39") and len(d) >= 11:
+        return d
+    if d.startswith("3") and 9 <= len(d) <= 10:
+        return "39" + d
+    return ""
+
+
+def _lv_maps(indirizzo):
+    from urllib.parse import quote
+    return "https://www.google.com/maps/search/?api=1&query=" + quote(str(indirizzo or ""))
+
+
+def _lv_dialogo_togli_contatto(cid, nome):
+    def _finestra():
+        st.warning(f"Togliere **{_h.escape(nome)}** dalla rubrica?")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglilo", key=f"lv_ct_si_{cid}", type="primary", width="stretch"):
+            _ca_salva(lambda cc: cc.__setitem__("contatti_lavoro", [x for x in cc.get("contatti_lavoro", []) if x.get("id") != cid]), "Lavoro: contatto tolto")
+            st.rerun()
+        if s2.button("No, tienilo", key=f"lv_ct_no_{cid}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli dalla rubrica")(_finestra)()
+
+
+def _lv_form_contatto(m=None):
+    import uuid
+    m = m or {}
+    tipi = list(_LV_TIPI)
+    with st.form(f"lv_form_cont_{m.get('id', 'nuovo')}", border=False):
+        tipo = st.selectbox("Che tipo è (il badge)", tipi, index=tipi.index(m["tipo"]) if m.get("tipo") in tipi else 0, format_func=lambda x: f"{_LV_TIPI[x][0]} {x}")
+        altro = st.text_input("Se «Altro», scrivi di che tipo è", value=m.get("altro", ""), placeholder="es. Scuola sindacale, Ufficio vertenze…")
+        nome = st.text_input("Nome (l'ente o la sede)", value=m.get("nome", ""), placeholder="es. CGIL Torino – Camera del Lavoro")
+        ref = st.text_input("Persona di riferimento", value=m.get("referente", ""), placeholder="es. Dott.ssa Rossi")
+        c1, c2 = st.columns(2)
+        tel = c1.text_input("Telefono (ufficio)", value=m.get("telefono", ""), placeholder="es. 011 1234567")
+        cell = c2.text_input("Cellulare / WhatsApp", value=m.get("cellulare", ""), placeholder="es. 333 1234567 oppure +39 333 1234567",
+                             help="Se scrivi qui un cellulare, compare il tasto per scrivere su WhatsApp.")
+        email = st.text_input("Email", value=m.get("email", ""), placeholder="nome@esempio.it")
+        indirizzo = st.text_input("Indirizzo", value=m.get("indirizzo", ""), placeholder="Via, numero, città")
+        sito = st.text_input("Sito web", value=m.get("sito", ""), placeholder="https://…")
+        orari = st.text_area("Orari di apertura", value=m.get("orari", ""), height=80, placeholder="es. lun-ven 9-12; su appuntamento")
+        note = st.text_area("Note", value=m.get("note", ""), height=80, placeholder="es. serve la tessera; pratica 730, ISEE, disoccupazione…")
+        ok = st.form_submit_button("💾 Salva", type="primary", width="stretch")
+    if ok:
+        if not (nome.strip() or ref.strip()):
+            st.error("Scrivi almeno il nome dell'ente o della persona.")
+            return
+        if email.strip() and ("@" not in email or "." not in email.split("@")[-1]):
+            st.error("L'email non sembra giusta: controlla (deve essere tipo nome@esempio.it).")
+            return
+        if cell.strip() and not _lv_wa(cell):
+            st.warning("Il cellulare non sembra un numero per WhatsApp (di solito inizia con 3, oppure con +39): lo salvo lo stesso, ma il tasto WhatsApp non comparirà.")
+        nuovo = {"id": m.get("id") or uuid.uuid4().hex[:8], "tipo": tipo, "altro": altro.strip(), "nome": nome.strip(), "referente": ref.strip(), "telefono": tel.strip(), "cellulare": cell.strip(),
+                 "email": email.strip(), "indirizzo": indirizzo.strip(), "sito": sito.strip(), "orari": orari.strip(), "note": note.strip()}
+        _ca_salva(lambda cc, nv=nuovo: cc.__setitem__("contatti_lavoro", [x for x in cc.get("contatti_lavoro", []) if x.get("id") != nv["id"]] + [nv]), "Lavoro: contatto")
+        st.session_state.pop("lv_cont_mod", None)
+        st.session_state["messaggio"] = "✅ Contatto salvato."
+        st.rerun()
+
+
+def lv_html_rubrica(lista):
+    e = _h.escape
+    stile = ("body{font-family:Arial,sans-serif;font-size:10.5pt;color:#111}h1{font-size:16pt}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}"
+             ".nota{font-size:8.5pt;color:#444;margin-top:12pt}")
+    righe = "".join("<tr>" + "".join(f"<td>{e(x)}</td>" for x in (f"{m.get('altro') or m.get('tipo', '')}", m.get("nome", ""), m.get("referente", ""), " / ".join(y for y in (m.get("telefono"), m.get("cellulare")) if y),
+                                                                  m.get("email", ""), m.get("indirizzo", ""), (m.get("orari") or "").replace("\n", "; "), m.get("note", ""))) + "</tr>" for m in lista)
+    return (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Rubrica del lavoro</title><style>{stile}</style></head><body><h1>Sindacato, CAF, Patronato e contatti del lavoro</h1>"
+            f"<table><tr><th>Tipo</th><th>Nome</th><th>Riferimento</th><th>Telefono</th><th>Email</th><th>Indirizzo</th><th>Orari</th><th>Note</th></tr>{righe}</table>"
+            "<p class='nota'>Creato dall'app «La nostra dispensa».</p></body></html>")
+
+
+def lv_tab_contatti(c):
+    lista = list(c.get("contatti_lavoro", []))
+    st.markdown("#### 🤝 Sindacato · CAF · Patronato")
+    st.caption("Qui metti i **riferimenti del tuo lavoro**: il sindacato, il CAF, il patronato, il consulente, il commercialista… Ognuno ha il suo **badge colorato**, con nome, persona di riferimento, "
+               "indirizzo, telefono, email e il tasto per **scrivere su WhatsApp**. Tutto si modifica, si esporta e si invia.")
+    tipi_presenti = [t for t in _LV_TIPI if any(x.get("tipo") == t for x in lista)]
+    if lista:
+        f1, f2 = st.columns([1, 1], gap="small")
+        filtro = f1.selectbox("Mostra", ["Tutti"] + tipi_presenti, key="lv_cont_filtro", format_func=lambda x: x if x == "Tutti" else f"{_LV_TIPI[x][0]} {x}")
+        cerca = f2.text_input("Cerca", key="lv_cont_cerca", placeholder="nome, persona, città…")
+        visibili = [m for m in lista if (filtro == "Tutti" or m.get("tipo") == filtro)
+                    and (not cerca.strip() or cerca.strip().lower() in " ".join(str(v) for v in m.values()).lower())]
+    else:
+        visibili = []
+    for m in sorted(visibili, key=lambda x: (list(_LV_TIPI).index(x["tipo"]) if x.get("tipo") in _LV_TIPI else 99, (x.get("nome") or "").lower())):
+        righe = "<br>".join(x for x in (f"<b>{_h.escape(m.get('nome', ''))}</b>" if m.get("nome") else "", f"👤 {_h.escape(m['referente'])}" if m.get("referente") else "",
+                                        f"📞 {_h.escape(m['telefono'])}" if m.get("telefono") else "", f"📱 {_h.escape(m['cellulare'])}" if m.get("cellulare") else "",
+                                        f"✉️ {_h.escape(m['email'])}" if m.get("email") else "", f"📍 {_h.escape(m['indirizzo'])}" if m.get("indirizzo") else "",
+                                        f"🕒 {_h.escape(m['orari']).replace(chr(10), '; ')}" if m.get("orari") else "", f"<i>{_h.escape(m['note'])}</i>" if m.get("note") else "") if x)
+        st.markdown(f"<div class='lv-card'>{_lv_badge(m.get('tipo'), m.get('altro', ''))}<div style='margin-top:6px'>{righe}</div></div>", unsafe_allow_html=True)
+        pulsanti = []
+        if m.get("telefono") or m.get("cellulare"):
+            pulsanti.append(("📞 Chiama", "tel:" + _lv_tel(m.get("telefono") or m.get("cellulare"))))
+        if _lv_wa(m.get("cellulare")):
+            pulsanti.append(("💬 WhatsApp", "https://wa.me/" + _lv_wa(m["cellulare"])))
+        if m.get("email"):
+            pulsanti.append(("✉️ Scrivi", "mailto:" + m["email"]))
+        if m.get("indirizzo"):
+            pulsanti.append(("📍 Mappa", _lv_maps(m["indirizzo"])))
+        if m.get("sito", "").startswith(("http://", "https://")):
+            pulsanti.append(("🌐 Sito", m["sito"]))
+        for i in range(0, len(pulsanti), 3):
+            cols = st.columns(3, gap="small")
+            for col, (et, url) in zip(cols, pulsanti[i:i + 3]):
+                col.link_button(et, url, width="stretch")
+        d1, d2, d3 = st.columns(3, gap="small")
+        if d1.button("✏️ Modifica", key=f"lv_c_e_{m['id']}", width="stretch"):
+            st.session_state["lv_cont_mod"] = m["id"]
+            st.rerun()
+        if d2.button("🗑️ Togli", key=f"lv_c_t_{m['id']}", width="stretch"):
+            _lv_dialogo_togli_contatto(m["id"], m.get("nome") or m.get("referente") or "questo contatto")
+        with d3:
+            if "_fa_inv_voce" in globals():
+                _fa_inv_voce(f"lv_c_inv_{m['id']}", "📤 Invia", f"{m.get('altro') or m.get('tipo', '')}: {m.get('nome', '')}",
+                             [("Tipo", m.get("altro") or m.get("tipo")), ("Nome", m.get("nome")), ("Riferimento", m.get("referente")), ("Telefono", m.get("telefono")), ("Cellulare", m.get("cellulare")),
+                              ("Email", m.get("email")), ("Indirizzo", m.get("indirizzo")), ("Orari", m.get("orari")), ("Note", m.get("note"))], [])
+        if st.session_state.get("lv_cont_mod") == m["id"]:
+            _lv_form_contatto(m)
+    if lista and not visibili:
+        st.info("Nessun contatto con questi filtri.")
+    with st.expander("➕ Aggiungi un contatto (sindacato, CAF, patronato…)", expanded=not lista):
+        _lv_form_contatto()
+    if lista:
+        html_r = lv_html_rubrica(lista)
+        nome_f = f"rubrica_lavoro_{date.today().isoformat()}"
+        st.download_button("📄 Scarica la rubrica (da stampare o salvare come PDF)", html_r.encode("utf-8"), file_name=nome_f + ".html", mime="text/html", width="stretch", key="lv_cont_dl")
+        if "inv_voce" in globals():
+            inv_voce("lv_cont_inv", "📤 Invia la rubrica", "Rubrica del lavoro", "\n".join(f"• {m.get('altro') or m.get('tipo', '')}: {m.get('nome', '')} {m.get('telefono') or m.get('cellulare') or ''} {m.get('email', '')}".strip() for m in lista), [])
+
+
 def schermata_lavoro():
     """La pagina «Lavoro»."""
     if "nav_barra" in globals():
@@ -263,11 +420,13 @@ def schermata_lavoro():
     except Exception as ex:
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
-    t1, t2 = st.tabs(["💶 Buste paga", "📊 Anno per anno"])
+    t1, t2, t3 = st.tabs(["💶 Buste paga", "📊 Anno per anno", "🤝 Sindacato · CAF · Patronato"])
     with t1:
         lv_tab_buste(c)
     with t2:
         lv_tab_grafici(c)
+    with t3:
+        lv_tab_contatti(c)
 
 
 # ---- lo smistamento: «lavoro» va alla sua pagina (con il controllo dei permessi di «Sezioni visibili»), il resto come prima
@@ -288,7 +447,7 @@ if "_NOMI_SEZIONI" in globals():
     _GUIDE.setdefault("lavoro", [
         ("💼 Cos'è la sezione Lavoro",
          """Qui sta tutto ciò che riguarda il tuo lavoro. Per ora: le **buste paga**.
-Ha due schede: **💶 Buste paga** (carichi, leggi, correggi, invii) e **📊 Anno per anno** (grafici e confronti).
+Ha tre schede: **💶 Buste paga** (carichi, leggi, correggi, invii), **📊 Anno per anno** (grafici e confronti) e **🤝 Sindacato · CAF · Patronato** (la rubrica dei tuoi riferimenti).
 Si apre dal bottone **💼 Lavoro** in alto, accanto agli altri.""", "lavoro buste paga stipendio netto lordo trattenute"),
         ("💶 Caricare una busta paga",
          """1. Apri **💼 Lavoro** e resta sulla scheda **💶 Buste paga**.
@@ -301,7 +460,11 @@ Per inserirla **a mano**, senza file, apri **✍️ Inserisci a mano una busta p
          """Apri la scheda **📊 Anno per anno**. Vedi, per ogni anno, il **netto ricevuto** (con 13ª, 14ª e voci a mano), il **lordo** e le **trattenute totali**, e quanto pesano le trattenute sul lordo.
 Sotto, **il confronto con gli anni prima**, in euro e in percentuale. Per l'anno non ancora finito il confronto è **«a parità di mesi»**, con gli stessi mesi dell'anno prima.
 Puoi **scaricare** il riepilogo (HTML o PDF) e **inviarlo** per email, WhatsApp o Telegram.""", "grafico anno confronto netto lordo trattenute percentuale riepilogo esporta"),
+        ("🤝 Sindacato, CAF, Patronato: la rubrica",
+         """Apri la scheda **🤝 Sindacato · CAF · Patronato**. Tocca **➕ Aggiungi un contatto**, scegli il **badge** (Sindacato, CAF, Patronato, Consulente del lavoro, Commercialista, Avvocato, INPS, Agenzia delle Entrate, Altro) e scrivi nome, persona di riferimento, telefono, **cellulare**, email, indirizzo, orari e note.
+Su ogni contatto: **📞 Chiama**, **💬 WhatsApp** (compare se hai scritto un cellulare), **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito**, poi **✏️ Modifica**, **🗑️ Togli** (ti chiedo conferma) e **📤 Invia**.
+In alto puoi **filtrare per badge** e **cercare**. In fondo **scarichi** la rubrica o la **invii**.""", "sindacato caf patronato rubrica contatti telefono whatsapp email indirizzo badge consulente commercialista"),
     ])
-    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni"])
+    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("lavoro", "l_cosa")

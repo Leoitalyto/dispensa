@@ -1033,9 +1033,20 @@ def ca_leggi_busta(testo, testo_p1="", nome_file="", forza=False, parole=None):
             m = re.search(r"(?:dal|periodo)[^\n]{0,24}?(\d{1,2})[/.\-](\d{1,2})[/.\-](20\d{2})[^\n]{0,20}?(?:al|a|-|–)\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](20\d{2})", t, re.I)
             if m and 1 <= int(m.group(5)) <= 12:                           # un periodo «dal 01/10/2026 al 31/10/2026»: vale il mese in cui finisce
                 comp = f"{int(m.group(6)):04d}-{int(m.group(5)):02d}"
-    metti("competenza", comp, "alta" if comp else "bassa")
-    men = "13ª mensilità" if re.search(r"tredicesima|13\s*[ªa°]\s*mensilit", tn) else "14ª mensilità" if re.search(r"quattordicesima|14\s*[ªa°]\s*mensilit", tn) else "Mensile"
-    metti("mensilita", men, "media")
+    # 13ª o 14ª: nell'intestazione, al posto del mese, c'è «13^ MENSILITA' 2025» (anche letto «13% MENSIL2025» o senza il numero)
+    cap = t[:2500]
+    m_agg = re.search(r"\b(?:(13|14|I3)\s*[\^%ªaAº°\.]?\s*)?MENSIL[A-ZÀ']{0,6}\s*(20\d{2})\b", cap, re.I)
+    m_par = re.search(r"\b(tredicesima|quattordicesima)\b", cap, re.I)
+    men, anno_agg, aff_men = "Mensile", None, "media"
+    if m_agg:
+        num = (m_agg.group(1) or "13").upper().replace("I", "1")
+        men, anno_agg, aff_men = ("14ª mensilità" if num == "14" else "13ª mensilità"), int(m_agg.group(2)), ("alta" if m_agg.group(1) else "media")
+    elif m_par:
+        men = "13ª mensilità" if "tredic" in m_par.group(1).lower() else "14ª mensilità"
+    if men != "Mensile" and anno_agg:                                                       # la 13ª è di dicembre; la 14ª, se non è scritto il mese, si propone giugno (da controllare)
+        comp = f"{anno_agg}-12" if men.startswith("13") else f"{anno_agg}-06"
+    metti("competenza", comp, ("media" if men != "Mensile" and anno_agg else "alta") if comp else "bassa")
+    metti("mensilita", men, aff_men)
     ente, aff_e, fonte_e = "", "bassa", ""
     ente_ditta = _bp_ente(t)
     v, _ = _ca_dopo(t, ["datore di lavoro", "ragione sociale"], r"([A-ZÀ-Ý][^\n]{3,50})", 45) if not ente_ditta else (None, None)
@@ -2951,8 +2962,45 @@ def _ca_pannello_caricamento(n):
     return up
 
 
-def _ca_flusso_documento(c, beni, n, up, bol_att=None, man_att=None, lavoro=False):
-    """Il documento aperto: lo leggo, avviso se c'è già, propongo i dati e archivio dopo la tua conferma. lavoro=True: è una busta paga (nessuna proposta di bollette, legge i campi della busta)."""
+def _ca_flusso_documento(c, beni, n, up, bol_att=None, man_att=None, lavoro=False, finestra=False):
+    """Il documento aperto. Con finestra=True si apre IN SOVRAIMPRESSIONE (non in fondo alla pagina da andare a cercare); se la chiudi con la X puoi riaprirla dal pulsante."""
+    if not finestra:
+        return _ca_flusso_documento_corpo(c, beni, n, up, bol_att, man_att, lavoro, False)
+    sorgente = None
+    if up is not None:
+        sorgente = {"nome": up.name, "dati": up.getvalue()}
+    elif st.session_state.get("ca_bozza_in"):
+        sorgente = st.session_state["ca_bozza_in"]
+    if not sorgente:
+        st.session_state.pop("ca_fin_chiave", None)
+        return
+    chiave = f"{n}:{sorgente.get('nome')}:{len(sorgente.get('dati') or b'')}"
+    titolo = "💶 Busta paga letta: controlla e conferma" if lavoro else "📖 Documento letto: controlla e conferma"
+
+    def _apri():
+        def _finestra():
+            _ca_flusso_documento_corpo(c, beni, n, up, bol_att, man_att, lavoro, True)
+        try:
+            st.dialog(titolo, width="large")(_finestra)()
+        except TypeError:
+            st.dialog(titolo)(_finestra)()
+    if st.session_state.get("ca_fin_chiave") != chiave:
+        st.session_state["ca_fin_chiave"] = chiave                                              # si apre da sola una volta per ogni file
+        _apri()
+    else:
+        st.info(f"📖 C'è un documento aperto: «{_ca_testo(sorgente.get('nome'))}». Se hai chiuso la finestra, riaprila.")
+        r1, r2 = st.columns(2, gap="small")
+        if r1.button("📖 Riapri il pannello", key=f"ca_fin_riapri_{n}", type="primary", width="stretch"):
+            _apri()
+        if r2.button("✖ Scarta il documento", key=f"ca_fin_scarta_{n}", width="stretch"):
+            for k_ in ("ca_bozza", "ca_bozza_in"):
+                st.session_state.pop(k_, None)
+            st.session_state["ca_giro"] = n + 1
+            st.rerun()
+
+
+def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavoro=False, finestra=False):
+    """Il documento aperto: lo leggo, avviso se c'è già, propongo i dati e archivio dopo la tua conferma. lavoro=True: è una busta paga (nessuna proposta di bollette, legge i campi della busta). finestra=True: si disegna dentro una finestra in sovraimpressione."""
     sorgente = None
     if up is not None:
         _dati_up = up.getvalue()
@@ -2960,9 +3008,12 @@ def _ca_flusso_documento(c, beni, n, up, bol_att=None, man_att=None, lavoro=Fals
     elif st.session_state.get("ca_bozza_in"):
         sorgente = st.session_state["ca_bozza_in"]
     if sorgente:
-        st.markdown("<div id='ca-doc-aperto'></div>", unsafe_allow_html=True)
-        st.markdown(f"#### 📖 Documento aperto: {_ca_testo(sorgente.get('nome'))}")
-        _ca_scorri_a("ca-doc-aperto", f"{sorgente.get('nome')}{len(sorgente.get('dati') or b'')}")
+        if not finestra:
+            st.markdown("<div id='ca-doc-aperto'></div>", unsafe_allow_html=True)
+            st.markdown(f"#### 📖 Documento aperto: {_ca_testo(sorgente.get('nome'))}")
+            _ca_scorri_a("ca-doc-aperto", f"{sorgente.get('nome')}{len(sorgente.get('dati') or b'')}")
+        else:
+            st.caption(f"📄 {_ca_testo(sorgente.get('nome'))}")
         if sorgente["mime"] in _CA_MIME and sorgente["mime"].startswith("image/") and len(sorgente["dati"]) > _CA_MAX_BYTE and not sorgente.get("ridotta"):
             rid = _ca_riduci_foto(sorgente["nome"], sorgente["dati"])
             if rid:
