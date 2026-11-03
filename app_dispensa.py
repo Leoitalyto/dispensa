@@ -4,6 +4,16 @@ import os
 
 _cartella = os.path.dirname(os.path.abspath(__file__))
 
+# Le «linguette» (riquadri che si aprono e si chiudono) restano SEMPRE chiuse all'apertura della pagina: si aprono solo se le tocchi tu.
+import streamlit as _st_chiuse
+if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
+    _expander_originale = _st_chiuse.expander
+
+    def _expander_sempre_chiusa(label, expanded=False, **kw):
+        return _expander_originale(label, expanded=False, **kw)
+    _expander_sempre_chiusa._sempre_chiusa = True
+    _st_chiuse.expander = _expander_sempre_chiusa
+
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
@@ -67,6 +77,7 @@ _AGGANCI = {
         ("# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n",
          "# --- intestazione e avvisi ---\nst.markdown(HERO, unsafe_allow_html=True)\n"
          'if "nav_pagine" in globals():\n    nav_pagine("dispensa")\n'
+         'if "pn_riepilogo" in globals():\n    pn_riepilogo()\n'
          'if "pensiero_scheda" in globals():\n    pensiero_scheda()\n'
          'if "pulsante_info" in globals():\n    pulsante_info("dispensa")\n'
          'if "fd_selettore" in globals():\n    fd_selettore()\n'),

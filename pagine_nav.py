@@ -10,6 +10,7 @@
    La scelta si fa in Utilità → «⚙️ Aspetto dell'app» e si ricorda per ogni persona.
 Caricato da app_dispensa.py dopo sezioni.py."""
 import json
+from datetime import date
 
 import streamlit as st
 
@@ -24,7 +25,30 @@ _PN_VOCI = [
 ]
 
 
-def _pn_css(corrente):
+_PN_TESTI = {"normale": 100, "grande": 115, "molto grande": 130}
+
+
+def pn_testo():
+    """La grandezza dei testi scelta da questa persona (si ricorda): normale, grande, molto grande."""
+    if "pn_testo" not in st.session_state:
+        try:
+            d = carica_dati(crea_archivio(), st.session_state["percorso"])
+            v = (d.get("impostazioni") or {}).get("testo", "normale")
+        except Exception:
+            v = "normale"
+        st.session_state["pn_testo"] = v if v in _PN_TESTI else "normale"
+    return st.session_state["pn_testo"]
+
+
+def _pn_css_testo():
+    pct = _PN_TESTI.get(pn_testo(), 100)
+    if pct == 100:
+        return ""
+    return (f"<style>html{{font-size:{pct}% !important}} .stButton button,.stDownloadButton button,[data-testid='stLinkButton'] a{{min-height:3rem !important}} "
+            "[data-testid='stTabs'] button{min-height:3rem}</style>")
+
+
+def _pn_css(corrente, lampeggiano=()):
     r = ["<style>"
          ".st-key-nav_pagine[data-testid='stVerticalBlock'],.st-key-nav_pagine [data-testid='stVerticalBlock']{display:grid !important;grid-template-columns:1fr 1fr;gap:9px !important;margin:6px 0 12px}"
          ".st-key-nav_pagine button{width:100% !important;min-height:58px !important;border-radius:18px !important;color:#fff !important;font-weight:900 !important;"
@@ -34,14 +58,115 @@ def _pn_css(corrente):
     for sez, _, c1, c2 in _PN_VOCI:
         r.append(f".st-key-navp_{sez} button,.st-key-navpa_{sez} button{{background:linear-gradient(135deg,{c1} 0%,{c2} 100%) !important}}")
         r.append(f".st-key-navpa_{sez} button{{outline:3px solid #fff !important;outline-offset:-5px;box-shadow:0 0 0 3px {c2},0 5px 0 rgba(0,0,0,.3) !important}}")
+    r.append("@keyframes pn-lampeggia{0%,100%{filter:brightness(1);box-shadow:0 4px 0 rgba(0,0,0,.25),0 0 0 0 rgba(255,235,59,0)}"
+             "50%{filter:brightness(1.3);box-shadow:0 4px 0 rgba(0,0,0,.25),0 0 16px 7px rgba(255,235,59,.95)}}")
+    for sez in lampeggiano:                                         # le sezioni con cose in scadenza lampeggiano, appena si apre la pagina
+        r.append(f".st-key-navp_{sez} button,.st-key-navpa_{sez} button{{animation:pn-lampeggia 1.15s ease-in-out infinite;outline:3px solid #ffeb3b !important;outline-offset:-5px}}")
+    r.append("@media (prefers-reduced-motion:reduce){.st-key-nav_pagine button{animation:none !important}}")
     r.append("@media (max-width:340px){.st-key-nav_pagine[data-testid='stVerticalBlock'],.st-key-nav_pagine [data-testid='stVerticalBlock']{grid-template-columns:1fr}}</style>")
     return "".join(r)
 
 
-def nav_pagine(corrente):
-    """I bottoni colorati per passare da una pagina all'altra."""
+def _pn_giorni(iso, oggi_):
+    try:
+        return (date.fromisoformat(str(iso)[:10]) - oggi_).days
+    except (ValueError, TypeError):
+        return None
+
+
+def _pn_quando(g):
+    return f"scaduto da {-g} giorni" if g < 0 else "scade oggi" if g == 0 else "scade domani" if g == 1 else f"scade tra {g} giorni"
+
+
+def pn_scadenze():
+    """Cosa c'è in scadenza, per sezione: {sezione: [testo, …]}. Dispensa, Salute (medicinali, ricette, visite, richiami, controlli), documenti personali e Casa (bollette, garanzie, manutenzioni)."""
+    out = {}
+    try:
+        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        oggi_ = oggi()
+    except Exception:
+        return out
+    try:
+        for a in d.get("articoli", []):
+            stato, g = stato_scadenza(a.get("scadenza"), oggi_)
+            if stato in ("scaduto", "rosso", "arancione"):
+                out.setdefault("dispensa", []).append(f"🥫 {a.get('nome', 'Prodotto')}: {_pn_quando(g)}")
+        f = d.get("farmacia") or {}
+        for m in f.get("medicinali", []):
+            g = _pn_giorni(m.get("scadenza"), oggi_)
+            if g is not None and g <= 60:
+                out.setdefault("salute", []).append(f"💊 {m.get('nome', 'Medicinale')}: {_pn_quando(g)}")
+        for x in f.get("prescrizioni", []):
+            g = _pn_giorni(x.get("valida_fino"), oggi_)
+            if g is not None and g <= 14 and x.get("stato") != "Usata":
+                out.setdefault("salute", []).append(f"📝 Prescrizione {str(x.get('tipo', '')).lower()}: {_pn_quando(g)}")
+        for x in f.get("visite", []):
+            for chiave in ("prossimo", "data"):
+                g = _pn_giorni(x.get(chiave), oggi_)
+                if g is not None and 0 <= g <= 7:
+                    out.setdefault("salute", []).append(f"📅 {x.get('categoria', 'Visita')}: " + ("oggi" if g == 0 else "domani" if g == 1 else f"tra {g} giorni"))
+                    break
+        for x in f.get("vaccinazioni", []):
+            g = _pn_giorni(x.get("richiamo"), oggi_)
+            if g is not None and -365 <= g <= 30:
+                out.setdefault("salute", []).append(f"💉 Richiamo {x.get('nome', '')}: " + ("in ritardo di %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+        if "sp_controlli_scadenti" in globals():
+            for p in (f.get("profili") or []):
+                for g, c in sp_controlli_scadenti(p, oggi_, 30):
+                    out.setdefault("salute", []).append(f"⏰ {c.get('nome', 'Controllo')}" + (f" ({p.get('nome', '')})" if len(f.get("profili") or []) > 1 else "") + ": " + ("in ritardo di %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+        for x in f.get("documenti", []):
+            g = _pn_giorni(x.get("scadenza"), oggi_)
+            if g is not None and g <= 90 and not x.get("senza_scadenza"):
+                out.setdefault("documenti", []).append(f"📄 {x.get('tipo', 'Documento')}: {_pn_quando(g)}")
+        if "ca_scadenze" in globals():
+            c = d.get("casa") or {}
+            for k in ("beni", "documenti", "manutenzioni"):
+                c.setdefault(k, [])
+            sc = ca_scadenze(c, oggi_)
+            for nome, g in sc.get("garanzie", []):
+                out.setdefault("casa", []).append(f"🛠️ Garanzia {nome}: " + ("scade tra %d giorni" % g))
+            for nome, voce, g in sc.get("manutenzioni", []):
+                out.setdefault("casa", []).append(f"🔧 {nome} · {voce}: " + ("in ritardo di %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+            for nome, g, imp in sc.get("bollette", []):
+                out.setdefault("casa", []).append(f"💶 {nome}: " + ("scaduta da %d giorni" % -g if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
+    except Exception:
+        pass
+    return out
+
+
+def pn_riepilogo():
+    """Sulla Home, sotto i bottoni: «Ci sono N cose da guardare», sezione per sezione (oppure «Tutto a posto»)."""
     nasc = sv_nascoste() if "sv_nascoste" in globals() else set()
-    st.markdown(_pn_css(corrente), unsafe_allow_html=True)
+    sc = {k: v for k, v in pn_scadenze().items() if k not in nasc}
+    nomi = {sez: etichetta for sez, etichetta, _a, _b in _PN_VOCI}
+    tot = sum(len(v) for v in sc.values())
+    if not tot:
+        st.markdown("<div style='background:rgba(255,255,255,.8);border-radius:16px;padding:8px 14px;margin:8px 0;color:#1b5e20;font-weight:800'>✅ Tutto a posto: niente in scadenza.</div>", unsafe_allow_html=True)
+        return
+    righe = ""
+    for sez in ("dispensa", "salute", "documenti", "casa"):
+        if sez in sc:
+            voci = sc[sez]
+            righe += f"<div style='margin-top:6px'><b>{nomi.get(sez, sez)}</b> ({len(voci)})</div>" + "".join(f"<div style='margin-left:10px'>{_pn_h(v)}</div>" for v in voci[:3])
+            if len(voci) > 3:
+                righe += f"<div style='margin-left:10px;opacity:.8'>…e altre {len(voci) - 3}: apri la sezione per vederle</div>"
+    st.markdown("<div style='background:rgba(255,248,225,.95);border:2px solid #ffb300;border-radius:18px;padding:10px 14px;margin:8px 0;color:#4e342e'>"
+                f"<div style='font-weight:900;font-size:1.05rem'>🔔 Ci sono {tot} {'cosa' if tot == 1 else 'cose'} da guardare</div>"
+                "<div style='font-size:.85rem;opacity:.9'>I bottoni che lampeggiano ti dicono dove: toccali per aprire.</div>" + righe + "</div>", unsafe_allow_html=True)
+
+
+def _pn_h(t):
+    import html as _hh
+    return _hh.escape(str(t))
+
+
+def nav_pagine(corrente):
+    """I bottoni colorati per passare da una pagina all'altra; quelli con cose in scadenza lampeggiano e dicono quante."""
+    nasc = sv_nascoste() if "sv_nascoste" in globals() else set()
+    sc = pn_scadenze()
+    lampeggiano = [sez for sez in sc if sez not in nasc]
+    st.markdown(_pn_css_testo(), unsafe_allow_html=True)
+    st.markdown(_pn_css(corrente, lampeggiano), unsafe_allow_html=True)
     with st.container(key="nav_pagine"):
         for sez, etichetta, _c1, _c2 in _PN_VOCI:
             if sez != "dispensa" and ("SEZIONI_NAV" in globals() and sez not in SEZIONI_NAV):
@@ -49,7 +174,8 @@ def nav_pagine(corrente):
             if sez in nasc:
                 continue
             attiva = sez == corrente
-            st.button(("● " if attiva else "") + etichetta, key=("navpa_" if attiva else "navp_") + sez, width="stretch",
+            n = len(sc.get(sez, []))
+            st.button((("● " if attiva else "") + etichetta) + (f" 🔔{n}" if n else ""), key=("navpa_" if attiva else "navp_") + sez, width="stretch",
                       on_click=(None if attiva else nav_vai), args=(None if attiva else (sez,)))
     pn_freccia_su()
 
@@ -126,8 +252,20 @@ def pn_freccia_su():
 
 
 def pn_impostazioni():
-    """Il riquadro «⚙️ Aspetto dell'app» (in Utilità): da che parte sta la freccia «torna su»."""
-    with st.expander("⚙️ Aspetto dell'app: freccia «torna su»"):
+    """Il riquadro «⚙️ Aspetto dell'app» (in Utilità): grandezza dei testi e da che parte sta la freccia «torna su»."""
+    with st.expander("⚙️ Aspetto dell'app: grandezza dei testi e freccia «torna su»"):
+        t_sc = st.radio("🔤 Grandezza dei testi", list(_PN_TESTI), index=list(_PN_TESTI).index(pn_testo()), horizontal=True, key="pn_testo_scelta",
+                        format_func=lambda x: {"normale": "Normale", "grande": "Grande", "molto grande": "Molto grande"}[x],
+                        help="Se leggi meglio con le scritte più grandi: scegli «Grande» o «Molto grande». Vale per tutta l'app.")
+        if t_sc != pn_testo():
+            st.session_state["pn_testo"] = t_sc
+            try:
+                def _fnt(d, v=t_sc):
+                    d.setdefault("impostazioni", {})["testo"] = v
+                salva(_fnt, "Aspetto: grandezza dei testi")
+            except Exception as e:
+                st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
+            st.rerun()
         scelta = st.radio("La freccia che riporta in cima sta a…", ["destra", "sinistra"], index=0 if pn_lato() == "destra" else 1, horizontal=True, key="pn_lato_scelta",
                           format_func=lambda x: "➡️ destra (predefinito)" if x == "destra" else "⬅️ sinistra")
         st.caption("Compare in basso solo quando scorri una pagina lunga, e con un tocco ti riporta all'inizio. Sta sopra i pulsanti in basso, per non coprire le scritte.")

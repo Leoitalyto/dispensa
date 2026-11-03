@@ -30,7 +30,8 @@ import streamlit as st
 
 CA_TIPI = ["Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto",
            "Dichiarazione di conformità", "Istruzioni di montaggio", "Fattura o scontrino", "Documentazione di un intervento",
-           "Bolletta o fattura", "Contratto", "Polizza assicurativa", "Ricevuta di pagamento", "Lettera o comunicazione", "Busta paga", "Altro"]
+           "Bolletta o fattura", "Contratto", "Polizza assicurativa", "Ricevuta di pagamento", "Lettera o comunicazione", "Busta paga", "Certificazione Unica (CU)", "Documento INPS", "Altro"]
+_CA_TIPI_LAVORO = ("Busta paga", "Certificazione Unica (CU)", "Documento INPS")                      # stanno nella sezione LAVORO, non in Casa
 _CA_TIPI_MANUALI = {"Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto", "Dichiarazione di conformità", "Istruzioni di montaggio"}
 CA_LINGUE = {"it": "Italiano", "en": "Inglese", "de": "Tedesco", "fr": "Francese", "es": "Spagnolo", "": "Non so"}
 CA_STANZE = ["Cucina", "Soggiorno", "Camera da letto", "Bagno", "Ingresso", "Studio", "Lavanderia", "Garage", "Cantina", "Giardino", "Terrazzo", "Tutta la casa", "Altro"]
@@ -1081,6 +1082,11 @@ def ca_titolo_auto(d):
         comp = d.get("competenza") or ""
         mese = f"{_CA_MESI_NOMI_IT[int(comp[5:]) - 1].capitalize()} {comp[:4]}" if re.fullmatch(r"\d{4}-\d{2}", comp) and 1 <= int(comp[5:]) <= 12 else ""
         return " · ".join(x for x in ("Busta paga", mese, (d.get("mensilita") if d.get("mensilita") not in (None, "", "Mensile") else ""), ("netto € " + ca_importo_fmt(d["netto"])) if d.get("netto") else "", ente) if x)[:140]
+    if d.get("tipo") == "Certificazione Unica (CU)":
+        return " · ".join(x for x in ("Certificazione Unica " + str(d.get("cu_anno") or ""), (f"redditi {d['cu_anno_imposta']}" if d.get("cu_anno_imposta") else ""), ente,
+                                      ("reddito € " + ca_importo_fmt(d["cu_reddito"])) if d.get("cu_reddito") else "") if x.strip())[:140]
+    if d.get("tipo") == "Documento INPS":
+        return " · ".join(x for x in ("INPS", d.get("inps_tipo") or "", _ca_data_it(d.get("data_doc")) if d.get("data_doc") else "") if x)[:140]
     if arg and arg not in _CA_ARG_APPARECCHIO and (ente or d.get("importo") or d.get("numero_doc")):
         parti = [arg, ente]
         tipo = {"Rifiuti (TARI)": "Avviso di pagamento", "Tasse e imposte": "Avviso di pagamento", "Condominio": "Rata condominiale"}.get(arg) or \
@@ -1230,7 +1236,7 @@ def ca_cerca_documenti(docs, testo="", argomento=""):
     toks = [t_ for t_ in _ca_norm(testo).split() if t_]
     out = []
     for d in docs:
-        if d.get("tipo") in ("Ricevuta di pagamento", "Busta paga"):
+        if d.get("tipo") == "Ricevuta di pagamento" or d.get("tipo") in _CA_TIPI_LAVORO:
             continue
         if not (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo")):
             continue
@@ -1254,7 +1260,7 @@ def _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs):
     if not ((ric["campi"].get("importo") or {}).get("valore") or (ric["campi"].get("numero_doc") or {}).get("valore")):
         st.info("Questo file non ha riferimenti che io riesca a leggere (nessun importo, nessun numero): dimmi tu a quale fattura appartiene. Cerca qui sotto per nome dell'ente.")
     st.caption("Scrivi il nome dell'ente (o il numero, o l'importo) e premi Invio: la lista si restringe. Puoi anche scegliere la sezione. Il file diventa la **ricevuta di pagamento** di quella fattura e resta dentro di lei.")
-    sezioni = sorted({_ca_argomento_di(d) for d in docs if d.get("tipo") not in ("Ricevuta di pagamento", "Busta paga") and (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo"))})
+    sezioni = sorted({_ca_argomento_di(d) for d in docs if d.get("tipo") != "Ricevuta di pagamento" and d.get("tipo") not in _CA_TIPI_LAVORO and (d.get("tipo") in _CA_TIPI_PAGABILI or d.get("importo"))})
     cerca = st.text_input("🔍 Cerca", key=f"ca_allega_q_{n}", placeholder="es. Octopus, Enel, SMAT, 43,01, numero fattura…")
     sez = st.selectbox("Sezione", [""] + sezioni, key=f"ca_allega_s_{n}", format_func=lambda x: "📂 Tutte le sezioni" if not x else f"{_CA_ICONE_ARG.get(x, '')} {x}")
     trovati = ca_cerca_documenti(docs, cerca, sez)
@@ -1314,6 +1320,43 @@ def _ca_ordine(d):
     return (d.get("data_doc") or str(d.get("creato_il") or "")[:10] or "0000-00-00")
 
 
+def ca_leggi_cu(testo, testo_p1="", nome_file="", forza=False, parole=None):
+    """Legge una Certificazione Unica (CU): anno, anno d'imposta, chi l'ha emessa (sostituto d'imposta), reddito, ritenute IRPEF, addizionali. Ritorna {'e_cu', 'campi'}. Le somme si cercano accanto alle scritte: da controllare."""
+    t = testo or ""
+    e_cu = bool(re.search(r"certificazione\s+unica|\bCU\s*20\d{2}\b", t[:4000], re.I)) and bool(re.search(r"sostituto|dati\s+fiscali|redditi|ritenute", t, re.I))
+    if not forza and not e_cu:
+        return {"e_cu": False, "campi": {}}
+    campi = {}
+
+    def metti(k, v, aff, fonte="testo"):
+        if v:
+            campi[k] = {"valore": v, "affidabilita": aff, "fonte": fonte}
+    m = re.search(r"certificazione\s+unica\s*(20\d{2})|\bCU\s*(20\d{2})\b", t, re.I)
+    anno_cu = int(next(g for g in m.groups() if g)) if m else None
+    m2 = re.search(r"(?:redditi|anno\s+d'imposta|periodo\s+d'imposta|anno\s+di\s+riferimento)\D{0,12}(20\d{2})", t, re.I)
+    anno_imp = int(m2.group(1)) if m2 else (anno_cu - 1 if anno_cu else None)
+    if anno_cu is None and anno_imp:
+        anno_cu = anno_imp + 1
+    metti("cu_anno", str(anno_cu) if anno_cu else "", "alta" if m else "media")
+    metti("cu_anno_imposta", str(anno_imp) if anno_imp else "", "alta" if m2 else "media")
+    righe = t.splitlines()
+    ente = ""
+    mm = re.search(r"denominazione\b[:\s]*([A-Z0-9][^\n]{3,70})", t, re.I)
+    if re.search(r"\bINPS\b|istituto\s+nazionale\s+(?:della|di)\s+previdenza\s+sociale", t[:3000], re.I) and not re.search(r"datore|dipendente\s+di", t[:600], re.I):
+        ente = "INPS"
+    if not ente and mm and not re.search(r"codice|fiscale|sostituto|percipiente|dati", mm.group(1), re.I):
+        ente = re.sub(r"\s+", " ", mm.group(1)).strip(" -–,:")
+    if not ente and "_bp_ente" in globals():
+        ente = _bp_ente(t)
+    metti("ente", ente, "media" if ente else "bassa")
+    for chiave, rx in (("cu_reddito", r"redditi?\s+di\s+lavoro\s+dipendente(?:\s+e\s+assimilati)?|reddito\s+di\s+lavoro\s+dipendente|reddito\s+di\s+pensione|redditi?\s+di\s+pensione"),
+                       ("cu_ritenute", r"ritenute\s+irpef"), ("cu_add_reg", r"addizionale\s+regionale"), ("cu_add_com", r"addizionale\s+comunale")):
+        trov = _bp_cerca(righe, rx) if "_bp_cerca" in globals() else []
+        if trov:
+            metti(chiave, trov[0][1], "media")
+    return {"e_cu": True, "campi": campi}
+
+
 def ca_riconosci(nome, mime, dati, testo=None, info=None):
     """Legge un documento e propone i dati. Ritorna {'testo_ok', 'info', 'campi': {nome: {'valore', 'affidabilita', 'fonte'}}, 'testo_inizio'}. NON salva niente."""
     if testo is None:
@@ -1354,11 +1397,20 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
             bp = ca_leggi_busta(testo, info.get("testo_p1") or "", stem, parole=ca_parole_posizionate(nome, mime, dati)) or bp
         except Exception:
             pass
-    ut = ca_leggi_utenza(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"]) else {"e_utenza": False, "campi": {}}
+    cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"]) else {"e_cu": False, "campi": {}}
+    ut = ca_leggi_utenza(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"] and not cu_["e_cu"]) else {"e_utenza": False, "campi": {}}
     if bp["e_busta"]:
         campi = {}
         for k, v_ in bp["campi"].items():
             metti(k, v_["valore"], v_["affidabilita"], v_["fonte"])
+    elif cu_["e_cu"]:                                                                          # una Certificazione Unica
+        campi = {}
+        metti("tipo", "Certificazione Unica (CU)", "alta", "testo")
+        metti("argomento", "Certificazioni Uniche", "alta", "testo")
+        for k, v_ in cu_["campi"].items():
+            metti(k, v_["valore"], v_["affidabilita"], v_["fonte"])
+        dd, fonte_d, aff_d = ca_data(testo, info.get("data_meta"))
+        metti("data_doc", dd.isoformat() if dd else "", aff_d, fonte_d)
     elif ut["e_utenza"]:
         campi = {}
         for k, v in ut["campi"].items():
@@ -1437,9 +1489,10 @@ def ca_ai_classifica(testo, base=None):
 _CAMPI_BENE = ("nome", "categoria", "sottocategoria", "marca", "modello", "seriale", "stanza", "acquisto", "garanzia_fino", "note")
 _CAMPI_DOC = ("tipo", "titolo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
               "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "collegato_a", "pagata_il", "modo_pagamento", "nota_pagamento",
-              "consumo", "unita_consumo", "competenza", "mensilita", "netto", "lordo", "trattenute", "voci", "manutenzione_id", "link", "note")
+              "consumo", "unita_consumo", "competenza", "mensilita", "netto", "lordo", "trattenute", "voci", "manutenzione_id", "link", "note",
+              "cu_anno", "cu_anno_imposta", "cu_reddito", "cu_ritenute", "cu_add_reg", "cu_add_com", "inps_tipo")
 _CAMPI_CONTROLLATI = ("tipo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura", "modo_pagamento", "consumo", "unita_consumo",
-                      "competenza", "mensilita", "netto", "lordo", "trattenute",
+                      "competenza", "mensilita", "netto", "lordo", "trattenute", "cu_anno", "cu_anno_imposta", "cu_reddito", "cu_ritenute", "cu_add_reg", "cu_add_com", "inps_tipo",
                       "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua")
 
 
@@ -1568,7 +1621,7 @@ def ca_elimina_documento(c, did):
 
 
 def ca_aggiungi_manutenzione(c, valori):
-    campi = ("bene_id", "data", "tipo", "descrizione", "ditta", "costo", "prossima", "documento_id", "note")
+    campi = ("bene_id", "data", "tipo", "descrizione", "ditta", "costo", "prossima", "documento_id", "note", "intervento")
     m = _ca_pulisci(valori, campi)
     m["id"] = uuid.uuid4().hex[:10]
     c.setdefault("manutenzioni", []).append(m)
@@ -1601,11 +1654,11 @@ def ca_scadenze(c, oggi_, giorni=60):
             garanzie.append((b.get("nome", ""), g))
     ultime = {}
     for m in sorted(c.get("manutenzioni", []), key=lambda x: x.get("data") or ""):
-        ultime[(m.get("bene_id"), m.get("tipo"))] = m
+        ultime[(m.get("intervento") or "", m.get("bene_id"), m.get("tipo")) if m.get("intervento") else (m.get("bene_id"), m.get("tipo"))] = m
     for m in ultime.values():
         d = _data(m.get("prossima"))
-        if d and (d - oggi_).days <= giorni and m.get("bene_id") in nomi:
-            manut.append((nomi[m["bene_id"]], m.get("descrizione") or m.get("tipo") or "Manutenzione", (d - oggi_).days))
+        if d and (d - oggi_).days <= giorni and (m.get("bene_id") in nomi or not m.get("bene_id")):
+            manut.append((nomi.get(m.get("bene_id")) or "Casa", m.get("intervento") or m.get("descrizione") or m.get("tipo") or "Manutenzione", (d - oggi_).days))
     docs = c.get("documenti", [])
     bollette = []                                                                    # bollette da pagare tra 10 giorni o già scadute (fino a un anno fa) senza ricevuta
     for d in docs:
@@ -3032,7 +3085,18 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                 with st.spinner("Leggo il documento…"):
                     testo, info = ca_estrai_testo(sorgente["nome"], sorgente["mime"], sorgente["dati"])
                     ric = ca_riconosci(sorgente["nome"], sorgente["mime"], sorgente["dati"], testo, info)
-                    if lavoro and testo:                                                  # sezione Lavoro: è una busta paga
+                    modo_l = lavoro if isinstance(lavoro, str) else "busta"
+                    if lavoro and modo_l == "cu" and testo:                              # sezione Lavoro → Certificazione Unica
+                        cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", "", forza=True)
+                        for k_, v_ in cu_["campi"].items():
+                            ric["campi"][k_] = v_
+                        ric["campi"]["tipo"] = {"valore": "Certificazione Unica (CU)", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                        ric["campi"]["argomento"] = {"valore": "Certificazioni Uniche", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                    elif lavoro and modo_l == "inps":                                     # sezione Lavoro → documento dell'INPS
+                        ric["campi"]["tipo"] = {"valore": "Documento INPS", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                        ric["campi"]["argomento"] = {"valore": "INPS", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                        ric["campi"]["ente"] = {"valore": "INPS", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                    if lavoro and modo_l == "busta" and testo:                           # sezione Lavoro: è una busta paga
                         bp = ca_leggi_busta(testo, info.get("testo_p1") or "", "", forza=True, parole=ca_parole_posizionate(sorgente["nome"], sorgente["mime"], sorgente["dati"]))
                         for k_, v_ in bp["campi"].items():
                             ric["campi"][k_] = v_
@@ -3043,6 +3107,9 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                                 if x_.get("tipo") == "Busta paga" and x_.get("ente") and re.sub(r"[^a-z0-9]", "", _ca_norm(x_["ente"])) == chiave_e:
                                     ric["campi"]["ente"]["valore"] = x_["ente"]
                                     break
+                        ric["campi"]["tipo"] = {"valore": "Busta paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                        ric["campi"]["argomento"] = {"valore": "Buste paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                    elif lavoro and modo_l == "busta":
                         ric["campi"]["tipo"] = {"valore": "Busta paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
                         ric["campi"]["argomento"] = {"valore": "Buste paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
                     ai = ca_ai_classifica(testo, ric) if not lavoro else None
@@ -3141,7 +3208,10 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                         st.session_state.pop(k, None)
                     st.rerun()
             elif not bloccato and not allega:
-                ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), docs_c, bozza.get("bolletta"), bozza.get("motivi_b"))
+                if lavoro and "_lv_form_documento" in globals():
+                    ok, val = _lv_form_documento("ca_form_nuovo", None, ric, lavoro if isinstance(lavoro, str) else "busta")
+                else:
+                    ok, val = _ca_form_documento("ca_form_nuovo", None, beni, ric, bozza.get("bene"), bozza.get("motivi"), docs_c, bozza.get("bolletta"), bozza.get("motivi_b"))
                 c1, c2 = st.columns(2)
                 if c2.button("✖ Scarta", key="ca_scarta", width="stretch"):
                     if sorgente.get("posta_id") and "_ca_posta_togli" in globals():
@@ -3189,7 +3259,10 @@ def _ca_correzione(c, beni):
                     st.session_state["messaggio"] = ("🔄 Ho completato: " + ", ".join(nuovi)) if nuovi else "🔄 Ho riletto il file: non c'era niente da aggiungere."
                     st.session_state.pop("ca_correggi", None)
                     st.rerun()
-            ok, val = _ca_form_documento(f"ca_form_cor_{cid}", d, beni, bollette=c.get("documenti", []))
+            if d.get("tipo") in _CA_TIPI_LAVORO and "_lv_form_documento" in globals():
+                ok, val = _lv_form_documento(f"ca_form_cor_{cid}", d, None, {"Busta paga": "busta", "Certificazione Unica (CU)": "cu", "Documento INPS": "inps"}[d["tipo"]])
+            else:
+                ok, val = _ca_form_documento(f"ca_form_cor_{cid}", d, beni, bollette=c.get("documenti", []))
             if st.button("Annulla", key="ca_cor_annulla"):
                 st.session_state.pop("ca_correggi", None)
                 st.rerun()
@@ -3229,7 +3302,7 @@ def _ca_tab_manuali(c):
             st.rerun()
     _ca_posta_riquadro(c)
     up = _ca_pannello_caricamento(n)
-    _ca_flusso_documento(c, beni, n, up, bol_att, man_att)
+    _ca_flusso_documento(c, beni, n, up, bol_att, man_att, finestra=True)
 
     _ca_correzione(c, beni)
 
@@ -3264,7 +3337,7 @@ def _ca_tab_manuali(c):
         parenti = [d] + ca_ricevute_di(docs, d["id"])
         if q and not any(q in _ca_norm(" ".join(str(x.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura")) + " " + _ca_testo_date(x)) for x in parenti):
             continue
-        if d.get("tipo") == "Busta paga":                                                          # le buste paga stanno nella sezione LAVORO
+        if d.get("tipo") in _CA_TIPI_LAVORO:                                                       # buste paga, Certificazioni Uniche e documenti INPS stanno nella sezione LAVORO
             buste_altrove += 1
             continue
         if d.get("collegato_a") and any(x.get("id") == d["collegato_a"] for x in docs):          # ricevuta collegata: si vede dentro la sua bolletta
@@ -3402,16 +3475,104 @@ def _ca_scheda_bene(c, b, nomi):
                 st.error(f"Non sono riuscito a salvare: {e}")
 
 
+def ca_gruppi_interventi(c):
+    """Gli interventi raggruppati per «genere» (la stessa manutenzione fatta più volte): {chiave: {nome, bene_id, tipo, voci (dal più recente)}}."""
+    nomi = {b["id"]: b.get("nome", "") for b in c.get("beni", [])}
+    gruppi = {}
+    for m in c.get("manutenzioni", []):
+        nome = (m.get("intervento") or "").strip() or f"{m.get('tipo') or 'Intervento'} · {nomi.get(m.get('bene_id')) or 'Casa in generale'}"
+        chiave = f"{(m.get('bene_id') or '')}|{_ca_norm(nome)}"
+        g = gruppi.setdefault(chiave, {"nome": nome, "bene_id": m.get("bene_id") or "", "tipo": m.get("tipo") or "", "voci": []})
+        g["voci"].append(m)
+    for g in gruppi.values():
+        g["voci"].sort(key=lambda x: str(x.get("data") or ""), reverse=True)
+    return gruppi
+
+
+def _ca_costo(x):
+    try:
+        return float(str(x).replace(".", "").replace(",", ".")) if x not in (None, "") and "," in str(x) else float(str(x)) if x not in (None, "") else 0.0
+    except ValueError:
+        return 0.0
+
+
+def ca_html_storico(c):
+    e = html.escape
+    nomi = {b["id"]: b.get("nome", "") for b in c.get("beni", [])}
+    corpo = ""
+    for g in sorted(ca_gruppi_interventi(c).values(), key=lambda g: str(g["voci"][0].get("data") or ""), reverse=True):
+        tot = sum(_ca_costo(m.get("costo")) for m in g["voci"])
+        corpo += (f"<h2>{e(g['nome'])} · {e(nomi.get(g['bene_id']) or 'Casa in generale')} · {len(g['voci'])} volte" + (f" · totale € {ca_importo_fmt(round(tot, 2))}" if tot else "") + "</h2><table><tr><th>Data</th><th>Cosa è stato fatto</th><th>Ditta</th><th>Costo €</th><th>Prossima</th><th>Note</th></tr>"
+                  + "".join(f"<tr><td>{e(_ca_data_it(m.get('data')))}</td><td>{e(m.get('descrizione') or m.get('tipo') or '')}</td><td>{e(m.get('ditta') or '')}</td><td>{e(str(m.get('costo') or ''))}</td>"
+                            f"<td>{e(_ca_data_it(m.get('prossima')) if m.get('prossima') else '')}</td><td>{e(m.get('note') or '')}</td></tr>" for m in g["voci"]) + "</table>")
+    return ("<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Storico degli interventi</title><style>body{font-family:Arial,sans-serif;font-size:10.5pt}h2{font-size:12pt;border-bottom:1px solid #888;margin-top:14pt}"
+            "table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px 5px;text-align:left}</style></head><body><h1>Storico degli interventi e delle manutenzioni</h1>" + corpo
+            + "<p style='font-size:8.5pt;color:#444'>Creato dall'app «La nostra dispensa».</p></body></html>")
+
+
+def _ca_storico_per_intervento(c, nomi, docs):
+    gruppi = ca_gruppi_interventi(c)
+    st.markdown("**📚 I tuoi interventi, raggruppati per genere**")
+    st.caption("Ogni volta che registri la stessa manutenzione (per esempio il controllo della caldaia) finisce nello stesso gruppo: vedi quante volte, quando, quanto hai speso, e puoi aggiungerne un'altra.")
+    import hashlib as _hl
+    for chiave, g in sorted(gruppi.items(), key=lambda kv: str(kv[1]["voci"][0].get("data") or ""), reverse=True):
+        voci = g["voci"]
+        tot = sum(_ca_costo(m.get("costo")) for m in voci)
+        pross = max((str(m.get("prossima")) for m in voci if m.get("prossima")), default="")
+        etichetta = (f"🔧 {g['nome']} · {len(voci)} {'volta' if len(voci) == 1 else 'volte'} · ultima {_ca_data_it(voci[0].get('data'))}"
+                     + (f" · prossima {_ca_data_it(pross)}" if pross else "") + (f" · totale € {ca_importo_fmt(round(tot, 2))}" if tot else ""))
+        k = _hl.md5(chiave.encode("utf-8")).hexdigest()[:8]
+        with st.expander(etichetta):
+            st.caption(f"Su: {nomi.get(g['bene_id']) or 'Casa in generale'}")
+            try:
+                import pandas as pd
+                st.dataframe(pd.DataFrame([{"Data": _ca_data_it(m.get("data")), "Cosa è stato fatto": m.get("descrizione") or m.get("tipo") or "", "Ditta": m.get("ditta") or "", "Costo €": m.get("costo") or "",
+                                            "Prossima": _ca_data_it(m.get("prossima")) if m.get("prossima") else "", "Fattura": "📎" if m.get("documento_id") else ""} for m in voci]), hide_index=True, width="stretch")
+                anni = {}
+                for m in voci:
+                    if m.get("data") and _ca_costo(m.get("costo")):
+                        anni[str(m["data"])[:4]] = anni.get(str(m["data"])[:4], 0.0) + _ca_costo(m.get("costo"))
+                if len(anni) >= 2:
+                    st.markdown("**Quanto hai speso, anno per anno**")
+                    st.bar_chart(pd.DataFrame({"Spesa €": [anni[a] for a in sorted(anni)]}, index=sorted(anni)), height=170)
+            except Exception:
+                for m in voci:
+                    st.markdown(f"- {_ca_data_it(m.get('data'))} · {_ca_testo(m.get('descrizione') or m.get('tipo'))}")
+            ult = voci[0]
+            with st.form(f"ca_gr_{k}", border=False):
+                st.markdown("**➕ Registra un'altra volta**")
+                f1, f2 = st.columns(2)
+                dt = f1.date_input("Data", value=oggi(), format="DD/MM/YYYY", key=f"ca_gr_d_{k}")
+                costo_n = f2.text_input("Costo (facoltativo)", key=f"ca_gr_c_{k}")
+                ditta_n = st.text_input("Ditta o tecnico", value=ult.get("ditta") or "", key=f"ca_gr_t_{k}")
+                pr_n = st.date_input("Prossimo controllo (facoltativo)", value=None, format="DD/MM/YYYY", key=f"ca_gr_p_{k}")
+                note_n = st.text_input("Note (facoltative)", key=f"ca_gr_n_{k}")
+                ok_n = st.form_submit_button("💾 Registra", type="primary", width="stretch")
+            if ok_n:
+                val = {"bene_id": ult.get("bene_id") or "", "data": dt, "tipo": ult.get("tipo") or "Manutenzione ordinaria", "descrizione": ult.get("descrizione") or "", "ditta": ditta_n,
+                       "costo": costo_n, "prossima": pr_n, "documento_id": "", "note": note_n, "intervento": g["nome"]}
+                _ca_salva(lambda cc, val=val: ca_aggiungi_manutenzione(cc, val), "Casa: intervento registrato")
+                st.session_state["messaggio"] = f"✅ Registrato un altro «{g['nome']}»."
+                st.rerun()
+            if "inv_voce" in globals():
+                inv_voce(f"ca_gr_inv_{k}", "📤 Invia questo storico", f"Storico: {g['nome']}", "\n".join(f"• {_ca_data_it(m.get('data'))} · {m.get('descrizione') or m.get('tipo') or ''} · {m.get('ditta') or ''} {('€ ' + str(m.get('costo'))) if m.get('costo') else ''}".strip() for m in voci), [])
+    h = ca_html_storico(c)
+    st.download_button("📄 Scarica tutto lo storico (da stampare o salvare come PDF)", h.encode("utf-8"), file_name=f"storico_interventi_{date.today().isoformat()}.html", mime="text/html", width="stretch", key="ca_storico_dl")
+
+
 def _ca_tab_manutenzioni(c):
     beni = c.get("beni", [])
-    if not beni:
-        st.info("Prima aggiungi un bene nella scheda «Beni»: poi qui registri le sue manutenzioni.")
-        return
     nomi = {b["id"]: b.get("nome", "") for b in beni}
     docs = c.get("documenti", [])
+    if not beni:
+        st.info("Puoi registrare anche gli interventi sulla casa in generale. Per quelli su un apparecchio (la caldaia, il condizionatore…) aggiungi prima il bene nella scheda «Beni».")
     with st.expander("➕ Registra una manutenzione o un intervento", expanded=not c.get("manutenzioni")):
         with st.form("ca_form_manut", border=False):
-            bene = st.selectbox("Su quale bene", [b["id"] for b in beni], format_func=lambda x: nomi.get(x, x))
+            bene = st.selectbox("Su quale bene", [""] + [b["id"] for b in beni], index=1 if beni else 0, format_func=lambda x: "🏠 Casa in generale (nessun bene)" if not x else nomi.get(x, x))
+            nomi_int = sorted({m.get("intervento") for m in c.get("manutenzioni", []) if m.get("intervento")})
+            sc_int = st.selectbox("È un intervento che hai già registrato?", [""] + nomi_int, format_func=lambda x: "— no, è nuovo —" if not x else x,
+                                  help="Scegli il nome: così tutte le volte che lo fai stanno nello stesso gruppo (per esempio «Controllo fumi caldaia»).")
+            nuovo_int = st.text_input("Oppure scrivi il nome dell'intervento", placeholder="es. Controllo fumi caldaia")
             c1, c2 = st.columns(2)
             data_m = c1.date_input("Data", value=oggi(), format="DD/MM/YYYY")
             tipo = c2.selectbox("Tipo", CA_TIPI_MANUTENZIONE)
@@ -3428,7 +3589,8 @@ def _ca_tab_manutenzioni(c):
             ok = st.form_submit_button("💾 Registra", type="primary", width="stretch")
         if ok:
             try:
-                val = {"bene_id": bene, "data": data_m, "tipo": tipo, "descrizione": descr, "ditta": ditta, "costo": costo, "prossima": prossima, "documento_id": doc, "note": note}
+                val = {"bene_id": bene, "data": data_m, "tipo": tipo, "descrizione": descr, "ditta": ditta, "costo": costo, "prossima": prossima, "documento_id": doc, "note": note,
+                       "intervento": (nuovo_int.strip() or sc_int or "")}
                 _ca_salva(lambda cc: ca_aggiungi_manutenzione(cc, val), "Casa: manutenzione registrata")
                 st.rerun()
             except Exception as e:
@@ -3440,38 +3602,40 @@ def _ca_tab_manutenzioni(c):
             st.markdown(f"- {'🔴 in ritardo di ' + str(-g) + ' giorni' if g < 0 else '🟠 tra ' + str(g) + ' giorni' if g > 0 else '🔴 oggi'} · **{_ca_testo(nome)}**: {_ca_testo(voce)}")
     man = sorted(c.get("manutenzioni", []), key=lambda x: x.get("data") or "", reverse=True)
     if man:
-        st.markdown("**📋 Storico**")
-        for m in man[:40]:
-            st.markdown(f"- {_ca_data_it(m.get('data'))} · **{_ca_testo(nomi.get(m.get('bene_id'), '?'))}** · {_ca_testo(m.get('tipo'))}: {_ca_testo(m.get('descrizione'))}"
-                        + (f" · {_ca_testo(m.get('ditta'))}" if m.get("ditta") else "") + (f" · {_ca_testo(m.get('costo'))} €" if m.get("costo") else ""))
-            dm = next((d for d in docs if d.get("id") == m.get("documento_id")), None)
-            if st.button("🗑️ Elimina questa manutenzione", key=f"ca_mdel_{m['id']}"):
-                _ca_finestra_elimina_manutenzione(m, nomi.get(m.get("bene_id"), "?"))
-            with st.expander(("📎 Fattura: " + _ca_etichetta_bolletta(dm)) if dm else "📎 Aggiungi la fattura o il documento dell'intervento", expanded=False):
-                if dm:
-                    _ca_riga_documento(dm, nomi, "mm" + m["id"], docs)
-                    if st.button("↩️ Scollega dalla manutenzione", key=f"ca_mscoll_{m['id']}"):
-                        _ca_salva(lambda cc, mid=m["id"]: next((x.pop("documento_id", None) for x in cc.get("manutenzioni", []) if x.get("id") == mid), None), "Casa: fattura scollegata")
-                        st.rerun()
-                else:
-                    adatti_m = [d for d in docs if d.get("tipo") in ("Bolletta o fattura", "Documentazione di un intervento", "Fattura o scontrino") or d.get("argomento") == "Interventi e riparazioni"]
-                    if adatti_m:
-                        sc_ = st.selectbox("Scegli una fattura già archiviata", [""] + [d["id"] for d in adatti_m], key=f"ca_msel_{m['id']}",
-                                           format_func=lambda x: "—" if not x else _ca_etichetta_bolletta(next((d for d in adatti_m if d["id"] == x), {})) or x)
-                        if sc_ and st.button("🔗 Collega questa fattura", key=f"ca_mlega_{m['id']}"):
-                            def _lega2(cc, mid=m["id"], did=sc_):
-                                m_ = next((x for x in cc.get("manutenzioni", []) if x.get("id") == mid), None)
-                                d_ = next((x for x in cc.get("documenti", []) if x.get("id") == did), None)
-                                if m_ is not None and d_ is not None:
-                                    m_["documento_id"], d_["manutenzione_id"] = did, mid
-                                    if m_.get("bene_id"):
-                                        d_["bene_id"] = m_["bene_id"]                        # la fattura resta dentro il bene
-                            _ca_salva(_lega2, "Casa: fattura collegata alla manutenzione")
+        _ca_storico_per_intervento(c, nomi, docs)
+        if st.toggle("📋 Mostra la cronologia completa (con le fatture e l'eliminazione)", key="ca_man_cronologia"):
+            st.markdown("**📋 Storico**")
+            for m in man[:40]:
+                st.markdown(f"- {_ca_data_it(m.get('data'))} · **{_ca_testo(nomi.get(m.get('bene_id')) or 'Casa in generale')}** · {_ca_testo(m.get('tipo'))}: {_ca_testo(m.get('descrizione'))}"
+                            + (f" · {_ca_testo(m.get('ditta'))}" if m.get("ditta") else "") + (f" · {_ca_testo(m.get('costo'))} €" if m.get("costo") else ""))
+                dm = next((d for d in docs if d.get("id") == m.get("documento_id")), None)
+                if st.button("🗑️ Elimina questa manutenzione", key=f"ca_mdel_{m['id']}"):
+                    _ca_finestra_elimina_manutenzione(m, nomi.get(m.get("bene_id"), "?"))
+                with st.expander(("📎 Fattura: " + _ca_etichetta_bolletta(dm)) if dm else "📎 Aggiungi la fattura o il documento dell'intervento", expanded=False):
+                    if dm:
+                        _ca_riga_documento(dm, nomi, "mm" + m["id"], docs)
+                        if st.button("↩️ Scollega dalla manutenzione", key=f"ca_mscoll_{m['id']}"):
+                            _ca_salva(lambda cc, mid=m["id"]: next((x.pop("documento_id", None) for x in cc.get("manutenzioni", []) if x.get("id") == mid), None), "Casa: fattura scollegata")
                             st.rerun()
-                    if st.button("📤 Carico una fattura nuova", key=f"ca_mnuova_{m['id']}"):
-                        st.session_state["ca_per_manutenzione"] = m["id"]
-                        st.session_state["messaggio"] = "🔧 Ora carica la fattura nella scheda Documenti (in cima): la collego a questo intervento e al suo bene."
-                        st.rerun()
+                    else:
+                        adatti_m = [d for d in docs if d.get("tipo") in ("Bolletta o fattura", "Documentazione di un intervento", "Fattura o scontrino") or d.get("argomento") == "Interventi e riparazioni"]
+                        if adatti_m:
+                            sc_ = st.selectbox("Scegli una fattura già archiviata", [""] + [d["id"] for d in adatti_m], key=f"ca_msel_{m['id']}",
+                                               format_func=lambda x: "—" if not x else _ca_etichetta_bolletta(next((d for d in adatti_m if d["id"] == x), {})) or x)
+                            if sc_ and st.button("🔗 Collega questa fattura", key=f"ca_mlega_{m['id']}"):
+                                def _lega2(cc, mid=m["id"], did=sc_):
+                                    m_ = next((x for x in cc.get("manutenzioni", []) if x.get("id") == mid), None)
+                                    d_ = next((x for x in cc.get("documenti", []) if x.get("id") == did), None)
+                                    if m_ is not None and d_ is not None:
+                                        m_["documento_id"], d_["manutenzione_id"] = did, mid
+                                        if m_.get("bene_id"):
+                                            d_["bene_id"] = m_["bene_id"]                        # la fattura resta dentro il bene
+                                _ca_salva(_lega2, "Casa: fattura collegata alla manutenzione")
+                                st.rerun()
+                        if st.button("📤 Carico una fattura nuova", key=f"ca_mnuova_{m['id']}"):
+                            st.session_state["ca_per_manutenzione"] = m["id"]
+                            st.session_state["messaggio"] = "🔧 Ora carica la fattura nella scheda Documenti (in cima): la collego a questo intervento e al suo bene."
+                            st.rerun()
 
 
 def schermata_casa():
@@ -3495,13 +3659,18 @@ def schermata_casa():
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
     for nome, g, imp in sc.get("bollette", [])[:4]:
         st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
-    t1, t2, t3 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni"])
+    t1, t2, t3, t4 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])
     with t1:
         _ca_tab_beni(c)
     with t2:
         _ca_tab_manuali(c)
     with t3:
         _ca_tab_manutenzioni(c)
+    with t4:
+        if "lv_tab_contatti" in globals():
+            lv_tab_contatti(c, "casa")
+        else:
+            st.info("La rubrica dei riferimenti non è disponibile.")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
