@@ -179,7 +179,14 @@ def _lv_form_documento(chiave, d, ric, modo):
             voci_t = st.text_area("Voci aggiunte a mano (una per riga: descrizione = importo)", value=_ca_voci_a_testo((d or {}).get("voci") if d else None), height=90,
                                   placeholder="Premio produzione = 150,00\nStraordinari = 80,00\nArretrati = 120,00", help="Servono per i grafici: si sommano al netto di quel mese.")
             ente = st.text_input("Datore di lavoro" + aff("ente"), value=val("ente") or "")
-            v = {"tipo": "Busta paga", "argomento": "Buste paga", "competenza": f"{int(anno_c):04d}-{int(mese_c):02d}", "mensilita": mensilita, "netto": _ca_importo_da_testo(netto),
+            try:
+                lavori_f = lv_lavori(_ca_dati())
+            except Exception:
+                lavori_f = lv_lavori({})
+            att_l = (d or {}).get("lavoro_id", "") if d else st.session_state.get("lv_lavoro_default", "")
+            ids_l = [x["id"] for x in lavori_f]
+            lavoro_id = st.selectbox("Di quale lavoro è", ids_l, index=ids_l.index(att_l) if att_l in ids_l else 0, format_func=lambda i: next((x["nome"] for x in lavori_f if x["id"] == i), "Lavoro principale")) if len(ids_l) > 1 else ""
+            v = {"tipo": "Busta paga", "argomento": "Buste paga", "lavoro_id": lavoro_id, "competenza": f"{int(anno_c):04d}-{int(mese_c):02d}", "mensilita": mensilita, "netto": _ca_importo_da_testo(netto),
                  "lordo": _ca_importo_da_testo(lordo), "trattenute": _ca_importo_da_testo(tratt), "voci": _ca_voci_da_testo(voci_t), "ente": ente}
         elif modo == "cu":
             c1, c2 = st.columns(2)
@@ -247,8 +254,8 @@ def lv_esporta(docs, etichetta, chiave):
         inv_voce(f"lv_invia_{chiave}", etichetta, "Buste paga: riepilogo", testo, lambda: ([(nome_file + ".pdf", "application/pdf", pdf)] if pdf else [(nome_file + ".html", "text/html", html_str.encode("utf-8"))]))
 
 
-def lv_archivio_buste(c):
-    docs = [d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"]
+def lv_archivio_buste(c, sel_l=None):
+    docs = lv_filtra_lavoro([d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"], sel_l)
     st.markdown(f"#### 📚 Le tue buste paga ({len(docs)})")
     if not docs:
         st.info("Ancora nessuna busta paga. Caricane una qui sopra, oppure inseriscila a mano.")
@@ -267,16 +274,87 @@ def lv_archivio_buste(c):
     lv_esporta(docs, "📤 Invia il riepilogo delle buste paga", "archivio")
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# 💼 PIÙ LAVORI: il principale e quelli secondari (secondo lavoro, collaborazioni, partita IVA…)
+# ---------------------------------------------------------------------------------------------------------------------
+def lv_lavori(c):
+    """[{id, nome}]: il lavoro principale (id vuoto) e quelli aggiunti."""
+    return [{"id": "", "nome": "Lavoro principale"}] + [x for x in (c.get("lavori") or []) if isinstance(x, dict) and x.get("id")]
+
+
+def lv_nome_lavoro(c, lid):
+    return next((x["nome"] for x in lv_lavori(c) if x["id"] == (lid or "")), "Lavoro principale")
+
+
+def lv_filtra_lavoro(docs, sel):
+    """sel None = tutti i lavori; altrimenti solo le buste di quel lavoro ('' = principale)."""
+    return docs if sel is None else [d for d in docs if (d.get("lavoro_id") or "") == sel]
+
+
+def _lv_dialogo_togli_lavoro(lid, nome):
+    def _finestra():
+        st.warning(f"Togliere il lavoro **{_h.escape(nome)}**? Le sue buste paga restano archiviate e passano al «Lavoro principale».")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglilo", key=f"lv_lav_si_{lid}", type="primary", width="stretch"):
+            def _fn(cc):
+                cc["lavori"] = [x for x in cc.get("lavori", []) if x.get("id") != lid]
+                for d in cc.get("documenti", []):
+                    if d.get("lavoro_id") == lid:
+                        d["lavoro_id"] = ""
+            _ca_salva(_fn, "Lavoro: lavoro tolto")
+            st.session_state.pop("lv_lavoro_p", None) if False else None
+            st.rerun()
+        if s2.button("No, tienilo", key=f"lv_lav_no_{lid}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli il lavoro")(_finestra)()
+
+
+def lv_selettore_lavoro(c, chiave="lv_lavoro_p"):
+    """Le pillole «Tutti · Lavoro principale · Secondo lavoro…» e l'aggiunta di un altro lavoro. Ritorna l'id scelto ('' = principale, None = tutti)."""
+    import uuid
+    lavori = lv_lavori(c)
+    sel = None
+    if len(lavori) > 1:
+        etichette = ["🔎 Tutti i lavori"] + [f"💼 {x['nome']}" for x in lavori]
+        if hasattr(st, "pills"):
+            scelta = st.pills("Quale lavoro", etichette, default=etichette[0], key=chiave, label_visibility="collapsed")
+        else:
+            scelta = st.radio("Quale lavoro", etichette, horizontal=True, key=chiave, label_visibility="collapsed")
+        if scelta and scelta in etichette and etichette.index(scelta) > 0:
+            sel = lavori[etichette.index(scelta) - 1]["id"]
+    st.session_state["lv_lavoro_default"] = sel or ""
+    with st.expander("➕ Aggiungi un altro lavoro (secondo lavoro, collaborazione…)"):
+        st.caption("Per seguire **più lavori**: ognuno ha le sue buste paga e i suoi totali. Potrai guardare un lavoro alla volta oppure **tutti insieme**.")
+        with st.form(f"{chiave}_nuovo", border=False, clear_on_submit=True):
+            nome = st.text_input("Nome del lavoro", placeholder="es. Secondo lavoro, Pulizie, Collaborazione")
+            ente = st.text_input("Datore di lavoro (facoltativo)")
+            ok = st.form_submit_button("💾 Aggiungi il lavoro", type="primary", width="stretch")
+        if ok:
+            if not nome.strip():
+                st.error("Scrivi un nome per il lavoro.")
+            else:
+                nv = {"id": uuid.uuid4().hex[:8], "nome": nome.strip(), "ente": ente.strip()}
+                _ca_salva(lambda cc, nv=nv: cc.__setitem__("lavori", list(cc.get("lavori", [])) + [nv]), "Lavoro: nuovo lavoro")
+                st.session_state["messaggio"] = f"✅ Aggiunto «{nv['nome']}»."
+                st.rerun()
+        for x in lavori[1:]:
+            r1, r2 = st.columns([3, 1], gap="small")
+            r1.markdown(f"💼 **{_h.escape(x['nome'])}**" + (f" · {_h.escape(x['ente'])}" if x.get("ente") else ""))
+            if r2.button("🗑️", key=f"lv_lav_t_{x['id']}", width="stretch"):
+                _lv_dialogo_togli_lavoro(x["id"], x["nome"])
+    return sel
+
+
 def lv_tab_buste(c):
     n = st.session_state.get("ca_giro", 0)
+    sel_l = lv_selettore_lavoro(c)
     st.markdown("#### ➕ Carica una busta paga")
     st.caption("Carica il **PDF**, una **foto** o una **scansione** della busta paga: leggo mese, **lordo**, **netto** e **trattenute** e te li propongo. **Controlli, correggi e confermi tu.** Il file resta com'è.")
     up = _ca_pannello_caricamento(n)
     _ca_flusso_documento(c, [], n, up, None, None, lavoro="busta", finestra=True)
-    if "_ca_busta_a_mano" in globals():
-        _ca_busta_a_mano()
+    _lv_a_mano("busta", "Inserisci a mano una busta paga o una voce")
     _ca_correzione(c, [])
-    lv_archivio_buste(c)
+    lv_archivio_buste(c, sel_l)
 
 
 def _lv_grafici_dati(punti):
@@ -288,7 +366,9 @@ def _lv_grafici_dati(punti):
 
 
 def lv_tab_grafici(c):
-    punti = lv_serie([d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"])
+    sel_l = lv_selettore_lavoro(c, "lv_lavoro_g")
+    docs_b = lv_filtra_lavoro([d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"], sel_l)
+    punti = lv_serie(docs_b)
     if len(punti) < 2:
         st.info("Per i grafici servono almeno due buste paga con il mese. Caricane altre (o inseriscile a mano) e compaiono qui.")
         return
@@ -323,7 +403,16 @@ def lv_tab_grafici(c):
                     st.caption(f"Il {r['anno']} non è ancora finito: il confronto giusto è con gli stessi mesi del {r['anno'] - 1}.")
                 if "media" in r["var"]:
                     st.markdown(f"&nbsp;&nbsp;↳ **media mensile** del netto: {_ca_fmt_var(r['var']['media'][0], r['var']['media'][1])}")
-    lv_esporta([d for d in c.get("documenti", []) if d.get("tipo") == "Busta paga"], "📤 Invia il riepilogo anno per anno", "grafici")
+    if sel_l is None and len(lv_lavori(c)) > 1:                                                   # tutti i lavori: quanto viene da ciascuno
+        st.markdown("**💼 Il netto di ogni lavoro, anno per anno**")
+        per = {}
+        for x in lv_lavori(c):
+            for r in lv_riepilogo_anni(lv_serie([d for d in docs_b if (d.get("lavoro_id") or "") == x["id"]])):
+                per.setdefault(x["nome"], {})[str(r["anno"])] = r["netto"]
+        anni_t = sorted({a for v_ in per.values() for a in v_})
+        if anni_t and pd is not None:
+            st.bar_chart(pd.DataFrame({n_: [per[n_].get(a, 0) for a in anni_t] for n_ in per}, index=anni_t), stack=True, height=240)
+    lv_esporta(docs_b, "📤 Invia il riepilogo anno per anno", "grafici")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -716,6 +805,13 @@ Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISE
     _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("lavoro", "l_cosa")
+    _lv_guida_aggiungi("lavoro", [
+        ("l_lavori", "💼 Più lavori (principale e secondari)", """Nelle **💶 Buste paga** e in **📊 Anno per anno** apri **➕ Aggiungi un altro lavoro** (secondo lavoro, collaborazione…): dai un nome e, se vuoi, il datore. Da quel momento in alto compaiono le **pillole**: **Tutti i lavori**, **Lavoro principale** e gli altri. Ogni busta ha il suo lavoro («Di quale lavoro è»). Nei grafici vedi un lavoro alla volta oppure **tutti insieme**, con il netto di ognuno anno per anno.""", "lavori secondo lavoro secondario collaborazione piu lavori"),
+    ])
+    _lv_guida_aggiungi("dispensa", [
+        ("h_radio", "🎧 La radio di sottofondo", """Sul bordo sinistro dello schermo c'è la **linguetta 🎧**. Toccala: si apre il pannello. Scegli una stazione **lounge e chill** già pronta, oppure **cerca tra migliaia di radio** (per nome o per genere: Lounge, Jazz, Classica…). Hai **▶ ⏸ ⏹**, il **volume**, le **★ preferite**, l'**equalizzatore** (bassi, medi, alti) e lo **spettro**. La musica **resta accesa in tutte le sezioni**. Il primo ascolto parte solo dopo un tuo tocco. Alcune radio non permettono equalizzatore e spettro: il pannello lo dice. Si nasconde da **Utilità → Aspetto dell'app**.""", "radio musica sottofondo lounge equalizzatore volume spettro"),
+        ("h_scambio", "📦 Scambiare i dati con un altro utente", """In **🧰 Utilità → 📦 Scambia i dati con un altro utente** (e dal pulsante in fondo a ogni sezione): **📤 Esporta** → scegli le sezioni, metti una **password** e scarica il file **.dispensa**. L'altro utente va in **📥 Importa**, sceglie il file con il pulsante arancione, scrive la password, guarda cosa contiene e **aggiunge** le tue cose alle sue: non cancella e non cambia niente di suo.""", "scambio esporta importa file utente famiglia dati condividere"),
+    ])
     _lv_guida_aggiungi("casa", [
         ("c_interventi", "🔧 Interventi ripetuti: lo storico", """In **🏡 Casa → 🔧 Manutenzioni** registri ogni intervento (anche sulla casa in generale, senza un bene). Dai un **nome** all'intervento (per esempio «Controllo fumi caldaia»): tutte le volte che lo fai finiscono **nello stesso gruppo**.
 Per ogni gruppo vedi **quante volte**, **quando**, **quanto hai speso** (anche anno per anno) e puoi toccare **➕ Registra un'altra volta**. Lo storico si **scarica** e si **invia**.""", "interventi manutenzione caldaia storico ripetuti spesa"),

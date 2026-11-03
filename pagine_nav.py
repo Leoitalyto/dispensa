@@ -178,6 +178,11 @@ def nav_pagine(corrente):
             st.button((("● " if attiva else "") + etichetta) + (f" 🔔{n}" if n else ""), key=("navpa_" if attiva else "navp_") + sez, width="stretch",
                       on_click=(None if attiva else nav_vai), args=(None if attiva else (sez,)))
     pn_freccia_su()
+    if "musica_inietta" in globals():                                  # la linguetta della radio di sottofondo (resta accesa in tutte le sezioni)
+        try:
+            musica_inietta()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -253,7 +258,18 @@ def pn_freccia_su():
 
 def pn_impostazioni():
     """Il riquadro «⚙️ Aspetto dell'app» (in Utilità): grandezza dei testi e da che parte sta la freccia «torna su»."""
-    with st.expander("⚙️ Aspetto dell'app: grandezza dei testi e freccia «torna su»"):
+    with st.expander("⚙️ Aspetto dell'app: testi, radio e freccia «torna su»"):
+        if "musica_attiva" in globals():
+            m_on = st.checkbox("🎧 Mostra la radio di sottofondo (la linguetta sul bordo dello schermo)", value=musica_attiva(), key="pn_musica_scelta")
+            if m_on != musica_attiva():
+                st.session_state["pn_musica"] = m_on
+                try:
+                    def _fnm(d, v=m_on):
+                        d.setdefault("impostazioni", {})["musica"] = v
+                    salva(_fnm, "Aspetto: radio di sottofondo")
+                except Exception as e:
+                    st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
+                st.rerun()
         t_sc = st.radio("🔤 Grandezza dei testi", list(_PN_TESTI), index=list(_PN_TESTI).index(pn_testo()), horizontal=True, key="pn_testo_scelta",
                         format_func=lambda x: {"normale": "Normale", "grande": "Grande", "molto grande": "Molto grande"}[x],
                         help="Se leggi meglio con le scritte più grandi: scegli «Grande» o «Molto grande». Vale per tutta l'app.")

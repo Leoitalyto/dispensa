@@ -823,8 +823,8 @@ def _ca_prepara_per_ocr(im):
     return g
 
 
-def ca_parole_posizionate(nome, mime, dati):
-    """Le parole della prima pagina con le coordinate. Da un PDF con testo: direttamente; da una foto o da una scansione: con l'OCR. [] se non riesce."""
+def ca_parole_posizionate(nome, mime, dati, pagine=1):
+    """Le parole delle prime pagine con le coordinate (ogni pagina ha il suo scarto in verticale: 10000 per pagina). Da un PDF con testo: direttamente; da una foto o da una scansione: con l'OCR. [] se non riesce."""
     try:
         if mime == "application/pdf":
             try:
@@ -833,7 +833,9 @@ def ca_parole_posizionate(nome, mime, dati):
                 import fitz as _mu
             doc = _mu.open(stream=dati, filetype="pdf")
             pag = doc[0]
-            parole = [{"t": w[4], "x0": w[0], "y0": w[1], "x1": w[2], "y1": w[3]} for w in pag.get_text("words") if str(w[4]).strip()]
+            parole = []
+            for k_ in range(min(max(1, pagine), doc.page_count)):
+                parole += [{"t": w[4], "x0": w[0], "y0": w[1] + 10000 * k_, "x1": w[2], "y1": w[3] + 10000 * k_} for w in doc[k_].get_text("words") if str(w[4]).strip()]
             if len(parole) >= 40:
                 doc.close()
                 return parole
@@ -1320,10 +1322,62 @@ def _ca_ordine(d):
     return (d.get("data_doc") or str(d.get("creato_il") or "")[:10] or "0000-00-00")
 
 
+def _cu_spaziale(parole):
+    """I dati fiscali di una CU dalla posizione: i numeri stanno SOTTO le scritte («Redditi di lavoro dipendente…», «Ritenute Irpef», «Addizionale regionale», «Acconto/Saldo» comunale)."""
+    parole = [dict(p) for p in parole]
+    # i numeri che hanno una SCRITTA sulla stessa riga, alla loro sinistra, non sono «sotto un'etichetta» (è un altro tipo di impaginazione): qui non si usano
+    def _con_etichetta(p):
+        if not _bp_num(p["t"]):
+            return False
+        h = max(p["y1"] - p["y0"], 1)
+        return any(0 <= p["x0"] - q["x1"] <= 14 and abs((q["y0"] + q["y1"]) / 2 - (p["y0"] + p["y1"]) / 2) < 0.5 * h and re.search(r"[A-Za-zÀ-ÿ]{3,}", q["t"]) for q in parole)
+    parole = [p for p in parole if not _con_etichetta(p)]
+    righe = _bp_righe_parole(parole)
+    out = {}
+    visti, red = set(), 0.0
+    for frasi in ([r"REDDITI", r"DI", r"LAVORO", r"DIPENDENTE", r"E", r"ASSIMILATI"], [r"REDDITI", r"DI", r"PENSIONE"], [r"ALTRI", r"REDDITI", r"ASSIMILATI"]):
+        for cas in _bp_trova_frase(righe, frasi):
+            n = _bp_numero_vicino(parole, cas, giu=4.0, dx_max=2.0)
+            q = next((p for p in parole if _bp_num(p["t"]) == n and abs(p["y0"] - cas[1]) < 60), None) if n else None
+            if q is not None and id(q) not in visti and (round(q["x0"]), round(q["y0"])) not in visti:
+                visti.add((round(q["x0"]), round(q["y0"])))
+                red += float(n)
+    if red:
+        out["cu_reddito"] = f"{red:.2f}"
+    for cas in _bp_trova_frase(righe, [r"RITENUTE", r"IRPEF"], dopo_vieta=r"SOSPESE"):
+        y0, y1 = cas[1], cas[3]
+        numeri = sorted((p["x0"], _bp_num(p["t"])) for p in parole if _bp_num(p["t"]) and y1 - 2 <= p["y0"] <= y1 + 28 and p["x0"] >= cas[0] - 30)
+        if not numeri:
+            continue
+        # le scritte di quella fila (Ritenute Irpef | Addizionale regionale | Acconto 2022 | Saldo 2022 | Acconto 2023): ogni numero va alla scritta più vicina a sinistra
+        colonne = []
+        for nome, frasi in (("rit", [r"RITENUTE", r"IRPEF"]), ("reg", [r"ADDIZIONALE", r"REGIONALE"]), ("com", [r"ACCONTO", r"20\d\d"]), ("com", [r"SALDO", r"20\d\d"])):
+            for c in _bp_trova_frase(righe, frasi, dopo_vieta=r"SOSPESA|SOSPESE"):
+                if y0 - 4 <= c[1] <= y0 + 6:
+                    colonne.append((c[0], nome))
+        colonne.sort()
+        if len(colonne) < 2:                                                          # layout diverso: non si indovina, ci pensa la lettura dal testo
+            continue
+        com = 0.0
+        for x, n in numeri:
+            nome = next((nm for cx, nm in reversed(colonne) if cx <= x + 25), colonne[0][1])
+            if nome == "rit" and "cu_ritenute" not in out:
+                out["cu_ritenute"] = n
+            elif nome == "reg" and "cu_add_reg" not in out:
+                out["cu_add_reg"] = n
+            elif nome == "com":
+                com += float(n)
+        if com:
+            out["cu_add_com"] = f"{com:.2f}"
+        break
+    return out
+
+
 def ca_leggi_cu(testo, testo_p1="", nome_file="", forza=False, parole=None):
     """Legge una Certificazione Unica (CU): anno, anno d'imposta, chi l'ha emessa (sostituto d'imposta), reddito, ritenute IRPEF, addizionali. Ritorna {'e_cu', 'campi'}. Le somme si cercano accanto alle scritte: da controllare."""
     t = testo or ""
-    e_cu = bool(re.search(r"certificazione\s+unica|\bCU\s*20\d{2}\b", t[:4000], re.I)) and bool(re.search(r"sostituto|dati\s+fiscali|redditi|ritenute", t, re.I))
+    e_cu = (bool(re.search(r"certificazione\s+unica|\bCU\s*20\d{2}\b", t[:5000], re.I)) or (bool(re.search(r"certificazione", t[:5000], re.I)) and bool(re.search(r"\bunica\s*20\d{2}", t[:5000], re.I)))) \
+        and bool(re.search(r"sostituto|dati\s+fiscali|redditi|ritenute", t, re.I))
     if not forza and not e_cu:
         return {"e_cu": False, "campi": {}}
     campi = {}
@@ -1331,9 +1385,9 @@ def ca_leggi_cu(testo, testo_p1="", nome_file="", forza=False, parole=None):
     def metti(k, v, aff, fonte="testo"):
         if v:
             campi[k] = {"valore": v, "affidabilita": aff, "fonte": fonte}
-    m = re.search(r"certificazione\s+unica\s*(20\d{2})|\bCU\s*(20\d{2})\b", t, re.I)
+    m = re.search(r"certificazione\s+unica\s*(20\d{2})|\bunica\s*(20\d{2})\b|\bCU\s*(20\d{2})\b", t, re.I)
     anno_cu = int(next(g for g in m.groups() if g)) if m else None
-    m2 = re.search(r"(?:redditi|anno\s+d'imposta|periodo\s+d'imposta|anno\s+di\s+riferimento)\D{0,12}(20\d{2})", t, re.I)
+    m2 = re.search(r"relativa\s+all['’]anno\s+(20\d{2})", t, re.I) or re.search(r"(?:redditi|anno\s+d'imposta|periodo\s+d'imposta|anno\s+di\s+riferimento)\D{0,12}(20\d{2})", t, re.I)
     anno_imp = int(m2.group(1)) if m2 else (anno_cu - 1 if anno_cu else None)
     if anno_cu is None and anno_imp:
         anno_cu = anno_imp + 1
@@ -1341,17 +1395,29 @@ def ca_leggi_cu(testo, testo_p1="", nome_file="", forza=False, parole=None):
     metti("cu_anno_imposta", str(anno_imp) if anno_imp else "", "alta" if m2 else "media")
     righe = t.splitlines()
     ente = ""
-    mm = re.search(r"denominazione\b[:\s]*([A-Z0-9][^\n]{3,70})", t, re.I)
+    cand = []
+    for mm_ in re.finditer(r"denominazione\b[:\s]*([A-Z0-9][^\n]{3,70})", t, re.I):
+        g_ = re.sub(r"\s+", " ", mm_.group(1)).strip(" -–,:")
+        if not re.match(r"(nome|cognome|codice|sesso|data|comune|indirizzo|telefono)\b", g_, re.I) and len(g_) >= 5:
+            cand.append(g_)
+    cand = [g_ for g_ in cand if re.search(r"coop|\bsoc|s\.?\s?r\.?\s?l|s\.?\s?p\.?\s?a|s\.?\s?n\.?\s?c|\bets\b|\bonlus\b|\bspa\b|\bsrl\b|\bsas\b|\bsnc\b|\bltd\b|\bgmbh\b|associazione|fondazione|comune di|azienda|ditta|studio", g_, re.I)]
     if re.search(r"\bINPS\b|istituto\s+nazionale\s+(?:della|di)\s+previdenza\s+sociale", t[:3000], re.I) and not re.search(r"datore|dipendente\s+di", t[:600], re.I):
         ente = "INPS"
-    if not ente and mm and not re.search(r"codice|fiscale|sostituto|percipiente|dati", mm.group(1), re.I):
-        ente = re.sub(r"\s+", " ", mm.group(1)).strip(" -–,:")
+    for mm_ in re.finditer(r"\b\d{11}\b\s+([A-Z0-9][^\n]{5,70}?)(?=\s{2,}|\n|$)", t):                  # la ragione sociale scritta dopo il codice fiscale/partita IVA del datore
+        g_ = re.sub(r"\s+", " ", mm_.group(1)).strip(" -–,:")
+        if re.search(r"coop|\bsoc|s\.?\s?r\.?\s?l|s\.?\s?p\.?\s?a|s\.?\s?n\.?\s?c|\bets\b|\bonlus\b|\bspa\b|\bsrl\b|\bsas\b|\bsnc\b|associazione|fondazione", g_, re.I):
+            cand.append(g_)
+    if not ente and cand:
+        ente = max(cand, key=len)
     if not ente and "_bp_ente" in globals():
         ente = _bp_ente(t)
     metti("ente", ente, "media" if ente else "bassa")
+    sp_ = _cu_spaziale(parole) if parole else {}
+    for k_, v_ in sp_.items():
+        metti(k_, v_, "alta")
     for chiave, rx in (("cu_reddito", r"redditi?\s+di\s+lavoro\s+dipendente(?:\s+e\s+assimilati)?|reddito\s+di\s+lavoro\s+dipendente|reddito\s+di\s+pensione|redditi?\s+di\s+pensione"),
                        ("cu_ritenute", r"ritenute\s+irpef"), ("cu_add_reg", r"addizionale\s+regionale"), ("cu_add_com", r"addizionale\s+comunale")):
-        trov = _bp_cerca(righe, rx) if "_bp_cerca" in globals() else []
+        trov = _bp_cerca(righe, rx) if ("_bp_cerca" in globals() and chiave not in campi) else []
         if trov:
             metti(chiave, trov[0][1], "media")
     return {"e_cu": True, "campi": campi}
@@ -1398,6 +1464,11 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
         except Exception:
             pass
     cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"]) else {"e_cu": False, "campi": {}}
+    if cu_["e_cu"] and dati:                                                                   # è una CU: si rilegge anche dalla posizione dei numeri
+        try:
+            cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", stem, parole=ca_parole_posizionate(nome, mime, dati, pagine=4)) or cu_
+        except Exception:
+            pass
     ut = ca_leggi_utenza(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"] and not cu_["e_cu"]) else {"e_utenza": False, "campi": {}}
     if bp["e_busta"]:
         campi = {}
@@ -1490,7 +1561,7 @@ _CAMPI_BENE = ("nome", "categoria", "sottocategoria", "marca", "modello", "seria
 _CAMPI_DOC = ("tipo", "titolo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura",
               "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua", "bene_id", "collegato_a", "pagata_il", "modo_pagamento", "nota_pagamento",
               "consumo", "unita_consumo", "competenza", "mensilita", "netto", "lordo", "trattenute", "voci", "manutenzione_id", "link", "note",
-              "cu_anno", "cu_anno_imposta", "cu_reddito", "cu_ritenute", "cu_add_reg", "cu_add_com", "inps_tipo")
+              "cu_anno", "cu_anno_imposta", "cu_reddito", "cu_ritenute", "cu_add_reg", "cu_add_com", "inps_tipo", "lavoro_id")
 _CAMPI_CONTROLLATI = ("tipo", "argomento", "ente", "importo", "numero_doc", "scadenza_doc", "periodo_da", "periodo_a", "codice_cliente", "codice_fornitura", "modo_pagamento", "consumo", "unita_consumo",
                       "competenza", "mensilita", "netto", "lordo", "trattenute", "cu_anno", "cu_anno_imposta", "cu_reddito", "cu_ritenute", "cu_add_reg", "cu_add_com", "inps_tipo",
                       "categoria", "sottocategoria", "marca", "modello", "seriale", "data_doc", "lingua")
@@ -3087,7 +3158,7 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                     ric = ca_riconosci(sorgente["nome"], sorgente["mime"], sorgente["dati"], testo, info)
                     modo_l = lavoro if isinstance(lavoro, str) else "busta"
                     if lavoro and modo_l == "cu" and testo:                              # sezione Lavoro → Certificazione Unica
-                        cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", "", forza=True)
+                        cu_ = ca_leggi_cu(testo, info.get("testo_p1") or "", "", forza=True, parole=ca_parole_posizionate(sorgente["nome"], sorgente["mime"], sorgente["dati"], pagine=4))
                         for k_, v_ in cu_["campi"].items():
                             ric["campi"][k_] = v_
                         ric["campi"]["tipo"] = {"valore": "Certificazione Unica (CU)", "affidabilita": "alta", "fonte": "sezione Lavoro"}
@@ -3104,7 +3175,8 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                         if ente_r:                                                           # lo stesso datore di lavoro si scrive sempre allo stesso modo (come nelle buste già archiviate)
                             chiave_e = re.sub(r"[^a-z0-9]", "", _ca_norm(ente_r))
                             for x_ in c.get("documenti", []):
-                                if x_.get("tipo") == "Busta paga" and x_.get("ente") and re.sub(r"[^a-z0-9]", "", _ca_norm(x_["ente"])) == chiave_e:
+                                k_x = re.sub(r"[^a-z0-9]", "", _ca_norm(x_.get("ente") or ""))
+                                if x_.get("tipo") in _CA_TIPI_LAVORO and k_x and (k_x == chiave_e or (min(len(k_x), len(chiave_e)) >= 12 and (k_x.startswith(chiave_e) or chiave_e.startswith(k_x)))):
                                     ric["campi"]["ente"]["valore"] = x_["ente"]
                                     break
                         ric["campi"]["tipo"] = {"valore": "Busta paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
