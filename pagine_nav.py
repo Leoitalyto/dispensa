@@ -19,6 +19,7 @@ _PN_VOCI = [
     ("documenti", "📁 I miei documenti", "#42b0ff", "#01579b"),
     ("archivio", "🗂️ Archivio", "#7986cb", "#283593"),
     ("casa", "🏡 Casa", "#ffb74d", "#d84315"),
+    ("lavoro", "💼 Lavoro", "#90a4ae", "#37474f"),
     ("utilita", "🧰 Utilità", "#c46bdc", "#4a148c"),
 ]
 

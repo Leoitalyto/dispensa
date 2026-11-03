@@ -691,13 +691,300 @@ def ca_leggi_negozio(testo, testo_p1=""):
 _CA_MESI_NOMI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 
 
-def ca_leggi_busta(testo, testo_p1="", nome_file=""):
+_BP_RE_IMPORTO = r"(?:€|eur(?:o)?\.?)?\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,6},\d{2}|\d{1,6}\.\d{2})(?!\d)"           # «1.234,56», «234,56» e anche «234.56»
+
+
+def _bp_importo_str(x):
+    return x.replace(".", "").replace(",", ".") if "," in x else x
+
+
+def _bp_importi(riga):
+    return [_bp_importo_str(m.group(1)) for m in re.finditer(_BP_RE_IMPORTO, riga or "")]
+
+
+def _bp_solo_numeri(riga):
+    return bool(_bp_importi(riga)) and not re.search(r"[A-Za-zÀ-ÿ]{4,}", re.sub(_BP_RE_IMPORTO, "", riga or ""))
+
+
+def _bp_cerca(righe, rx, escludi=None, ultimo_importo=False):
+    """Le righe dove c'è la scritta, con gli importi trovati: DOPO la scritta sulla stessa riga, oppure PRIMA, oppure su una delle due righe sotto se contengono solo numeri."""
+    out = []
+    for i, r in enumerate(righe):
+        m = re.search(rx, r, re.I)
+        if not m or (escludi and re.search(escludi, r, re.I)):
+            continue
+        ams = _bp_importi(r[m.end():]) or _bp_importi(r[:m.start()])
+        if not ams and len(set(x.lower() for x in re.findall(r"competenze|trattenute|ritenute|netto|lordo", r, re.I))) < 2:     # con più scritte sulla stessa riga i numeri sotto sono in colonna: li legge un'altra regola
+            for j in (i + 1, i + 2):
+                if j < len(righe) and _bp_solo_numeri(righe[j]):
+                    ams = _bp_importi(righe[j])
+                    break
+        if ams:
+            out.append((i, ams[-1] if ultimo_importo else ams[0], ams))
+    return out
+
+
+def _bp_totali(t):
+    """Lordo, netto e trattenute di una busta paga, con vari modi di leggerli. Ritorna {'lordo', 'netto', 'trattenute'} (stringhe «1234.56», solo quelli trovati) e come sono stati trovati."""
+    righe = [r for r in t.splitlines()]
+    trovati, come = {}, {}
+
+    def metti(k, v, c):
+        if v and k not in trovati:
+            trovati[k], come[k] = v, c
+    # 1) il NETTO: prima le scritte precise (in fondo alla busta), poi qualunque «netto»; vale l'ultima riga trovata
+    for rx, esc in ((r"netto\s+(?:del\s+mese|in\s+busta|a\s+pagare|da\s+pagare|da\s+corrispondere|busta|pagato|erogato|mensile)|totale\s+netto|netto\s+paga|netto\s+retribuzione|importo\s+netto", None),
+                    (r"\bnetto\b", r"imponibile|netto\s+imposta|imposta\s+netta|\bnetto\s+\d+\s*%|detrazion")):
+        c = _bp_cerca(righe, rx, esc, ultimo_importo=True)
+        if c:
+            metti("netto", c[-1][1], "scritta")
+            break
+    # 2) il LORDO (competenze)
+    for rx in (r"totale\s+competenze|tot\.?\s*competenze|competenze\s+totali|totale\s+lordo|lordo\s+totale|totale\s+retribuzione|retribuzione\s+lorda|totale\s+emolumenti|totale\s+voci\s+a\s+favore",
+               r"\blordo\b", r"\bcompetenze\b"):
+        c = _bp_cerca(righe, rx, r"imponibile|contributi|irpef|competenze\s+mese|ore\s+lavor")
+        if c:
+            metti("lordo", c[0][1], "scritta")
+            break
+    # 3) le TRATTENUTE
+    for rx in (r"totale\s+trattenute|tot\.?\s*trattenute|trattenute\s+totali|totale\s+ritenute|totale\s+voci\s+a\s+carico|totale\s+a\s+carico\s+del\s+dipendente",
+               r"^\s*trattenute\b", r"\btrattenute\b|\britenute\b"):
+        c = _bp_cerca(righe, rx, r"irpef|inps|addizionale|previdenz|sindacal|cessione|fondo|assistenz|imponibile|\bpercentuale\b")
+        if c:
+            metti("trattenute", c[-1][1] if rx.startswith("totale") or rx.startswith("tot") else c[0][1], "scritta")
+            break
+    # 4) la riga «TOTALI 2.129,51 512,30»: competenze e trattenute una accanto all'altra
+    for i, r in enumerate(righe):
+        if re.match(r"\s*(?:totali|totale\s+generale|totale\s+mese)\b", r, re.I):
+            ams = _bp_importi(r) or (_bp_importi(righe[i + 1]) if i + 1 < len(righe) and _bp_solo_numeri(righe[i + 1]) else [])
+            if len(ams) >= 2:
+                metti("lordo", ams[0], "riga totali")
+                metti("trattenute", ams[1], "riga totali")
+                if len(ams) >= 3:
+                    metti("netto", ams[2], "riga totali")
+    # 5) l'intestazione a colonne: «TOTALE COMPETENZE   TOTALE TRATTENUTE   NETTO» e sotto i tre numeri
+    for i, r in enumerate(righe[:-1]):
+        sigle = [(m.start(), k) for k, rx in (("lordo", r"competenze"), ("trattenute", r"trattenute|ritenute"), ("netto", r"\bnetto\b")) for m in [re.search(rx, r, re.I)] if m]
+        if len(sigle) >= 2 and not _bp_importi(r):
+            for j in (i + 1, i + 2):
+                if j < len(righe) and _bp_solo_numeri(righe[j]) and len(_bp_importi(righe[j])) >= len(sigle):
+                    for (pos, k), v_ in zip(sorted(sigle), _bp_importi(righe[j])):
+                        metti(k, v_, "colonne")
+                    break
+    # 6) il terzo valore dagli altri due (lordo − trattenute = netto), segnalato come «calcolato»
+    def f(k):
+        return float(trovati[k]) if k in trovati else None
+    L, N, T = f("lordo"), f("netto"), f("trattenute")
+    if L is not None and N is not None and T is None and N <= L:
+        metti("trattenute", f"{L - N:.2f}", "calcolato")
+    elif L is not None and T is not None and N is None and T <= L:
+        metti("netto", f"{L - T:.2f}", "calcolato")
+    elif N is not None and T is not None and L is None:
+        metti("lordo", f"{N + T:.2f}", "calcolato")
+    return trovati, come
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# BUSTE PAGA: leggere dove stanno le cose sulla pagina (la scritta e il numero che le sta sotto o accanto)
+# ---------------------------------------------------------------------------------------------------------------------
+def _ca_tsv_parole(im, psm="6"):
+    """Le parole di un'immagine con la loro posizione, dal Tesseract (comando): [{t, x0, y0, x1, y1}]."""
+    if not ("_doc_ocr_lingue" in globals() and _doc_ocr_lingue()):
+        return []
+    import subprocess
+    import tempfile
+    import os
+    try:
+        with tempfile.TemporaryDirectory() as cartella:
+            percorso = os.path.join(cartella, "pag.png")
+            im.save(percorso)
+            r = subprocess.run(["tesseract", percorso, "stdout", "-l", _doc_ocr_lingue(), "--psm", psm, "tsv"], capture_output=True, text=True, timeout=60)
+    except Exception:
+        return []
+    out = []
+    for riga in (r.stdout or "").splitlines()[1:]:
+        c = riga.split("\t")
+        if len(c) >= 12 and c[11].strip():
+            try:
+                x, y, w, h = int(c[6]), int(c[7]), int(c[8]), int(c[9])
+            except ValueError:
+                continue
+            out.append({"t": c[11].strip(), "x0": x, "y0": y, "x1": x + w, "y1": y + h})
+    return out
+
+
+def _ca_prepara_per_ocr(im):
+    """Grigio, contrasto al massimo e ingrandimento: le foto scure o grigie (screenshot di un PDF) si leggono molto meglio."""
+    from PIL import ImageOps
+    g = ImageOps.autocontrast(ImageOps.grayscale(im))
+    if g.width < 2200:
+        g = g.resize((g.width * 2, g.height * 2))
+    return g
+
+
+def ca_parole_posizionate(nome, mime, dati):
+    """Le parole della prima pagina con le coordinate. Da un PDF con testo: direttamente; da una foto o da una scansione: con l'OCR. [] se non riesce."""
+    try:
+        if mime == "application/pdf":
+            try:
+                import pymupdf as _mu
+            except Exception:
+                import fitz as _mu
+            doc = _mu.open(stream=dati, filetype="pdf")
+            pag = doc[0]
+            parole = [{"t": w[4], "x0": w[0], "y0": w[1], "x1": w[2], "y1": w[3]} for w in pag.get_text("words") if str(w[4]).strip()]
+            if len(parole) >= 40:
+                doc.close()
+                return parole
+            from PIL import Image
+            pix = pag.get_pixmap(dpi=170, alpha=False)
+            im = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            doc.close()
+            return _ca_tsv_parole(_ca_prepara_per_ocr(im), "6")
+        if mime.startswith("image/"):
+            from PIL import Image
+            im = Image.open(io.BytesIO(dati)).convert("RGB")
+            return _ca_tsv_parole(_ca_prepara_per_ocr(im), "6")
+    except Exception:
+        return []
+    return []
+
+
+def _bp_num(t):
+    m = re.fullmatch(r"€?(\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,6},\d{2})", str(t).strip(" |:;_"))
+    return _bp_importo_str(m.group(1)) if m else None
+
+
+def _bp_unisci_numeri(parole):
+    """L'OCR a volte spezza un importo in due («440,» e «68»): si riuniscono se sono vicini sulla stessa riga. Nessuna parola va persa."""
+    ordine = sorted(parole, key=lambda p: ((p["y0"] + p["y1"]) / 2, p["x0"]))
+    usati, out = set(), []
+    for idx, p in enumerate(ordine):
+        if idx in usati:
+            continue
+        t0 = p["t"].strip("|:; ")
+        if re.fullmatch(r"\d{1,3}(?:\.\d{3})*,", t0):
+            h = max(p["y1"] - p["y0"], 1)
+            migliore = None
+            for j, x in enumerate(ordine):
+                if j == idx or j in usati or not re.fullmatch(r"\d{2}", x["t"].strip("|:; ")):
+                    continue
+                if 0 <= x["x0"] - p["x1"] <= 2 * h and abs((x["y0"] + x["y1"]) / 2 - (p["y0"] + p["y1"]) / 2) <= 0.6 * h and (migliore is None or x["x0"] < ordine[migliore]["x0"]):
+                    migliore = j
+            if migliore is not None:
+                q = ordine[migliore]
+                usati.add(migliore)
+                out.append({"t": t0 + q["t"].strip("|:; "), "x0": p["x0"], "y0": min(p["y0"], q["y0"]), "x1": q["x1"], "y1": max(p["y1"], q["y1"])})
+                continue
+        out.append(p)
+    return out
+
+
+def _bp_righe_parole(parole):
+    """Le parole raggruppate per riga (stessa altezza), da sinistra a destra."""
+    if not parole:
+        return []
+    alt = sorted(p["y1"] - p["y0"] for p in parole)[len(parole) // 2] or 1
+    righe = []
+    for p in sorted(parole, key=lambda p: ((p["y0"] + p["y1"]) / 2, p["x0"])):
+        yc = (p["y0"] + p["y1"]) / 2
+        if righe and abs(righe[-1]["yc"] - yc) <= 0.6 * alt:
+            righe[-1]["p"].append(p)
+        else:
+            righe.append({"yc": yc, "p": [p]})
+    for r in righe:
+        r["p"].sort(key=lambda p: p["x0"])
+    return [r["p"] for r in righe]
+
+
+def _bp_trova_frase(righe, frasi, dopo_vieta=None, unico=None):
+    """Le caselle (x0, y0, x1, y1) delle scritte fatte da quelle parole di fila: «TOTALE» «LORDO»… Se dopo_vieta c'è, la parola che segue non deve corrispondere (per non confondere «TOTALE TRATTENUTE» con «TOTALE TRATTENUTE IRPEF»)."""
+    trovate = []
+    for r in righe:
+        toks = [re.sub(r"[^A-Za-z0-9ÀÈÉÌÒÙ%']", "", p["t"]).upper() for p in r]
+        if unico:
+            for i, tk in enumerate(toks):
+                if re.fullmatch(unico, tk):
+                    trovate.append((r[i]["x0"], r[i]["y0"], r[i]["x1"], r[i]["y1"]))
+        for i in range(len(toks) - len(frasi) + 1):
+            if all(re.match(f, toks[i + j]) for j, f in enumerate(frasi)):
+                seguente = toks[i + len(frasi)] if i + len(frasi) < len(toks) else ""
+                if dopo_vieta and seguente and re.match(dopo_vieta, seguente):
+                    continue
+                blocco = r[i:i + len(frasi)]
+                trovate.append((min(p["x0"] for p in blocco), min(p["y0"] for p in blocco), max(p["x1"] for p in blocco), max(p["y1"] for p in blocco)))
+    return trovate
+
+
+def _bp_numero_vicino(parole, casella, giu=6.0, dx_max=30.0):
+    """Il numero scritto SOTTO (o appena a destra di) una scritta: nella stessa casella del cedolino."""
+    x0, y0, x1, y1 = casella
+    h = max(y1 - y0, 1)
+    scelti = []
+    for p in parole:
+        n = _bp_num(p["t"])
+        if n is None:
+            continue
+        dy = p["y0"] - y0
+        if dy < -0.3 * h or dy > giu * h + h:
+            continue
+        if p["x0"] < x0 - 3 * h or p["x0"] > x1 + dx_max * h:
+            continue
+        scelti.append((abs(dy) + 0.35 * abs(p["x0"] - x0), n))
+    return min(scelti)[1] if scelti else None
+
+
+def _bp_spaziale(parole):
+    """Lordo, netto e trattenute dalla POSIZIONE sulla pagina: «TOTALE LORDO», «TOTALE TRATTENUTE», «NETTO BUSTA» e la riga «TOTALI». Ritorna ({campo: valore}, {campo: come})."""
+    parole = _bp_unisci_numeri(parole)
+    righe = _bp_righe_parole(parole)
+    tot, come = {}, {}
+
+    def metti(k, v, c):
+        if v and k not in tot:
+            tot[k], come[k] = v, c
+    for casella in _bp_trova_frase(righe, [r"NETTO", r"[BR]U[ST]T[A4]"], unico=r"NETTO[BR]U[ST]T[A4]"):
+        metti("netto", _bp_numero_vicino(parole, casella, giu=5.0, dx_max=34.0), "posizione")
+    for casella in _bp_trova_frase(righe, [r"TOTALE", r"LORDO"]):
+        metti("lordo", _bp_numero_vicino(parole, casella, giu=5.0, dx_max=14.0), "posizione")
+    for casella in _bp_trova_frase(righe, [r"TOTALE", r"TRATTENUTE"], dopo_vieta=r"IRPEF|T\.?S"):
+        metti("trattenute", _bp_numero_vicino(parole, casella, giu=5.0, dx_max=14.0), "posizione")
+    # la riga «TOTALI  2.088,96  440,68»: competenze e trattenute (i numeri che stanno alla stessa altezza della scritta, alla sua destra)
+    for p in parole:
+        if re.sub(r"[^A-Za-z]", "", p["t"]).upper() == "TOTALI":
+            h = max(p["y1"] - p["y0"], 1)
+            nums = sorted(((q["x0"], _bp_num(q["t"])) for q in parole if _bp_num(q["t"]) and q["x0"] >= p["x1"] - 5 and p["y0"] - 0.25 * h <= (q["y0"] + q["y1"]) / 2 <= p["y1"] + 0.25 * h), key=lambda x: x[0])
+            nums = [n for _, n in nums]
+            if len(nums) >= 2:
+                metti("lordo", nums[0], "riga totali")
+                metti("trattenute", nums[1], "riga totali")
+            elif len(nums) == 1:
+                metti("lordo", nums[0], "riga totali")
+    return tot, come
+
+
+def _bp_ente(t):
+    """Il datore di lavoro: la riga sotto «Ditta» (a volte spezzata su due righe)."""
+    righe = [r.strip() for r in t.splitlines()]
+    for i, r in enumerate(righe):
+        if re.fullmatch(r"ditta[:\s]*", r, re.I):
+            seguenti = [x for x in righe[i + 1:i + 8] if x][:3]
+            if not seguenti:
+                return ""
+            nome = seguenti[0]
+            if (len(nome) < 14 or re.search(r"(coop\.?|soc\.?)$", nome, re.I)) and len(seguenti) > 1 and not re.search(r"strada|via\b|viale|piazza|cod|fiscale|voce", seguenti[1], re.I):
+                nome += " " + seguenti[1]
+            return re.sub(r"\s+", " ", nome).strip(" -–,:")
+    return ""
+
+
+def ca_leggi_busta(testo, testo_p1="", nome_file="", forza=False, parole=None):
     """Legge una busta paga (cedolino): competenza (mese e anno), netto, lordo, trattenute, 13ª/14ª, datore di lavoro. Ritorna {'e_busta', 'campi'}."""
     t = testo or ""
     tn = " " + _ca_norm(t) + " "
     punti = sum(peso * min(tn.count(parola), 3) for parola, peso in (("cedolino", 4), ("busta paga", 4), ("prospetto paga", 4), ("libro unico", 3), ("competenze", 2), ("trattenute", 2), ("retribuzione", 2),
                                                                       ("netto in busta", 4), ("netto del mese", 4), ("netto a pagare", 3), ("tfr", 2), ("irpef", 2), ("inps", 1), ("ritenute", 1), ("giorni lavorati", 2), ("ore ordinarie", 2), ("paga base", 3)))
-    if not (punti >= 8 and "netto" in tn):
+    if not forza and not (punti >= 8 and "netto" in tn):
         return {"e_busta": False, "campi": {}}
     campi = {}
 
@@ -705,12 +992,32 @@ def ca_leggi_busta(testo, testo_p1="", nome_file=""):
         if valore:
             campi[k] = {"valore": valore, "affidabilita": aff, "fonte": fonte}
     metti("tipo", "Busta paga", "alta"); metti("argomento", "Buste paga", "alta")
-    for et, chiave in (("netto", ["netto del mese", "netto in busta", "netto a pagare", "netto da pagare", "netto busta", "totale netto", "netto"]),
-                       ("lordo", ["totale competenze", "totale lordo", "retribuzione lorda", "totale retribuzione", "lordo", "competenze"]),
-                       ("trattenute", ["totale trattenute", "totale ritenute", "trattenute"])):
-        v, _ = _ca_dopo(t, chiave, _CA_RE_IMPORTO, 70)
-        if v:
-            metti(et, _ca_importo_str(v.group(1)), "alta" if chiave[0] in _ca_norm(t) else "media")
+    tot_sp, come_sp = _bp_spaziale(parole) if parole else ({}, {})
+    t_testo, c_testo = _bp_totali(t)
+    tre = ("lordo", "netto", "trattenute")
+
+    def _err(d):                                                                              # quanto i tre numeri «tornano»: lordo − trattenute ≈ netto
+        return abs(float(d["lordo"]) - float(d["trattenute"]) - float(d["netto"])) if all(k in d for k in tre) else None
+    misto, come_m = {}, {}
+    for k_ in tre:                                                                             # per ogni valore: quello letto dalla posizione, altrimenti quello letto dal testo
+        if k_ in tot_sp:
+            misto[k_], come_m[k_] = tot_sp[k_], come_sp[k_]
+        elif k_ in t_testo:
+            misto[k_], come_m[k_] = t_testo[k_], c_testo[k_]
+    tot, come = misto, come_m
+    if tot_sp and t_testo:                                                                     # se i due modi non concordano, vale quello i cui tre numeri tornano meglio
+        e_m, e_t = _err(misto), _err(t_testo)
+        if e_t is not None and (e_m is None or e_t < e_m):
+            tot, come = dict(t_testo), dict(c_testo)
+    L_, N_, T_ = (float(tot[k]) if k in tot else None for k in ("lordo", "netto", "trattenute"))
+    if L_ is not None and N_ is not None and T_ is None and N_ <= L_:                         # il terzo valore si ricava dagli altri due
+        tot["trattenute"], come["trattenute"] = f"{L_ - N_:.2f}", "calcolato"
+    elif L_ is not None and T_ is not None and N_ is None and T_ <= L_:
+        tot["netto"], come["netto"] = f"{L_ - T_:.2f}", "calcolato"
+    for et in ("netto", "lordo", "trattenute"):
+        if et in tot:
+            metti(et, tot[et], "alta" if come[et] in ("scritta", "riga totali", "posizione") else "media" if come[et] == "colonne" else "bassa",
+                  {"scritta": "testo", "riga totali": "posizione sulla pagina", "posizione": "posizione sulla pagina", "colonne": "testo", "calcolato": "calcolato dagli altri due"}[come[et]])
     # competenza: «Periodo di paga: OTTOBRE 2026», «Mese: 10/2026», o il mese scritto in cima
     comp = ""
     m = re.search(r"(?:periodo\s+di\s+paga|mese\s+di\s+retribuzione|competenza|periodo|mese)[^\n\d]{0,25}?(" + "|".join(_CA_MESI_NOMI_IT) + r")\s+(\d{4})", t, re.I)
@@ -719,15 +1026,22 @@ def ca_leggi_busta(testo, testo_p1="", nome_file=""):
     if m:
         comp = f"{int(m.group(2)):04d}-{_CA_MESI_NOMI_IT.index(m.group(1).lower()) + 1:02d}"
     else:
-        m = re.search(r"(?:periodo|mese|competenza)[^\n\d]{0,20}(\d{1,2})\s*[/\-.]\s*(20\d{2})", t, re.I)
+        m = re.search(r"(?:periodo|mese|competenza|mensilit[aà]|retribuzione)[^\n\d]{0,24}(\d{1,2})\s*[/\-. ]\s*(20\d{2})", t, re.I)
         if m and 1 <= int(m.group(1)) <= 12:
             comp = f"{int(m.group(2)):04d}-{int(m.group(1)):02d}"
+        else:
+            m = re.search(r"(?:dal|periodo)[^\n]{0,24}?(\d{1,2})[/.\-](\d{1,2})[/.\-](20\d{2})[^\n]{0,20}?(?:al|a|-|–)\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](20\d{2})", t, re.I)
+            if m and 1 <= int(m.group(5)) <= 12:                           # un periodo «dal 01/10/2026 al 31/10/2026»: vale il mese in cui finisce
+                comp = f"{int(m.group(6)):04d}-{int(m.group(5)):02d}"
     metti("competenza", comp, "alta" if comp else "bassa")
     men = "13ª mensilità" if re.search(r"tredicesima|13\s*[ªa°]\s*mensilit", tn) else "14ª mensilità" if re.search(r"quattordicesima|14\s*[ªa°]\s*mensilit", tn) else "Mensile"
     metti("mensilita", men, "media")
     ente, aff_e, fonte_e = "", "bassa", ""
-    v, _ = _ca_dopo(t, ["datore di lavoro", "ragione sociale", "azienda"], r"([A-ZÀ-Ý][^\n]{3,50})", 45)
-    if v:
+    ente_ditta = _bp_ente(t)
+    v, _ = _ca_dopo(t, ["datore di lavoro", "ragione sociale"], r"([A-ZÀ-Ý][^\n]{3,50})", 45) if not ente_ditta else (None, None)
+    if ente_ditta:
+        ente, aff_e, fonte_e = ente_ditta, "alta", "testo"
+    elif v and not re.search(r"posizione|codice|cognome|matricola|azienda", v.group(1), re.I):
         ente, aff_e, fonte_e = re.sub(r"\s+", " ", v.group(1)).strip(" -–,:"), "media", "testo"
     else:
         trovato = ""
@@ -1024,6 +1338,11 @@ def ca_riconosci(nome, mime, dati, testo=None, info=None):
     metti("nome_apparecchio", nome_prop or stem[:60], "media" if nome_prop else "bassa", "testo" if nome_prop else "nome del file")
     # --- è una bolletta, una fattura, un avviso di pagamento, una polizza? Allora NON è un apparecchio: si leggono ente, importo, numero, date, periodo e codici
     bp = ca_leggi_busta(testo, info.get("testo_p1") or "", stem) if testo else {"e_busta": False, "campi": {}}
+    if bp["e_busta"] and dati:                                                                  # è una busta paga: si rilegge anche dalla posizione delle parole
+        try:
+            bp = ca_leggi_busta(testo, info.get("testo_p1") or "", stem, parole=ca_parole_posizionate(nome, mime, dati)) or bp
+        except Exception:
+            pass
     ut = ca_leggi_utenza(testo, info.get("testo_p1") or "", stem) if (testo and not bp["e_busta"]) else {"e_utenza": False, "campi": {}}
     if bp["e_busta"]:
         campi = {}
@@ -2583,32 +2902,8 @@ def _ca_archivia(sorgente, sha, ric, bozza, val, n):
             + (" e collegato alla sua bolletta" if val.get("collegato_a") else "") + ", con il file originale: lo ritrovi nella scheda Documenti.")
 
 
-def _ca_tab_manuali(c):
-    beni = c.get("beni", [])
-    nomi = {b["id"]: b.get("nome", "") for b in beni}
-    st.markdown("#### ➕ Archivia un documento: manuale, bolletta, fattura, polizza…")
-    st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
-               "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
-    n = st.session_state.get("ca_giro", 0)
-    per_b = st.session_state.get("ca_per_bolletta")
-    bol_att = next((x for x in c.get("documenti", []) if x.get("id") == per_b), None) if per_b else None
-    if per_b and not bol_att:
-        st.session_state.pop("ca_per_bolletta", None)
-    if bol_att:
-        st.info(f"📎 Stai aggiungendo la **ricevuta di pagamento** di: {_CA_ICONE_ARG.get(_ca_argomento_di(bol_att), '')} {_ca_etichetta_bolletta(bol_att)}. Carica qui sotto la foto, il PDF o lo screenshot.")
-        if st.button("✖ Annulla", key="ca_per_b_no"):
-            st.session_state.pop("ca_per_bolletta", None)
-            st.rerun()
-    per_m = st.session_state.get("ca_per_manutenzione")
-    man_att = next((x for x in c.get("manutenzioni", []) if x.get("id") == per_m), None) if per_m else None
-    if per_m and not man_att:
-        st.session_state.pop("ca_per_manutenzione", None)
-    if man_att:
-        st.info(f"🔧 Stai aggiungendo la **fattura dell'intervento**: {_ca_data_it(man_att.get('data'))} · {_ca_testo(man_att.get('tipo'))} · {_ca_testo(man_att.get('descrizione'))}. Carica qui sotto il documento: lo collego alla manutenzione e al bene.")
-        if st.button("✖ Annulla", key="ca_per_m_no"):
-            st.session_state.pop("ca_per_manutenzione", None)
-            st.rerun()
-    _ca_posta_riquadro(c)
+def _ca_pannello_caricamento(n):
+    """Tutti i modi per portare un file nell'app: 📷 Scatta foto, 🖼️ Dalla galleria, 📚 Più file, 📎 Il PDF o il file (pulsante arancione), 🔗 da un link. Ritorna il file arrivato (o None)."""
     chiave_f = f"cadoc{n}"
     if "_fa_assicura_fotocamera" in globals():                                  # la fotocamera posteriore è la stessa di Salute e della dispensa
         try:
@@ -2638,18 +2933,8 @@ def _ca_tab_manuali(c):
                 f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if (ack_t.endswith(':fine') or ack_t.startswith('upl:')) else 'Tocca il pulsante arancione e scegli il file: lo vedi tutto, anche se ha un nome strano.')}</div>"
                 f"<span data-ca-ack='{ack_t}' style='display:none'></span>", unsafe_allow_html=True)
     st.caption("📸 **Metodo sicuro per un PDF:** aprilo, fai uno **screenshot** di una pagina (o fotografalo) e usa **«🖼️ Dalla galleria»**: la foto viene letta come il documento.")
-    with st.expander("📂 Altro metodo: il campo di caricamento normale (solo PDF)"):
-        up_pdf = st.file_uploader("PDF", type=["pdf"], key=f"ca_up_{n}", label_visibility="collapsed")
-    with st.expander("🛟 Il PDF o la foto non si caricano? Prova da qui"):
-        st.caption("Qui il telefono ti fa scegliere **qualsiasi file**, anche uno senza estensione o con un nome strano (per esempio scaricato da WhatsApp o da una mail): "
-                   "controllo io dentro il file se è un PDF o una foto. Tocca il campo e scegli **Fotocamera**, **File** o **Documenti**.")
-        f_soc = st.file_uploader("Scegli qualsiasi file", key=f"ca_soc_{n}", label_visibility="collapsed")
-    with st.expander("🔎 Cosa ha ricevuto l'app finora (per capire dove si ferma)"):
-        def _rx(fl):
-            return f"ricevuto «{fl.name}» ({fl.size // 1024} KB)" if fl is not None else "niente"
-        st.markdown("<pre data-ca-log='1' style='white-space:pre-wrap;font-size:.78rem;background:#eef7f5;border-radius:12px;padding:8px;margin:4px 0'>Qui compare il racconto passo passo del pulsante arancione: scegli un file e torna a guardare.</pre>", unsafe_allow_html=True)
-        st.caption(f"Fotocamera: {_rx(f_cam)} · Galleria: {_rx(f_gal)} · Campo PDF: {_rx(up_pdf)} · Qualsiasi file: {_rx(f_soc)} · Canale 2 del pulsante: {_rx(f_pdfx)} · "
-                   f"Pulsante arancione: {('file ricevuto' if (ack_t.endswith(':fine') or ack_t.startswith('upl:')) else ('in arrivo (pezzo ' + ack_t.split(':')[-1] + ')' if ack_t else 'niente'))}" + (f" · ⚠️ {err_t}" if err_t else ""))
+    st.markdown("<pre data-ca-log='1' style='display:none'></pre>", unsafe_allow_html=True)                  # il pulsante arancione ci scrive dentro (nascosto)
+    f_soc = up_pdf = None
     up = _ca_ultimo_file({"cam": f_cam, "gal": f_gal, "soc": f_soc, "pdf": up_pdf, "x": f_pdfx}, chiave_f)
     with st.expander("🔗 …oppure prendi il manuale da un link"):
         st.caption("Va bene anche il link di **Google Drive** o **Dropbox**. Attenzione: perché funzioni il file deve essere condiviso con «chiunque abbia il link»: dopo averlo caricato qui, **togli la condivisione**.")
@@ -2663,6 +2948,11 @@ def _ca_tab_manuali(c):
                 else:
                     st.session_state["ca_bozza_in"] = {"nome": f.name, "mime": "application/pdf", "dati": f.getvalue() if hasattr(f, "getvalue") else f.dati, "link": url.strip()}
                     st.rerun()
+    return up
+
+
+def _ca_flusso_documento(c, beni, n, up, bol_att=None, man_att=None, lavoro=False):
+    """Il documento aperto: lo leggo, avviso se c'è già, propongo i dati e archivio dopo la tua conferma. lavoro=True: è una busta paga (nessuna proposta di bollette, legge i campi della busta)."""
     sorgente = None
     if up is not None:
         _dati_up = up.getvalue()
@@ -2691,7 +2981,20 @@ def _ca_tab_manuali(c):
                 with st.spinner("Leggo il documento…"):
                     testo, info = ca_estrai_testo(sorgente["nome"], sorgente["mime"], sorgente["dati"])
                     ric = ca_riconosci(sorgente["nome"], sorgente["mime"], sorgente["dati"], testo, info)
-                    ai = ca_ai_classifica(testo, ric)
+                    if lavoro and testo:                                                  # sezione Lavoro: è una busta paga
+                        bp = ca_leggi_busta(testo, info.get("testo_p1") or "", "", forza=True, parole=ca_parole_posizionate(sorgente["nome"], sorgente["mime"], sorgente["dati"]))
+                        for k_, v_ in bp["campi"].items():
+                            ric["campi"][k_] = v_
+                        ente_r = (ric["campi"].get("ente") or {}).get("valore")
+                        if ente_r:                                                           # lo stesso datore di lavoro si scrive sempre allo stesso modo (come nelle buste già archiviate)
+                            chiave_e = re.sub(r"[^a-z0-9]", "", _ca_norm(ente_r))
+                            for x_ in c.get("documenti", []):
+                                if x_.get("tipo") == "Busta paga" and x_.get("ente") and re.sub(r"[^a-z0-9]", "", _ca_norm(x_["ente"])) == chiave_e:
+                                    ric["campi"]["ente"]["valore"] = x_["ente"]
+                                    break
+                        ric["campi"]["tipo"] = {"valore": "Busta paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                        ric["campi"]["argomento"] = {"valore": "Buste paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
+                    ai = ca_ai_classifica(testo, ric) if not lavoro else None
                     if ai:                                                              # se l'assistente intelligente è acceso, completa i dati che mancano
                         for k, v in ai.items():
                             if k in ("tipo", "categoria", "sottocategoria", "marca", "modello", "seriale", "lingua", "data_doc") and v and k not in ric["campi"]:
@@ -2741,16 +3044,16 @@ def _ca_tab_manuali(c):
             bloccato = bool(doppi) and not st.session_state.get(f"ca_dup_ok_{n}")
             senza_rif = not ((ric["campi"].get("importo") or {}).get("valore") or (ric["campi"].get("numero_doc") or {}).get("valore")
                              or (ric["campi"].get("tipo") or {}).get("valore") not in ("", None, "Altro"))
-            allega = (bool(st.session_state.get(f"ca_allega_{n}")) or (senza_rif and bool(docs_c) and not st.session_state.get(f"ca_allega_off_{n}") and not man_att)) and not bloccato
+            allega = (not lavoro) and (bool(st.session_state.get(f"ca_allega_{n}")) or (senza_rif and bool(docs_c) and not st.session_state.get(f"ca_allega_off_{n}") and not man_att)) and not bloccato
             if allega:
                 _ca_scelta_allega(sorgente, sha, ric, bozza, n, docs_c)
-            elif not bloccato and docs_c:
+            elif not bloccato and docs_c and not lavoro:
                 if st.button("🔗 Allega a una fattura già inserita", key=f"ca_allega_apri_{n}", width="stretch", help="Cerchi la fattura per nome dell'ente e le allegli questo file come ricevuta di pagamento."):
                     st.session_state[f"ca_allega_{n}"] = True
                     st.rerun()
             cand = ca_candidate_bollette(docs_c, ric["campi"])
             esatte = [x for x in cand if x["esatto"]]
-            rapido = (not bloccato) and (not allega) and bool(cand or bol_att) and (tipo_ric == "Ricevuta di pagamento" or bool(bol_att) or (bool(esatte) and tipo_ric in ("", "Altro"))) and not st.session_state.get(f"ca_scelgo_io_{n}") and not man_att
+            rapido = (not lavoro) and (not bloccato) and (not allega) and bool(cand or bol_att) and (tipo_ric == "Ricevuta di pagamento" or bool(bol_att) or (bool(esatte) and tipo_ric in ("", "Altro"))) and not st.session_state.get(f"ca_scelgo_io_{n}") and not man_att
             if rapido:
                 imp_r = (ric["campi"].get("importo") or {}).get("valore", "")
                 dat_r = (ric["campi"].get("data_doc") or {}).get("valore", "")
@@ -2802,6 +3105,10 @@ def _ca_tab_manuali(c):
                         st.rerun()
                     except Exception as e:
                         st.error(f"Non sono riuscito a salvare: {e}")
+
+
+def _ca_correzione(c, beni):
+    """Il modulo «✏️ Correggi» di un documento (compare quando tocchi Correggi su una scheda). Serve a Casa e a Lavoro."""
     # ---- correzione e cancellazione
     cid = st.session_state.get("ca_correggi")
     if cid:
@@ -2842,10 +3149,42 @@ def _ca_tab_manuali(c):
                     st.rerun()
                 except Exception as e:
                     st.error(f"Non sono riuscito a salvare: {e}")
+
+
+def _ca_tab_manuali(c):
+    beni = c.get("beni", [])
+    nomi = {b["id"]: b.get("nome", "") for b in beni}
+    st.markdown("#### ➕ Archivia un documento: manuale, bolletta, fattura, polizza…")
+    st.caption("Carica un **PDF**, una **foto** o una **scansione** (anche un PDF fatto con lo scanner): leggo il documento e ti propongo tipo, apparecchio, marca, modello e numero di serie, "
+               "e lo collego al bene giusto. **Il file resta com'è**, e prima di archiviare controlli e confermi tu.")
+    n = st.session_state.get("ca_giro", 0)
+    per_b = st.session_state.get("ca_per_bolletta")
+    bol_att = next((x for x in c.get("documenti", []) if x.get("id") == per_b), None) if per_b else None
+    if per_b and not bol_att:
+        st.session_state.pop("ca_per_bolletta", None)
+    if bol_att:
+        st.info(f"📎 Stai aggiungendo la **ricevuta di pagamento** di: {_CA_ICONE_ARG.get(_ca_argomento_di(bol_att), '')} {_ca_etichetta_bolletta(bol_att)}. Carica qui sotto la foto, il PDF o lo screenshot.")
+        if st.button("✖ Annulla", key="ca_per_b_no"):
+            st.session_state.pop("ca_per_bolletta", None)
+            st.rerun()
+    per_m = st.session_state.get("ca_per_manutenzione")
+    man_att = next((x for x in c.get("manutenzioni", []) if x.get("id") == per_m), None) if per_m else None
+    if per_m and not man_att:
+        st.session_state.pop("ca_per_manutenzione", None)
+    if man_att:
+        st.info(f"🔧 Stai aggiungendo la **fattura dell'intervento**: {_ca_data_it(man_att.get('data'))} · {_ca_testo(man_att.get('tipo'))} · {_ca_testo(man_att.get('descrizione'))}. Carica qui sotto il documento: lo collego alla manutenzione e al bene.")
+        if st.button("✖ Annulla", key="ca_per_m_no"):
+            st.session_state.pop("ca_per_manutenzione", None)
+            st.rerun()
+    _ca_posta_riquadro(c)
+    up = _ca_pannello_caricamento(n)
+    _ca_flusso_documento(c, beni, n, up, bol_att, man_att)
+
+    _ca_correzione(c, beni)
+
     # ---- l'archivio: per ARGOMENTO (Luce, Gas, Acqua…), dentro per ENTE (la compagnia, il negozio, la marca), dentro per DATA
     docs = c.get("documenti", [])
     st.divider()
-    _ca_busta_a_mano()
     if not docs:
         st.info("Non hai ancora archiviato nessun documento. Carica qui sopra il primo: un manuale, una bolletta, una fattura, una polizza…")
         return
@@ -2860,6 +3199,7 @@ def _ca_tab_manuali(c):
     q = _ca_norm(cerca)
     gruppi = {}
     nascosti_beni = 0
+    buste_altrove = 0
     mostra_beni = st.session_state.get("ca_mostra_beni", False)
     for d in docs:
         if farg and _ca_argomento_di(d) != farg:
@@ -2873,12 +3213,17 @@ def _ca_tab_manuali(c):
         parenti = [d] + ca_ricevute_di(docs, d["id"])
         if q and not any(q in _ca_norm(" ".join(str(x.get(k) or "") for k in ("titolo", "ente", "marca", "modello", "seriale", "tipo", "sottocategoria", "note", "categoria", "argomento", "numero_doc", "importo", "codice_cliente", "codice_fornitura")) + " " + _ca_testo_date(x)) for x in parenti):
             continue
+        if d.get("tipo") == "Busta paga":                                                          # le buste paga stanno nella sezione LAVORO
+            buste_altrove += 1
+            continue
         if d.get("collegato_a") and any(x.get("id") == d["collegato_a"] for x in docs):          # ricevuta collegata: si vede dentro la sua bolletta
             continue
         if d.get("bene_id") and not (mostra_beni or (fbene and fbene != "__nessuno__")):             # i documenti di un bene stanno dentro il bene (scheda Beni)
             nascosti_beni += 1
             continue
         gruppi.setdefault(_ca_argomento_di(d), {}).setdefault(_ca_ente_di(d), []).append(d)
+    if buste_altrove:
+        st.caption(f"💼 Le {buste_altrove} buste paga ora stanno nella sezione **Lavoro** (bottone «💼 Lavoro» in alto).")
     if nascosti_beni or mostra_beni:
         st.checkbox(f"🏠 Mostra anche i {nascosti_beni} documenti dei beni" if not mostra_beni else "🏠 Mostra anche i documenti dei beni (tolgo la spunta per nasconderli)", key="ca_mostra_beni",
                     help="I manuali, le garanzie e le fatture collegati a un bene stanno dentro il bene (scheda Beni), dove si leggono e si correggono.")
