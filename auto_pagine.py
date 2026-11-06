@@ -818,7 +818,9 @@ def schermata_auto():
     if "_CA_CSS" in globals():
         st.markdown(_CA_CSS, unsafe_allow_html=True)
     st.markdown(_AU_CSS, unsafe_allow_html=True)
-    st.markdown("<div class='au-hero'><div class='ico'>🚗</div><div><h1>Garage personale</h1><p>Documenti, scadenze, manutenzione, consumi ed emergenze dei tuoi veicoli</p></div></div>", unsafe_allow_html=True)
+    _uri_auto = ih_uri("auto.webp", 360) if "ih_uri" in globals() else ""                 # l'icona verde e oro nell'intestazione (senza il riquadro di vetro); se manca, resta l'emoji
+    _ico_auto = f"<img class='ico-img' alt='Auto' src='{_uri_auto}'>" if _uri_auto else "<div class='ico'>🚗</div>"
+    st.markdown(f"<div class='au-hero'>{_ico_auto}<div><h1>Garage personale</h1><p>Documenti, scadenze, manutenzione, consumi ed emergenze dei tuoi mezzi</p></div></div>", unsafe_allow_html=True)
     if st.session_state.get("messaggio"):
         st.success(st.session_state.pop("messaggio"))
     if "pulsante_info" in globals():

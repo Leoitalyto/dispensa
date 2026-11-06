@@ -41,7 +41,8 @@ except Exception:
     pass
 
 _AU_CSS = """<style>
-.au-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#26c6da 0%,#00838f 55%,#004d5a 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;box-shadow:0 6px 18px rgba(0,60,70,.35)}
+.au-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#0a3d33 0%,#12805f 55%,#b8962e 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;box-shadow:0 6px 18px rgba(0,60,40,.4)}
+.au-hero .ico-img{width:140px;max-width:42%;height:auto;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.55)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}
 .au-hero .ico{font-size:3rem;line-height:1}.au-hero h1{margin:0;font-size:1.7rem;color:#fff}.au-hero p{margin:2px 0 0;font-size:.95rem;opacity:.95}
 .au-card{background:rgba(255,255,255,.9);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b;border-left:6px solid #00acc1}
 .au-card b.t{font-size:1.02rem}.au-card small{color:#33474a}
