@@ -1755,13 +1755,100 @@ def _ca_dati():
     return c
 
 
+_CA_LISTE_CASA = ("beni", "documenti", "manutenzioni", "contatti_casa")
+
+
 def _ca_salva(fn, messaggio):
+    sel = st.session_state.get("ca_casa_sel") or ""
+
     def _m(d):
         c = d.setdefault("casa", {})
         for k in ("beni", "documenti", "manutenzioni"):
             c.setdefault(k, [])
+        prima = {k: {id(x) for x in c.get(k, [])} for k in _CA_LISTE_CASA}
         fn(c)
+        if sel:                                                                  # con una seconda casa scelta, le voci nuove stanno in quella casa
+            lavoro = globals().get("_CA_TIPI_LAVORO", ())
+            for k in _CA_LISTE_CASA:
+                for x in c.get(k, []):
+                    if isinstance(x, dict) and id(x) not in prima[k] and not x.get("casa_id") and not (k == "documenti" and x.get("tipo") in lavoro):
+                        x["casa_id"] = sel
     salva(_m, messaggio)
+
+
+def ca_case(c):
+    """[{id, nome, indirizzo}]: la casa principale (id vuoto) e le altre."""
+    return [{"id": "", "nome": "Casa principale", "indirizzo": ""}] + [x for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id")]
+
+
+def ca_vista_casa(c, sel):
+    """I dati di UNA casa (la scelta): gli elenchi senza le voci delle altre case. I documenti del lavoro non si toccano."""
+    sel = sel or ""
+    lavoro = globals().get("_CA_TIPI_LAVORO", ())
+    v = dict(c)
+    for k in _CA_LISTE_CASA:
+        v[k] = [x for x in c.get(k, []) if not isinstance(x, dict) or (k == "documenti" and x.get("tipo") in lavoro) or (x.get("casa_id") or "") == sel]
+    return v
+
+
+def _ca_dialogo_togli_casa(cid, nome):
+    def _finestra():
+        st.warning(f"Togliere la casa **{html.escape(nome)}**? Quello che hai registrato per lei (beni, documenti, interventi, riferimenti) **non si cancella**: passa alla casa principale.")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("🗑️ Sì, toglila", key=f"ca_casa_si_{cid}", type="primary", width="stretch"):
+            def _fn(cc):
+                cc["case"] = [x for x in cc.get("case", []) if x.get("id") != cid]
+                for k in _CA_LISTE_CASA:
+                    for x in cc.get(k, []):
+                        if isinstance(x, dict) and x.get("casa_id") == cid:
+                            x["casa_id"] = ""
+            _ca_salva(_fn, "Casa: casa tolta")
+            st.session_state["ca_casa_sel"] = ""
+            st.rerun()
+        if s2.button("No, tienila", key=f"ca_casa_no_{cid}", width="stretch"):
+            st.rerun()
+    st.dialog("🗑️ Togli la casa")(_finestra)()
+
+
+def ca_selettore_casa(c):
+    """Le pillole «Casa principale · Seconda casa…» e l'aggiunta di un'altra casa. Ritorna l'id della casa scelta ('' = principale)."""
+    import uuid
+    case = ca_case(c)
+    sel = st.session_state.get("ca_casa_sel") or ""
+    if sel not in [x["id"] for x in case]:
+        sel = ""
+    if len(case) > 1:
+        etichette = [f"🏡 {x['nome']}" for x in case]
+        corrente = etichette[[x["id"] for x in case].index(sel)]
+        if hasattr(st, "pills"):
+            scelta = st.pills("Quale casa", etichette, default=corrente, key="ca_casa_pillole", label_visibility="collapsed")
+        else:
+            scelta = st.radio("Quale casa", etichette, index=etichette.index(corrente), horizontal=True, key="ca_casa_pillole", label_visibility="collapsed")
+        if scelta and scelta in etichette:
+            sel = case[etichette.index(scelta)]["id"]
+    st.session_state["ca_casa_sel"] = sel
+    with st.expander("➕ Aggiungi un'altra casa (seconda casa, casa dei genitori…)"):
+        st.caption("Per seguire **più case**: ognuna ha i suoi beni, documenti, bollette, manutenzioni e riferimenti. In alto scegli quale guardare; gli **avvisi di scadenza** valgono per tutte.")
+        with st.form("ca_casa_nuova", border=False, clear_on_submit=True):
+            nome = st.text_input("Nome della casa", placeholder="es. Casa al mare, Casa della nonna")
+            ind = st.text_input("Indirizzo (facoltativo)")
+            ok = st.form_submit_button("💾 Aggiungi la casa", type="primary", width="stretch")
+        if ok:
+            if not nome.strip():
+                st.error("Scrivi un nome per la casa.")
+            else:
+                nv = {"id": uuid.uuid4().hex[:8], "nome": nome.strip(), "indirizzo": ind.strip()}
+                _ca_salva(lambda cc, nv=nv: cc.__setitem__("case", list(cc.get("case", [])) + [nv]), "Casa: nuova casa")
+                st.session_state["ca_casa_sel"] = nv["id"]
+                st.session_state.pop("ca_casa_pillole", None)
+                st.session_state["messaggio"] = f"✅ Aggiunta «{nv['nome']}». Ora stai guardando quella casa."
+                st.rerun()
+        for x in case[1:]:
+            r1, r2 = st.columns([3, 1], gap="small")
+            r1.markdown(f"🏡 **{html.escape(x['nome'])}**" + (f" · {html.escape(x['indirizzo'])}" if x.get("indirizzo") else ""))
+            if r2.button("🗑️", key=f"ca_casa_t_{x['id']}", width="stretch"):
+                _ca_dialogo_togli_casa(x["id"], x["nome"])
+    return sel
 
 
 def _ca_scrivi_file(nid, nome, mime, dati):
@@ -2394,6 +2481,8 @@ def _ca_avvia_trasferimento():
               "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
               "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
               "var s=P.document.createElement('script');s.textContent=" + json.dumps(_CA_JS_PDF) + ";P.document.head.appendChild(s);})();</script>")
+    if "pn_inietta_una_volta" in globals():
+        return pn_inietta_una_volta("trasferimento", "1", pagina)
     try:
         st.html(pagina, unsafe_allow_javascript=True)
     except Exception:
@@ -3731,18 +3820,26 @@ def schermata_casa():
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
     for nome, g, imp in sc.get("bollette", [])[:4]:
         st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
+    sel_c = ca_selettore_casa(c)
+    cv = ca_vista_casa(c, sel_c)
+    if len(ca_case(c)) > 1:
+        st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
     t1, t2, t3, t4 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])
     with t1:
-        _ca_tab_beni(c)
+        if getattr(t1, "open", True):                                  # si disegna solo la scheda aperta (più veloce)
+            _ca_tab_beni(cv)
     with t2:
-        _ca_tab_manuali(c)
+        if getattr(t2, "open", True):
+            _ca_tab_manuali(cv)
     with t3:
-        _ca_tab_manutenzioni(c)
+        if getattr(t3, "open", True):
+            _ca_tab_manutenzioni(cv)
     with t4:
-        if "lv_tab_contatti" in globals():
-            lv_tab_contatti(c, "casa")
-        else:
-            st.info("La rubrica dei riferimenti non è disponibile.")
+        if getattr(t4, "open", True):
+            if "lv_tab_contatti" in globals():
+                lv_tab_contatti(cv, "casa")
+            else:
+                st.info("La rubrica dei riferimenti non è disponibile.")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -3757,7 +3854,7 @@ if "_NOMI_SEZIONI" in globals():                                    # la guida d
     _GUIDE.setdefault("casa", [
         ("🏡 Cos'è la sezione Casa",
          """La sezione **Casa** raccoglie **i beni della tua casa** (caldaia, climatizzatori, elettrodomestici, TV, allarmi, impianti), **tutti i documenti di casa** (manuali, garanzie, bollette di luce, gas e acqua, fatture, polizze…) e **le manutenzioni**.
-Ha tre schede in basso: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni**.
+Ha quattro schede: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni** e **📇 Riferimenti**. Se hai più case (**➕ Aggiungi un'altra casa**), in alto scegli quale guardare.
 Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
          "casa abitazione beni inventario caldaia lavatrice manuali manutenzioni sezione"),
         ("📚 Archiviare un documento (manuale, bolletta, fattura…)",

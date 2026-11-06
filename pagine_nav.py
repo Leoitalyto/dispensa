@@ -162,6 +162,11 @@ def _pn_h(t):
 
 def nav_pagine(corrente):
     """I bottoni colorati per passare da una pagina all'altra; quelli con cose in scadenza lampeggiano e dicono quante."""
+    try:                                                              # la sezione in cui sei si scrive nell'indirizzo: se la pagina riparte, si torna qui
+        if st.query_params.get("s") != corrente:
+            st.query_params["s"] = corrente
+    except Exception:
+        pass
     nasc = sv_nascoste() if "sv_nascoste" in globals() else set()
     sc = pn_scadenze()
     lampeggiano = [sez for sez in sc if sez not in nasc]
@@ -236,12 +241,11 @@ def pn_lato():
     return st.session_state["pn_lato"]
 
 
-def pn_freccia_su():
-    """Mette (o aggiorna) la freccia «torna su» nella pagina."""
-    pagina = ("<script>(function(){"
-              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
-              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
-              "var s=P.document.createElement('script');s.textContent=" + json.dumps(_PN_JS.replace("__LATO__", json.dumps(pn_lato()))) + ";P.document.head.appendChild(s);})();</script>")
+def pn_inietta_una_volta(chiave, versione, pagina):
+    """Manda uno script alla pagina SOLO la prima volta di ogni sessione (o quando cambia la versione): lo script resta nel browser, rimandarlo a ogni tocco rallentava tutto."""
+    if st.session_state.get("_inj_" + chiave) == versione:
+        return
+    st.session_state["_inj_" + chiave] = versione
     try:
         st.html(pagina, unsafe_allow_javascript=True)
     except Exception:
@@ -254,6 +258,16 @@ def pn_freccia_su():
             _comp_pn.html(pagina, height=0)
     except Exception:
         pass
+
+
+def pn_freccia_su():
+    """Mette (o aggiorna) la freccia «torna su» nella pagina (una volta sola per sessione, o quando cambi il lato)."""
+    lato = pn_lato()
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
+              "var s=P.document.createElement('script');s.textContent=" + json.dumps(_PN_JS.replace("__LATO__", json.dumps(lato))) + ";P.document.head.appendChild(s);})();</script>")
+    pn_inietta_una_volta("freccia", str(lato), pagina)
 
 
 def pn_impostazioni():

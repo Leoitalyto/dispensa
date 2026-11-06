@@ -36,7 +36,7 @@ _MU_JS = r"""
   var LS = null; try { LS = w.localStorage; } catch (e) { LS = null; }
   function leggi(k, d) { try { var v = LS ? LS.getItem('mu_' + k) : null; return (v === null || v === undefined) ? d : JSON.parse(v); } catch (e) { return d; } }
   function scrivi(k, v) { try { if (LS) LS.setItem('mu_' + k, JSON.stringify(v)); } catch (e) {} }
-  var S = { audio: null, ctx: null, nodi: null, staz: leggi('ultima', null), limitata: false, vol: leggi('vol', 0.7), eq: leggi('eq', [0, 0, 0]), fav: leggi('fav', []), suona: false, aperto: false, risultati: [] };
+  var S = { duck: false, audio: null, ctx: null, nodi: null, staz: leggi('ultima', null), limitata: false, vol: leggi('vol', 0.7), eq: leggi('eq', [0, 0, 0]), fav: leggi('fav', []), suona: false, aperto: false, risultati: [] };
   if (typeof S.vol !== 'number') S.vol = 0.7;
   if (!S.eq || S.eq.length !== 3) S.eq = [0, 0, 0];
   if (!Array.isArray(S.fav)) S.fav = [];
@@ -121,6 +121,8 @@ _MU_JS = r"""
     } catch (x) { S.nodi = null; return false; }
   }
   function applicaEq() { if (!S.nodi) return; for (var i = 0; i < 3; i++) { try { S.nodi.f[i].gain.value = S.eq[i]; } catch (e) {} } }
+  function volEff() { return (S.muto || S.duck) ? 0 : S.vol; }
+  function applicaVol() { if (S.audio) { try { S.audio.volume = volEff(); } catch (x) {} } }
   function ferma() {
     if (S.audio) { try { S.audio.onerror = null; S.audio.pause(); S.audio.removeAttribute('src'); S.audio.load(); } catch (e) {} }
     S.audio = null; S.nodi = null; segna(false); aggiornaNote();
@@ -128,7 +130,7 @@ _MU_JS = r"""
   function avvia(st, senzaCors) {
     ferma(); S.staz = st; scrivi('ultima', st); aggiornaLista(); mostraStato('Mi collego a «' + st.n + '»…');
     if (!/^https:/i.test(st.u || '')) { mostraStato('Questa stazione non è sicura (non https): scegline un\'altra.'); return; }
-    var e = new Audio(); e.preload = 'none'; e.volume = S.muto ? 0 : S.vol;
+    var e = new Audio(); e.preload = 'none'; e.volume = volEff();
     if (!senzaCors) e.crossOrigin = 'anonymous';
     S.audio = e; S.limitata = !!senzaCors; var partito = false;
     if (!senzaCors) grafo(e);
@@ -230,19 +232,27 @@ _MU_JS = r"""
     }
     else if (a === 'stop') { ferma(); mostraStato('Fermata'); }
     else if (a === 'spegni') { ferma(); mostraStato('Radio spenta'); apri(false); }
-    else if (a === 'muto') { S.muto = !S.muto; if (S.audio) S.audio.volume = S.muto ? 0 : S.vol; ev.target.textContent = S.muto ? '🔇' : '🔊'; }
+    else if (a === 'muto') { S.muto = !S.muto; applicaVol(); ev.target.textContent = S.muto ? '🔇' : '🔊'; }
     else if (a === 'piatto') { S.eq = [0, 0, 0]; scrivi('eq', S.eq); mostraEq(); applicaEq(); }
     else if (a === 'cerca') cerca(q('q').value.trim(), '');
   });
   q('q').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') cerca(q('q').value.trim(), ''); });
   var vol = q('vol'); vol.value = Math.round(S.vol * 100);
-  vol.addEventListener('input', function () { S.vol = vol.value / 100; S.muto = false; if (S.audio) S.audio.volume = S.vol; scrivi('vol', S.vol); });
+  vol.addEventListener('input', function () { S.vol = vol.value / 100; S.muto = false; applicaVol(); scrivi('vol', S.vol); });
   function mostraEq() { for (var i = 0; i < 3; i++) { pan.querySelector('[data-b="' + i + '"]').value = S.eq[i]; pan.querySelector('[data-v="' + i + '"]').textContent = (S.eq[i] > 0 ? '+' : '') + S.eq[i]; } }
   [0, 1, 2].forEach(function (i) {
     pan.querySelector('[data-b="' + i + '"]').addEventListener('input', function (ev) { S.eq[i] = parseInt(ev.target.value, 10) || 0; scrivi('eq', S.eq); mostraEq(); applicaEq(); });
   });
   mostraEq(); aggiornaLista(); aggiornaNote();
   if (S.staz) mostraStato('Ultima stazione: ' + S.staz.n + ' (tocca ▶)');
+  // quando si apre il pannello dell'assistente la radio tace da sola, e riprende quando si chiude
+  setInterval(function () {
+    var a = doc.getElementById('asst-pan'); var ap = !!(a && a.style && a.style.display === 'block');
+    if (ap !== S.duck) {
+      S.duck = ap; applicaVol();
+      if (S.audio && S.suona && S.staz) mostraStato(ap ? '🔇 In silenzio mentre parla l\'assistente' : '🎶 In ascolto: ' + S.staz.n);
+    }
+  }, 300);
   M.attiva = function (si) { tab.style.display = si ? 'flex' : 'none'; if (!si) { ferma(); apri(false); } };
   M.stato = S; M.avvia = avvia; M.cerca = cerca;
   M.attiva(ATTIVA);
@@ -269,15 +279,10 @@ def musica_inietta():
               "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
               "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
               "var s=P.document.createElement('script');s.textContent=" + json.dumps(codice) + ";P.document.head.appendChild(s);s.parentNode.removeChild(s);})();</script>")
-    try:
-        st.html(pagina, unsafe_allow_javascript=True)
-    except Exception:
-        pass
-    try:
-        if hasattr(st, "iframe"):
-            st.iframe(pagina, height=1)
-        else:
-            import streamlit.components.v1 as _comp_mu
-            _comp_mu.html(pagina, height=0)
-    except Exception:
-        pass
+    if "pn_inietta_una_volta" in globals():
+        pn_inietta_una_volta("musica", "on" if musica_attiva() else "off", pagina)
+    else:
+        try:
+            st.html(pagina, unsafe_allow_javascript=True)
+        except Exception:
+            pass

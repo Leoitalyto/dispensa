@@ -45,7 +45,7 @@ def sc_estrai(d, sezione):
     tipi = _sc_lavoro_tipi()
     if sezione == "casa":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") not in tipi]
-        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", [])})
+        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", []), "case": c.get("case", [])})
     if sezione == "lavoro":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") in tipi]
         out = {"documenti": docs, "contatti_lavoro": c.get("contatti_lavoro", []), "lavori": c.get("lavori", [])}
@@ -86,7 +86,7 @@ def sc_conta(dati):
 
 
 _SC_NOMI = {"articoli": "prodotti", "profili": "persone", "medicinali": "medicinali", "terapie": "terapie", "visite": "visite", "prescrizioni": "ricette", "vaccinazioni": "vaccinazioni",
-            "documenti": "documenti", "archivio_foto": "foto", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "contatti_lavoro": "contatti", "lavori": "lavori"}
+            "documenti": "documenti", "archivio_foto": "foto", "case": "case", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "contatti_lavoro": "contatti", "lavori": "lavori"}
 
 
 def sc_riassunto(dati):

@@ -4,6 +4,41 @@ import os
 
 _cartella = os.path.dirname(os.path.abspath(__file__))
 
+# Le SCHEDE (tab) ricordano quella scelta: dopo un'azione o un ridisegno non si torna alla prima.
+import inspect as _inspect_tab
+import streamlit as _st_tab
+if not getattr(_st_tab.tabs, "_ricorda", False):
+    _tabs_originale = _st_tab.tabs
+    try:
+        _par_tab = _inspect_tab.signature(_tabs_originale).parameters
+        _tabs_ok = "key" in _par_tab and "on_change" in _par_tab
+    except Exception:
+        _tabs_ok = False
+
+    def _tabs_con_memoria(tabs, *a, **kw):
+        if not _tabs_ok or "key" in kw or a:
+            return _tabs_originale(tabs, *a, **kw)
+        try:
+            nome_file = os.path.basename(_sys_cc._getframe(1).f_code.co_filename)
+        except Exception:
+            nome_file = ""
+        if nome_file in ("invio.py", "info_sezioni.py"):                  # finestre di invio e guide: restano come sono
+            return _tabs_originale(tabs, **kw)
+        vistE = _st_tab.session_state.setdefault("_tabs_viste", {})
+        base = "tabm_" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
+        giro = _st_tab.session_state.get("_tabs_giro", 0)
+        n = vistE.get(base)
+        n = (n[1] + 1) if (n and n[0] == giro) else 0
+        vistE[base] = (giro, n)
+        try:
+            return _tabs_originale(tabs, key=base + (f"_{n}" if n else ""), on_change="rerun", **kw)
+        except Exception:
+            return _tabs_originale(tabs, **kw)
+    _tabs_con_memoria._ricorda = True
+    _st_tab.tabs = _tabs_con_memoria
+import streamlit as _st_giro
+_st_giro.session_state["_tabs_giro"] = _st_giro.session_state.get("_tabs_giro", 0) + 1     # ogni ridisegno è un «giro»: serve a dare chiavi stabili alle schede
+
 # Le «linguette» (riquadri che si aprono e si chiudono) restano SEMPRE chiuse all'apertura della pagina: si aprono solo se le tocchi tu.
 import streamlit as _st_chiuse
 if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
@@ -17,6 +52,9 @@ if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
+    "parte2.py": [
+        ('@st.cache_data(ttl=15, show_spinner=False)\ndef carica_dati(_archivio, nome):', '@st.cache_data(ttl=60, show_spinner=False)\ndef carica_dati(_archivio, nome):'),
+    ],
     "farmacia.py": [
         # Avvisi: canale WhatsApp (gratuito, a scelta) e avvisi di Casa nel modulo «Scegli come ricevere gli avvisi»
         ('    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")\n',
@@ -115,6 +153,15 @@ _AGGANCI = {
 }
 
 
+import hashlib as _hashlib_cc
+import sys as _sys_cc
+import types as _types_cc
+_MEMORIA_CODICE = _sys_cc.modules.get("_dispensa_codice_compilato")
+if _MEMORIA_CODICE is None:                                             # sopravvive ai ridisegni della pagina: si compila una volta sola per ogni versione del file
+    _MEMORIA_CODICE = _sys_cc.modules["_dispensa_codice_compilato"] = _types_cc.ModuleType("_dispensa_codice_compilato")
+    _MEMORIA_CODICE.codice = {}
+
+
 def _carica(percorso):
     with open(percorso, encoding="utf-8") as _f:
         _testo = _f.read()
@@ -127,8 +174,28 @@ def _carica(percorso):
             else:
                 import streamlit as _st
                 _st.sidebar.caption("⚠️ Farmacia: punto di aggancio non trovato in " + os.path.basename(percorso))
-    exec(compile(_testo, percorso, "exec"), globals())
+    _chiave = (percorso, _hashlib_cc.md5(_testo.encode("utf-8")).hexdigest())
+    _codice = _MEMORIA_CODICE.codice.get(_chiave)
+    if _codice is None:
+        _codice = compile(_testo, percorso, "exec")
+        for _vecchia in [k for k in _MEMORIA_CODICE.codice if k[0] == percorso]:                  # di ogni file si tiene solo l'ultima versione
+            del _MEMORIA_CODICE.codice[_vecchia]
+        _MEMORIA_CODICE.codice[_chiave] = _codice
+    exec(_codice, globals())
 
+
+import streamlit as _st_pos
+_SEZ_VALIDE = {"salute", "documenti", "archivio", "casa", "lavoro", "utilita"}
+if not _st_pos.session_state.get("_pos_letta"):                       # sessione nuova (primo avvio, o la pagina è stata ripresa dopo una pausa): si torna alla sezione in cui eri
+    _st_pos.session_state["_pos_letta"] = True
+    try:
+        _s_url = _st_pos.query_params.get("s")
+        if _s_url in _SEZ_VALIDE and "farmacia_aperta" not in _st_pos.session_state:
+            _st_pos.session_state["farmacia_aperta"] = True
+            if _s_url != "salute":
+                _st_pos.session_state["sezione_home"] = _s_url
+    except Exception:
+        pass
 
 for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "musica.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
@@ -141,3 +208,10 @@ try:
 finally:
     if "fd_ripristina" in globals():
         fd_ripristina()                                   # a fine pagina il percorso torna sempre quello personale
+try:                                                      # la sezione in cui sei si scrive nell'indirizzo (senza ridisegnare): serve a ritrovarla se la pagina riparte
+    if "sess" in _st_pos.session_state:
+        _sez_ora = "dispensa" if not _st_pos.session_state.get("farmacia_aperta") else (_st_pos.session_state.get("sezione_home") or "salute")
+        if _st_pos.query_params.get("s") != _sez_ora:
+            _st_pos.query_params["s"] = _sez_ora
+except Exception:
+    pass
