@@ -791,14 +791,21 @@ def garage(v):
     pos = v.get("posizione") or {}
     st.markdown(f"<div class='au-card'>📍 <b>Ultima posizione salvata:</b> {_h_ap.escape(pos.get('testo') or 'nessuna')}" + (f"<br><small>{_au_it(pos.get('data'))}</small>" if pos.get("data") else "") + "</div>", unsafe_allow_html=True)
     with st.expander("📍 Salva dove hai parcheggiato"):
+        if "as_inietta" in globals():
+            as_inietta()
+            st.markdown(_AS_CSS, unsafe_allow_html=True)
+            st.markdown("<div class='as-gps' role='button' tabindex='0' data-as-azione='gps_campo' data-as-label='Dove (via, parcheggio, piano, posto)'>📍 Usa la mia posizione (GPS)</div>"
+                        "<div data-as-msg style='display:none;margin:6px 0;font-weight:700;font-size:13.5px'></div>", unsafe_allow_html=True)
+            st.caption("Il telefono trova dove sei (se consenti) e scrive le coordinate qui sotto; toccando «Salva la posizione» aggiungo anche l'indirizzo. **Oppure scrivi tu l'indirizzo.**")
         with st.form(f"au_pos_{vid}", border=False):
             testo = st.text_input("Dove (via, parcheggio, piano, posto)", value=pos.get("testo", ""), key=f"au_pos_t_{vid}", placeholder="es. Via Baveno, Torino")
             if st.form_submit_button("💾 Salva la posizione", type="primary", width="stretch"):
-                _au_mod(vid, lambda x, t_=testo.strip(): x.__setitem__("posizione", {"testo": t_, "data": _au_oggi().isoformat()}), "Auto: posizione")
+                dati_pos = au_posizione_da_testo(testo) if "au_posizione_da_testo" in globals() else {"testo": testo.strip()}
+                dati_pos["data"] = _au_oggi().isoformat()
+                _au_mod(vid, lambda x, d_=dati_pos: x.__setitem__("posizione", d_), "Auto: posizione")
                 st.rerun()
-        st.caption("Scrivi l'indirizzo: non uso il GPS.")
     if pos.get("testo"):
-        st.link_button("🗺️ Apri sulla mappa", "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(pos["testo"]), width="stretch")
+        st.link_button("🗺️ Apri sulla mappa", au_mappa_url(pos) if "au_mappa_url" in globals() else "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(pos["testo"]), width="stretch")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -923,7 +930,7 @@ Ti avviso **30, 15 e 3 giorni prima**: la Home lampeggia e ricevi il promemoria 
 **⛽ Rifornimenti e spese:** registra rifornimenti e ricariche (kWh, costo, potenza). Con **due pieni** o **due ricariche** calcolo i **consumi reali** (l/100 km, kWh/100 km). **📊 Consumi e spese totali** mostra il costo totale per voce e per chilometro.""", "manutenzione tagliando rifornimenti ricariche consumi spese costo chilometro soh batteria"),
         ("🆘 Emergenza e sinistro",
          """**🚦 Spie del cruscotto:** cerca per nome o filtra per colore: per le rosse il **pericolo** è scritto per primo. **⚡ Procedure di emergenza:** batteria 12V scarica, cavo di ricarica bloccato, modalità tartaruga, fumo/fuoco/allagamento. **Mai toccare o tagliare i cavi arancioni** (alta tensione).
-**📝 Sinistro (CAI):** guida passo passo, registri i dati, allegi le foto e crei il **testo pronto per l'assicuratore**. **📷 Diagnosi visiva:** fotografi il cruscotto (pulsante arancione: **📷 Scatta foto** o **🖼️ Dalla galleria**, anche di camion, TIR e autobus) e l'**intelligenza artificiale** riconosce la spia: se è rossa compare per primo il **PERICOLO**, poi nome, colore, urgenza, azioni e cause, con il **soccorso a un tocco**, il **112**, la chat per approfondire e il report da salvare o condividere. Si accende quando l'amministratore mette **ANTHROPIC_API_KEY** nei Secrets di Streamlit (la stessa chiave dell'assistente); senza, la foto si confronta col catalogo. L'IA può sbagliare: se la spia è rossa fermati comunque.""", "emergenza spie cruscotto sinistro cai incidente elettrica alta tensione"),
+**📝 Sinistro (CAI):** guida passo passo, registri i dati, allegi le foto e crei il **testo pronto per l'assicuratore**. **📷 Diagnosi visiva:** fotografi il cruscotto (pulsante arancione: **📷 Scatta foto** o **🖼️ Dalla galleria**, anche di camion, TIR e autobus) e l'**intelligenza artificiale** riconosce la spia: se è rossa compare per primo il **PERICOLO**, poi nome, colore, urgenza, azioni e cause, con il **soccorso a un tocco**, il **112**, la chat per approfondire e il report da salvare o condividere. **Senza pagare:** puoi usare **la tua app di IA** (ChatGPT, Gemini, Claude, Copilot…) col tasto **📤 Manda foto e istruzioni alla mia IA**, oppure una **tua chiave** (per esempio la chiave gratuita di Gemini, o un modello gratuito di OpenRouter), che resta solo nella sessione e non viene salvata. Se l'amministratore mette **ANTHROPIC_API_KEY** nei Secrets, l'app usa quella (a suo costo, con i tetti giornalieri). In ogni caso resta il catalogo delle spie. L'IA può sbagliare: se la spia è rossa fermati comunque.""", "emergenza spie cruscotto sinistro cai incidente elettrica alta tensione"),
     ])
     _ID_GUIDA.setdefault("auto", ["au_cosa", "au_aggiungi", "au_scadenze", "au_manut", "au_emerg"])
     if "_CTX_GUIDA" in globals():

@@ -20,8 +20,8 @@ import streamlit as st
 _AS_JS = r"""
 (function () {
   var w = window, doc = document;
-  if (w.__soccorsoPos) return;
-  w.__soccorsoPos = true;
+  if (w.__soccorsoPos2) return;
+  w.__soccorsoPos2 = true;
   function avvisa(t, errore) {
     var el = doc.querySelector('[data-as-msg]');
     if (el) { el.textContent = t; el.style.display = 'block'; el.style.color = errore ? '#b71c1c' : '#0f766e'; }
@@ -40,11 +40,30 @@ _AS_JS = r"""
       avvisa(e && e.code === 1 ? 'Non hai dato il permesso alla posizione: abilitalo nelle impostazioni del sito, oppure scrivi tu dove sei.' : 'Non riesco a trovare la posizione adesso (poco segnale GPS?). Scrivi tu dove sei.', true);
     }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
   }
+  function riempiCampo(etichetta) {
+    if (!navigator.geolocation) { avvisa('Questo browser non sa dove ti trovi: scrivi tu l\'indirizzo.', true); return; }
+    avvisa('Cerco la tua posizione… (se il telefono lo chiede, consenti l\'accesso alla posizione)');
+    navigator.geolocation.getCurrentPosition(function (p) {
+      var lat = p.coords.latitude.toFixed(6), lon = p.coords.longitude.toFixed(6), acc = Math.round(p.coords.accuracy || 0);
+      var inp = doc.querySelector('input[aria-label="' + etichetta + '"]');
+      if (!inp) { avvisa('Posizione trovata: ' + lat + ', ' + lon + '. Scrivila nel campo.', true); return; }
+      var setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+      try { inp.focus(); } catch (e) {}
+      setter.call(inp, lat + ', ' + lon);
+      inp.dispatchEvent(new w.Event('input', {bubbles: true}));
+      try { inp.blur(); } catch (e) {}
+      inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true}));
+      avvisa('✅ Posizione trovata (circa ' + acc + ' m). Ora tocca «Salva la posizione»: scrivo anche l\'indirizzo.');
+    }, function (e) {
+      avvisa(e && e.code === 1 ? 'Non hai dato il permesso alla posizione: abilitalo nelle impostazioni del sito, oppure scrivi tu l\'indirizzo.' : 'Non riesco a trovare la posizione adesso (poco segnale GPS?). Scrivi tu l\'indirizzo.', true);
+    }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+  }
   doc.addEventListener('click', function (ev) {
     var b = ev.target && ev.target.closest ? ev.target.closest('[data-as-azione]') : null;
     if (!b) return;
     ev.preventDefault();
-    if (b.getAttribute('data-as-azione') === 'gps') condividi();
+    var a = b.getAttribute('data-as-azione');
+    if (a === 'gps') condividi(); else if (a === 'gps_campo') riempiCampo(b.getAttribute('data-as-label') || '');
   }, true);
 })();
 """
@@ -100,13 +119,55 @@ def _as_numeri(v):
     return "803116", "ACI 803.116"
 
 
+def au_coordinate(testo):
+    """(lat, lon) se il testo è una coppia di coordinate («45.070300, 7.686900»), altrimenti None."""
+    m = re.fullmatch(r"\s*(-?\d{1,2}\.\d+)\s*[,;]\s*(-?\d{1,3}\.\d+)\s*", str(testo or ""))
+    if not m:
+        return None
+    lat, lon = float(m.group(1)), float(m.group(2))
+    return (lat, lon) if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+
+
+def au_geocodifica(lat, lon):
+    """L'indirizzo di un punto (OpenStreetMap Nominatim: gratuito, senza chiave). '' se non riesce."""
+    try:
+        import requests
+        r = requests.get("https://nominatim.openstreetmap.org/reverse", params={"format": "jsonv2", "lat": f"{lat:.6f}", "lon": f"{lon:.6f}", "zoom": 18, "accept-language": "it"},
+                         headers={"User-Agent": "LaNostraDispensa/1.0 (uso familiare)"}, timeout=6)
+        if r.status_code != 200:
+            return ""
+        d = r.json()
+        ind = d.get("address") or {}
+        via = " ".join(x for x in (ind.get("road") or ind.get("pedestrian") or ind.get("footway") or "", ind.get("house_number") or "") if x)
+        citta = ind.get("city") or ind.get("town") or ind.get("village") or ind.get("municipality") or ""
+        bello = ", ".join(x for x in (via, citta) if x)
+        return bello or str(d.get("display_name") or "")[:140]
+    except Exception:
+        return ""
+
+
+def au_posizione_da_testo(testo):
+    """Il dato da salvare per «dove ho parcheggiato»: se è scritto a mano resta così; se sono coordinate (dal GPS) aggiungo l'indirizzo."""
+    t = (testo or "").strip()
+    c = au_coordinate(t)
+    if not c:
+        return {"testo": t}
+    ind = au_geocodifica(*c)
+    return {"testo": (f"{ind} ({c[0]:.5f}, {c[1]:.5f})" if ind else f"{c[0]:.5f}, {c[1]:.5f} (GPS)"), "lat": f"{c[0]:.6f}", "lon": f"{c[1]:.6f}"}
+
+
+def au_mappa_url(pos):
+    q = f"{pos['lat']},{pos['lon']}" if pos.get("lat") and pos.get("lon") else (pos.get("testo") or "")
+    return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(q)
+
+
 def as_inietta():
     pagina = ("<script>(function(){"
               "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
               "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
               "var s=P.document.createElement('script');s.textContent=" + _json_as.dumps(_AS_JS) + ";P.document.head.appendChild(s);s.parentNode.removeChild(s);})();</script>")
     if "pn_inietta_una_volta" in globals():
-        pn_inietta_una_volta("soccorsogps", "1", pagina)
+        pn_inietta_una_volta("soccorsogps", "2", pagina)
     else:
         try:
             st.html(pagina, unsafe_allow_javascript=True)

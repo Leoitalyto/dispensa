@@ -50,21 +50,64 @@ Non dare istruzioni su impianti ad alta tensione (cavi arancioni) né su interve
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# stato e limiti
+# i fornitori di intelligenza artificiale: quello dell'app (a pagamento, del proprietario) e quelli che sceglie chi usa l'app
 # ---------------------------------------------------------------------------------------------------------------------
-def _ad_chiave():
+AD_PROVIDER = {
+    "anthropic": {"nome": "Claude (Anthropic)", "secret": "ANTHROPIC_API_KEY", "modello": AD_MODELLO, "chiave_link": "https://console.anthropic.com/", "gratis": "a pagamento (si paga a consumo)"},
+    "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-2.0-flash", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
+    "openai": {"nome": "ChatGPT (OpenAI)", "secret": "OPENAI_API_KEY", "modello": "gpt-4o-mini", "url": "https://api.openai.com/v1/chat/completions", "chiave_link": "https://platform.openai.com/api-keys", "gratis": "a pagamento (si paga a consumo)"},
+    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemini-2.0-flash-exp:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
+                   "gratis": "ha modelli gratuiti con limiti (scrivi un modello che finisce con «:free»)"},
+    "altra": {"nome": "Un'altra IA (compatibile con OpenAI)", "secret": "ALTRA_IA_KEY", "modello": "", "url": "", "chiave_link": "", "gratis": "dipende dal servizio"},
+}
+AD_ORDINE = ["anthropic", "gemini", "openai", "openrouter", "altra"]
+
+
+def _ad_secret(nome):
     try:
-        return str(st.secrets.get("ANTHROPIC_API_KEY", "") or "").strip()
+        return str(st.secrets.get(nome, "") or "").strip()
     except Exception:
         return ""
 
 
+def _ad_chiave():
+    """La chiave di Claude messa dall'amministratore (la stessa dell'assistente intelligente)."""
+    return _ad_secret("ANTHROPIC_API_KEY")
+
+
+def ad_cfg(prov):
+    """{key, fonte ('app' = messa dall'amministratore, 'mia' = scritta da chi usa l'app in questa sessione), modello, url}. La chiave 'mia' resta SOLO nella sessione: non viene salvata."""
+    d = AD_PROVIDER.get(prov) or AD_PROVIDER["anthropic"]
+    key, fonte = _ad_secret(d["secret"]), "app"
+    if not key:
+        key, fonte = str(st.session_state.get(f"ad_k_{prov}", "") or "").strip(), "mia"
+    mod = str(st.session_state.get(f"ad_m_{prov}", "") or "").strip() or _ad_secret("DIAGNOSI_MODELLO" if prov == "anthropic" else f"DIAGNOSI_MODELLO_{prov.upper()}") or d.get("modello", "")
+    url = str(st.session_state.get(f"ad_u_{prov}", "") or "").strip() or _ad_secret(f"DIAGNOSI_URL_{prov.upper()}") or d.get("url", "")
+    return {"key": key, "fonte": fonte if key else "", "modello": mod, "url": url}
+
+
+def ad_provider_scelto():
+    """Quale fornitore si usa: quello scelto da chi usa l'app, altrimenti il primo con una chiave dell'amministratore, altrimenti Claude."""
+    sc = st.session_state.get("ad_prov")
+    if sc in AD_PROVIDER:
+        return sc
+    for k in AD_ORDINE:
+        if _ad_secret(AD_PROVIDER[k]["secret"]):
+            return k
+    return "anthropic"
+
+
 def ad_attivo():
+    """True se il fornitore scelto ha una chiave (dell'amministratore o di chi usa l'app) e non è spento da DIAGNOSI_AI."""
     try:
         spento = str(st.secrets.get("DIAGNOSI_AI", "")).strip().lower() in ("no", "off", "0", "false", "spento")
     except Exception:
         spento = False
-    return bool(_ad_chiave()) and not spento
+    if spento:
+        return False
+    prov = ad_provider_scelto()
+    cfg = ad_cfg(prov)
+    return bool(cfg["key"]) and (prov != "altra" or bool(cfg["url"] and cfg["modello"]))
 
 
 @st.cache_resource
@@ -80,7 +123,7 @@ def _ad_limite_giorno():
 
 
 def ad_puo(adesso=None):
-    """True se i limiti (all'ora per sessione, al giorno per l'app) non sono superati; in tal caso conta l'analisi."""
+    """True se i limiti (all'ora per sessione, al giorno per l'app) non sono superati; in tal caso conta l'analisi. Valgono solo per le chiavi dell'amministratore: chi usa la PROPRIA chiave ha i suoi limiti."""
     adesso = adesso or time.time()
     orari = [t for t in st.session_state.get("_ad_orari", []) if adesso - t < 3600]
     if len(orari) >= AD_MAX_ORA:
@@ -99,10 +142,7 @@ def ad_puo(adesso=None):
 
 
 def _ad_modello():
-    try:
-        return str(st.secrets.get("DIAGNOSI_MODELLO", AD_MODELLO) or AD_MODELLO)
-    except Exception:
-        return AD_MODELLO
+    return ad_cfg("anthropic")["modello"] or AD_MODELLO
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -150,54 +190,88 @@ def _ad_parse(testo):
             "avviso_sicurezza": str(d.get("avviso_sicurezza") or "").strip()[:400], "note": str(d.get("note") or "").strip()[:500]}
 
 
-def ad_analizza(jpeg, mezzo):
-    """Manda la foto al modello. Ritorna il risultato (dict) oppure {'errore': motivo} con motivo in: chiave, limite, rete, rifiuto, formato."""
-    if not _ad_chiave():
-        return {"errore": "chiave"}
-    if not ad_puo():
-        return {"errore": "limite"}
+def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
+    """Una richiesta a UN fornitore. turni = [("u"|"a", testo), ...]; la foto va col primo turno dell'utente. Ritorna (testo, None) oppure (None, errore) con errore in: chiave, limite, rete, rifiuto, formato."""
+    import requests
+    img = base64.b64encode(jpeg).decode()
     try:
-        import requests
-        r = requests.post(AD_URL, timeout=(8, 60), headers={"x-api-key": _ad_chiave(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                          json={"model": _ad_modello(), "max_tokens": 1500, "system": [{"type": "text", "text": _AD_REGOLE, "cache_control": {"type": "ephemeral"}}],
-                                "messages": [{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}},
-                                                                          {"type": "text", "text": f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto."}]}]})
+        if prov == "anthropic":
+            msgs = []
+            for i, (ruolo, testo) in enumerate(turni):
+                if i == 0:
+                    msgs.append({"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img}}, {"type": "text", "text": testo}]})
+                else:
+                    msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
+            r = requests.post(AD_URL, timeout=(8, 60), headers={"x-api-key": cfg["key"], "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                              json={"model": cfg["modello"] or AD_MODELLO, "max_tokens": max_tokens, "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}], "messages": msgs})
+        elif prov == "gemini":
+            cont = []
+            for i, (ruolo, testo) in enumerate(turni):
+                parti = ([{"inline_data": {"mime_type": "image/jpeg", "data": img}}] if i == 0 else []) + [{"text": testo}]
+                cont.append({"role": "user" if ruolo == "u" else "model", "parts": parti})
+            corpo = {"systemInstruction": {"parts": [{"text": system}]}, "contents": cont, "generationConfig": {"maxOutputTokens": max_tokens}}
+            if json_out:
+                corpo["generationConfig"]["responseMimeType"] = "application/json"
+            r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{cfg['modello']}:generateContent", timeout=(8, 60), headers={"x-goog-api-key": cfg["key"], "content-type": "application/json"}, json=corpo)
+        else:                                                           # OpenAI, OpenRouter e ogni servizio compatibile
+            msgs = [{"role": "system", "content": system}]
+            for i, (ruolo, testo) in enumerate(turni):
+                if i == 0:
+                    msgs.append({"role": "user", "content": [{"type": "text", "text": testo}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]})
+                else:
+                    msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
+            r = requests.post(cfg["url"], timeout=(8, 60), headers={"Authorization": "Bearer " + cfg["key"], "content-type": "application/json"}, json={"model": cfg["modello"], "max_tokens": max_tokens, "messages": msgs})
         if r.status_code in (401, 403):
-            return {"errore": "chiave"}
+            return None, "chiave"
+        if r.status_code == 400 and prov == "gemini" and "API key" in str(r.text if hasattr(r, "text") else r.json())[:400]:
+            return None, "chiave"
         if r.status_code == 429:
-            return {"errore": "limite"}
+            return None, "limite"
         if r.status_code != 200:
-            return {"errore": "rete"}
+            return None, "rete"
         dati = r.json()
-        if dati.get("stop_reason") == "refusal":
-            return {"errore": "rifiuto"}
-        testo = "".join(b.get("text", "") for b in dati.get("content", []) if b.get("type") == "text")
-        ris = _ad_parse(testo)
-        return ris if ris is not None else {"errore": "formato", "testo": testo[:1500]}
+        if prov == "anthropic":
+            if dati.get("stop_reason") == "refusal":
+                return None, "rifiuto"
+            return "".join(b.get("text", "") for b in dati.get("content", []) if b.get("type") == "text"), None
+        if prov == "gemini":
+            cand = (dati.get("candidates") or [{}])[0]
+            if cand.get("finishReason") in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
+                return None, "rifiuto"
+            return "".join(p_.get("text", "") for p_ in ((cand.get("content") or {}).get("parts") or [])), None
+        ch = (dati.get("choices") or [{}])[0]
+        msg = (ch.get("message") or {}).get("content")
+        if isinstance(msg, list):
+            msg = "".join(x.get("text", "") for x in msg if isinstance(x, dict))
+        return (msg or ""), None
     except Exception:
-        return {"errore": "rete"}
+        return None, "rete"
+
+
+def ad_analizza(jpeg, mezzo):
+    """Manda la foto al fornitore scelto. Ritorna il risultato (dict) oppure {'errore': motivo}."""
+    prov = ad_provider_scelto()
+    cfg = ad_cfg(prov)
+    if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
+        return {"errore": "chiave"}
+    if cfg["fonte"] == "app" and not ad_puo():
+        return {"errore": "limite"}
+    testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto.")], jpeg, 1500, json_out=True)
+    if err:
+        return {"errore": err}
+    ris = _ad_parse(testo)
+    return ris if ris is not None else {"errore": "formato", "testo": (testo or "")[:1500]}
 
 
 def ad_chiedi(storia, jpeg, mezzo, riassunto):
-    """Una domanda di approfondimento (testo) sulla foto già analizzata. Ritorna il testo o None."""
-    if not _ad_chiave() or not ad_puo():
+    """Una domanda di approfondimento sulla foto già analizzata. Ritorna il testo o None."""
+    prov = ad_provider_scelto()
+    cfg = ad_cfg(prov)
+    if not cfg["key"] or (cfg["fonte"] == "app" and not ad_puo()):
         return None
-    try:
-        import requests
-        msgs = [{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}},
-                                              {"type": "text", "text": f"Mezzo: {mezzo}. Analisi già fatta: {riassunto}\n\nDomanda: {storia[0][1]}"}]}]
-        for ruolo, testo in storia[1:]:
-            msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
-        r = requests.post(AD_URL, timeout=(8, 45), headers={"x-api-key": _ad_chiave(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                          json={"model": _ad_modello(), "max_tokens": 700, "system": [{"type": "text", "text": _AD_CHAT, "cache_control": {"type": "ephemeral"}}], "messages": msgs})
-        if r.status_code != 200:
-            return None
-        dati = r.json()
-        if dati.get("stop_reason") == "refusal":
-            return None
-        return "".join(b.get("text", "") for b in dati.get("content", []) if b.get("type") == "text").strip()[:2500] or None
-    except Exception:
-        return None
+    turni = [("u", f"Mezzo: {mezzo}. Analisi già fatta: {riassunto}\n\nDomanda: {storia[0][1]}")] + [(r_, t_) for r_, t_ in storia[1:]]
+    testo, err = _ad_invia(prov, cfg, _AD_CHAT, turni, jpeg, 700)
+    return (testo or "").strip()[:2500] or None if not err else None
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -259,7 +333,111 @@ _AD_CSS = """<style>
 .ad-spia{border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b;background:rgba(255,255,255,.92)}
 .ad-spia.r{border-left:8px solid #c62828}.ad-spia.g{border-left:8px solid #f9a825}.ad-spia.v{border-left:8px solid #2e7d32}.ad-spia.b{border-left:8px solid #1565c0}
 </style>"""
+_AD_CSS2 = """<style>.ad-share{border-radius:14px;padding:13px 10px;text-align:center;font-weight:900;font-size:1.02rem;color:#fff;cursor:pointer;user-select:none;background:linear-gradient(135deg,#42a5f5,#0d47a1);box-shadow:0 5px 0 rgba(10,40,100,.35);-webkit-tap-highlight-color:transparent;margin:6px 0}.ad-share:active{transform:scale(.98)}</style>"""
+
+_AD_JS = r"""
+(function () {
+  var w = window, doc = document;
+  if (w.__adShare) return;
+  w.__adShare = true;
+  function avvisa(t, errore) {
+    var el = doc.querySelector('[data-ad-msg]');
+    if (el) { el.textContent = t; el.style.display = 'block'; el.style.color = errore ? '#b71c1c' : '#0f766e'; }
+  }
+  function inFile(b64) {
+    var bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+    return new File([u], 'spia-cruscotto.jpg', {type: 'image/jpeg'});
+  }
+  function copia(t) { try { return navigator.clipboard.writeText(t); } catch (e) { return Promise.resolve(); } }
+  function condividi() {
+    var d = w.__adFoto;
+    if (!d || !d.b64) { avvisa('Prima scegli la foto.', true); return; }
+    var f = inFile(d.b64);
+    if (navigator.canShare && navigator.canShare({files: [f]}) && navigator.share) {
+      navigator.share({files: [f], text: d.testo, title: 'Spia del cruscotto'}).then(function () {
+        avvisa('Fatto: nella tua app di IA vedi la foto e le istruzioni. Se non vedi le istruzioni, incollale (le ho copiate).');
+      }).catch(function (e) { avvisa(e && e.name === 'AbortError' ? 'Annullato.' : 'Non sono riuscito a condividere la foto: usa i bottoni qui sotto.', !(e && e.name === 'AbortError')); });
+      copia(d.testo);
+      return;
+    }
+    copia(d.testo).then(function () {
+      avvisa('Questo telefono non può mandare la foto da qui. Ho copiato le istruzioni: apri la tua IA con i bottoni qui sotto, incolla le istruzioni e allega la foto.', true);
+    });
+  }
+  doc.addEventListener('click', function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest('[data-ad-azione]') : null;
+    if (!b) return;
+    ev.preventDefault();
+    if (b.getAttribute('data-ad-azione') === 'condividi') condividi();
+  }, true);
+})();
+"""
+_AD_APP_IA = [("ChatGPT", "https://chatgpt.com/"), ("Gemini", "https://gemini.google.com/app"), ("Claude", "https://claude.ai/new"), ("Copilot", "https://copilot.microsoft.com/"), ("Perplexity", "https://www.perplexity.ai/"), ("Grok", "https://grok.com/")]
 _AD_COLORE = {"rosso": ("r", "🔴"), "giallo": ("g", "🟡"), "verde": ("v", "🟢"), "blu": ("b", "🔵"), "bianco": ("b", "⚪")}
+
+
+def ad_prompt_libero(mezzo):
+    """Le istruzioni da dare a una qualunque app di IA insieme alla foto (testo semplice, non JSON)."""
+    return (f"Sei un esperto di diagnostica dei veicoli (auto, moto, camion e TIR, autobus, monopattini, mezzi agricoli) e di soccorso stradale. In allegato c'è la FOTO del cruscotto di questo mezzo: {mezzo}. "
+            "Riconosci le spie accese e rispondi in italiano semplice, con frasi brevi. Per ogni spia scrivi: nome della spia; colore (rosso = fermati subito, giallo o arancio = avviso, officina a breve, verde o blu = informazione); urgenza; cosa significa; "
+            "cosa fare subito, in passi numerati; possibili cause. Se una spia indica pericolo (pressione olio, freni, surriscaldamento, sterzo, aria dell'impianto frenante nei mezzi pesanti, alta tensione) scrivilo PER PRIMO in grassetto e dimmi se devo accostare e spegnere subito. "
+            "Non inventare: se la foto non è chiara dimmelo e spiegami come rifarla. Nei veicoli elettrici non consigliarmi mai di toccare i cavi arancioni. Alla fine ricordami che sei un aiuto e che vale il manuale del mezzo.")
+
+
+def _ad_inietta_foto(jpeg, prompt, sha):
+    """Manda al browser la foto e le istruzioni (una volta per foto), così il tasto «Manda alla mia IA» può condividerle."""
+    codice = "window.__adFoto={b64:" + json.dumps(base64.b64encode(jpeg).decode()) + ",testo:" + json.dumps(prompt) + "};"
+    pagina = ("<script>(function(){"
+              "function ok(x){try{return !!x.document.querySelector('[data-testid=\"stApp\"],.stApp,[data-testid=\"stAppViewContainer\"]')}catch(e){return false}}"
+              "var P=window;if(!ok(P)){var c=window;for(var i=0;i<3&&c.parent&&c.parent!==c;i++){c=c.parent;if(ok(c)){P=c;break}}}"
+              "var s=P.document.createElement('script');s.textContent=" + json.dumps(_AD_JS + codice) + ";P.document.head.appendChild(s);s.parentNode.removeChild(s);})();</script>")
+    if "pn_inietta_una_volta" in globals():
+        pn_inietta_una_volta("adfoto", sha, pagina)
+    else:
+        try:
+            st.html(pagina, unsafe_allow_javascript=True)
+        except Exception:
+            pass
+
+
+def _ad_scelta_ia():
+    """Quale intelligenza artificiale usare: quella dell'app (se c'è) oppure una a scelta, con la chiave di chi usa l'app (tenuta solo nella sessione)."""
+    prov = ad_provider_scelto()
+    etichette = {k: AD_PROVIDER[k]["nome"] + (" ✅" if _ad_secret(AD_PROVIDER[k]["secret"]) else "") for k in AD_ORDINE}
+    st.markdown("#### 🤖 Quale intelligenza artificiale uso?")
+    scelta = st.selectbox("Intelligenza artificiale", AD_ORDINE, index=AD_ORDINE.index(prov), format_func=lambda k: etichette[k], key="ad_prov", label_visibility="collapsed") if "ad_prov" not in st.session_state \
+        else st.selectbox("Intelligenza artificiale", AD_ORDINE, format_func=lambda k: etichette[k], key="ad_prov", label_visibility="collapsed")
+    cfg = ad_cfg(scelta)
+    d = AD_PROVIDER[scelta]
+    if cfg["fonte"] == "app" and cfg["key"]:
+        st.caption("✅ Uso la chiave messa dall'amministratore dell'app: il costo è suo, con i tetti giornalieri.")
+    else:
+        st.text_input(f"La tua chiave di {d['nome']}", type="password", key=f"ad_k_{scelta}", placeholder="incollala qui")
+        st.caption(f"La chiave resta **solo in questa sessione**: non viene salvata e va solo a {d['nome']}. Costo: {d['gratis']}.")
+        if d.get("chiave_link"):
+            st.link_button(f"🔑 Ottieni una chiave di {d['nome'].split(' (')[0]}", d["chiave_link"], width="stretch")
+    if scelta == "altra":
+        st.text_input("Indirizzo del servizio (come https://…/v1/chat/completions)", key="ad_u_altra", placeholder="https://…")
+        st.text_input("Nome del modello (che sa leggere le immagini)", key="ad_m_altra", placeholder="es. pixtral-12b")
+    else:
+        st.text_input("Modello (puoi cambiarlo)", key=f"ad_m_{scelta}", placeholder=d.get("modello", ""))
+    st.caption("I servizi gratuiti possono usare le foto per migliorarsi: **non inquadrare persone, targhe o documenti**, solo il cruscotto.")
+    return scelta
+
+
+def _ad_condividi_ia(jpeg, mezzo, sha):
+    """Senza chiavi e senza pagare: la foto e le istruzioni vanno alla TUA app di IA (ChatGPT, Gemini, Claude, Copilot…) col menu «Condividi» del telefono."""
+    prompt = ad_prompt_libero(mezzo)
+    st.markdown("#### 🆓 Usa la tua app di intelligenza artificiale (senza pagare)")
+    st.caption("Se hai già ChatGPT, Gemini, Claude, Copilot o un'altra IA sul telefono, puoi farle leggere la foto da lì: ti preparo foto e istruzioni.")
+    _ad_inietta_foto(jpeg, prompt, sha)
+    st.markdown(_AD_CSS2 + "<div class='ad-share' role='button' tabindex='0' data-ad-azione='condividi'>📤 Manda foto e istruzioni alla mia IA</div><div data-ad-msg style='display:none;margin:4px 0;font-weight:700;font-size:13.5px'></div>", unsafe_allow_html=True)
+    cols = st.columns(3, gap="small")
+    for i, (nome, url) in enumerate(_AD_APP_IA):
+        cols[i % 3].link_button(nome, url, width="stretch")
+    st.caption("Se il tasto qui sopra non apre la condivisione, apri la tua IA con uno di questi bottoni, **incolla le istruzioni** (qui sotto) e **allega la foto**.")
+    st.code(prompt, language=None)
 
 
 def _ad_numero_soccorso(v):
@@ -437,7 +615,7 @@ def ad_pagina(v):
     jpeg = st.session_state.get("ad_foto")
     sha = st.session_state.get("ad_sha")
     if not jpeg:
-        st.caption("Scatta una foto con **📷 Scatta foto** o scegli **🖼️ Dalla galleria**. " + ("" if ad_attivo() else "Senza l'intelligenza artificiale attiva la foto si confronta con il catalogo delle spie."))
+        st.caption("Scatta una foto con **📷 Scatta foto** o scegli **🖼️ Dalla galleria**. " + ("" if ad_attivo() else "Senza l'intelligenza artificiale attiva puoi usare la tua app di IA, una tua chiave gratuita, oppure il catalogo delle spie."))
         _ad_storico(v) if v else None
         return
     st.image(jpeg, width="stretch", caption="La tua foto")
@@ -447,6 +625,12 @@ def ad_pagina(v):
         st.session_state["ca_giro"] = st.session_state.get("ca_giro", 0) + 1
         st.rerun()
     mezzo = st.session_state.get("ad_mezzo_usato") or desc_mezzo
+    scelta_ia = _ad_scelta_ia()
+    cfg_ia = ad_cfg(scelta_ia)
+    firma = (scelta_ia, hashlib.sha256((cfg_ia["key"] or "").encode()).hexdigest()[:10], cfg_ia["modello"], cfg_ia["url"])
+    if st.session_state.get("ad_firma") != firma:                      # se cambia l'IA, la chiave o il modello si rifà l'analisi
+        st.session_state["ad_firma"] = firma
+        st.session_state.pop("ad_ris", None)
     # ---- l'analisi
     if ad_attivo():
         if "ad_ris" not in st.session_state:
@@ -471,10 +655,13 @@ def ad_pagina(v):
             _ad_azioni(ris, v, mezzo, sha, jpeg, vid)
             _ad_chat(ris, mezzo, sha, jpeg)
     else:
-        st.info("🤖 L'**intelligenza artificiale non è attiva**: la foto non può essere riconosciuta da sola. Confrontala con il catalogo qui sotto (filtra per colore o cerca per nome). Per attivarla l'amministratore aggiunge ANTHROPIC_API_KEY nei Secrets di Streamlit (vedi la guida).")
+        st.info("🤖 L'**intelligenza artificiale non è attiva**: la foto non può essere riconosciuta da sola. **Senza pagare** puoi: (1) mandare foto e istruzioni alla **tua app di IA** (qui sotto); (2) incollare qui sopra **una tua chiave gratuita** (per esempio di Gemini); oppure (3) confrontare la foto col **catalogo** (filtra per colore o cerca per nome).")
         c1, c2 = st.columns(2, gap="small")
         c1.link_button("🚨 Chiama il soccorso stradale", "tel:" + _ad_numero_soccorso(v), width="stretch")
         c2.link_button("🆘 Chiama il 112", "tel:112", width="stretch")
+        _ad_condividi_ia(jpeg, mezzo, sha)
         ae_spie(v)
+    if ad_attivo():
+        _ad_condividi_ia(jpeg, mezzo, sha)
     if v:
         _ad_storico(v)
