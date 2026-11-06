@@ -574,11 +574,16 @@ def _extra_sinistro(v, s):
 
 
 def tab_emergenza(v):
-    voci = ["🚦 Spie del cruscotto", "⚡ Procedure di emergenza", "📝 Sinistro (CAI)"]
+    voci = ["🚦 Spie del cruscotto", "📷 Diagnosi visiva (foto)", "⚡ Procedure di emergenza", "📝 Sinistro (CAI)"]
     sc = _au_scegli("Emergenza", voci, f"au_em_{v['id']}")
     if sc == voci[0]:
         ae_spie(v)
     elif sc == voci[1]:
+        if "ad_pagina" in globals():
+            ad_pagina(v)
+        else:
+            st.info("La diagnosi visiva non è disponibile.")
+    elif sc == voci[2]:
         ae_procedure(v)
     else:
         st.info("🚨 In caso di incidente: sicurezza prima di tutto. Se ci sono feriti chiama il **112**.")
@@ -670,14 +675,14 @@ def garage(v):
     st.markdown("#### 🛠️ Accessi rapidi")
     ric = "🔋 Ricarica e sessioni" if _au_ricarica(v) else "⛽ Rifornimenti"
     with st.container(key="au_hub"):
-        t = [st.button("📖 Manuali e documenti", key="au_h_doc", width="stretch"), st.button("🔍 Spie del cruscotto", key="au_h_spie", width="stretch"),
+        t = [st.button("📖 Manuali e documenti", key="au_h_doc", width="stretch"), st.button("📷 Diagnosi spie (foto)", key="au_h_spie", width="stretch"),
              st.button(ric, key="au_h_ric", width="stretch"), st.button("🔧 Storico manutenzione", key="au_h_man", width="stretch"),
              st.button("🚨 Soccorso ed emergenza", key="au_h_soc", width="stretch"), st.button("📊 Spese e consumi (TCO)", key="au_h_tco", width="stretch"),
              st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch")]
     if t[0]:
         _au_vai(_AU_SEZ[0])
     elif t[1]:
-        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "🚦 Spie del cruscotto"})
+        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "📷 Diagnosi visiva (foto)"})
     elif t[2]:
         _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "⛽ Rifornimenti e ricariche"})
     elif t[3]:
@@ -688,7 +693,7 @@ def garage(v):
         _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "📊 Consumi e spese totali"})
     elif t[6]:
         _au_vai(_AU_SEZ[4])
-    st.caption("La diagnosi delle spie da una **foto** non c'è (serve un'IA esterna): «Spie del cruscotto» è il catalogo da cercare per nome o per colore.")
+    st.caption("La diagnosi delle spie da una **foto** usa l'intelligenza artificiale (si attiva con la chiave nei Secrets); senza, la foto si confronta col catalogo delle spie.")
     # ---- ultima posizione
     pos = v.get("posizione") or {}
     st.markdown(f"<div class='au-card'>📍 <b>Ultima posizione salvata:</b> {_h_ap.escape(pos.get('testo') or 'nessuna')}" + (f"<br><small>{_au_it(pos.get('data'))}</small>" if pos.get("data") else "") + "</div>", unsafe_allow_html=True)
@@ -756,6 +761,12 @@ def schermata_auto():
     if coda:
         _au_finestra(coda)
     if not v:
+        if "ad_pagina" in globals():
+            if st.session_state.get("ad_libera"):
+                return ad_pagina(None)
+            if st.button("📷 Diagnosi visiva delle spie (senza veicolo)", key="ad_libera_b", width="stretch"):
+                st.session_state["ad_libera"] = True
+                st.rerun()
         return
     # ---- il veicolo scelto
     sc = au_scadenze(v)
@@ -805,7 +816,7 @@ Ti avviso **30, 15 e 3 giorni prima**: la Home lampeggia e ricevi il promemoria 
 **⛽ Rifornimenti e spese:** registra rifornimenti e ricariche (kWh, costo, potenza). Con **due pieni** o **due ricariche** calcolo i **consumi reali** (l/100 km, kWh/100 km). **📊 Consumi e spese totali** mostra il costo totale per voce e per chilometro.""", "manutenzione tagliando rifornimenti ricariche consumi spese costo chilometro soh batteria"),
         ("🆘 Emergenza e sinistro",
          """**🚦 Spie del cruscotto:** cerca per nome o filtra per colore: per le rosse il **pericolo** è scritto per primo. **⚡ Procedure di emergenza:** batteria 12V scarica, cavo di ricarica bloccato, modalità tartaruga, fumo/fuoco/allagamento. **Mai toccare o tagliare i cavi arancioni** (alta tensione).
-**📝 Sinistro (CAI):** guida passo passo, registri i dati, allegi le foto e crei il **testo pronto per l'assicuratore**. Non riconosco le spie da una foto: serve un'IA esterna.""", "emergenza spie cruscotto sinistro cai incidente elettrica alta tensione"),
+**📝 Sinistro (CAI):** guida passo passo, registri i dati, allegi le foto e crei il **testo pronto per l'assicuratore**. **📷 Diagnosi visiva:** fotografi il cruscotto (pulsante arancione: **📷 Scatta foto** o **🖼️ Dalla galleria**, anche di camion, TIR e autobus) e l'**intelligenza artificiale** riconosce la spia: se è rossa compare per primo il **PERICOLO**, poi nome, colore, urgenza, azioni e cause, con il **soccorso a un tocco**, il **112**, la chat per approfondire e il report da salvare o condividere. Si accende quando l'amministratore mette **ANTHROPIC_API_KEY** nei Secrets di Streamlit (la stessa chiave dell'assistente); senza, la foto si confronta col catalogo. L'IA può sbagliare: se la spia è rossa fermati comunque.""", "emergenza spie cruscotto sinistro cai incidente elettrica alta tensione"),
     ])
     _ID_GUIDA.setdefault("auto", ["au_cosa", "au_aggiungi", "au_scadenze", "au_manut", "au_emerg"])
     if "_CTX_GUIDA" in globals():
