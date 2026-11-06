@@ -42,7 +42,8 @@ REGOLE
 - Veicoli elettrici e ibridi: NON suggerire mai di toccare o tagliare i cavi arancioni ad alta tensione; distingui la rete a 12 V dall'alta tensione.
 - Azioni: passi brevi e numerati, il primo è sempre il più importante per la sicurezza. Niente consigli pericolosi (non aprire il tappo del radiatore a motore caldo, non lavorare su impianti ad alta tensione).
 - Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo e senza ``` , con questa forma:
-{"riconosciuta": true|false, "confidenza": "alta"|"media"|"bassa", "spie": [{"nome": "", "colore": "rosso"|"giallo"|"verde"|"blu"|"bianco", "urgenza": "critica"|"alta"|"media"|"informazione", "simbolo_iso": "", "significato": "", "azioni": ["", ""], "cause": ["", ""]}], "avviso_sicurezza": "", "note": ""}
+{"riconosciuta": true|false, "confidenza": "alta"|"media"|"bassa", "spie": [{"nome": "", "colore": "rosso"|"giallo"|"verde"|"blu"|"bianco", "urgenza": "critica"|"alta"|"media"|"informazione", "simbolo_iso": "", "aspetto": "", "significato": "", "azioni": ["", ""], "cause": ["", ""]}], "avviso_sicurezza": "", "note": ""}
+- «aspetto»: come è fatto il simbolo, in poche parole (es. «triangolo giallo con punto esclamativo», «oliatore rosso con goccia»).
 - «avviso_sicurezza»: una frase di pericolo se serve fermarsi (altrimenti stringa vuota). «note»: consigli per rifare la foto o osservazioni (breve). Massimo 6 spie."""
 
 _AD_CHAT = """Sei un esperto di diagnostica dei veicoli e di soccorso stradale. Rispondi in italiano semplice, con frasi brevi e passi numerati, a domande su una spia del cruscotto già analizzata. Priorità alla sicurezza: se c'è pericolo dillo per primo.
@@ -184,7 +185,7 @@ def _ad_parse(testo):
         urg = str(s.get("urgenza") or "").lower().strip()
         spie.append({"nome": str(s["nome"]).strip()[:140], "colore": col if col in ("rosso", "giallo", "verde", "blu", "bianco") else "giallo",
                      "urgenza": urg if urg in ("critica", "alta", "media", "informazione") else ("critica" if col == "rosso" else "media"),
-                     "simbolo_iso": str(s.get("simbolo_iso") or "").strip()[:40], "significato": str(s.get("significato") or "").strip()[:500],
+                     "simbolo_iso": str(s.get("simbolo_iso") or "").strip()[:40], "aspetto": str(s.get("aspetto") or "").strip()[:120], "significato": str(s.get("significato") or "").strip()[:500],
                      "azioni": [str(x).strip()[:300] for x in (s.get("azioni") or []) if str(x).strip()][:8], "cause": [str(x).strip()[:160] for x in (s.get("cause") or []) if str(x).strip()][:8]})
     return {"riconosciuta": bool(d.get("riconosciuta")) and bool(spie), "confidenza": str(d.get("confidenza") or "bassa").lower(), "spie": spie,
             "avviso_sicurezza": str(d.get("avviso_sicurezza") or "").strip()[:400], "note": str(d.get("note") or "").strip()[:500]}
@@ -193,12 +194,12 @@ def _ad_parse(testo):
 def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
     """Una richiesta a UN fornitore. turni = [("u"|"a", testo), ...]; la foto va col primo turno dell'utente. Ritorna (testo, None) oppure (None, errore) con errore in: chiave, limite, rete, rifiuto, formato."""
     import requests
-    img = base64.b64encode(jpeg).decode()
+    img = base64.b64encode(jpeg).decode() if jpeg else ""
     try:
         if prov == "anthropic":
             msgs = []
             for i, (ruolo, testo) in enumerate(turni):
-                if i == 0:
+                if i == 0 and img:
                     msgs.append({"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img}}, {"type": "text", "text": testo}]})
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
@@ -207,7 +208,7 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         elif prov == "gemini":
             cont = []
             for i, (ruolo, testo) in enumerate(turni):
-                parti = ([{"inline_data": {"mime_type": "image/jpeg", "data": img}}] if i == 0 else []) + [{"text": testo}]
+                parti = ([{"inline_data": {"mime_type": "image/jpeg", "data": img}}] if (i == 0 and img) else []) + [{"text": testo}]
                 cont.append({"role": "user" if ruolo == "u" else "model", "parts": parti})
             corpo = {"systemInstruction": {"parts": [{"text": system}]}, "contents": cont, "generationConfig": {"maxOutputTokens": max_tokens}}
             if json_out:
@@ -216,7 +217,7 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         else:                                                           # OpenAI, OpenRouter e ogni servizio compatibile
             msgs = [{"role": "system", "content": system}]
             for i, (ruolo, testo) in enumerate(turni):
-                if i == 0:
+                if i == 0 and img:
                     msgs.append({"role": "user", "content": [{"type": "text", "text": testo}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]})
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
@@ -257,6 +258,24 @@ def ad_analizza(jpeg, mezzo):
     if cfg["fonte"] == "app" and not ad_puo():
         return {"errore": "limite"}
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto.")], jpeg, 1500, json_out=True)
+    if err:
+        return {"errore": err}
+    ris = _ad_parse(testo)
+    return ris if ris is not None else {"errore": "formato", "testo": (testo or "")[:1500]}
+
+
+_AD_REGOLE_TESTO = _AD_REGOLE.replace("Ti viene mostrata la FOTO di un cruscotto con una o più spie accese.", "Ti viene descritta A PAROLE una spia del cruscotto o un guasto del mezzo (non c'è la foto).")
+
+
+def ad_analizza_testo(domanda, mezzo):
+    """Come ad_analizza, ma da una descrizione scritta (spia o guasto), senza foto. Ritorna il risultato (dict) oppure {'errore': motivo}."""
+    prov = ad_provider_scelto()
+    cfg = ad_cfg(prov)
+    if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
+        return {"errore": "chiave"}
+    if cfg["fonte"] == "app" and not ad_puo():
+        return {"errore": "limite"}
+    testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", f"Mezzo: {mezzo}. Problema descritto a parole: {str(domanda)[:400]}")], None, 1500, json_out=True)
     if err:
         return {"errore": err}
     ris = _ad_parse(testo)
@@ -377,9 +396,10 @@ _AD_APP_IA = [("ChatGPT", "https://chatgpt.com/"), ("Gemini", "https://gemini.go
 _AD_COLORE = {"rosso": ("r", "🔴"), "giallo": ("g", "🟡"), "verde": ("v", "🟢"), "blu": ("b", "🔵"), "bianco": ("b", "⚪")}
 
 
-def ad_prompt_libero(mezzo):
-    """Le istruzioni da dare a una qualunque app di IA insieme alla foto (testo semplice, non JSON)."""
-    return (f"Sei un esperto di diagnostica dei veicoli (auto, moto, camion e TIR, autobus, monopattini, mezzi agricoli) e di soccorso stradale. In allegato c'è la FOTO del cruscotto di questo mezzo: {mezzo}. "
+def ad_prompt_libero(mezzo, domanda=None):
+    """Le istruzioni da dare a una qualunque app di IA insieme alla foto (testo semplice, non JSON). Con «domanda» il problema è descritto a parole, senza foto."""
+    cosa = f"In allegato c'è la FOTO del cruscotto di questo mezzo: {mezzo}. " if not domanda else f"Il mezzo è questo: {mezzo}. Descrivo il problema a parole: «{str(domanda)[:400]}». "
+    return (f"Sei un esperto di diagnostica dei veicoli (auto, moto, camion e TIR, autobus, monopattini, mezzi agricoli) e di soccorso stradale. {cosa}"
             "Riconosci le spie accese e rispondi in italiano semplice, con frasi brevi. Per ogni spia scrivi: nome della spia; colore (rosso = fermati subito, giallo o arancio = avviso, officina a breve, verde o blu = informazione); urgenza; cosa significa; "
             "cosa fare subito, in passi numerati; possibili cause. Se una spia indica pericolo (pressione olio, freni, surriscaldamento, sterzo, aria dell'impianto frenante nei mezzi pesanti, alta tensione) scrivilo PER PRIMO in grassetto e dimmi se devo accostare e spegnere subito. "
             "Non inventare: se la foto non è chiara dimmelo e spiegami come rifarla. Nei veicoli elettrici non consigliarmi mai di toccare i cavi arancioni. Alla fine ricordami che sei un aiuto e che vale il manuale del mezzo.")
@@ -488,6 +508,11 @@ def _ad_risultato(ris, v, mezzo, sha, jpeg):
             with st.expander(f"✅ Nel catalogo verificato: {cat['icona']} {cat['nome']}"):
                 st.markdown(f"**Urgenza:** {cat['urgenza']}  \n**Significato:** {cat['significato']}")
                 st.markdown("**Cosa fare subito**\n" + "\n".join(f"{i}. {a}" for i, a in enumerate(cat["azioni"], 1)))
+        if "bd_mostra_abbinamento" in globals():
+            try:
+                bd_mostra_abbinamento(s["nome"], s["colore"], hashlib.md5(f"{sha}{s['nome']}".encode("utf-8")).hexdigest()[:8])
+            except Exception:
+                pass
         st.link_button("📖 Cerca nel manuale", _ad_manuale_url(v, mezzo, s["nome"]), width="stretch")
     conf = ris.get("confidenza", "bassa")
     st.caption(f"Affidabilità dell'analisi: **{conf}**. L'IA può sbagliare: se la spia è **ROSSA** fermati comunque, e per il tuo mezzo vale il manuale.")
@@ -591,6 +616,16 @@ def ad_pagina(v):
         opz = opz[1:]
     mezzo_sel = st.selectbox("Di che mezzo è la spia", opz, format_func=lambda x: f"Il mio veicolo: {nome_v}" if x == "Il veicolo scelto" else x, key="ad_mezzo")
     desc_mezzo = (f"{_au_nome(v)} ({v.get('alimentazione', '')}, {v.get('anno', '')})".replace(", )", ")").replace(" ()", "") if mezzo_sel == "Il veicolo scelto" else mezzo_sel)
+    if "bd_scope" in globals():
+        _bd_form_modello()                                                  # facoltativo: marca, modello e anno scritti a mano
+        scope_ad = bd_scope(v)
+        st.session_state["ad_scope"] = scope_ad
+        if (st.session_state.get("mz_marca") or st.session_state.get("mz_modello")):
+            desc_mezzo = bd_scope_desc(scope_ad, v)
+        if bd_attiva():
+            bd_checkbox_contribuisci()
+    else:
+        scope_ad = {}
     # ---- il «visore»: cornice, fotocamera e galleria
     st.markdown("<div class='ad-cornice'><div class='ico'>🔴</div><b>Inquadra la spia accesa</b><small>Cruscotto acceso, spia ben visibile, foto nitida e senza riflessi. Per fare luce usa la torcia del telefono.</small></div>", unsafe_allow_html=True)
     arr = _ad_riceve()
@@ -652,6 +687,12 @@ def ad_pagina(v):
             ae_spie(v)
         else:
             _ad_risultato(ris, v, mezzo, sha, jpeg)
+            if "bd_registra_risultato" in globals() and bd_attiva() and st.session_state.get("bd_contrib", True) and not st.session_state.get(f"ad_reg_{sha}"):
+                st.session_state[f"ad_reg_{sha}"] = True                    # una volta per foto: le spie riconosciute entrano nella base condivisa (solo testo)
+                nuove, agg = bd_registra_risultato(ris, scope_ad, "IA (" + AD_PROVIDER[ad_provider_scelto()]["nome"].split(" (")[0] + ")")
+                st.session_state[f"ad_reg_msg_{sha}"] = f"📚 Aggiunta alla base condivisa: {nuove} nuove, {agg} già presenti (solo testo, senza la foto)." if (nuove or agg) else ""
+            if st.session_state.get(f"ad_reg_msg_{sha}"):
+                st.caption(st.session_state[f"ad_reg_msg_{sha}"])
             _ad_azioni(ris, v, mezzo, sha, jpeg, vid)
             _ad_chat(ris, mezzo, sha, jpeg)
     else:
