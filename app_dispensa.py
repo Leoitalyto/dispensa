@@ -56,6 +56,8 @@ _AGGANCI = {
         ('@st.cache_data(ttl=15, show_spinner=False)\ndef carica_dati(_archivio, nome):', '@st.cache_data(ttl=60, show_spinner=False)\ndef carica_dati(_archivio, nome):'),
     ],
     "farmacia.py": [
+        ('    with st.expander(f"👥 Gestisci profili ({len(profili)}/{MAX_PROFILI})"):\n        with st.form("fa_nuovo_profilo", clear_on_submit=True):\n',
+         '    with st.expander(f"👥 Gestisci profili ({len(profili)}/{MAX_PROFILI})"):\n        if "sp_rinomina_profili" in globals():\n            sp_rinomina_profili(profili, f)\n        with st.form("fa_nuovo_profilo", clear_on_submit=True):\n'),
         # Avvisi: canale WhatsApp (gratuito, a scelta) e avvisi di Casa nel modulo «Scegli come ricevere gli avvisi»
         ('    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")\n',
          '    chat, mail, sms = str(d.get("telegram_chat_id") or ""), str(d.get("avviso_email") or ""), str(d.get("avviso_sms") or "")\n    wa_num, wa_key = str(d.get("avviso_whatsapp") or ""), str(d.get("avviso_whatsapp_chiave") or "")\n'),
@@ -197,7 +199,7 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     except Exception:
         pass
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "musica.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):

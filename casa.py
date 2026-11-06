@@ -3126,7 +3126,7 @@ def _ca_archivia(sorgente, sha, ric, bozza, val, n):
             + (" e collegato alla sua bolletta" if val.get("collegato_a") else "") + ", con il file originale: lo ritrovi nella scheda Documenti.")
 
 
-def _ca_pannello_caricamento(n):
+def _ca_pannello_caricamento(n, multi=True):
     """Tutti i modi per portare un file nell'app: 📷 Scatta foto, 🖼️ Dalla galleria, 📚 Più file, 📎 Il PDF o il file (pulsante arancione), 🔗 da un link. Ritorna il file arrivato (o None)."""
     chiave_f = f"cadoc{n}"
     if "_fa_assicura_fotocamera" in globals():                                  # la fotocamera posteriore è la stessa di Salute e della dispensa
@@ -3151,8 +3151,9 @@ def _ca_pannello_caricamento(n):
         ack_t = _html_ca.escape(f"upl:{f_pdfx.name}:{f_pdfx.size}", quote=True)
     with st.container(key="ca_ricezione"):
         st.text_input("ca-pdf-trasf", key="ca_trasf_in", label_visibility="collapsed")
-    st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='multi' style='background:linear-gradient(135deg,#8e24aa,#5e35b1);box-shadow:0 5px 0 rgba(60,20,110,.35);margin-bottom:8px'>"
-                "📚 Scegli PIÙ file insieme</div>", unsafe_allow_html=True)
+    if multi:
+        st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='multi' style='background:linear-gradient(135deg,#8e24aa,#5e35b1);box-shadow:0 5px 0 rgba(60,20,110,.35);margin-bottom:8px'>"
+                    "📚 Scegli PIÙ file insieme</div>", unsafe_allow_html=True)
     st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='1'>📎 Scegli il PDF o il file</div>"
                 f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if (ack_t.endswith(':fine') or ack_t.startswith('upl:')) else 'Tocca il pulsante arancione e scegli il file: lo vedi tutto, anche se ha un nome strano.')}</div>"
                 f"<span data-ca-ack='{ack_t}' style='display:none'></span>", unsafe_allow_html=True)
