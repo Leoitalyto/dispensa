@@ -162,6 +162,11 @@ def _pn_h(t):
 
 def nav_pagine(corrente):
     """I bottoni colorati per passare da una pagina all'altra; quelli con cose in scadenza lampeggiano e dicono quante."""
+    if "nu_aggiorna_sessione" in globals():                           # se l'amministratore ha cambiato il mio nome, lo vedo subito
+        try:
+            nu_aggiorna_sessione()
+        except Exception:
+            pass
     try:                                                              # la sezione in cui sei si scrive nell'indirizzo: se la pagina riparte, si torna qui
         if st.query_params.get("s") != corrente:
             st.query_params["s"] = corrente
@@ -273,6 +278,8 @@ def pn_freccia_su():
 def pn_impostazioni():
     """Il riquadro «⚙️ Aspetto dell'app» (in Utilità): grandezza dei testi e da che parte sta la freccia «torna su»."""
     with st.expander("⚙️ Aspetto dell'app: testi, radio e freccia «torna su»"):
+        if "nu_ui_proprio" in globals():
+            nu_ui_proprio()
         if "musica_attiva" in globals():
             m_on = st.checkbox("🎧 Mostra la radio di sottofondo (la linguetta sul bordo dello schermo)", value=musica_attiva(), key="pn_musica_scelta")
             if m_on != musica_attiva():

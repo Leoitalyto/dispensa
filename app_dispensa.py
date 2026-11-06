@@ -123,6 +123,8 @@ _AGGANCI = {
          'if "fd_selettore" in globals():\n    fd_selettore()\n'),
     ],
     "parte4.py": [
+        ('                b1, b2, b3 = st.columns(3)\n                if b1.button("🔑 " + t("Nuova password"), key=f"np_{u[\'id\']}"):\n',
+         '                if "nu_ui_admin" in globals():\n                    nu_ui_admin(u, elenco)\n                b1, b2, b3 = st.columns(3)\n                if b1.button("🔑 " + t("Nuova password"), key=f"np_{u[\'id\']}"):\n'),
         # data di acquisto nel modulo «Aggiungi»
         ('    note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))\n',
          '    note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))\n'
@@ -199,7 +201,7 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     except Exception:
         pass
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
