@@ -750,6 +750,28 @@ def raccogli_controlli(d, oggi):
                 if len((d.get("farmacia") or {}).get("profili") or []) > 1:
                     nome += f" · {p.get('nome', '')}"
                 out.append((g, nome, scad))
+    # AUTO: bollo, assicurazione, revisione, garanzie, tagliando, documenti con scadenza, cambio gomme. Avviso a 30, 15 e 3 giorni prima, il giorno stesso, e ogni lunedì se in ritardo (fino a 180 giorni)
+    veicoli = ((d.get("auto") or {}).get("veicoli")) or []
+    for v in veicoli:
+        if not isinstance(v, dict):
+            continue
+        nome_v = " ".join(x for x in (v.get("marca"), v.get("modello")) if x) or v.get("nome") or "Veicolo"
+        sc = v.get("scadenze") or {}
+        etich = {"bollo": "Bollo", "assicurazione": "Assicurazione", "revisione": "Revisione", "garanzia_auto": "Garanzia", "garanzia_batteria": "Garanzia batteria", "tagliando": "Tagliando"}
+        voci = [(etich.get(k, k), data_di((s_ or {}).get("data"))) for k, s_ in sc.items() if isinstance(s_, dict) and s_.get("avvisa") is not False]
+        for dc in (v.get("documenti") or []):
+            dd = data_di(dc.get("scadenza"))
+            if dd and not ((dc.get("tipo") == "Polizza assicurativa" and data_di((sc.get("assicurazione") or {}).get("data")) == dd) or (dc.get("tipo") == "Revisione (certificato)" and data_di((sc.get("revisione") or {}).get("data")) == dd)):
+                voci.append((dc.get("titolo") or dc.get("tipo") or "Documento", dd))
+        for pn in (v.get("pneumatici") or []):
+            if pn.get("stato") != "In deposito" and data_di(pn.get("cambio_entro")):
+                voci.append(("Cambio gomme", data_di(pn.get("cambio_entro"))))
+        for etichetta, dd in voci:
+            if not dd:
+                continue
+            g = (dd - oggi).days
+            if g in (30, 15, 3, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+                out.append((g, f"🚗 {etichetta} · {nome_v}" + (f" ({v.get('targa')})" if v.get("targa") else ""), dd))
     return sorted(out, key=lambda t: t[0])
 
 

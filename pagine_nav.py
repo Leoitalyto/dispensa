@@ -21,6 +21,7 @@ _PN_VOCI = [
     ("archivio", "🗂️ Archivio", "#7986cb", "#283593"),
     ("casa", "🏡 Casa", "#ffb74d", "#d84315"),
     ("lavoro", "💼 Lavoro", "#90a4ae", "#37474f"),
+    ("auto", "🚗 Auto", "#4dd0e1", "#006064"),
     ("utilita", "🧰 Utilità", "#c46bdc", "#4a148c"),
 ]
 
@@ -122,6 +123,9 @@ def pn_scadenze():
             g = _pn_giorni(x.get("scadenza"), oggi_)
             if g is not None and g <= 90 and not x.get("senza_scadenza"):
                 out.setdefault("documenti", []).append(f"📄 {x.get('tipo', 'Documento')}: {_pn_quando(g)}")
+        if "au_scadenze_avviso" in globals():                                     # Auto: bollo, assicurazione, revisione, garanzie, tagliando, gomme (scadute o entro 30 giorni)
+            for _g, _txt in au_scadenze_avviso(d.get("auto") or {}, oggi_, 30):
+                out.setdefault("auto", []).append(_txt)
         if "ca_scadenze" in globals():
             c = d.get("casa") or {}
             for k in ("beni", "documenti", "manutenzioni"):
@@ -148,7 +152,7 @@ def pn_riepilogo():
         st.markdown("<div style='background:rgba(255,255,255,.8);border-radius:16px;padding:8px 14px;margin:8px 0;color:#1b5e20;font-weight:800'>✅ Tutto a posto: niente in scadenza.</div>", unsafe_allow_html=True)
         return
     righe = ""
-    for sez in ("dispensa", "salute", "documenti", "casa"):
+    for sez in ("dispensa", "salute", "documenti", "casa", "auto"):
         if sez in sc:
             voci = sc[sez]
             righe += f"<div style='margin-top:6px'><b>{nomi.get(sez, sez)}</b> ({len(voci)})</div>" + "".join(f"<div style='margin-left:10px'>{_pn_h(v)}</div>" for v in voci[:3])
