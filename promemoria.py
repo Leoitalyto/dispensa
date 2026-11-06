@@ -757,7 +757,7 @@ def raccogli_controlli(d, oggi):
             continue
         nome_v = " ".join(x for x in (v.get("marca"), v.get("modello")) if x) or v.get("nome") or "Veicolo"
         sc = v.get("scadenze") or {}
-        etich = {"bollo": "Bollo", "assicurazione": "Assicurazione", "revisione": "Revisione", "garanzia_auto": "Garanzia", "garanzia_batteria": "Garanzia batteria", "tagliando": "Tagliando"}
+        etich = {"bollo": "Bollo", "assicurazione": "Assicurazione", "revisione": "Revisione", "garanzia_auto": "Garanzia", "garanzia_batteria": "Garanzia batteria", "tagliando": "Tagliando", "tachigrafo": "Tachigrafo (taratura)"}
         voci = [(etich.get(k, k), data_di((s_ or {}).get("data"))) for k, s_ in sc.items() if isinstance(s_, dict) and s_.get("avvisa") is not False]
         for dc in (v.get("documenti") or []):
             dd = data_di(dc.get("scadenza"))
@@ -766,12 +766,31 @@ def raccogli_controlli(d, oggi):
         for pn in (v.get("pneumatici") or []):
             if pn.get("stato") != "In deposito" and data_di(pn.get("cambio_entro")):
                 voci.append(("Cambio gomme", data_di(pn.get("cambio_entro"))))
+        for us in (v.get("usura") or []):
+            if data_di(us.get("prossima_data")):
+                voci.append((f"{us.get('parte', 'Parte')} (usura)", data_di(us.get("prossima_data"))))
         for etichetta, dd in voci:
             if not dd:
                 continue
             g = (dd - oggi).days
-            if g in (30, 15, 3, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+            if g in (90, 30, 15, 3, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
                 out.append((g, f"🚗 {etichetta} · {nome_v}" + (f" ({v.get('targa')})" if v.get("targa") else ""), dd))
+    # CONDUCENTE: patente, visita medica, CQC (90, 30, 15, 3 giorni prima) e verbali da pagare (15, 5, 3, 0 giorni prima)
+    cond = (d.get("auto") or {}).get("conducente") or {}
+    for pt in (cond.get("patenti") or []):
+        for k, et in (("scadenza", "Patente"), ("visita_medica", "Visita medica della patente"), ("cqc", "CQC")):
+            dd = data_di(pt.get(k))
+            if not dd or pt.get("avvisa") is False:
+                continue
+            g = (dd - oggi).days
+            if g in (90, 30, 15, 3, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+                out.append((g, f"🪪 {et} · {pt.get('nome', '')}", dd))
+    for vb in (cond.get("verbali") or []):
+        dd = data_di(vb.get("scadenza_pagamento"))
+        if dd and vb.get("stato") == "Da pagare":
+            g = (dd - oggi).days
+            if g in (15, 5, 3, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+                out.append((g, f"🧾 Verbale da pagare ({vb.get('tipo') or vb.get('luogo') or 'multa'})", dd))
     return sorted(out, key=lambda t: t[0])
 
 

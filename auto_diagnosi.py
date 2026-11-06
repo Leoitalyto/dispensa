@@ -27,7 +27,7 @@ import streamlit as st
 AD_MODELLO = "claude-sonnet-5-5"
 AD_URL = "https://api.anthropic.com/v1/messages"
 AD_MAX_ORA = 15
-AD_MEZZI = ["Il veicolo scelto", "Auto", "Moto", "Camion / TIR", "Autobus / pullman", "Furgone o veicolo commerciale", "Camper", "Mezzo agricolo o da lavoro", "Altro mezzo"]
+AD_MEZZI = ["Il veicolo scelto", "Auto", "Moto", "Ciclomotore / scooter", "Monopattino elettrico", "Bicicletta elettrica (e-bike)", "Camion / TIR", "Autobus / pullman", "Furgone o veicolo commerciale", "Camper", "Mezzo agricolo o da lavoro", "Altro mezzo"]
 AD_SOCCORSO_PREDEFINITO = "803116"
 
 _AD_REGOLE = """Sei un esperto di diagnostica dei veicoli (auto, moto, camion e TIR, autobus, furgoni, camper, mezzi agricoli; termici, ibridi ed elettrici) e di soccorso stradale. Ti viene mostrata la FOTO di un cruscotto con una o più spie accese.

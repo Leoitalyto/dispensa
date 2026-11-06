@@ -57,6 +57,11 @@ _AU_CSS = """<style>
 .au-v{background:#e8f5e9;border-left:6px solid #2e7d32;color:#1b5e20}.au-g{background:#fff8e1;border-left:6px solid #f9a825;color:#6d4c00}.au-r{background:#ffebee;border-left:6px solid #c62828;color:#7f1111}.au-n{background:#eceff1;border-left:6px solid #90a4ae;color:#37474f}
 </style>"""
 
+_AU_TIPI = ["Auto", "Moto", "Ciclomotore / scooter", "Monopattino elettrico", "Bicicletta elettrica (e-bike)", "Furgone / veicolo commerciale", "Camion / TIR", "Autobus / pullman", "Camper", "Mezzo agricolo o da lavoro", "Altro mezzo"]
+_AU_EMOJI = {"Auto": "🚗", "Moto": "🏍️", "Ciclomotore / scooter": "🛵", "Monopattino elettrico": "🛴", "Bicicletta elettrica (e-bike)": "🚲", "Furgone / veicolo commerciale": "🚐", "Camion / TIR": "🚚",
+             "Autobus / pullman": "🚌", "Camper": "🚐", "Mezzo agricolo o da lavoro": "🚜", "Altro mezzo": "🚘"}
+_AU_PARTI_USURA = ["Pastiglie freno anteriori", "Pastiglie freno posteriori", "Dischi freno", "Spazzole tergicristallo", "Filtro abitacolo / polline", "Filtro aria", "Liquido freni", "Liquido lavavetri",
+                   "Liquido di raffreddamento", "Batteria 12V", "Cinghia o catena di distribuzione", "Catena e pignoni (moto, bici)", "Altro"]
 _AU_ALIM = ["Benzina", "Diesel", "GPL", "Metano", "Ibrida (HEV)", "Ibrida plug-in (PHEV)", "Elettrica (BEV)"]
 _AU_CONNETTORI = ["", "Type 2", "CCS Combo 2", "CHAdeMO", "Type 1", "Schuko / domestico", "Altro"]
 _AU_DOC_TIPI = ["Carta di circolazione", "Certificato di proprietà", "Polizza assicurativa", "Bollo (ricevuta)", "Revisione (certificato)", "Garanzia", "Delega o permesso ZTL", "Fattura o ricevuta", "Perizia o sinistro", "Altro"]
@@ -111,12 +116,26 @@ def _au_oggi():
         return date.today()
 
 
-def _au_e_ev(v):
+def _au_micro(v):
+    """Monopattini e biciclette elettriche: batteria al litio a bassa tensione (non alta tensione)."""
+    return (v or {}).get("tipo_veicolo") in ("Monopattino elettrico", "Bicicletta elettrica (e-bike)")
+
+
+def _au_pesante(v):
+    return (v or {}).get("tipo_veicolo") in ("Camion / TIR", "Autobus / pullman")
+
+
+def _au_solo_elettrico(v):
     return str(v.get("alimentazione", "")).startswith("Elettrica")
 
 
+def _au_e_ev(v):
+    """Veicolo elettrico con ALTA TENSIONE (auto, moto, furgoni, bus…): non i monopattini e le e-bike."""
+    return _au_solo_elettrico(v) and not _au_micro(v)
+
+
 def _au_ha_batteria(v):
-    return str(v.get("alimentazione", "")).startswith(("Elettrica", "Ibrida"))
+    return str(v.get("alimentazione", "")).startswith(("Elettrica", "Ibrida")) or _au_micro(v)
 
 
 def _au_ricarica(v):
@@ -128,7 +147,7 @@ def _au_nome(v):
 
 
 def _au_etichetta(v):
-    return ("🏍️ " if v.get("tipo_veicolo") == "Moto" else "🚗 ") + (v.get("nome") or _au_nome(v)) + (f" · {v['targa']}" if v.get("targa") else "")
+    return _AU_EMOJI.get(v.get("tipo_veicolo"), "🚗") + " " + (v.get("nome") or _au_nome(v)) + (f" · {v['targa']}" if v.get("targa") else "")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -152,9 +171,26 @@ def _au_salva(fn, msg):
     salva(_m, msg)
 
 
+def _au_cond(a=None):
+    """Il «conducente»: patente, visita medica, CQC, punti e verbali. È un contenitore a parte (id «cond»), che si usa come un veicolo."""
+    a = a if a is not None else _au_dati()
+    c = dict(a.get("conducente") or {})
+    c["id"] = "cond"
+    c["nome"] = "Conducente"
+    c.setdefault("patenti", [])
+    c.setdefault("verbali", [])
+    return c
+
+
 def _au_mod(vid, fn, msg):
-    """Modifica UN veicolo: fn(veicolo)."""
+    """Modifica UN veicolo: fn(veicolo). Con vid «cond» modifica il conducente (patente e verbali)."""
     def _f(a):
+        if vid == "cond":
+            c = a.setdefault("conducente", {"id": "cond"})
+            c.setdefault("patenti", [])
+            c.setdefault("verbali", [])
+            fn(c)
+            return
         for v in a["veicoli"]:
             if v.get("id") == vid:
                 fn(v)
@@ -408,6 +444,25 @@ _AU_SCAD = [("bollo", "💶 Bollo auto", [("data", "Scade il", "d", None), ("imp
             ("tagliando", "🔧 Prossimo tagliando", [("data", "Entro il", "d", None), ("km", "Oppure a (km)", "n", "es. 45000")])]
 
 
+_AU_SCAD_TACHIGRAFO = ("tachigrafo", "⏱️ Tachigrafo (taratura)", [("ultima", "Ultima taratura il", "d", None), ("data", "Prossima taratura entro il", "d", None), ("note", "Note", "t", None)])
+
+
+def au_scad_def(v):
+    """Le scadenze che hanno senso per questo tipo di mezzo: tutte per auto e moto; senza bollo e revisione per monopattini e e-bike; con il tachigrafo per camion e autobus."""
+    out = []
+    for chiave, etichetta, spec in _AU_SCAD:
+        if _au_micro(v) and chiave in ("bollo", "revisione"):
+            continue
+        if chiave == "garanzia_batteria" and not _au_ha_batteria(v):
+            continue
+        if _au_micro(v) and chiave == "garanzia_batteria":
+            etichetta = "🔋 Garanzia della batteria"
+        out.append((chiave, etichetta, spec))
+    if _au_pesante(v):
+        out.append(_AU_SCAD_TACHIGRAFO)
+    return out
+
+
 def _au_stato(giorni):
     return "r" if giorni < 0 else "g" if giorni <= 30 else "v"
 
@@ -416,10 +471,8 @@ def au_scadenze(v, oggi_=None):
     """[{chiave, etichetta, data, giorni, stato ('r' scaduta, 'g' entro 30 giorni, 'v' ok), testo}] ordinate. Include scadenze, documenti con scadenza, cambio gomme, tagliando a km."""
     oggi_ = oggi_ or _au_oggi()
     out = []
-    for chiave, etichetta, _spec in _AU_SCAD:
+    for chiave, etichetta, _spec in au_scad_def(v):
         s = (v.get("scadenze") or {}).get(chiave) or {}
-        if chiave == "garanzia_batteria" and not _au_ha_batteria(v):
-            continue
         d_ = _au_d(s.get("data"))
         if d_:
             g = (d_ - oggi_).days
@@ -437,6 +490,15 @@ def au_scadenze(v, oggi_=None):
         if d_:
             g = (d_ - oggi_).days
             out.append({"chiave": "doc_" + dc["id"], "etichetta": f"{_AU_DOC_ICONE.get(dc.get('tipo'), '📄')} {dc.get('titolo') or dc.get('tipo')}", "data": d_, "giorni": g, "stato": _au_stato(g), "avvisa": True})
+    for us in v.get("usura", []):
+        d_ = _au_d(us.get("prossima_data"))
+        if d_:
+            g = (d_ - oggi_).days
+            out.append({"chiave": "usura_" + us["id"], "etichetta": f"🧩 {us.get('parte', 'Parte')}: da sostituire/controllare", "data": d_, "giorni": g, "stato": _au_stato(g), "avvisa": True})
+        km_t, km_a = _au_n(us.get("prossima_km")), _au_n(v.get("km_attuali"))
+        if km_t and km_a:
+            r = km_t - km_a
+            out.append({"chiave": "usura_km_" + us["id"], "etichetta": f"🧩 {us.get('parte', 'Parte')} (km)", "data": None, "giorni": None, "km_restanti": r, "stato": "r" if r < 0 else "g" if r <= 1000 else "v", "avvisa": True})
     for pn in v.get("pneumatici", []):
         d_ = _au_d(pn.get("cambio_entro"))
         if d_ and pn.get("stato") != "In deposito":
@@ -450,6 +512,22 @@ def au_scadenze_avviso(a, oggi_=None, entro=30):
     oggi_ = oggi_ or _au_oggi()
     out = []
     molte = len(a.get("veicoli", [])) > 1
+    cond = a.get("conducente") or {}
+    for pt in cond.get("patenti", []):
+        for k, et in (("scadenza", "Patente"), ("visita_medica", "Visita medica della patente"), ("cqc", "CQC")):
+            d_ = _au_d(pt.get(k))
+            if d_ and pt.get("avvisa") is not False:
+                g = (d_ - oggi_).days
+                if g <= 90:
+                    q = "scaduta da %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"
+                    out.append((g, f"🪪 {et} di {pt.get('nome', '')}: {q}"))
+    for vb in cond.get("verbali", []):
+        d_ = _au_d(vb.get("scadenza_pagamento"))
+        if d_ and vb.get("stato") == "Da pagare":
+            g = (d_ - oggi_).days
+            if g <= 15:
+                q = "scaduto da %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"
+                out.append((g, f"🧾 Verbale da pagare ({vb.get('tipo') or vb.get('luogo') or 'multa'}, {_au_eur(vb.get('importo'))}): {q}"))
     for v in a.get("veicoli", []):
         for s in au_scadenze(v, oggi_):
             if not s.get("avvisa", True):

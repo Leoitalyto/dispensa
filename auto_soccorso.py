@@ -63,6 +63,8 @@ _AS_PROC_EV = [("🔌 1. Sblocco d'emergenza del cavo di ricarica", "🔌 Cavo d
                ("⚡ 2. Avviamento di emergenza a 12V (jump-start)", "🔋 Batteria 12V scarica (elettrica/ibrida)", "Come alimentare la rete di bordo per sbloccare portiere, freni e centraline HV."),
                ("🐢 3. Gestione della «modalità tartaruga» (potenza limitata)", "🐢 Modalità tartaruga / potenza ridotta", "Cosa fare se l'auto limita la potenza per surriscaldamento o carica critica (sotto il 5%)."),
                ("🧯 4. Incendio, fumo o allagamento", "🔥 Fumo, fuoco o allagamento", "Allontanamento di 15-20 metri, cosa dire al 112 e dov'è il sezionatore d'emergenza.")]
+_AS_PROC_MICRO = [("🔋 1. Batteria al litio che scalda, fuma o prende fuoco", "🔋 Batteria al litio (monopattino / e-bike)", "Cosa fare se la batteria si surriscalda, si gonfia o fuma, e come ricaricare in sicurezza."),
+                  ("🧯 2. Incendio o fumo", "🔥 Fumo, fuoco o allagamento", "Allontanamento di 15-20 metri e cosa dire al 115 o al 112.")]
 _AS_PROC_TERMICA = [("⚡ 1. Avviamento di emergenza a 12V (cavi di avviamento)", "🔋 Batteria 12V scarica (auto termica)", "Come far ripartire l'auto con un'altra auto o un booster."),
                     ("🧯 2. Incendio o fumo", "🔥 Fumo, fuoco o allagamento", "Allontanamento di 15-20 metri e cosa dire al 112.")]
 
@@ -127,7 +129,8 @@ def _as_procedura(titolo, chiave, riassunto, extra=None):
 def as_pagina(v):
     """La schermata «Soccorso ed emergenza»."""
     vid = (v or {}).get("id")
-    ev = bool(v) and _au_ha_batteria(v)
+    micro = bool(v) and _au_micro(v)
+    ev = bool(v) and _au_ha_batteria(v) and not micro
     st.markdown(_AS_CSS, unsafe_allow_html=True)
     t1, t2 = st.columns([1, 3], gap="small")
     if t1.button("← Indietro", key="as_indietro", width="stretch"):
@@ -171,8 +174,9 @@ def as_pagina(v):
     st.caption("La tensione della 12V la misuri tu con un tester sui morsetti (o sui punti di avviamento d'emergenza indicati dal manuale). Mai misurare o toccare l'alta tensione.")
     # ---- procedure rapide
     st.markdown("#### 🛠️ Procedure di emergenza rapida")
-    st.markdown(_AE_HV)
-    for titolo, chiave, riassunto in (_AS_PROC_EV if ev else _AS_PROC_TERMICA):
+    if not micro:
+        st.markdown(_AE_HV)
+    for titolo, chiave, riassunto in (_AS_PROC_EV if ev else _AS_PROC_MICRO if micro else _AS_PROC_TERMICA):
         _as_procedura(titolo, chiave, riassunto, "**Se la carica è sotto il 5%:** l'auto può ridurre molto la potenza o fermarsi. Spegni clima e consumi e vai alla colonnina più vicina." if "tartaruga" in chiave else None)
     if ev:
         with st.expander("🔴 5. Sezionatore d'emergenza (Emergency Cut-Off)"):

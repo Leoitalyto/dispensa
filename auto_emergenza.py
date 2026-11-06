@@ -122,6 +122,11 @@ _AE_PROCEDURE = {
                   "Chiama il **112 / 115** e dì chiaramente: **«veicolo ELETTRICO (o ibrido)»**, dove sei e se ci sono feriti.", "**Non aprire cofano o portellone** se c'è fumo; **non toccare i cavi arancioni**; non tentare di spegnere la batteria con estintori piccoli.",
                   "Una batteria danneggiata può **riaccendersi anche ore dopo**: lascia il lavoro ai Vigili del Fuoco, ai quali serve il **sezionatore d'emergenza** (indicato nella «guida di soccorso» del modello).",
                   "**Allagamento:** non entrare in acqua alta; se sei dentro, esci subito. **Non ricaricare mai** un veicolo elettrico dopo un allagamento: va controllato da un tecnico."]},
+    "🔋 Batteria al litio (monopattino / e-bike)": {
+        "intro": "Le batterie al litio dei monopattini e delle biciclette elettriche, se si danneggiano o si surriscaldano, possono **fumare o incendiarsi all'improvviso**. Non sono alta tensione come quelle delle auto, ma il fuoco è pericoloso.",
+        "passi": ["Se la batteria **scalda troppo, gonfia, puzza o fuma**: **smetti di usarla** e **stacca il caricatore** subito, se non c'è pericolo a toccarlo.", "Mettila **all'aperto**, lontano da case, auto e materiali infiammabili, **mai sotto una scala o in un corridoio**.",
+                  "Se c'è fumo o fiamma: **allontanati**, non respirare i fumi e chiama il **115 (Vigili del Fuoco)** o il **112**. Non cercare di salvare il mezzo.", "**Non ricaricare mai** una batteria che ha preso un urto forte, è caduta in acqua o è deformata.",
+                  "Ricarica **sotto controllo**, con il caricatore originale, non di notte e non su un letto o un divano. Dopo un incendio o un urto, falla controllare da un tecnico prima di riusarla."]},
     "🔋 Batteria 12V scarica (auto termica)": {
         "intro": "Valido per benzina e diesel (per le elettriche/ibride vedi la procedura dedicata).",
         "passi": ["Servono cavi di avviamento e un'auto con batteria 12 V (o un booster). Spegni entrambe le auto.", "Collega il **+ rosso** al + della batteria scarica, poi al + di quella buona.", "Collega il **– nero** al – della batteria buona e l'altro capo a una **parte metallica nuda del motore** della tua auto (non al polo –).",

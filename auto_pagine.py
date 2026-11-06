@@ -12,11 +12,13 @@ import streamlit as st
 # ---------------------------------------------------------------------------------------------------------------------
 # elenchi (campi)
 # ---------------------------------------------------------------------------------------------------------------------
-_SPEC_VEICOLO = [("tipo_veicolo", "Tipo", "s", ["Auto", "Moto"]), ("nome", "Soprannome (facoltativo)", "t", None), ("targa", "Targa", "t", None), ("marca", "Marca", "t", None), ("modello", "Modello", "t", None),
+_SPEC_VEICOLO = [("tipo_veicolo", "Che mezzo è", "s", _AU_TIPI), ("nome", "Soprannome (facoltativo)", "t", None), ("targa", "Targa", "t", None), ("marca", "Marca", "t", None), ("modello", "Modello", "t", None),
                  ("allestimento", "Allestimento", "t", None), ("anno", "Anno", "n", None), ("immatricolazione", "Prima immatricolazione", "d", None), ("alimentazione", "Alimentazione", "s", _AU_ALIM),
                  ("kw", "Potenza (kW)", "n", None), ("cv", "Potenza (CV)", "n", None), ("classe_euro", "Classe ambientale", "t", None), ("cilindrata", "Cilindrata (cc)", "n", None), ("telaio", "Numero di telaio", "t", None),
                  ("km_attuali", "Chilometri attuali", "n", None), ("pressione_pneumatici", "Pressione pneumatici consigliata", "t", None), ("serbatoio_l", "Serbatoio (litri)", "n", None), ("bagagliaio_l", "Bagagliaio (litri)", "n", None),
-                 ("colore", "Colore", "t", None), ("batteria_nominale_kwh", "🔋 Batteria di trazione: capacità nominale (kWh)", "n", None), ("batteria_utile_kwh", "🔋 Batteria di trazione: capacità utile (kWh)", "n", None),
+                 ("colore", "Colore", "t", None), ("serie", "Numero di serie o contrassegno (monopattini, e-bike, ciclomotori)", "t", None), ("massa_kg", "Massa complessiva (kg)", "n", None),
+                 ("posti", "Posti", "n", None), ("assi", "Numero di assi", "n", None), ("velocita_max", "Velocità massima (km/h)", "n", None), ("autonomia_km", "Autonomia dichiarata (km)", "n", None),
+                 ("potenza_w", "Potenza (W, per monopattini e e-bike)", "n", None), ("batteria_nominale_kwh", "🔋 Batteria di trazione: capacità nominale (kWh)", "n", None), ("batteria_utile_kwh", "🔋 Batteria di trazione: capacità utile (kWh)", "n", None),
                  ("ricarica_ac_kw", "⚡ Potenza massima di ricarica AC (kW)", "n", None), ("ricarica_dc_kw", "⚡ Potenza massima di ricarica DC (kW)", "n", None), ("connettore", "🔌 Connettore di bordo", "s", _AU_CONNETTORI),
                  ("note", "Note", "a", None)]
 _SPEC_DOC = [("tipo", "Che documento è", "s", _AU_DOC_TIPI), ("titolo", "Titolo", "t", None), ("data", "Data del documento", "d", None), ("scadenza", "Scadenza (se c'è)", "d", None), ("importo", "Importo (€, se c'è)", "n", None), ("note", "Note", "a", None)]
@@ -29,6 +31,13 @@ _SPEC_SOH = [("data", "Data del test", "d", None), ("km", "Chilometri", "n", Non
 _SPEC_VALORE = [("data", "Data", "d", None), ("valore", "Valore stimato (€)", "n", None), ("km", "Chilometri", "n", None), ("note", "Note (da dove viene la stima)", "t", None)]
 _SPEC_CAVI = [("tipo", "Che cos'è", "s", ["Cavo Modo 2 (domestico)", "Cavo Modo 3 (Type 2)", "Adattatore", "Altro"]), ("specifica", "Potenza (A / kW) e lunghezza", "t", None), ("note", "Note", "a", None)]
 _SPEC_TESSERE = [("nome", "Nome", "t", None), ("tipo", "Che cos'è", "s", ["Tessera RFID", "App di ricarica", "Abbonamento"]), ("note", "Numero, tessera o dove sta (non scrivere le password)", "a", None)]
+_SPEC_USURA = [("parte", "Quale parte", "s", _AU_PARTI_USURA), ("data", "Data del controllo", "d", None), ("valore", "Misura o stato (es. 4 mm, 60%)", "t", None), ("stato", "Come sta", "s", ["OK", "Da controllare", "Da sostituire"]),
+               ("prossima_km", "Da sostituire o controllare a (km)", "n", None), ("prossima_data", "Oppure entro il", "d", None), ("note", "Note", "a", None)]
+_SPEC_VIAGGI = [("data", "Data", "d", None), ("partenza", "Partenza", "t", None), ("arrivo", "Arrivo", "t", None), ("km", "Km percorsi", "n", None), ("categoria", "Tipo di viaggio", "s", ["Personale", "Lavoro / aziendale"]), ("note", "Motivo o note", "t", None)]
+_SPEC_PATENTI = [("nome", "Di chi è la patente", "t", None), ("categorie", "Categorie (es. B, A, C, D, CQC)", "t", None), ("numero", "Numero della patente (facoltativo)", "t", None), ("scadenza", "Scadenza della patente", "d", None),
+                 ("visita_medica", "Scadenza della visita medica", "d", None), ("cqc", "Scadenza CQC (se ce l'hai)", "d", None), ("punti", "Saldo punti", "n", "es. 20"), ("note", "Note", "a", None)]
+_SPEC_VERBALI = [("data", "Data dell'infrazione", "d", None), ("luogo", "Luogo", "t", None), ("tipo", "Che infrazione", "t", None), ("importo", "Importo (€)", "n", None), ("stato", "Stato", "s", ["Da pagare", "Pagato", "Ricorso in corso", "Annullato"]),
+                 ("scadenza_pagamento", "Pagare entro il", "d", None), ("veicolo", "Targa del veicolo", "t", None), ("punti_tolti", "Punti tolti", "n", None), ("ricorso", "Note sul ricorso (data, ente…)", "a", None), ("note", "Note", "a", None)]
 _SPEC_SINISTRO = [("data", "Data", "d", None), ("ora", "Ora", "t", None), ("luogo", "Luogo preciso", "t", None), ("dinamica", "Come è successo", "a", None), ("danni", "Danni al mio veicolo", "a", None),
                   ("feriti", "Ci sono feriti", "b", None), ("controparte_targa", "Targa dell'altro veicolo", "t", None), ("controparte_nome", "Nome dell'altro conducente", "t", None), ("controparte_telefono", "Telefono", "t", None),
                   ("controparte_compagnia", "Compagnia dell'altro", "t", None), ("controparte_polizza", "Polizza dell'altro", "t", None), ("testimoni", "Testimoni (nome e telefono)", "a", None),
@@ -36,7 +45,7 @@ _SPEC_SINISTRO = [("data", "Data", "d", None), ("ora", "Ora", "t", None), ("luog
 
 
 def _spec_rifornimenti(v):
-    tipi = ["Ricarica"] if _au_e_ev(v) else (["Ricarica", "Carburante"] if _au_ricarica(v) else ["Carburante"])
+    tipi = ["Ricarica"] if _au_solo_elettrico(v) else (["Ricarica", "Carburante"] if _au_ricarica(v) else ["Carburante"])
     return [("tipo", "Che cosa hai fatto", "s", tipi), ("data", "Data", "d", None), ("km", "Chilometri", "n", None), ("luogo", "Dove (casa, colonnina AC/DC, distributore)", "t", None),
             ("quantita", "Litri (carburante) o kWh (ricarica)", "n", None), ("costo", "Costo totale (€)", "n", None), ("prezzo", "Prezzo al litro o al kWh (se vuoto lo calcolo)", "n", None),
             ("potenza_max", "Potenza massima raggiunta (kW, ricarica)", "n", None), ("pieno", "Pieno fatto (serbatoio pieno / batteria carica)", "b", None), ("note", "Note", "t", None)]
@@ -91,7 +100,10 @@ def _au_corpo(coda):
         _au_chiudi(coda)
         st.rerun()
     if modo.startswith("libretto"):
-        ok, val = _form_veicolo("au_fv_" + c["sha"][:8], None, ric)
+        pre = {"tipo_veicolo": c.get("tipo") or "Auto"}
+        if pre["tipo_veicolo"] in ("Monopattino elettrico", "Bicicletta elettrica (e-bike)"):
+            pre["alimentazione"] = "Elettrica (BEV)"
+        ok, val = _form_veicolo("au_fv_" + c["sha"][:8], pre, ric)
         if ok:
             vid = uuid.uuid4().hex[:10]
             rif = {}
@@ -195,7 +207,7 @@ def _au_pannello(v, coda):
     """Il pannello del pulsante arancione, quando serve: nuovo veicolo / nuovo documento / allegare un file."""
     ctx = st.session_state.get("au_pannello")
     al = st.session_state.get("au_allega")
-    if al and (not v or al["vid"] != v["id"]):
+    if al and al["vid"] != "cond" and (not v or al["vid"] != v["id"]):
         al = None
     if not ctx and not al:
         return
@@ -252,7 +264,7 @@ def _au_pannello(v, coda):
         st.rerun()
     modo = "libretto" if ctx == "libretto" else "doc"
     if not any(c_["sha"] == sha for c_ in coda):
-        coda.append({"modo": modo, "nome": nome, "dati": dati, "sha": sha, "vid": (v or {}).get("id")})
+        coda.append({"modo": modo, "nome": nome, "dati": dati, "sha": sha, "vid": (v or {}).get("id"), "tipo": st.session_state.get("au_nuovo_tipo", "Auto")})
     st.session_state.pop("au_pannello", None)
 
 
@@ -276,9 +288,11 @@ def _cerca_url(q):
 
 def tab_scheda(v):
     vid = v["id"]
-    dett = [("Targa", v.get("targa")), ("Alimentazione", v.get("alimentazione")), ("Anno", v.get("anno")), ("Allestimento", v.get("allestimento")), ("Potenza", (v["kw"] + " kW" + ((" / " + v["cv"] + " CV") if v.get("cv") else "")) if v.get("kw") else ""),
+    dett = [("Mezzo", v.get("tipo_veicolo")), ("Targa", v.get("targa")), ("Numero di serie o contrassegno", v.get("serie")), ("Alimentazione", v.get("alimentazione")), ("Anno", v.get("anno")), ("Allestimento", v.get("allestimento")), ("Potenza", (v["kw"] + " kW" + ((" / " + v["cv"] + " CV") if v.get("cv") else "")) if v.get("kw") else ""),
             ("Classe", v.get("classe_euro")), ("Cilindrata", (v["cilindrata"] + " cc") if v.get("cilindrata") else ""), ("Telaio", v.get("telaio")), ("Prima immatricolazione", _au_it(v.get("immatricolazione"))),
-            ("Pneumatici", v.get("pressione_pneumatici")), ("Serbatoio", (v["serbatoio_l"] + " L") if v.get("serbatoio_l") else ""), ("Bagagliaio", (v["bagagliaio_l"] + " L") if v.get("bagagliaio_l") else ""), ("Colore", v.get("colore"))]
+            ("Pneumatici", v.get("pressione_pneumatici")), ("Serbatoio", (v["serbatoio_l"] + " L") if v.get("serbatoio_l") else ""), ("Bagagliaio", (v["bagagliaio_l"] + " L") if v.get("bagagliaio_l") else ""), ("Colore", v.get("colore")),
+            ("Massa complessiva", (v["massa_kg"] + " kg") if v.get("massa_kg") else ""), ("Posti", v.get("posti")), ("Assi", v.get("assi")), ("Velocità massima", (v["velocita_max"] + " km/h") if v.get("velocita_max") else ""),
+            ("Autonomia dichiarata", (v["autonomia_km"] + " km") if v.get("autonomia_km") else ""), ("Potenza", (v["potenza_w"] + " W") if v.get("potenza_w") else "")]
     if _au_ha_batteria(v):
         dett += [("Batteria (nominale / utile)", " / ".join(x for x in ((v.get("batteria_nominale_kwh") or "") and v["batteria_nominale_kwh"] + " kWh", (v.get("batteria_utile_kwh") or "") and v["batteria_utile_kwh"] + " kWh") if x)),
                  ("Ricarica max AC / DC", " / ".join(x for x in ((v.get("ricarica_ac_kw") or "") and v["ricarica_ac_kw"] + " kW", (v.get("ricarica_dc_kw") or "") and v["ricarica_dc_kw"] + " kW") if x)), ("Connettore", v.get("connettore"))]
@@ -377,9 +391,7 @@ def tab_scadenze(v):
         st.info("Nessuna scadenza impostata. Tocca ✏️ qui sotto per bollo, assicurazione, revisione, garanzie e tagliando.")
     st.markdown("#### ✏️ Imposta o cambia")
     q = " ".join(x for x in (v.get("marca"), v.get("modello")) if x)
-    for chiave, etichetta, spec in _AU_SCAD:
-        if chiave == "garanzia_batteria" and not _au_ha_batteria(v):
-            continue
+    for chiave, etichetta, spec in au_scad_def(v):
         s = (v.get("scadenze") or {}).get(chiave) or {}
         riga = f"{etichetta}" + (f" — {_au_it(s.get('data'))}" if s.get("data") else " — non impostata")
         if st.button(riga, key=f"au_sc_{chiave}_{vid}", width="stretch"):
@@ -407,7 +419,7 @@ def tab_scadenze(v):
 
 
 def tab_manutenzione(v):
-    voci = ["🔧 Interventi e tagliandi", "🛞 Pneumatici"] + (["🔋 Salute batteria (SoH)"] if _au_ha_batteria(v) else [])
+    voci = ["🔧 Interventi e tagliandi", "🧩 Parti di usura", "🛞 Pneumatici"] + (["🔋 Salute batteria (SoH)"] if _au_ha_batteria(v) else [])
     sc = _au_scegli("Manutenzione", voci, f"au_man_{v['id']}")
     if sc == voci[0]:
         cats = ["Tutte le categorie"] + _AU_INT_CAT
@@ -420,6 +432,11 @@ def tab_manutenzione(v):
                    ("Prossimo: " + " / ".join(z for z in ((x["prossimo_km"] + " km") if x.get("prossimo_km") else "", _au_it(x.get("prossima_data"))) if z)) if (x.get("prossimo_km") or x.get("prossima_data")) else ""],
                    "Nessun intervento registrato. Registra tagliandi, riparazioni, carrozzeria e cristalli (con le foto prima e dopo: tasto 📎).", "Registra un intervento", filtro=lambda x: f == cats[0] or x.get("categoria") == f, icona="🔧")
     elif sc == voci[1]:
+        st.caption("Il logorio che non si vede ma conta: pastiglie e dischi dei freni, spazzole, filtri, liquidi, batteria 12V, distribuzione. Annota la misura e quando va sostituita: ti avviso.")
+        _au_elenco(v, "usura", "Usura", _SPEC_USURA, lambda x: f"{x.get('parte', 'Parte')} · {x.get('stato', '')}".strip(" ·"), lambda x: [("Controllato il " + _au_it(x["data"])) if x.get("data") else "", ("Misura: " + x["valore"]) if x.get("valore") else "",
+                   ("Da sostituire/controllare a " + x["prossima_km"] + " km") if x.get("prossima_km") else "", ("Entro il " + _au_it(x["prossima_data"])) if x.get("prossima_data") else "", "🔴 Da sostituire" if x.get("stato") == "Da sostituire" else "🟡 Da controllare" if x.get("stato") == "Da controllare" else "", x.get("note")],
+                   "Nessuna parte registrata. Annota per esempio lo spessore delle pastiglie dei freni o la data dei filtri.", "Registra una parte di usura", ordine="data", icona="🧩", aggiorna_km=False)
+    elif sc == voci[2]:
         st.caption("Le gomme montate, quelle in deposito, il battistrada e il cambio stagionale.")
         _au_elenco(v, "pneumatici", "Pneumatici", _SPEC_GOMME, lambda x: f"{x.get('tipo', 'Gomme')} · {x.get('misura', '')}".strip(" ·"), lambda x: [x.get("marca"), x.get("stato"), ("Battistrada: " + x["battistrada_mm"] + " mm") if x.get("battistrada_mm") else "",
                    ("Montate dal " + _au_it(x["montata_dal"])) if x.get("montata_dal") else "", ("Deposito: " + x["deposito"]) if x.get("deposito") else "", ("Cambio entro il " + _au_it(x["cambio_entro"])) if x.get("cambio_entro") else "", x.get("note")],
@@ -478,7 +495,7 @@ def au_tco(v):
 
 
 def tab_rifornimenti(v):
-    voci = ["⛽ Rifornimenti e ricariche", "💸 Altre spese", "📊 Consumi e spese totali"]
+    voci = ["⛽ Rifornimenti e ricariche", "💸 Altre spese", "📊 Consumi e spese totali", "🧭 Viaggi e rimborsi"]
     sc = _au_scegli("Rifornimenti", voci, f"au_rif_{v['id']}")
     if sc == voci[0]:
         _au_elenco(v, "rifornimenti", "Rifornimenti", _spec_rifornimenti(v), lambda x: f"{'🔌' if x.get('tipo') == 'Ricarica' else '⛽'} {x.get('tipo', '')} · {_au_it(x.get('data'))}", lambda x: [("Km: " + x["km"]) if x.get("km") else "", x.get("luogo"),
@@ -489,6 +506,8 @@ def tab_rifornimenti(v):
     elif sc == voci[1]:
         _au_elenco(v, "spese", "Spese", _SPEC_SPESE, lambda x: f"{x.get('categoria', 'Spesa')} · {_au_it(x.get('data'))}", lambda x: [("Importo: " + _au_eur(x["importo"])) if x.get("importo") else "", x.get("note")],
                    "Nessuna spesa registrata: bollo, assicurazione, revisione, parcheggi, pedaggi, lavaggi, multe.", "Registra una spesa", icona="💸", aggiorna_km=False)
+    elif sc == voci[3]:
+        tab_viaggi(v)
     else:
         cons = au_consumi(v)
         if not cons:
@@ -524,6 +543,75 @@ def tab_rifornimenti(v):
             pass
         for cat, imp in sorted(tot.items(), key=lambda kv: -kv[1]):
             st.markdown(f"- {cat}: **{_au_eur(imp)}** ({imp / somma * 100:.0f}%)")
+
+
+def au_report_viaggi(v, anno, mese, tariffa):
+    """Il testo del report dei viaggi di lavoro (per il rimborso chilometrico)."""
+    voci = [x for x in v.get("viaggi", []) if x.get("categoria") == "Lavoro / aziendale" and str(x.get("data", ""))[:4] == anno and (mese == "Tutti" or str(x.get("data", ""))[5:7] == mese)]
+    voci.sort(key=lambda x: x.get("data", ""))
+    km = sum(_au_n(x.get("km")) or 0 for x in voci)
+    righe = [f"RIMBORSO CHILOMETRICO — {anno}" + ("" if mese == "Tutti" else f"/{mese}"), f"Veicolo: {_au_nome(v)} {v.get('targa', '')}", ""]
+    righe += [f"{_au_it(x.get('data'))} · {x.get('partenza', '')} → {x.get('arrivo', '')} · {x.get('km', '')} km" + (f" · {x['note']}" if x.get("note") else "") for x in voci]
+    righe += ["", f"Km di lavoro: {km:.0f}", f"Tariffa: {_au_eur(tariffa)}/km" if tariffa else "Tariffa: da indicare", (f"Rimborso: {_au_eur(km * tariffa)}" if tariffa else "")]
+    return "\n".join(x for x in righe)
+
+
+def tab_viaggi(v):
+    """Diario di bordo: i tragitti (personali o di lavoro) e il rimborso chilometrico dei viaggi di lavoro."""
+    vid = v["id"]
+    st.caption("Annota i tragitti: partenza, arrivo, km e se sono **personali** o di **lavoro**. Per i viaggi di lavoro calcolo il rimborso con la tariffa €/km che scrivi qui sotto.")
+    with st.form(f"au_tar_{vid}", border=False):
+        c1, c2 = st.columns([3, 2], gap="small")
+        tar = c1.text_input("Tariffa di rimborso (€/km)", value=str(v.get("tariffa_km", "")), key=f"au_tarv_{vid}", placeholder="es. 0,38")
+        if c2.form_submit_button("💾 Salva la tariffa", width="stretch"):
+            n = _au_n(tar)
+            _au_mod(vid, lambda x, n=n: x.__setitem__("tariffa_km", "" if n is None else str(n)), "Auto: tariffa")
+            st.rerun()
+    q = " ".join(x for x in (v.get("marca"), v.get("modello")) if x)
+    if q:
+        st.link_button("🔎 Cerca la tabella ACI dei costi chilometrici del mio modello", "https://www.google.com/search?q=" + urllib.parse.quote_plus(f"tabelle ACI costi chilometrici {q} rimborso"), width="stretch")
+    st.caption("Le tabelle ACI ufficiali non sono incluse: le trovi sul sito dell'ACI; scrivi qui la tariffa del tuo modello.")
+    _au_elenco(v, "viaggi", "Viaggi", _SPEC_VIAGGI, lambda x: f"{_au_it(x.get('data'))} · {x.get('partenza', '')} → {x.get('arrivo', '')}".strip(" ·→ "), lambda x: [("Km: " + x["km"]) if x.get("km") else "", x.get("categoria"), x.get("note")],
+               "Nessun viaggio registrato.", "Registra un viaggio", icona="🧭", aggiorna_km=False)
+    anni = sorted({str(x.get("data", ""))[:4] for x in v.get("viaggi", []) if x.get("data")}, reverse=True)
+    if not anni:
+        return
+    st.markdown("#### 📊 Riepilogo")
+    c1, c2 = st.columns(2, gap="small")
+    anno = c1.selectbox("Anno", anni, key=f"au_vgi_a_{vid}")
+    mese = c2.selectbox("Mese", ["Tutti"] + [f"{i:02d}" for i in range(1, 13)], key=f"au_vgi_m_{vid}")
+    sel = [x for x in v.get("viaggi", []) if str(x.get("data", ""))[:4] == anno and (mese == "Tutti" or str(x.get("data", ""))[5:7] == mese)]
+    km_l = sum(_au_n(x.get("km")) or 0 for x in sel if x.get("categoria") == "Lavoro / aziendale")
+    km_p = sum(_au_n(x.get("km")) or 0 for x in sel if x.get("categoria") != "Lavoro / aziendale")
+    tar = _au_n(v.get("tariffa_km"))
+    st.markdown(f"<div class='au-card'><b class='t'>🧭 {anno}{'' if mese == 'Tutti' else '/' + mese}</b><br><small>Km personali: <b>{km_p:.0f}</b> · Km di lavoro: <b>{km_l:.0f}</b>" + (f"<br>💶 Rimborso dei viaggi di lavoro: <b>{_au_eur(km_l * tar)}</b> (a {_au_eur(tar)}/km)" if tar else "<br>Scrivi la tariffa per vedere il rimborso.") + "</small></div>", unsafe_allow_html=True)
+    if km_l:
+        _fa_inv_voce(f"au_rimb_{vid}", "📤 Invia il report del rimborso", f"Rimborso chilometrico {anno} – {_au_nome(v)}", [("Report", au_report_viaggi(v, anno, mese, tar))], [])
+
+
+def tab_conducente(v=None):
+    """Patente, visita medica, CQC, saldo punti e verbali (multe) con stato dei pagamenti e ricorsi. Sono dati della PERSONA, non del veicolo."""
+    c = _au_cond()
+    st.caption("Patente, visita medica e CQC con la scadenza (ti avviso **90, 30, 15 e 3 giorni prima**), il saldo punti e le multe con lo stato del pagamento e dei ricorsi. Valgono per te, non per un solo veicolo.")
+    st.markdown("#### 🪪 Patenti")
+    _au_elenco(c, "patenti", "Patenti", _SPEC_PATENTI, lambda x: f"Patente {x.get('categorie', '')} · {x.get('nome', '')}".strip(" ·"), lambda x: [("Scade il " + _au_it(x["scadenza"])) if x.get("scadenza") else "", ("Visita medica entro il " + _au_it(x["visita_medica"])) if x.get("visita_medica") else "",
+               ("CQC fino al " + _au_it(x["cqc"])) if x.get("cqc") else "", ("Saldo punti: " + x["punti"]) if x.get("punti") else "", ("N. " + x["numero"]) if x.get("numero") else "", x.get("note")],
+               "Nessuna patente registrata: scrivi la scadenza della patente e della visita medica, e l'eventuale CQC.", "Aggiungi una patente", ordine="scadenza", inverso=False, icona="🪪", aggiorna_km=False)
+    for pt in c.get("patenti", []):
+        for k, et in (("scadenza", "Patente"), ("visita_medica", "Visita medica"), ("cqc", "CQC")):
+            d_ = _au_d(pt.get(k))
+            if d_:
+                g = (d_ - _au_oggi()).days
+                stato = "r" if g < 0 else "g" if g <= 30 else "v"
+                _carta_scad({"etichetta": f"🪪 {et} di {pt.get('nome', '')}", "data": d_, "giorni": g, "stato": stato}, v)
+    st.markdown("#### 🧾 Verbali e multe")
+    da_pagare = sum(_au_n(x.get("importo")) or 0 for x in c.get("verbali", []) if x.get("stato") == "Da pagare")
+    if da_pagare:
+        st.markdown(f"<div class='au-scad au-g'>💶 Da pagare in totale: {_au_eur(da_pagare)}</div>", unsafe_allow_html=True)
+    st.caption("Sul verbale trovi i termini (indicativi: sconto se paghi entro 5 giorni dalla notifica; ricorso al Prefetto entro 60 giorni o al Giudice di pace entro 30). Controlla sempre il tuo verbale.")
+    _au_elenco(c, "verbali", "Verbali", _SPEC_VERBALI, lambda x: f"{x.get('tipo') or 'Verbale'} · {_au_it(x.get('data'))}", lambda x: [("Importo: " + _au_eur(x["importo"])) if x.get("importo") else "", ("Stato: " + x["stato"]) if x.get("stato") else "",
+               ("Pagare entro il " + _au_it(x["scadenza_pagamento"])) if x.get("scadenza_pagamento") else "", x.get("luogo"), ("Veicolo: " + x["veicolo"]) if x.get("veicolo") else "", ("Punti tolti: " + x["punti_tolti"]) if x.get("punti_tolti") else "", x.get("ricorso")],
+               "Nessun verbale registrato. Fotografa la multa e allegala (tasto 📎): tieni insieme importo, scadenza e ricorso.", "Registra un verbale", ordine="data", icona="🧾", aggiorna_km=False)
 
 
 def tab_ricambi(v):
@@ -599,7 +687,7 @@ def tab_emergenza(v):
 # ---------------------------------------------------------------------------------------------------------------------
 # il GARAGE: la schermata iniziale (foto, stato, scadenze in evidenza, accessi rapidi, ultima posizione)
 # ---------------------------------------------------------------------------------------------------------------------
-_AU_SEZ = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza"]
+_AU_SEZ = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza", "👤 Patente e multe"]
 
 
 def _au_vai(sezione, extra=None, vid=None):
@@ -629,7 +717,7 @@ def garage(v):
                 st.image(dati, width="stretch")
                 mostrata = True
         if not mostrata:
-            st.markdown(f"<div style='font-size:3.6rem;text-align:center;background:rgba(255,255,255,.75);border-radius:16px;padding:16px 0'>{'🏍️' if v.get('tipo_veicolo') == 'Moto' else '🚗'}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:3.6rem;text-align:center;background:rgba(255,255,255,.75);border-radius:16px;padding:16px 0'>{_AU_EMOJI.get(v.get('tipo_veicolo'), '🚗')}</div>", unsafe_allow_html=True)
         if st.button("📷 Cambia foto" if mostrata else "📷 Aggiungi foto", key=f"au_foto_{vid}", width="stretch"):
             st.session_state["au_pannello"] = "foto"
             st.rerun()
@@ -681,7 +769,7 @@ def garage(v):
         t = [st.button("📖 Manuali e documenti", key="au_h_doc", width="stretch"), st.button("📷 Diagnosi spie (foto)", key="au_h_spie", width="stretch"),
              st.button(ric, key="au_h_ric", width="stretch"), st.button("🔧 Storico manutenzione", key="au_h_man", width="stretch"),
              st.button("🚨 Soccorso ed emergenza", key="au_h_soc", width="stretch"), st.button("📊 Spese e consumi (TCO)", key="au_h_tco", width="stretch"),
-             st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch")]
+             st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch"), st.button("🪪 Patente e multe", key="au_h_pat", width="stretch")]
     if t[0]:
         _au_vai(_AU_SEZ[0])
     elif t[1]:
@@ -696,6 +784,8 @@ def garage(v):
         _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "📊 Consumi e spese totali"})
     elif t[6]:
         _au_vai(_AU_SEZ[4])
+    elif t[7]:
+        _au_vai(_AU_SEZ[6])
     st.caption("La diagnosi delle spie da una **foto** usa l'intelligenza artificiale (si attiva con la chiave nei Secrets); senza, la foto si confronta col catalogo delle spie.")
     # ---- ultima posizione
     pos = v.get("posizione") or {}
@@ -749,17 +839,22 @@ def schermata_auto():
                 v = vs[et.index(scelta)]
         st.session_state["au_sel"] = v["id"]
     # ---- aggiungere un veicolo
-    with st.expander("➕ Aggiungi un veicolo (auto o moto)", expanded=False):
-        st.caption("Carica la **Carta di Circolazione** (PDF o foto): la leggo e ti propongo targa, marca, modello, anno, alimentazione, potenza e classe. Oppure inserisci i dati a mano.")
-        if st.button("📷 Carica la Carta di Circolazione (la leggo io)", key="au_pl", type="primary", width="stretch"):
-            st.session_state["au_pannello"] = "libretto"
-            st.rerun()
-        if st.button("✍️ Inserisci a mano", key="au_man_v", width="stretch") and not any(c_["modo"] == "libretto_manuale" for c_ in coda):
-            coda.insert(0, {"modo": "libretto_manuale", "nome": "", "dati": b"", "sha": "manuale" + uuid.uuid4().hex[:8]})
+    with st.expander("➕ Aggiungi un mezzo (auto, moto, scooter, monopattino, camion, bus…)", expanded=False):
+        tipo_n = st.selectbox("Che mezzo è", _AU_TIPI, format_func=lambda x: f"{_AU_EMOJI.get(x, '🚘')} {x}", key="au_nuovo_tipo")
+        micro_n = tipo_n in ("Monopattino elettrico", "Bicicletta elettrica (e-bike)")
+        if micro_n:
+            st.caption("Monopattini ed e-bike non hanno la Carta di Circolazione: inserisci i dati a mano (marca, modello, numero di serie o contrassegno, batteria, assicurazione).")
+        else:
+            st.caption("Carica la **Carta di Circolazione** (PDF o foto): la leggo e ti propongo targa, marca, modello, anno, alimentazione, potenza e classe. Oppure inserisci i dati a mano.")
+            if st.button("📷 Carica la Carta di Circolazione (la leggo io)", key="au_pl", type="primary", width="stretch"):
+                st.session_state["au_pannello"] = "libretto"
+                st.rerun()
+        if st.button("✍️ Inserisci a mano", key="au_man_v", type="primary" if micro_n else "secondary", width="stretch") and not any(c_["modo"] == "libretto_manuale" for c_ in coda):
+            coda.insert(0, {"modo": "libretto_manuale", "nome": "", "dati": b"", "sha": "manuale" + uuid.uuid4().hex[:8], "tipo": tipo_n})
             st.session_state.pop("au_fin", None)
             st.rerun()
     if not vs and not st.session_state.get("au_pannello") and not coda:
-        st.info("Ancora nessun veicolo. Apri **➕ Aggiungi un veicolo** e carica la Carta di Circolazione, oppure inserisci i dati a mano.")
+        st.info("Ancora nessun veicolo. Apri **➕ Aggiungi un mezzo** e carica la Carta di Circolazione, oppure inserisci i dati a mano.")
     _au_pannello(v, coda)
     if coda:
         _au_finestra(coda)
@@ -770,6 +865,15 @@ def schermata_auto():
             if st.button("📷 Diagnosi visiva delle spie (senza veicolo)", key="ad_libera_b", width="stretch"):
                 st.session_state["ad_libera"] = True
                 st.rerun()
+        if st.session_state.get("au_cond_libero"):
+            _au_pannello(_au_cond(), coda)
+            if st.button("← Chiudi", key="au_cond_chiudi", width="stretch"):
+                st.session_state.pop("au_cond_libero", None)
+                st.rerun()
+            return tab_conducente(None)
+        if st.button("🪪 Patente e multe (senza veicolo)", key="au_cond_b", width="stretch"):
+            st.session_state["au_cond_libero"] = True
+            st.rerun()
         return
     # ---- il veicolo scelto
     sc = au_scadenze(v)
@@ -783,7 +887,7 @@ def schermata_auto():
         st.rerun()
     voci = _AU_SEZ
     scelta = _au_scegli("Che cosa vuoi vedere?", voci, "au_sezione")
-    {voci[0]: tab_scheda, voci[1]: tab_scadenze, voci[2]: tab_manutenzione, voci[3]: tab_rifornimenti, voci[4]: tab_ricambi, voci[5]: tab_emergenza}[scelta](v)
+    {voci[0]: tab_scheda, voci[1]: tab_scadenze, voci[2]: tab_manutenzione, voci[3]: tab_rifornimenti, voci[4]: tab_ricambi, voci[5]: tab_emergenza, voci[6]: tab_conducente}[scelta](v)
 
 
 # ---- lo smistamento: «auto» va alla sua pagina (con il controllo dei permessi), il resto come prima
@@ -803,10 +907,10 @@ if "_NOMI_SEZIONI" in globals():
     _NOMI_SEZIONI.setdefault("auto", "🚗 Auto")
     _GUIDE.setdefault("auto", [
         ("🚗 Cos'è la sezione Auto",
-         """Qui tieni **tutto quello che riguarda i tuoi veicoli** (auto e moto, benzina, diesel, GPL, metano, ibride ed elettriche). Si apre dal bottone **🚗 Auto**, **prima di Utilità**.
-In alto scegli il veicolo (se ne hai più di uno) e poi cosa vedere: **🪪 Scheda e documenti**, **⏰ Scadenze**, **🔧 Manutenzione**, **⛽ Rifornimenti e spese**, **🧰 Ricambi e valore**, **🆘 Emergenza**.""", "auto moto veicolo targa libretto"),
+         """Qui tieni **tutto quello che riguarda i tuoi mezzi**: auto, moto, ciclomotori, **monopattini ed e-bike**, furgoni, **camion e autobus**, camper, mezzi agricoli (benzina, diesel, GPL, metano, ibridi ed elettrici). Si apre dal bottone **🚗 Auto**, **prima di Utilità**.
+In alto scegli il mezzo (se ne hai più di uno) e poi cosa vedere: **🪪 Scheda e documenti**, **⏰ Scadenze**, **🔧 Manutenzione** (con le **parti di usura**), **⛽ Rifornimenti e spese** (con **viaggi e rimborsi**), **🧰 Ricambi e valore**, **🆘 Emergenza**, **👤 Patente e multe**.""", "auto moto scooter monopattino bicicletta e-bike camion tir autobus furgone camper veicolo targa libretto mezzo"),
         ("➕ Aggiungere un veicolo",
-         """1. Apri **🚗 Auto** → **➕ Aggiungi un veicolo**.
+         """1. Apri **🚗 Auto** → **➕ Aggiungi un mezzo**.
 2. Tocca **📷 Carica la Carta di Circolazione** e scegli il PDF o la foto con il **pulsante arancione**. Lo leggo e ti propongo **targa, marca, modello, anno, alimentazione, potenza, classe, telaio**.
 3. **Controlli e correggi**, poi **✅ Conferma e salva**. Il libretto resta nel cassetto dei documenti.
 Se preferisci, **✍️ Inserisci a mano**. Per le elettriche e le plug-in aggiungi batteria (kWh), potenza di ricarica AC/DC e connettore.
