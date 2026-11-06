@@ -98,6 +98,11 @@ _CATALOGO = [
     ("Radiologia e diagnostica per immagini", "🩻", ["radiolog", "radiografia", "tomografia", "tac ", "risonanza", "ecografia", "scintigrafia", "pet ", "moc ", "mineralometria", "rx ", "reperto", "quesito diagnostico", "mezzo di contrasto"], [
         ("Radiografia (RX)", "E", ["radiografia", "rx "]), ("TAC", "E", ["tac ", "tomografia computerizzata"]), ("Risonanza magnetica", "E", ["risonanza magnetica", "rmn", "rm "]),
         ("Ecografia", "E", ["ecografia", "ecocolordoppler", "eco-doppler"]), ("Mineralometria ossea (MOC)", "E", ["mineralometria", "moc "]), ("Scintigrafia", "E", ["scintigrafia"])]),
+    ("Chirurgia", "✂️", ["chirurg", "preoperator", "pre-operator", "operatorio", "anestesi", "ernia"], [
+        ("Visita chirurgica", "V", ["visita chirurgica", "chirurgo"]), ("Visita preoperatoria", "V", ["visita preoperatoria", "visita pre-operatoria", "preoperatoria"]),
+        ("Intervento chirurgico", "T", ["intervento chirurgico", "verbale operatorio"]), ("Controllo post-operatorio", "C", ["controllo post-operatorio", "controllo postoperatorio"])]),
+    ("Vaccinazioni", "💉", ["vaccin", "vaccinale", "antitetan", "antinfluenz", "richiamo"], [("Vaccinazione", "T", ["vaccinazione", "certificato vaccinale"])]),
+    ("Certificazioni mediche", "📜", ["certificato medico", "certificazione", "si certifica", "certifico"], [("Certificato medico", "V", ["certificato medico", "si certifica", "certifico"])]),
     ("Ricoveri e pronto soccorso", "🏥", ["dimissione", "ricovero", "degenza", "pronto soccorso", "decorso clinico", "dimesso", "reparto di"], [
         ("Lettera di dimissione", "A", ["lettera di dimissione", "dimissione"]), ("Pronto soccorso", "V", ["pronto soccorso", "triage"]), ("Intervento chirurgico", "T", ["intervento chirurgico", "verbale operatorio"])]),
 ]
@@ -114,7 +119,25 @@ _ALIAS_VISITE = {"cardiolog": "Cardiologia", "oculist": "Oculistica", "ortoped":
                  "reumat": "Reumatologia", "ematolog": "Ematologia", "allergolog": "Allergologia", "immunolog": "Immunologia", "infettiv": "Infettivologia", "psichiatr": "Psichiatria", "psicolog": "Psicologia",
                  "fisiatr": "Fisiatria", "fisioter": "Fisioterapia", "geriatr": "Geriatria", "lavoro": "Medicina del lavoro", "sport": "Medicina dello sport", "diet": "Dietologia e nutrizione", "nutriz": "Dietologia e nutrizione",
                  "ostetric": "Ostetricia", "senolog": "Senologia", "analisi": "Analisi di laboratorio", "sangue": "Analisi di laboratorio", "radiolog": "Radiologia e diagnostica per immagini",
-                 "ecograf": "Radiologia e diagnostica per immagini", "pronto": "Ricoveri e pronto soccorso", "ricover": "Ricoveri e pronto soccorso"}
+                 "ecograf": "Radiologia e diagnostica per immagini", "pronto": "Ricoveri e pronto soccorso", "ricover": "Ricoveri e pronto soccorso", "chirurg": "Chirurgia", "vaccin": "Vaccinazioni", "certificaz": "Certificazioni mediche"}
+
+
+# le categorie che le visite avevano PRIMA → (specialità del catalogo, tipo di prestazione che si capisce dal nome)
+CAT_VECCHIE_VISITE = {
+    "Odontoiatria e ortodonzia": ("Odontoiatria", ""), "Urologia e nefrologia": ("Urologia e andrologia", ""), "Ginecologia e ostetricia": ("Ginecologia", ""),
+    "Allergologia e immunologia": ("Allergologia", ""), "Psichiatria e psicologia": ("Psichiatria", ""), "Fisiatria e fisioterapia": ("Fisiatria", ""),
+    "Chirurgia e visite preoperatorie": ("Chirurgia", "Visita specialistica"), "Esami del sangue e analisi": ("Analisi di laboratorio", "Esame diagnostico"),
+    "Radiologia, ecografie, TAC e risonanze": ("Radiologia e diagnostica per immagini", "Esame diagnostico"), "Elettrocardiogramma e esami cardiologici": ("Cardiologia", "Esame diagnostico"),
+    "Endoscopie": ("Gastroenterologia", "Esame diagnostico"), "Screening e controlli preventivi": ("Medicina preventiva e screening", "Screening"), "Vaccinazioni": ("Vaccinazioni", "Prestazione terapeutica"),
+    "Pronto soccorso e ricoveri": ("Ricoveri e pronto soccorso", ""), "Certificazioni mediche": ("Certificazioni mediche", "")}
+
+
+def cat_unifica_visita(nome):
+    """(specialità del catalogo, tipo di prestazione suggerito) per una categoria di visita scritta in uno dei due modi. Se è una categoria creata a mano resta com'è."""
+    n = str(nome or "").strip()
+    if n in CAT_VECCHIE_VISITE:
+        return CAT_VECCHIE_VISITE[n]
+    return n, ""
 
 
 def cat_area_da_nome(nome):

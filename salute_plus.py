@@ -51,6 +51,8 @@ _SP_CSS = """<style>
 .st-key-sp_a_docsan button{background:linear-gradient(135deg,#7e57c2,#4527a0) !important}
 .st-key-sp_a_param button{background:linear-gradient(135deg,#26c6da,#00838f) !important}
 .st-key-sp_a_controlli button{background:linear-gradient(135deg,#ec407a,#ad1457) !important}
+.st-key-sp_a_esenzioni button{background:linear-gradient(135deg,#8d6e63,#4e342e) !important}
+.st-key-sp_azioni > div:nth-child(odd):last-child,.st-key-sp_azioni [data-testid='stVerticalBlock'] > div:nth-child(odd):last-child{grid-column:1 / -1}
 .sp-card{background:rgba(255,255,255,.88);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b}
 .sp-alert{background:#ffebee;border:2px solid #c62828;border-radius:16px;padding:10px 14px;margin:8px 0;color:#7f0000;font-weight:700}
 </style>"""
@@ -300,7 +302,9 @@ def sp_riga_azioni(pid):
         g = st.button("📈 Parametri e valori", key="sp_a_param", width="stretch")
         n_c = len(sp_controlli_scadenti(p))
         h = st.button("⏰ Controlli periodici" + (f" · {n_c} da fare" if n_c else ""), key="sp_a_controlli", width="stretch")
-    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri"), (h, "controlli")):
+        n_e = len(sp_esenzioni_scadenti(p)) if "sp_esenzioni_scadenti" in globals() else 0
+        i_ = st.button("🪪 Invalidità ed esenzioni" + (f" · {n_e} in scadenza" if n_e else ""), key="sp_a_esenzioni", width="stretch")
+    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri"), (h, "controlli"), (i_, "esenzioni")):
         if premuto:
             st.session_state["sp_modulo"] = {"vista": vista, "pid": pid}
             st.rerun()
@@ -319,7 +323,7 @@ def _sp_intestazione(titolo, pid):
 
 def _sp_dispatch(m):
     vista, pid = m.get("vista"), m.get("pid")
-    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri, "controlli": sp_modulo_controlli}.get(vista, lambda _p: None)(pid)
+    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri, "controlli": sp_modulo_controlli, "esenzioni": globals().get("sp_modulo_esenzioni")}.get(vista, lambda _p: None)(pid)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1543,6 +1547,12 @@ def _sp_docsan_corpo(f, p, pid, utente, coda, finestra):
             st.warning("⚠️ Ho trovato solo la data del referto: **controlla la data dell'esame o della visita**.")
     else:
         st.info("Non sono riuscito a leggere il testo (foto sfocata o scansione): compila tu i dati qui sotto.")
+    if letto and (riconosciuto.get("tipo") or {}).get("valore") == "Esenzione o invalidità" and "se_da_docsan" in globals():
+        st.info("🪪 Questo sembra un documento di **invalidità o di esenzione**. Nella sezione **Invalidità ed esenzioni** lo registro con codice, percentuale, validità e revisione, e ti avviso prima della scadenza.")
+        if st.button("🪪 Registralo lì", key="sp_ds_verso_ese", type="primary", width="stretch"):
+            se_da_docsan(pid, coda[0])
+            _sp_docsan_chiudi(coda)
+            st.rerun()
     prop_pid = (riconosciuto.get("profilo") or {}).get("valore") or pid
     pr_dest = next((x for x in _fa_profili(f) if x["id"] == prop_pid), p)
     doppi = sp_trova_doppioni_doc(pr_dest, (riconosciuto.get("tipo") or {}).get("valore"), (riconosciuto.get("data") or {}).get("valore"), c["sha"], (riconosciuto.get("struttura") or {}).get("valore", ""))
@@ -1816,17 +1826,33 @@ def sp_modulo_docsan(pid):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# 6-bis) VISITE ED ESAMI: storico per specialità (visite + referti + esami insieme) e scorciatoia per caricare un referto
+# 6-bis) VISITE ED ESAMI: le STESSE specialità dei documenti, il tipo di prestazione, lo storico per specialità
 # ---------------------------------------------------------------------------------------------------------------------
 def _sp_vai_docsan(pid):
     st.session_state["sp_modulo"] = {"vista": "docsan", "pid": pid}
     st.rerun()
 
 
+def _sp_migra_visite_dati(f):
+    """Le visite di prima passano alle specialità del catalogo (in place). Ritorna True se ha cambiato qualcosa."""
+    cambiato = False
+    for v in f.get("visite", []):
+        nuova, tp = cat_unifica_visita(v.get("categoria"))
+        if nuova != v.get("categoria"):
+            v["categoria"] = nuova
+            cambiato = True
+        if tp and not v.get("tipo_prestazione"):
+            v["tipo_prestazione"] = tp
+            cambiato = True
+    return cambiato
+
+
 def _sp_card_visita(v, pid, nomi):
-    """Una visita (la scheda di sempre, con Elimina, Modifica e Invia)."""
+    """Una visita (la scheda di sempre, con Elimina, Modifica e Invia), ora con tipo di prestazione e prestazione."""
     e = _h.escape
-    righe = f"<div class='nome'>🩺 {e(v.get('categoria', ''))}</div>"
+    righe = f"<div class='nome'>{CAT_ICONE.get(v.get('categoria'), '🩺')} {e(v.get('categoria', ''))}</div>"
+    if v.get("tipo_prestazione") or v.get("prestazione"):
+        righe += "<div class='riga'>🧭 " + e(" · ".join(x for x in (v.get("tipo_prestazione"), v.get("prestazione")) if x)) + "</div>"
     righe += f"<div class='riga'>📅 {data_it(v['data'])}" + (f" · {e(v['ora'])}" if v.get("ora") else "") + "</div>"
     for icona, chiave in (("👨‍⚕️", "medico"), ("❓", "motivo"), ("🔁", "controlli"), ("📝", "note")):
         if v.get(chiave):
@@ -1845,13 +1871,81 @@ def _sp_card_visita(v, pid, nomi):
             _fa_visita_invia(v, nomi.get(pid, ""))
 
 
+@st.dialog("Visita o esame")
+def _fa_dialogo_visita(pid, vis_id=None):                                          # noqa: F811
+    """Aggiungere o modificare una visita o un esame: stesse specialità dei documenti + tipo di prestazione."""
+    f = _fa_dati()
+    v = next((x for x in f.get("visite", []) if x["id"] == vis_id), {}) if vis_id else {}
+    area_att, tp_sugg = cat_unifica_visita(v.get("categoria"))
+    extra = [x for x in (f.get("categorie_extra") or []) if x not in CAT_AREE]
+    if area_att and area_att not in CAT_AREE and area_att != "Altro" and area_att not in extra:
+        extra.append(area_att)
+    opzioni = list(CAT_AREE) + extra + ["Altro"]
+    with st.form("fa_form_vis"):
+        c1, c2 = st.columns(2)
+        data_v = c1.date_input("Data", value=_fa_data(v.get("data")) or oggi(), format="DD/MM/YYYY", min_value=date(1950, 1, 1), max_value=date(2100, 12, 31))
+        ora_v = c2.text_input("Orario (facoltativo)", value=v.get("ora", ""), placeholder="es. 09:30")
+        cat = st.selectbox("🩺 Specialità", opzioni, index=opzioni.index(area_att) if area_att in opzioni else len(opzioni) - 1, format_func=lambda x: f"{CAT_ICONE.get(x, '🩺')} {x}")
+        nuova = st.text_input("Se la specialità non c'è, scrivila qui", placeholder="es. Medicina estetica")
+        tp_att = v.get("tipo_prestazione") or tp_sugg
+        opz_t = [""] + list(CAT_TIPI)
+        tipo_p = st.selectbox("🧭 Tipo di prestazione", opz_t, index=opz_t.index(tp_att) if tp_att in opz_t else 0, format_func=lambda x: "— non so —" if not x else x)
+        prest = st.text_input("Che visita o che esame (facoltativo)", value=v.get("prestazione", ""), placeholder="es. Ecocardiogramma, Visita di controllo")
+        medico = st.text_input("Medico, specialista o struttura", value=v.get("medico", ""))
+        motivo = st.text_input("Motivo della visita o dell'esame", value=v.get("motivo", ""))
+        controlli = st.text_area("Indicazioni per i controlli successivi", value=v.get("controlli", ""))
+        prossimo = st.date_input("Data del prossimo appuntamento (facoltativa)", value=_fa_data(v.get("prossimo")), format="DD/MM/YYYY", min_value=date(1950, 1, 1), max_value=date(2100, 12, 31))
+        note = st.text_area("Note personali", value=v.get("note", ""))
+        if v.get("allegati"):
+            st.caption(f"Documenti già allegati: {len(v['allegati'])} (si aprono ed eliminano dalla scheda).")
+        st.caption("📎 Per allegare un referto o un esame, dopo aver salvato usa **Carica un referto, un esame o una ricetta (lo leggo io)**: lo leggo e lo metto nella stessa specialità.")
+        nuovi = st.file_uploader("Oppure allega qui: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
+        inviato = st.form_submit_button("Salva", type="primary")
+    if inviato:
+        categoria = nuova.strip() or cat
+        try:
+            riferimenti = _fa_salva_files(nuovi, next((x_.get("allegati") or [] for x_ in _fa_dati().get("visite", []) if x_["id"] == vis_id), [])) if nuovi else []
+        except ValueError as e:
+            st.error(str(e))
+            return
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare i documenti: {e}")
+            return
+        rec = {"profilo": pid, "data": data_v.isoformat(), "ora": ora_v.strip(), "categoria": categoria, "tipo_prestazione": tipo_p, "prestazione": prest.strip(),
+               "medico": medico.strip(), "motivo": motivo.strip(), "controlli": controlli.strip(), "prossimo": prossimo.isoformat() if prossimo else None, "note": note.strip()}
+
+        def _scrivi(f):
+            f.setdefault("visite", [])
+            if nuova.strip() and categoria not in CAT_AREE and categoria not in (f.get("categorie_extra") or []):
+                f.setdefault("categorie_extra", []).append(categoria)
+            if vis_id:
+                for x in f["visite"]:
+                    if x["id"] == vis_id:
+                        x.update(rec)
+                        x["allegati"] = (x.get("allegati") or []) + riferimenti
+            else:
+                rec["id"] = uuid.uuid4().hex[:10]
+                rec["allegati"] = riferimenti
+                f["visite"].append(rec)
+        try:
+            _fa_salva(_scrivi, "Salute: visita")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare: {e}")
+            return
+        st.session_state["fa_msg"] = "✅ Visita salvata."
+        st.rerun()
+
+
 def _sp_storico_specialita(f, pid, nomi, p):
     """Una linguetta per ogni specialità: dentro, in ordine di data, le visite e i documenti (referti, esami, ricette) di quella specialità."""
     visite = [v for v in f.get("visite", []) if v.get("profilo", "p0") == pid]
     docs = [d for d in p.get("docsan", [])]
     gruppi = {}
     for v in visite:
-        area = (cat_area_da_nome(v.get("categoria")) if "cat_area_da_nome" in globals() else "") or v.get("categoria") or "Senza specialità"
+        area = cat_unifica_visita(v.get("categoria"))[0]
+        if area not in CAT_AREE:                                                   # un nome scritto a mano («Cardiologo») si collega alla specialità giusta
+            area = cat_area_da_nome(area) or area
+        area = area or "Senza specialità"
         gruppi.setdefault(area, []).append(("visita", v.get("data", ""), v))
     for d in docs:
         gruppi.setdefault(d.get("specialita") or "Senza specialità", []).append(("doc", d.get("data", ""), d))
@@ -1875,20 +1969,59 @@ def _sp_storico_specialita(f, pid, nomi, p):
                     _sp_riga_docsan(x, pid, f, p, vedi)
 
 
-_fa_tab_visite_originale = _fa_tab_visite
-
-
 def _fa_tab_visite(f, pid, nomi, oggi_):                                         # noqa: F811
-    """La scheda Visite di sempre, con in più: il pulsante per caricare un referto (lo leggo io) e lo STORICO PER SPECIALITÀ."""
+    """La scheda Visite: stesse specialità dei documenti, tipo di prestazione, ricerca, e lo STORICO PER SPECIALITÀ."""
+    if not st.session_state.get("sp_mig_vis"):                                    # una volta sola: le categorie di prima passano al catalogo (le visite non si perdono)
+        st.session_state["sp_mig_vis"] = True
+        try:
+            if _sp_migra_visite_dati(dict(f, visite=[dict(x) for x in f.get("visite", [])])):
+                _fa_salva(_sp_migra_visite_dati, "Salute: specialità delle visite unificate")
+                f = _fa_dati()
+        except Exception:
+            pass
     if st.button("📎 Carica un referto, un esame o una ricetta (lo leggo io)", key=f"sp_vis_carica_{pid}", width="stretch"):
         _sp_vai_docsan(pid)
     vista = st.radio("Come vuoi vederle", ["📇 Le visite", "📚 Storico per specialità"], horizontal=True, key=f"sp_vis_vista_{pid}", label_visibility="collapsed")
+    visite = [v for v in f.get("visite", []) if v.get("profilo", "p0") == pid]
+    for v in visite:                                                              # in sicurezza anche per la sola visualizzazione
+        nuova, tp = cat_unifica_visita(v.get("categoria"))
+        v["categoria"] = nuova
+        if tp and not v.get("tipo_prestazione"):
+            v["tipo_prestazione"] = tp
     if vista.startswith("📚"):
         if st.button("➕ Aggiungi visita o esame", type="primary", key="fa_nuova_vis", width="stretch"):
             _fa_dialogo_visita(pid)
         _sp_storico_specialita(f, pid, nomi, _sp_profilo(f, pid))
         return
-    return _fa_tab_visite_originale(f, pid, nomi, oggi_)
+    prossimi = sorted([v for v in visite if v.get("prossimo") and v["prossimo"] >= oggi_.isoformat()], key=lambda v: v["prossimo"])[:5]
+    if prossimi:
+        st.subheader("📅 Prossimi appuntamenti")
+        for v in prossimi:
+            st.markdown(f"• **{data_it(v['prossimo'])}** · {_h.escape(v.get('categoria', ''))}" + (f" · {_h.escape(v['medico'])}" if v.get("medico") else ""))
+    if st.button("➕ Aggiungi visita o esame", type="primary", key="fa_nuova_vis", width="stretch"):
+        _fa_dialogo_visita(pid)
+    c1, c2, c3 = st.columns([3, 2, 2])
+    cerca = c1.text_input("Cerca", placeholder="medico, motivo, note…", label_visibility="collapsed", key="fa_cerca_vis")
+    presenti = sorted({v.get("categoria", "") for v in visite if v.get("categoria")})
+    cat = c2.selectbox("Specialità", ["Tutte le specialità"] + presenti, label_visibility="collapsed", key="fa_cat_vis")
+    tipi_pres = sorted({v.get("tipo_prestazione", "") for v in visite if v.get("tipo_prestazione")})
+    tpf = c3.selectbox("Tipo", ["Tutti i tipi"] + tipi_pres, label_visibility="collapsed", key="fa_tp_vis")
+    visibili = []
+    for v in sorted(visite, key=lambda v: (v.get("data", ""), v.get("ora", "")), reverse=True):
+        testo = " ".join(str(v.get(k, "")) for k in ("categoria", "tipo_prestazione", "prestazione", "medico", "motivo", "note", "controlli")).lower()
+        if cerca and cerca.lower() not in testo:
+            continue
+        if cat != "Tutte le specialità" and v.get("categoria") != cat:
+            continue
+        if tpf != "Tutti i tipi" and v.get("tipo_prestazione") != tpf:
+            continue
+        visibili.append(v)
+    if not visite:
+        st.info(f"Nessuna visita o esame per {nomi[pid]}. Tocca «Aggiungi visita o esame».")
+    elif not visibili:
+        st.info("Nessun risultato.")
+    for v in visibili:
+        _sp_card_visita(v, pid, nomi)
 
 
 _fa_tab_prescrizioni_originale = _fa_tab_prescrizioni
@@ -1898,7 +2031,6 @@ def _fa_tab_prescrizioni(f, pid, nomi, oggi_):                                  
     if st.button("📎 Carica una ricetta o un'impegnativa (la leggo io)", key=f"sp_pre_carica_{pid}", width="stretch"):
         _sp_vai_docsan(pid)
     return _fa_tab_prescrizioni_originale(f, pid, nomi, oggi_)
-
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -2245,6 +2377,13 @@ Le informazioni sono quelle che inserisci tu: la scheda non è certificata da un
 4. **Controlli e correggi**, poi **✅ Conferma e archivia**. Non invento niente: se un dato non c'è nel documento, resta vuoto.
 **Ritrovarli:** sotto, una **linguetta per ogni tipo di documento**, oppure **per specialità**, oppure **per anno** (scegli in alto). Tocca la linguetta: dentro vedi i documenti, con **👁️ Vedi / scarica**, **✏️ Correggi**, **📤 Invia** e **🗑️ Elimina**. C'è anche la ricerca.""",
      "documenti sanitari referto esame ecografia ricetta dimissione pulsante arancione specialita linguetta carica leggi conferma"),
+    ("s_esenzioni", "🪪 Invalidità ed esenzioni",
+     """In **Salute** tocca **🪪 Invalidità ed esenzioni** (in fondo ai bottoni). Qui tieni i documenti di **invalidità civile**, **Legge 104**, **indennità di accompagnamento**, **esenzioni ticket** (per patologia, per invalidità, per reddito/età/disoccupazione, per gravidanza), **contrassegno disabili**, **agevolazioni auto**.
+1. Tocca il **pulsante arancione «📎 Scegli il PDF o il file»** (o scatta una foto). Lo leggo e ti propongo **tipo, codice dell'esenzione, percentuale di invalidità, ente, numero del verbale, date di validità e di revisione**. Quello che non trovo resta vuoto.
+2. **Controlli e correggi**, poi **✅ Conferma e archivia**. Oppure **✍️ Aggiungi a mano** senza file.
+3. Ogni tipo ha la sua **linguetta**: dentro, per ogni voce, **👁️ Vedi / scarica**, **✏️ Correggi**, **📤 Invia**, **🗑️ Elimina**. Se è **permanente** spunta «♾️ È permanente».
+**Avvisi:** se una voce scade (o va rivista) entro 60 giorni, o è già scaduta, la Home lampeggia e Salute lo dice; con gli avvisi accesi ricevi anche il promemoria sui tuoi canali.""",
+     "invalidita esenzione ticket legge 104 accompagnamento contrassegno disabili percentuale codice esenzione verbale scadenza revisione"),
     ("s_storico", "📚 Storico per specialità (Visite)",
      """Nella scheda **🩺 Visite** scegli **📚 Storico per specialità**: una linguetta per ogni specialità (Cardiologia, Oculistica…). Dentro trovi, **anno per anno**, le visite e i documenti di quella specialità (referti, esami, ricette): per esempio tutta la storia cardiologica in un posto solo.
 In cima c'è **📎 Carica un referto, un esame o una ricetta (lo leggo io)**: ti porta ai Documenti sanitari.""", "storico specialita visite referti cardiologia anno linguetta"),

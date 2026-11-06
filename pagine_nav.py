@@ -110,6 +110,10 @@ def pn_scadenze():
             g = _pn_giorni(x.get("richiamo"), oggi_)
             if g is not None and -365 <= g <= 30:
                 out.setdefault("salute", []).append(f"💉 Richiamo {x.get('nome', '')}: " + ("in ritardo di %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+        if "sp_esenzioni_scadenti" in globals():                                  # invalidità ed esenzioni: scadute o in scadenza entro 60 giorni
+            for p in (f.get("profili") or []):
+                for g, e in sp_esenzioni_scadenti(p, oggi_, 60):
+                    out.setdefault("salute", []).append(f"🪪 {se_titolo(e)}" + (f" ({p.get('nome', '')})" if len(f.get("profili") or []) > 1 else "") + ": " + ("scaduta da %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"scade tra {g} giorni"))
         if "sp_controlli_scadenti" in globals():
             for p in (f.get("profili") or []):
                 for g, c in sp_controlli_scadenti(p, oggi_, 30):

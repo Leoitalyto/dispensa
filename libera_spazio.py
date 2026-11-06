@@ -193,5 +193,6 @@ try:
     _ls_avvolgi_ricezione()
     _ls_avvolgi_archiviazione("_ca_archivia")
     _ls_avvolgi_archiviazione("_sp_archivia_docsan")
+    _ls_avvolgi_archiviazione("_se_archivia")
 except Exception:
     pass

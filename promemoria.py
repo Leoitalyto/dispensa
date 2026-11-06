@@ -15,15 +15,19 @@ Chiavi segrete (GitHub -> Settings -> Secrets and variables -> Actions), ognuna 
   Telegram: TELEGRAM_TOKEN
   Email:    EMAIL_USER, EMAIL_PASSWORD  (facoltativi: EMAIL_SMTP, EMAIL_PORT; di base Gmail)
   SMS:      TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM
+  WhatsApp: (gratuito) ogni persona ha la sua chiave personale di CallMeBot, scritta nell'app: non servono segreti qui
 """
 import base64
 import calendar
 import glob
 import json
 import os
+import re
 import smtplib
 import ssl
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -248,6 +252,58 @@ def invia_sms(numero, testo):
     except Exception as e:
         return f"errore: {type(e).__name__}"
     return "ok"
+
+
+def numero_e164(n):
+    """+39… da come lo scrive una persona (spazi, 00, cellulare italiano senza prefisso)."""
+    n = re.sub(r"[\s.\-()]", "", str(n or ""))
+    if n.startswith("00"):
+        n = "+" + n[2:]
+    if n and not n.startswith("+") and re.fullmatch(r"3\d{8,9}", n):
+        n = "+39" + n
+    return n
+
+
+_ULTIMO_WHATSAPP = [0.0]
+
+
+def _risposta_pulita(corpo):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", corpo or "")).strip()[:110]
+
+
+def invia_whatsapp(numero, chiave, testo):
+    """WhatsApp gratuito con CallMeBot (servizio esterno non ufficiale): la chiave la ottiene ogni persona scrivendo al bot.
+    Si considera «ok» solo se il servizio risponde che il messaggio è in coda; altrimenti nel registro compare cosa ha risposto davvero.
+    Tra un messaggio e l'altro passano alcuni secondi, per non farsi bloccare per eccesso di richieste."""
+    numero, chiave = numero_e164(numero), str(chiave or "").strip()
+    testo = testo if len(testo) <= 1500 else testo[:1450].rstrip() + "…\n(apri l'app per il resto)"
+    if DRY:
+        print(f"--- WhatsApp a {numero} ---\n{testo}\n")
+        return "ok"
+    if not (numero and chiave):
+        return "saltato: mancano il numero o la chiave di CallMeBot"
+    attesa = 7 - (time.time() - _ULTIMO_WHATSAPP[0])
+    if attesa > 0:
+        time.sleep(attesa)
+    url = "https://api.callmebot.com/whatsapp.php?" + urllib.parse.urlencode({"phone": numero, "text": testo, "apikey": chiave})
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "DispensaFamiglia/1.0"}), timeout=30) as r:
+            corpo = r.read(1200).decode("utf-8", "replace")
+            stato = r.status
+    except urllib.error.HTTPError as e:
+        try:
+            corpo = e.read(600).decode("utf-8", "replace")
+        except Exception:
+            corpo = ""
+        _ULTIMO_WHATSAPP[0] = time.time()
+        return f"errore: CallMeBot risponde {e.code}: «{_risposta_pulita(corpo)}»"
+    except Exception as e:
+        _ULTIMO_WHATSAPP[0] = time.time()
+        return f"errore: {type(e).__name__}"
+    _ULTIMO_WHATSAPP[0] = time.time()
+    if stato == 200 and re.search(r"queued|message\s+sent|sent\s+to", corpo, re.I) and not re.search(r"error|invalid|not\s+registered|wrong", corpo, re.I):
+        return "ok"
+    return f"errore: CallMeBot dice «{_risposta_pulita(corpo)}»"
 
 
 def adesso_roma():
@@ -517,16 +573,216 @@ def avvisi_dispensa_famiglia(oggi, bloccati, registra):
             elif canale == "sms" and (d.get("avviso_sms") or "").strip():
                 testo = "Dispensa di famiglia: prova riuscita." if PROVA else testo_sms_famiglia(oggi, in_soglia, scaduti, esaurimento)
                 esito = invia_sms(d["avviso_sms"].strip(), testo)
+            elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi della dispensa di famiglia." if PROVA else testo_famiglia_dispensa(oggi, in_soglia, scaduti, esaurimento)
+                esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
             else:
                 continue
             registra(f"{uid}-famiglia-dispensa", canale, esito)
+
+
+def raccogli_casa(d, oggi):
+    """Casa: (garanzie in scadenza, manutenzioni in arrivo o in ritardo). Garanzie a 60, 30, 14, 7, 1 giorno e il giorno stesso; manutenzioni a 30, 14, 7, 1, oggi e, se in ritardo, ogni lunedì."""
+    casa = d.get("casa") or {}
+    beni = {b.get("id"): b.get("nome", "Bene") for b in casa.get("beni", []) if isinstance(b, dict)}
+    garanzie, manut = [], []
+    for b in casa.get("beni", []):
+        s_ = data_di(b.get("garanzia_fino")) if isinstance(b, dict) else None
+        if s_ and (s_ - oggi).days in SOGLIE:
+            garanzie.append(((s_ - oggi).days, b.get("nome", "Bene"), s_))
+    ultime = {}
+    for m in sorted([x for x in casa.get("manutenzioni", []) if isinstance(x, dict)], key=lambda x: x.get("data") or ""):
+        ultime[(m.get("bene_id"), m.get("tipo"))] = m                  # conta l'ultima di ogni tipo: le vecchie sono già state fatte
+    for m in ultime.values():
+        s_ = data_di(m.get("prossima"))
+        if not s_ or m.get("bene_id") not in beni:
+            continue
+        g = (s_ - oggi).days
+        if g in (30, 14, 7, 1, 0) or (g < 0 and oggi.weekday() == 0):
+            manut.append((g, beni[m["bene_id"]], m.get("descrizione") or m.get("tipo") or "Manutenzione", s_))
+    return sorted(garanzie, key=lambda x: x[0]), sorted(manut, key=lambda x: x[0])
+
+
+SOGLIE_BOLLETTE = (7, 3, 1, 0)            # giorni mancanti alla scadenza in cui arriva l'avviso di una bolletta da pagare (e, se scaduta, ogni lunedì)
+
+
+def raccogli_bollette(d, oggi):
+    """Bollette, fatture e polizze di Casa NON ancora pagate (né «pagata il», né ricevuta collegata): [(giorni, «Luce · Octopus Energy», importo, scadenza)]."""
+    casa = d.get("casa") or {}
+    docs = [x for x in casa.get("documenti", []) if isinstance(x, dict)]
+    pagate = {x.get("collegato_a") for x in docs if x.get("collegato_a")}
+    out = []
+    for x in docs:
+        if x.get("tipo") not in ("Bolletta o fattura", "Polizza assicurativa") or x.get("pagata_il") or x.get("id") in pagate:
+            continue
+        s_ = data_di(x.get("scadenza_doc"))
+        if not s_:
+            continue
+        g = (s_ - oggi).days
+        # prima: 7, 3, 1 giorno e il giorno stesso. Dopo la scadenza: ogni giorno per i primi 30 giorni, poi ogni lunedì, fino a un anno.
+        if g in SOGLIE_BOLLETTE or (-30 <= g < 0) or (-365 <= g < -30 and oggi.weekday() == 0):
+            nome = " · ".join(v for v in ((x.get("argomento") if x.get("argomento") not in (None, "", "Altro") else ""), x.get("ente") or "") if v) or (x.get("titolo") or "Bolletta")
+            out.append((g, nome, x.get("importo") or "", s_))
+    return sorted(out, key=lambda t: t[0])
+
+
+def _euro(v):
+    try:
+        return "€ " + f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (TypeError, ValueError):
+        return ""
+
+
+def testo_casa(oggi, garanzie, manut, bollette=()):
+    righe = [f"🏡 Casa – promemoria del {oggi.strftime('%d/%m/%Y')}"]
+    if bollette:
+        righe += ["", "💶 Bollette da pagare:"] + [f"• {nome}" + (f" ({_euro(imp)})" if _euro(imp) else "") + f" – {quando(g)} ({s_.strftime('%d/%m/%Y')})" for g, nome, imp, s_ in bollette]
+    if garanzie:
+        righe += ["", "🛡️ Garanzie in scadenza:"] + [f"• {nome} – {quando(g)} ({s_.strftime('%d/%m/%Y')})" for g, nome, s_ in garanzie]
+    if manut:
+        righe += ["", "🔧 Manutenzioni:"] + [f"• {nome}: {voce} – {quando(g)} ({s_.strftime('%d/%m/%Y')})" for g, nome, voce, s_ in manut]
+    return "\n".join(righe)
+
+
+def testo_sms_casa(oggi, garanzie, manut, bollette=()):
+    parti = []
+    if bollette:
+        parti.append(f"{len(bollette)} bollett{'a' if len(bollette) == 1 else 'e'} da pagare")
+    if garanzie:
+        parti.append(f"{len(garanzie)} garanzi{'a' if len(garanzie) == 1 else 'e'} in scadenza")
+    if manut:
+        parti.append(f"{len(manut)} manutenzion{'e' if len(manut) == 1 else 'i'} da fare")
+    return "Casa: " + ", ".join(parti) + ". Apri l'app per i dettagli."
+
+
+def utenti_attivi(bloccati):
+    """Tutte le persone con un account attivo (capo famiglia compreso) con i loro dati personali."""
+    risultato = []
+    if "admin" not in bloccati:
+        risultato.append(("admin", leggi("dispense/admin.json")))
+    for u in leggi("utenti.json").get("utenti", []):
+        if u.get("id") and u.get("attivo", True) and u["id"] not in bloccati:
+            risultato.append((u["id"], leggi(f"dispense/{u['id']}.json")))
+    return risultato
+
+
+def avvisi_casa(oggi, bloccati, registra):
+    """Garanzie, manutenzioni e BOLLETTE DA PAGARE di Casa, solo a chi ha spuntato «Avvisami anche di Casa», sui canali che ha scelto."""
+    for uid, d in utenti_attivi(bloccati):
+        # una riga di RIEPILOGO sempre (anche quando non parte niente), per capire dal registro cosa succede
+        _docs = [x for x in ((d.get("casa") or {}).get("documenti") or []) if isinstance(x, dict) and x.get("tipo") in ("Bolletta o fattura", "Polizza assicurativa")]
+        _pagate = {x.get("collegato_a") for x in ((d.get("casa") or {}).get("documenti") or []) if isinstance(x, dict) and x.get("collegato_a")}
+        _non_pagate = [x for x in _docs if not x.get("pagata_il") and x.get("id") not in _pagate]
+        _scadute = [x for x in _non_pagate if data_di(x.get("scadenza_doc")) and data_di(x.get("scadenza_doc")) < oggi]
+        print(f"[{uid}] Casa: {len(_non_pagate)} bollette non pagate ({len(_scadute)} scadute) · avvisi di Casa: {'SPUNTATI' if d.get('avvisi_casa') else 'NON spuntati'} · canali scelti: {', '.join(canali_di(d)) or 'nessuno'} · oggi {oggi.strftime('%d/%m/%Y')} ({'lunedì' if oggi.weekday() == 0 else 'non è lunedì'}) · da avvisare oggi: {len(raccogli_bollette(d, oggi))}")
+        if not d.get("avvisi_casa"):
+            if raccogli_bollette(d, oggi) or raccogli_casa(d, oggi) != ([], []):
+                print(f"[{uid}] ci sono cose da avvisare in Casa (bollette, garanzie o manutenzioni) ma «Avvisami anche di Casa» NON è spuntato: nessun messaggio. "
+                      f"Spuntalo in Salute → Scegli come ricevere gli avvisi.")
+            continue
+        garanzie, manut = raccogli_casa(d, oggi)
+        bollette = raccogli_bollette(d, oggi)
+        if not canali_di(d):
+            print(f"[{uid}] «Avvisami anche di Casa» è spuntato ma non c'è nessun canale scelto (Telegram, email, WhatsApp, SMS): nessun messaggio.")
+            continue
+        if not PROVA and not (garanzie or manut or bollette):
+            continue
+        for canale in canali_di(d):
+            if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
+            elif canale == "email" and (d.get("avviso_email") or "").strip():
+                testo = "Prova riuscita: da oggi ricevi via email gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                esito = invia_email(d["avviso_email"].strip(), "Casa - La nostra dispensa", testo)
+            elif canale == "sms" and (d.get("avviso_sms") or "").strip():
+                testo = "Casa: prova riuscita." if PROVA else testo_sms_casa(oggi, garanzie, manut, bollette)
+                esito = invia_sms(d["avviso_sms"].strip(), testo)
+            elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
+            else:
+                continue
+            registra(f"{uid}-casa", canale, esito)
+
+
+def _aggiungi_mesi(d, n):
+    m = d.month - 1 + int(n)
+    a, me = d.year + m // 12, m % 12 + 1
+    giorno = min(d.day, [31, 29 if (a % 4 == 0 and (a % 100 != 0 or a % 400 == 0)) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][me - 1])
+    return date(a, me, giorno)
+
+
+def raccogli_controlli(d, oggi):
+    """Controlli periodici della Salute (dentista, vista, vaccini…) e scadenze di invalidità ed esenzioni: [(giorni, «Nome · Persona», scadenza)]. Avviso a 30, 7, 1 giorno prima, il giorno stesso, e ogni lunedì se in ritardo (fino a 180 giorni).
+    Solo quelli con l'avviso acceso. Il «prossimo» è l'ultimo fatto + ogni quanti mesi."""
+    out = []
+    for p in ((d.get("farmacia") or {}).get("profili") or []):
+        for c in (p.get("controlli") or []):
+            if not isinstance(c, dict) or c.get("avvisa") is False:
+                continue
+            ultimo = data_di(c.get("ultimo"))
+            try:
+                mesi = int(c.get("ogni_mesi") or 0)
+            except (TypeError, ValueError):
+                mesi = 0
+            prossimo = data_di(c.get("prossimo")) or (_aggiungi_mesi(ultimo, mesi) if (ultimo and mesi > 0) else None)
+            if not prossimo:
+                continue
+            g = (prossimo - oggi).days
+            if g in (30, 7, 1, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+                nome = c.get("nome") or "Controllo"
+                if len((d.get("farmacia") or {}).get("profili") or []) > 1:
+                    nome += f" · {p.get('nome', '')}"
+                out.append((g, nome, prossimo))
+        # invalidità ed esenzioni: fine validità (se non è permanente) o prossima revisione. Avviso a 60, 30, 7, 1 giorno prima, il giorno stesso, e ogni lunedì se in ritardo (fino a 180 giorni)
+        for e in (p.get("esenzioni") or []):
+            if not isinstance(e, dict) or e.get("avvisa") is False:
+                continue
+            fino = None if e.get("permanente") else data_di(e.get("valida_fino"))
+            rev = data_di(e.get("revisione"))
+            cand = [x for x in (fino, rev) if x]
+            if not cand:
+                continue
+            scad = min(cand)
+            g = (scad - oggi).days
+            if g in (60, 30, 7, 1, 0) or (-180 <= g < 0 and oggi.weekday() == 0):
+                nome = "🪪 " + (e.get("tipo") or "Esenzione") + ((" " + e["codice"]) if e.get("codice") else "") + (" (revisione)" if (rev and scad == rev and not (fino and fino == rev)) else " (scadenza)")
+                if len((d.get("farmacia") or {}).get("profili") or []) > 1:
+                    nome += f" · {p.get('nome', '')}"
+                out.append((g, nome, scad))
+    return sorted(out, key=lambda t: t[0])
+
+
+def testo_controlli(oggi, controlli):
+    return "\n".join([f"⏰ Controlli periodici – {oggi.strftime('%d/%m/%Y')}", ""] + [f"• {nome} – " + ("in ritardo di %d giorni" % -g if g < 0 else "OGGI" if g == 0 else "domani" if g == 1 else f"tra {g} giorni") + f" ({s_.strftime('%d/%m/%Y')})" for g, nome, s_ in controlli])
+
+
+def avvisi_controlli(oggi, bloccati, registra):
+    """I controlli periodici, a chiunque abbia dei controlli con l'avviso acceso, sui canali che ha scelto."""
+    for uid, d in utenti_attivi(bloccati):
+        controlli = raccogli_controlli(d, oggi)
+        if not PROVA and not controlli:
+            continue
+        for canale in canali_di(d):
+            testo = "✅ Prova riuscita: da oggi ricevi qui i promemoria dei controlli." if PROVA else testo_controlli(oggi, controlli)
+            if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
+            elif canale == "email" and (d.get("avviso_email") or "").strip():
+                esito = invia_email(d["avviso_email"].strip(), "Controlli periodici - La nostra dispensa", testo)
+            elif canale == "sms" and (d.get("avviso_sms") or "").strip():
+                esito = invia_sms(d["avviso_sms"].strip(), f"Controlli periodici: {len(controlli)} in scadenza. Apri l'app." if not PROVA else "Controlli: prova riuscita.")
+            elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
+            else:
+                continue
+            registra(f"{uid}-controlli", canale, esito)
 
 
 def canali_di(d):
     canali = d.get("avvisi_canali")
     if canali is None:                                    # chi ha solo il Chat ID di Telegram
         canali = ["telegram"] if d.get("telegram_chat_id") else []
-    return [c for c in canali if c in ("telegram", "email", "sms")]
+    return [c for c in canali if c in ("telegram", "email", "sms", "whatsapp")]
 
 
 def main():
@@ -579,11 +835,17 @@ def main():
                 testo = "Dispensa: prova riuscita, da oggi ricevi qui gli avvisi di scadenza." if PROVA \
                     else testo_sms(oggi, in_soglia, scaduti, docs)
                 esito = invia_sms(d["avviso_sms"].strip(), testo)
+            elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                testo = "✅ Prova riuscita: da oggi ricevi qui i promemoria della dispensa e di Salute." if PROVA \
+                    else testo_lungo(d, oggi, in_soglia, scaduti, docs)
+                esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
             else:
                 continue
             registra(uid, canale, esito)
-    if not DOSI:                                                     # avvisi della dispensa di famiglia (ogni mattina, non nei controlli delle dosi)
+    if not DOSI:                                                     # avvisi della dispensa di famiglia e di Casa (ogni mattina, non nei controlli delle dosi)
         avvisi_dispensa_famiglia(oggi, bloccati, registra)
+        avvisi_casa(oggi, bloccati, registra)
+        avvisi_controlli(oggi, bloccati, registra)
     # il capo famiglia (account «admin»): riepilogo del mattino e dosi non registrate
     d_capo = leggi("dispense/admin.json")
     if "admin" not in bloccati:

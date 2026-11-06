@@ -39,6 +39,67 @@ if not getattr(_st_tab.tabs, "_ricorda", False):
 import streamlit as _st_giro
 _st_giro.session_state["_tabs_giro"] = _st_giro.session_state.get("_tabs_giro", 0) + 1     # ogni ridisegno è un «giro»: serve a dare chiavi stabili alle schede
 
+# I CALENDARI di tutta l'app vanno indietro di 100 anni e avanti di 150 (di solito Streamlit ne permette solo 10 per parte, e molti punti avevano limiti propri).
+import datetime as _dt_cal
+if not getattr(_st_tab.date_input, "_calendario_ampio", False):
+    from streamlit.delta_generator import DeltaGenerator as _DG_cal
+
+    def _date_ampie(firma, args, kw):
+        """Allarga min_value e max_value: oggi-100 anni … oggi+150 anni (e comunque le date già scelte e i limiti più larghi già impostati)."""
+        try:
+            b = firma.bind_partial(*args, **kw)
+        except TypeError:
+            return args, kw
+        ar = b.arguments
+        oggi_c = _dt_cal.date.today()
+
+        def sposta(anni):
+            try:
+                return oggi_c.replace(year=oggi_c.year + anni)
+            except ValueError:
+                return oggi_c.replace(year=oggi_c.year + anni, day=28)
+        lo, hi = sposta(-100), sposta(150)
+        v = ar.get("value")
+        scelte = []
+        for x in (v if isinstance(v, (list, tuple)) else [v]):
+            if isinstance(x, _dt_cal.datetime):
+                x = x.date()
+            if isinstance(x, _dt_cal.date):
+                scelte.append(x)
+        mn, mx = ar.get("min_value"), ar.get("max_value")
+        mn = mn.date() if isinstance(mn, _dt_cal.datetime) else mn
+        mx = mx.date() if isinstance(mx, _dt_cal.datetime) else mx
+        ar["min_value"] = min([lo] + [x for x in scelte if x < lo] + ([mn] if isinstance(mn, _dt_cal.date) and mn < lo else []))
+        ar["max_value"] = max([hi] + [x for x in scelte if x > hi] + ([mx] if isinstance(mx, _dt_cal.date) and mx > hi else []))
+        return b.args, b.kwargs
+    try:
+        _firma_dg = _inspect_tab.signature(_DG_cal.date_input)
+        _dg_originale = _DG_cal.date_input
+
+        def _dg_date_input(self, *a, **kw):
+            a2, k2 = _date_ampie(_firma_dg, (self,) + a, kw)
+            return _dg_originale(*a2, **k2)
+        _firma_st = _inspect_tab.signature(_st_tab.date_input)
+        _st_originale = _st_tab.date_input
+
+        def _st_date_input(*a, **kw):
+            a2, k2 = _date_ampie(_firma_st, a, kw)
+            return _st_originale(*a2, **k2)
+        _dg_date_input._calendario_ampio = True
+        _st_date_input._calendario_ampio = True
+        _DG_cal.date_input = _dg_date_input
+        _st_tab.date_input = _st_date_input
+        _col_originale = _st_tab.column_config.DateColumn                      # anche i calendari dentro le tabelle modificabili
+
+        def _colonna_data(*a, **kw):
+            oggi_c = _dt_cal.date.today()
+            kw["min_value"] = min([oggi_c.replace(year=oggi_c.year - 100, day=min(oggi_c.day, 28))] + ([kw["min_value"]] if isinstance(kw.get("min_value"), _dt_cal.date) else []))
+            kw["max_value"] = max([oggi_c.replace(year=oggi_c.year + 150, day=min(oggi_c.day, 28))] + ([kw["max_value"]] if isinstance(kw.get("max_value"), _dt_cal.date) else []))
+            return _col_originale(*a, **kw)
+        _st_tab.column_config.DateColumn = _colonna_data
+    except Exception:
+        pass
+
 # Le «linguette» (riquadri che si aprono e si chiudono) restano SEMPRE chiuse all'apertura della pagina: si aprono solo se le tocchi tu.
 import streamlit as _st_chiuse
 if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
@@ -205,7 +266,7 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     except Exception:
         pass
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
