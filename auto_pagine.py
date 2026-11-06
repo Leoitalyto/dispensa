@@ -199,7 +199,7 @@ def _au_pannello(v, coda):
         al = None
     if not ctx and not al:
         return
-    st.markdown(f"<div class='au-card'><b class='t'>📎 {'Allega un file a: ' + _h_ap.escape(al['titolo']) if al else ('Carica la Carta di Circolazione' if ctx == 'libretto' else 'Carica un documento del veicolo')}</b></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='au-card'><b class='t'>📎 {'Allega un file a: ' + _h_ap.escape(al['titolo']) if al else ('Carica la Carta di Circolazione' if ctx == 'libretto' else 'Scegli la foto del veicolo' if ctx == 'foto' else 'Carica un documento del veicolo')}</b></div>", unsafe_allow_html=True)
     arr = _au_ricevi()
     if st.button("✖ Chiudi questo pannello", key="au_chiudi_pannello", width="stretch"):
         st.session_state.pop("au_pannello", None)
@@ -227,6 +227,29 @@ def _au_pannello(v, coda):
         st.session_state["ca_giro"] = st.session_state.get("ca_giro", 0) + 1
         st.session_state["messaggio"] = f"✅ «{nome}» allegato."
         st.rerun()
+    if ctx == "foto":
+        mime = _ca_mime(nome, "", dati) if "_ca_mime" in globals() else ("image/jpeg" if not nome.lower().endswith(".pdf") else "application/pdf")
+        if not str(mime).startswith("image/"):
+            st.error("Per la foto scegli un'immagine (non un PDF).")
+            return
+        try:
+            rif = (_fa_salva_files([_SpUp(nome, dati)]) or [{}])[0]
+        except Exception as ex:
+            st.error(f"Non sono riuscito a salvare la foto: {ex}")
+            return
+        vecchia = (v.get("foto") or {}).get("id")
+        _au_mod(v["id"], lambda x, rif=rif: x.__setitem__("foto", rif), "Auto: foto del veicolo")
+        if vecchia:
+            try:
+                _fa_cancella_files([vecchia])
+            except Exception:
+                pass
+        if "ls_segna_archiviato" in globals():
+            ls_segna_archiviato()
+        st.session_state.pop("au_pannello", None)
+        st.session_state["ca_giro"] = st.session_state.get("ca_giro", 0) + 1
+        st.session_state["messaggio"] = "✅ Foto salvata."
+        st.rerun()
     modo = "libretto" if ctx == "libretto" else "doc"
     if not any(c_["sha"] == sha for c_ in coda):
         coda.append({"modo": modo, "nome": nome, "dati": dati, "sha": sha, "vid": (v or {}).get("id")})
@@ -236,6 +259,17 @@ def _au_pannello(v, coda):
 # ---------------------------------------------------------------------------------------------------------------------
 # le schede
 # ---------------------------------------------------------------------------------------------------------------------
+def _au_scegli(label, voci, chiave):
+    """Pillole (o scelta a bottoni) che ricordano la scelta; si può impostare da fuori (es. dal garage) senza avvisi."""
+    if st.session_state.get(chiave) not in voci:
+        st.session_state.pop(chiave, None)
+    if hasattr(st, "pills"):
+        r = st.pills(label, voci, key=chiave, label_visibility="collapsed") if chiave in st.session_state else st.pills(label, voci, default=voci[0], key=chiave, label_visibility="collapsed")
+    else:
+        r = st.radio(label, voci, horizontal=True, key=chiave, label_visibility="collapsed")
+    return r or voci[0]
+
+
 def _cerca_url(q):
     return "https://www.google.com/search?q=" + urllib.parse.quote_plus(q)
 
@@ -374,11 +408,7 @@ def tab_scadenze(v):
 
 def tab_manutenzione(v):
     voci = ["🔧 Interventi e tagliandi", "🛞 Pneumatici"] + (["🔋 Salute batteria (SoH)"] if _au_ha_batteria(v) else [])
-    if hasattr(st, "pills"):
-        sc = st.pills("Manutenzione", voci, default=voci[0], key=f"au_man_{v['id']}", label_visibility="collapsed")
-    else:
-        sc = st.radio("Manutenzione", voci, horizontal=True, key=f"au_man_{v['id']}", label_visibility="collapsed")
-    sc = sc or voci[0]
+    sc = _au_scegli("Manutenzione", voci, f"au_man_{v['id']}")
     if sc == voci[0]:
         cats = ["Tutte le categorie"] + _AU_INT_CAT
         f = st.selectbox("Filtra", cats, key=f"au_intf_{v['id']}", label_visibility="collapsed")
@@ -449,11 +479,7 @@ def au_tco(v):
 
 def tab_rifornimenti(v):
     voci = ["⛽ Rifornimenti e ricariche", "💸 Altre spese", "📊 Consumi e spese totali"]
-    if hasattr(st, "pills"):
-        sc = st.pills("Rifornimenti", voci, default=voci[0], key=f"au_rif_{v['id']}", label_visibility="collapsed")
-    else:
-        sc = st.radio("Rifornimenti", voci, horizontal=True, key=f"au_rif_{v['id']}", label_visibility="collapsed")
-    sc = sc or voci[0]
+    sc = _au_scegli("Rifornimenti", voci, f"au_rif_{v['id']}")
     if sc == voci[0]:
         _au_elenco(v, "rifornimenti", "Rifornimenti", _spec_rifornimenti(v), lambda x: f"{'🔌' if x.get('tipo') == 'Ricarica' else '⛽'} {x.get('tipo', '')} · {_au_it(x.get('data'))}", lambda x: [("Km: " + x["km"]) if x.get("km") else "", x.get("luogo"),
                    ((x["quantita"] + (" kWh" if x.get("tipo") == "Ricarica" else " litri")) if x.get("quantita") else ""), ("Costo: " + _au_eur(x["costo"])) if x.get("costo") else "",
@@ -549,11 +575,7 @@ def _extra_sinistro(v, s):
 
 def tab_emergenza(v):
     voci = ["🚦 Spie del cruscotto", "⚡ Procedure di emergenza", "📝 Sinistro (CAI)"]
-    if hasattr(st, "pills"):
-        sc = st.pills("Emergenza", voci, default=voci[0], key=f"au_em_{v['id']}", label_visibility="collapsed")
-    else:
-        sc = st.radio("Emergenza", voci, horizontal=True, key=f"au_em_{v['id']}", label_visibility="collapsed")
-    sc = sc or voci[0]
+    sc = _au_scegli("Emergenza", voci, f"au_em_{v['id']}")
     if sc == voci[0]:
         ae_spie(v)
     elif sc == voci[1]:
@@ -567,6 +589,121 @@ def tab_emergenza(v):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# il GARAGE: la schermata iniziale (foto, stato, scadenze in evidenza, accessi rapidi, ultima posizione)
+# ---------------------------------------------------------------------------------------------------------------------
+_AU_SEZ = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza"]
+
+
+def _au_vai(sezione, extra=None, vid=None):
+    """Dal garage alla sezione scelta (e, se serve, alla sua sotto-scheda)."""
+    st.session_state["au_vista"] = "sezione"
+    st.session_state["au_sezione"] = sezione
+    for k, val in (extra or {}).items():
+        st.session_state[k] = val
+    st.rerun()
+
+
+def _au_ultimo_soh(v):
+    punti = sorted([x for x in v.get("soh", []) if x.get("data") and _au_n(x.get("soh")) is not None], key=lambda x: x["data"])
+    return (punti[-1]["soh"], punti[-1]["data"]) if punti else (None, None)
+
+
+def garage(v):
+    vid = v["id"]
+    st.markdown("#### 🚘 Il tuo veicolo")
+    c1, c2 = st.columns([2, 3], gap="small")
+    with c1:
+        mostrata = False
+        ref = v.get("foto") or {}
+        if ref.get("id"):
+            dati = _sp_dati_file(ref)
+            if dati:
+                st.image(dati, width="stretch")
+                mostrata = True
+        if not mostrata:
+            st.markdown(f"<div style='font-size:3.6rem;text-align:center;background:rgba(255,255,255,.75);border-radius:16px;padding:16px 0'>{'🏍️' if v.get('tipo_veicolo') == 'Moto' else '🚗'}</div>", unsafe_allow_html=True)
+        if st.button("📷 Cambia foto" if mostrata else "📷 Aggiungi foto", key=f"au_foto_{vid}", width="stretch"):
+            st.session_state["au_pannello"] = "foto"
+            st.rerun()
+    with c2:
+        titolo = " ".join(x for x in (v.get("marca"), v.get("modello"), v.get("allestimento")) if x) or v.get("nome") or "Veicolo"
+        riga2 = " · ".join(x for x in (v.get("alimentazione"), v.get("anno")) if x)
+        stato = ""
+        if _au_ha_batteria(v):
+            sc = v.get("stato_carica") or {}
+            soh, soh_d = _au_ultimo_soh(v)
+            stato = "🔋 " + (f"SOC: <b>{_h_ap.escape(str(sc.get('soc')))}%</b>" + (f" ({_h_ap.escape(str(sc.get('km')))} km)" if sc.get("km") else "") if sc.get("soc") else "SOC: non indicato") + (f" · SoH <b>{_h_ap.escape(str(soh))}%</b>" if soh else "")
+            if sc.get("data"):
+                stato += f"<br><small>carica aggiornata il {_au_it(sc['data'])}</small>"
+        elif v.get("km_attuali"):
+            stato = f"🛣️ <b>{_h_ap.escape(v['km_attuali'])}</b> km"
+        st.markdown(f"<div class='au-card'><b class='t'>{_h_ap.escape(titolo)}</b><br><small>{_h_ap.escape(riga2)}</small>" + (f"<br><small>Targa: <b>{_h_ap.escape(v['targa'])}</b></small>" if v.get("targa") else "") + (f"<hr style='margin:6px 0;border:none;border-top:1px solid #b2ebf2'>{stato}" if stato else "") + "</div>", unsafe_allow_html=True)
+    if _au_ha_batteria(v):
+        with st.expander("🔋 Aggiorna la carica (la leggi dal display dell'auto)"):
+            with st.form(f"au_soc_{vid}", border=False):
+                k1, k2 = st.columns(2, gap="small")
+                soc = k1.text_input("Carica attuale (%)", value=str((v.get("stato_carica") or {}).get("soc", "")), key=f"au_soc_v_{vid}")
+                kmr = k2.text_input("Autonomia indicata (km)", value=str((v.get("stato_carica") or {}).get("km", "")), key=f"au_soc_k_{vid}")
+                if st.form_submit_button("💾 Salva", type="primary", width="stretch"):
+                    n = _au_n(soc)
+                    if n is None or not 0 <= n <= 100:
+                        st.error("Scrivi la carica come numero da 0 a 100.")
+                    else:
+                        dd = {"soc": str(int(n)), "km": str(int(_au_n(kmr))) if _au_n(kmr) is not None else "", "data": _au_oggi().isoformat()}
+                        _au_mod(vid, lambda x, dd=dd: x.__setitem__("stato_carica", dd), "Auto: carica")
+                        st.rerun()
+            st.caption("L'app non è collegata all'auto: carica e autonomia le scrivi tu.")
+    # ---- scadenze in evidenza
+    st.markdown("#### ⚠️ Scadenze in evidenza")
+    sc_ = au_scadenze(v)
+    if sc_:
+        urgenti = [x for x in sc_ if x["stato"] in ("r", "g")][:3] or sc_[:2]
+        for x in urgenti:
+            _carta_scad(x, v)
+        if st.button("⏰ Vedi tutte le scadenze", key=f"au_g_scad_{vid}", width="stretch"):
+            _au_vai(_AU_SEZ[1])
+    else:
+        st.info("Nessuna scadenza impostata: tocca il bottone qui sotto per bollo, assicurazione, revisione, tagliando…")
+        if st.button("⏰ Imposta le scadenze", key=f"au_g_scad_{vid}", type="primary", width="stretch"):
+            _au_vai(_AU_SEZ[1])
+    # ---- accessi rapidi
+    st.markdown("#### 🛠️ Accessi rapidi")
+    ric = "🔋 Ricarica e sessioni" if _au_ricarica(v) else "⛽ Rifornimenti"
+    with st.container(key="au_hub"):
+        t = [st.button("📖 Manuali e documenti", key="au_h_doc", width="stretch"), st.button("🔍 Spie del cruscotto", key="au_h_spie", width="stretch"),
+             st.button(ric, key="au_h_ric", width="stretch"), st.button("🔧 Storico manutenzione", key="au_h_man", width="stretch"),
+             st.button("🚨 Soccorso ed emergenza", key="au_h_soc", width="stretch"), st.button("📊 Spese e consumi (TCO)", key="au_h_tco", width="stretch"),
+             st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch")]
+    if t[0]:
+        _au_vai(_AU_SEZ[0])
+    elif t[1]:
+        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "🚦 Spie del cruscotto"})
+    elif t[2]:
+        _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "⛽ Rifornimenti e ricariche"})
+    elif t[3]:
+        _au_vai(_AU_SEZ[2], {f"au_man_{vid}": "🔧 Interventi e tagliandi"})
+    elif t[4]:
+        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "⚡ Procedure di emergenza"})
+    elif t[5]:
+        _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "📊 Consumi e spese totali"})
+    elif t[6]:
+        _au_vai(_AU_SEZ[4])
+    st.caption("La diagnosi delle spie da una **foto** non c'è (serve un'IA esterna): «Spie del cruscotto» è il catalogo da cercare per nome o per colore.")
+    # ---- ultima posizione
+    pos = v.get("posizione") or {}
+    st.markdown(f"<div class='au-card'>📍 <b>Ultima posizione salvata:</b> {_h_ap.escape(pos.get('testo') or 'nessuna')}" + (f"<br><small>{_au_it(pos.get('data'))}</small>" if pos.get("data") else "") + "</div>", unsafe_allow_html=True)
+    with st.expander("📍 Salva dove hai parcheggiato"):
+        with st.form(f"au_pos_{vid}", border=False):
+            testo = st.text_input("Dove (via, parcheggio, piano, posto)", value=pos.get("testo", ""), key=f"au_pos_t_{vid}", placeholder="es. Via Baveno, Torino")
+            if st.form_submit_button("💾 Salva la posizione", type="primary", width="stretch"):
+                _au_mod(vid, lambda x, t_=testo.strip(): x.__setitem__("posizione", {"testo": t_, "data": _au_oggi().isoformat()}), "Auto: posizione")
+                st.rerun()
+        st.caption("Scrivi l'indirizzo: non uso il GPS.")
+    if pos.get("testo"):
+        st.link_button("🗺️ Apri sulla mappa", "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(pos["testo"]), width="stretch")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # la pagina
 # ---------------------------------------------------------------------------------------------------------------------
 def schermata_auto():
@@ -576,7 +713,7 @@ def schermata_auto():
     if "_CA_CSS" in globals():
         st.markdown(_CA_CSS, unsafe_allow_html=True)
     st.markdown(_AU_CSS, unsafe_allow_html=True)
-    st.markdown("<div class='au-hero'><div class='ico'>🚗</div><div><h1>Auto</h1><p>Documenti, scadenze, manutenzione, consumi ed emergenze dei tuoi veicoli</p></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='au-hero'><div class='ico'>🚗</div><div><h1>Garage personale</h1><p>Documenti, scadenze, manutenzione, consumi ed emergenze dei tuoi veicoli</p></div></div>", unsafe_allow_html=True)
     if st.session_state.get("messaggio"):
         st.success(st.session_state.pop("messaggio"))
     if "pulsante_info" in globals():
@@ -625,12 +762,13 @@ def schermata_auto():
     rosse, gialle = sum(1 for s in sc if s["stato"] == "r"), sum(1 for s in sc if s["stato"] == "g")
     if rosse or gialle:
         st.markdown(f"<div class='au-scad {'au-r' if rosse else 'au-g'}'>⏰ {'🔴 ' + str(rosse) + ' scadut' + ('a' if rosse == 1 else 'e') if rosse else ''}{' · ' if rosse and gialle else ''}{'🟡 ' + str(gialle) + ' in scadenza' if gialle else ''} — apri ⏰ Scadenze</div>", unsafe_allow_html=True)
-    voci = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza"]
-    if hasattr(st, "pills"):
-        scelta = st.pills("Che cosa vuoi vedere?", voci, default=voci[0], key="au_sezione", label_visibility="collapsed")
-    else:
-        scelta = st.radio("Che cosa vuoi vedere?", voci, horizontal=True, key="au_sezione", label_visibility="collapsed")
-    scelta = scelta or voci[0]
+    if st.session_state.get("au_vista") != "sezione":
+        return garage(v)
+    if st.button("← Torna al garage", key="au_garage", width="stretch"):
+        st.session_state["au_vista"] = "garage"
+        st.rerun()
+    voci = _AU_SEZ
+    scelta = _au_scegli("Che cosa vuoi vedere?", voci, "au_sezione")
     {voci[0]: tab_scheda, voci[1]: tab_scadenze, voci[2]: tab_manutenzione, voci[3]: tab_rifornimenti, voci[4]: tab_ricambi, voci[5]: tab_emergenza}[scelta](v)
 
 

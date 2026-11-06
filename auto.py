@@ -46,6 +46,14 @@ _AU_CSS = """<style>
 .au-card{background:rgba(255,255,255,.9);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b;border-left:6px solid #00acc1}
 .au-card b.t{font-size:1.02rem}.au-card small{color:#33474a}
 .au-scad{border-radius:14px;padding:9px 12px;margin:6px 0;font-weight:700}
+.st-key-au_hub[data-testid='stVerticalBlock'],.st-key-au_hub [data-testid='stVerticalBlock']{display:grid !important;grid-template-columns:1fr 1fr;gap:9px !important;margin:8px 0 12px}
+.st-key-au_hub button{width:100% !important;min-height:62px !important;border-radius:18px !important;color:#fff !important;border:2px solid rgba(255,255,255,.55) !important;box-shadow:0 4px 0 rgba(0,0,0,.18),0 6px 14px rgba(0,0,0,.2) !important}
+.st-key-au_hub button p{color:#fff !important;font-weight:900 !important;font-size:.95rem !important;line-height:1.12 !important;text-shadow:0 1px 3px rgba(0,0,0,.5);margin:0}
+.st-key-au_h_doc button{background:linear-gradient(135deg,#42a5f5,#0d47a1) !important}.st-key-au_h_spie button{background:linear-gradient(135deg,#ffa726,#e65100) !important}
+.st-key-au_h_ric button{background:linear-gradient(135deg,#26c6da,#00838f) !important}.st-key-au_h_man button{background:linear-gradient(135deg,#7e57c2,#4527a0) !important}
+.st-key-au_h_soc button{background:linear-gradient(135deg,#ef5350,#b71c1c) !important}.st-key-au_h_tco button{background:linear-gradient(135deg,#66bb6a,#2e7d32) !important}
+.st-key-au_h_ric2 button{background:linear-gradient(135deg,#8d6e63,#4e342e) !important}
+.st-key-au_hub > div:nth-child(odd):last-child,.st-key-au_hub [data-testid='stVerticalBlock'] > div:nth-child(odd):last-child{grid-column:1 / -1}
 .au-v{background:#e8f5e9;border-left:6px solid #2e7d32;color:#1b5e20}.au-g{background:#fff8e1;border-left:6px solid #f9a825;color:#6d4c00}.au-r{background:#ffebee;border-left:6px solid #c62828;color:#7f1111}.au-n{background:#eceff1;border-left:6px solid #90a4ae;color:#37474f}
 </style>"""
 
