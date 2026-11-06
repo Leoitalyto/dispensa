@@ -167,6 +167,12 @@ def nav_pagine(corrente):
             nu_aggiorna_sessione()
         except Exception:
             pass
+    if "ls_banner" in globals() and st.session_state.get("_ls_giro") != st.session_state.get("_tabs_giro"):     # «🧹 Libera spazio»: dopo aver archiviato un file (una volta per ridisegno)
+        st.session_state["_ls_giro"] = st.session_state.get("_tabs_giro")
+        try:
+            ls_banner()
+        except Exception:
+            pass
     try:                                                              # la sezione in cui sei si scrive nell'indirizzo: se la pagina riparte, si torna qui
         if st.query_params.get("s") != corrente:
             st.query_params["s"] = corrente
@@ -280,6 +286,8 @@ def pn_impostazioni():
     with st.expander("⚙️ Aspetto dell'app: testi, radio e freccia «torna su»"):
         if "nu_ui_proprio" in globals():
             nu_ui_proprio()
+        if "ls_ui_impostazione" in globals():
+            ls_ui_impostazione()
         if "musica_attiva" in globals():
             m_on = st.checkbox("🎧 Mostra la radio di sottofondo (la linguetta sul bordo dello schermo)", value=musica_attiva(), key="pn_musica_scelta")
             if m_on != musica_attiva():

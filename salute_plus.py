@@ -1612,6 +1612,57 @@ def _sp_docsan_finestra(f, p, pid, utente, coda):
             st.rerun()
 
 
+def _sp_riclassifica(pid, did, nuovi, pid_a=None):
+    """Cambia categoria (tipo, specialità, prestazione) a un documento e, se serve, lo sposta nella cartella di un'altra persona."""
+    pid_a = pid_a or pid
+
+    def _fn(f_):
+        doc = None
+        for pr in f_.get("profili", []):
+            if pr["id"] == pid:
+                for d_ in pr.get("docsan", []):
+                    if d_.get("id") == did:
+                        doc = d_
+                if pid_a != pid and doc is not None:
+                    pr["docsan"] = [d_ for d_ in pr.get("docsan", []) if d_.get("id") != did]
+        if doc is None:
+            return
+        vecchio_auto = sp_titolo_doc(doc)
+        doc.update(nuovi)
+        if not doc.get("titolo") or doc.get("titolo") == vecchio_auto:
+            doc["titolo"] = sp_titolo_doc(doc)
+        if pid_a != pid:
+            for pr in f_.get("profili", []):
+                if pr["id"] == pid_a:
+                    pr["docsan"] = list(pr.get("docsan", [])) + [doc]
+    _fa_salva(_fn, "Salute: documento sanitario riclassificato")
+
+
+def _sp_scelta_categoria(chiave, d=None, con_persona=False, f=None, pid=None, solo=None):
+    """I campi per scegliere la categoria: tipo di documento, area medica, tipo di prestazione (e, se serve, di chi è). Ritorna i valori scelti.
+    solo = 'tipo' | 'specialita' per mostrarne uno solo (spostamento di un gruppo intero)."""
+    d = d or {}
+    out = {}
+    if solo in (None, "tipo"):
+        att = d.get("tipo") if d.get("tipo") in _SP_TIPI_DOC else "Altro"
+        out["tipo"] = st.selectbox("📂 Tipo di documento", _SP_TIPI_DOC, index=_SP_TIPI_DOC.index(att), format_func=lambda x: f"{_SP_ICONE_DOC.get(x, '')} {x}", key=f"{chiave}_tipo")
+    if solo in (None, "specialita"):
+        opz = [""] + list(CAT_AREE)
+        sp_att = d.get("specialita") or ""
+        sel = st.selectbox("🩺 Area medica (specialità)", opz, index=opz.index(sp_att) if sp_att in opz else 0, format_func=lambda x: "— nessuna —" if not x else f"{CAT_ICONE.get(x, '')} {x}", key=f"{chiave}_sp")
+        altra = st.text_input("Se non è nell'elenco, scrivila qui", value=sp_att if sp_att and sp_att not in opz else "", key=f"{chiave}_spa")
+        out["specialita"] = altra.strip() or sel
+    if solo is None:
+        tp_att = d.get("tipo_prestazione") or ""
+        opz_t = [""] + list(CAT_TIPI)
+        out["tipo_prestazione"] = st.selectbox("🧭 Tipo di prestazione", opz_t, index=opz_t.index(tp_att) if tp_att in opz_t else 0, format_func=lambda x: "— non so —" if not x else x, key=f"{chiave}_tp")
+    if con_persona and f is not None:
+        profili = _fa_profili(f)
+        pids = [x["id"] for x in profili]
+        out["_persona"] = st.selectbox("👤 Di chi è (cartella)", pids, index=pids.index(pid) if pid in pids else 0, format_func=lambda i: next(x["nome"] for x in profili if x["id"] == i), key=f"{chiave}_pers")
+    return out
+
+
 def _sp_riga_docsan(d, pid, f, p, vedi):
     """Un documento: scheda con i dati, e i tasti per vederlo e scaricarlo, correggerlo, inviarlo, eliminarlo."""
     prest = d.get("prestazione") or d.get("esame") or ""
@@ -1646,6 +1697,22 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
                      ("Conclusioni", d.get("conclusioni")), ("Controllo", d.get("controllo_indicato")), ("Note", d.get("note"))], [ref] if ref.get("id") else [])
     if e2.button("🗑️ Elimina", key=f"sp_dsd_{d['id']}", width="stretch"):
         _sp_dialogo_togli_docsan(pid, d["id"], d.get("titolo"))
+    aperta_cat = st.session_state.get("sp_ds_cat") == d["id"]
+    if st.button("🙈 Chiudi" if aperta_cat else "🏷️ Cambia categoria (o cartella)", key=f"sp_dscat_{d['id']}", width="stretch"):
+        st.session_state["sp_ds_cat"] = None if aperta_cat else d["id"]
+        st.rerun()
+    if aperta_cat:
+        st.caption("Scegli dove deve stare questo documento. Non perdi niente: cambia solo la categoria.")
+        with st.form(f"sp_ds_catf_{d['id']}", border=False):
+            nuovi = _sp_scelta_categoria(f"sp_ds_cat_{d['id']}", d, con_persona=len(_fa_profili(f)) > 1, f=f, pid=pid)
+            ok_c = st.form_submit_button("✅ Sposta", type="primary", width="stretch")
+        if ok_c:
+            dest = nuovi.pop("_persona", pid)
+            _sp_riclassifica(pid, d["id"], nuovi, dest)
+            st.session_state.pop("sp_ds_cat", None)
+            nome_dest = next((x["nome"] for x in _fa_profili(f) if x["id"] == dest), "")
+            st.session_state["fa_msg"] = "✅ Spostato" + (f" nella cartella di {nome_dest}." if dest != pid else ": nuova categoria salvata.")
+            st.rerun()
     if st.session_state.get("sp_ds_cor") == d["id"]:
         ok, val = _sp_form_docsan("sp_ds_cor_" + d["id"], f, pid, v=d, con_profilo=False)
         if ok:
@@ -1724,6 +1791,26 @@ def sp_modulo_docsan(pid):
     ordine = sorted(gruppi, key=lambda k: (k.startswith("Senza"), -int(k) if k.isdigit() else 0, k))
     for k in ordine:
         with st.expander(f"{etichetta(k)} · {len(gruppi[k])}"):
+            if not gruppo.startswith("📅"):
+                modo = "tipo" if gruppo.startswith("📂") else "specialita"
+                with st.popover("🏷️ Sposta tutti i documenti di questa linguetta"):
+                    st.caption(f"Sposta **tutti i {len(gruppi[k])}** documenti di «{k}» in un'altra " + ("categoria di documento." if modo == "tipo" else "area medica."))
+                    nuovi_g = _sp_scelta_categoria(f"sp_ds_bulk_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", None, solo=modo)
+                    if st.button(f"✅ Sposta {"il documento" if len(gruppi[k]) == 1 else "i " + str(len(gruppi[k])) + " documenti"}", key=f"sp_ds_bulkb_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", type="primary", width="stretch"):
+                        ids = [x["id"] for x in gruppi[k]]
+
+                        def _bulk(f_, ids=ids, nuovi=nuovi_g):
+                            for pr in f_.get("profili", []):
+                                if pr["id"] == pid:
+                                    for d_ in pr.get("docsan", []):
+                                        if d_.get("id") in ids:
+                                            vecchio_auto = sp_titolo_doc(d_)
+                                            d_.update(nuovi)
+                                            if not d_.get("titolo") or d_.get("titolo") == vecchio_auto:
+                                                d_["titolo"] = sp_titolo_doc(d_)
+                        _fa_salva(_bulk, "Salute: documenti sanitari riclassificati")
+                        st.session_state["fa_msg"] = f"✅ Spostati {len(ids)} documenti."
+                        st.rerun()
             for d in sorted(gruppi[k], key=lambda x: x.get("data", ""), reverse=True):
                 _sp_riga_docsan(d, pid, f, p, vedi)
 

@@ -10,6 +10,27 @@ Caricato da app_dispensa.py dopo pagine_nav.py."""
 import streamlit as st
 
 
+def nu_ultimo_accesso(iso):
+    """«mai», «oggi alle 09:31», «ieri alle 18:02» oppure «06/11/2026 alle 09:31» (dall'ora salvata, tipo 2026-11-06T09:31)."""
+    from datetime import date, datetime, timedelta
+    if not iso:
+        return "mai"
+    try:
+        dt = datetime.fromisoformat(str(iso)[:16])
+    except ValueError:
+        return str(iso).replace("T", " ")
+    try:
+        oggi_ = adesso().date()
+    except Exception:
+        oggi_ = date.today()
+    ora = dt.strftime("%H:%M")
+    if dt.date() == oggi_:
+        return f"oggi alle {ora}"
+    if dt.date() == oggi_ - timedelta(days=1):
+        return f"ieri alle {ora}"
+    return f"{dt.strftime('%d/%m/%Y')} alle {ora}"
+
+
 def nu_valida(nuovo, elenco, uid):
     """(ok, messaggio) per un nome nuovo."""
     n = (nuovo or "").strip()
