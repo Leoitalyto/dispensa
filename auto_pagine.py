@@ -574,7 +574,7 @@ def _extra_sinistro(v, s):
 
 
 def tab_emergenza(v):
-    voci = ["🚦 Spie del cruscotto", "📷 Diagnosi visiva (foto)", "⚡ Procedure di emergenza", "📝 Sinistro (CAI)"]
+    voci = ["🚦 Spie del cruscotto", "📷 Diagnosi visiva (foto)", "🚨 Soccorso ed emergenza", "📝 Sinistro (CAI)"]
     sc = _au_scegli("Emergenza", voci, f"au_em_{v['id']}")
     if sc == voci[0]:
         ae_spie(v)
@@ -584,7 +584,10 @@ def tab_emergenza(v):
         else:
             st.info("La diagnosi visiva non è disponibile.")
     elif sc == voci[2]:
-        ae_procedure(v)
+        if "as_pagina" in globals():
+            as_pagina(v)
+        else:
+            ae_procedure(v)
     else:
         st.info("🚨 In caso di incidente: sicurezza prima di tutto. Se ci sono feriti chiama il **112**.")
         ae_cai_guida()
@@ -688,7 +691,7 @@ def garage(v):
     elif t[3]:
         _au_vai(_AU_SEZ[2], {f"au_man_{vid}": "🔧 Interventi e tagliandi"})
     elif t[4]:
-        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "⚡ Procedure di emergenza"})
+        _au_vai(_AU_SEZ[5], {f"au_em_{vid}": "🚨 Soccorso ed emergenza"})
     elif t[5]:
         _au_vai(_AU_SEZ[3], {f"au_rif_{vid}": "📊 Consumi e spese totali"})
     elif t[6]:
