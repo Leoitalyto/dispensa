@@ -414,9 +414,10 @@ def lb_campi_fronte(testi):
         metti("consumo", " · ".join(f"{k} {v[0]}" for k, v in cons.items()) + " l/100 km", min((v[1] for v in cons.values()), key=["bassa", "media", "alta"].index))
     gomme = Counter()
     for x in _raccogli(T, r"\b(\d{3}\s?/\s?\d{2}\s*R\s?\d{2}\s*\d{2,3}[A-Z])\b"):
-        gomme[re.sub(r"\s", "", x).upper()] += 1
+        m_ = re.match(r"(\d{3})\s?/\s?(\d{2})\s*R\s?(\d{2})\s*(\d{2,3}[A-Z])", x.upper())
+        gomme[f"{m_.group(1)}/{m_.group(2)} R{m_.group(3)} {m_.group(4)}"] += 1                 # es. «155/80 R13 79T»
     gomme = [g_ for g_, n_ in gomme.most_common(8) if n_ >= 1]
-    metti("pneumatici", ", ".join(gomme), "media" if gomme else "")
+    metti("pneumatici_omologati", ", ".join(gomme), "media" if gomme else "")
     n_c = [re.sub(r"\s", "", x) for x in _raccogli(T, r"CIRCOLAZIONE\s+([A-Z]{2}\s?\d{6,8})\b")]
     v, n, tot = _piu_votato(n_c)
     metti("numero_carta", (v[:2] + " " + v[2:]) if v else "", _aff(n, tot))
@@ -685,8 +686,8 @@ def lb_unisci(ocr, ia):
     if cons and "consumo" not in campi:
         metti("consumo", " · ".join(cons) + " l/100 km", "media")
     gomme = ia.get("pneumatici")
-    if isinstance(gomme, list) and gomme and "pneumatici" not in campi:
-        metti("pneumatici", ", ".join(str(x) for x in gomme[:8]), "media")
+    if isinstance(gomme, list) and gomme and "pneumatici_omologati" not in campi:
+        metti("pneumatici_omologati", ", ".join(str(x) for x in gomme[:8]), "media")
     rev = list(ocr.get("revisioni") or [])
     for r in (ia.get("revisioni") or []):
         try:

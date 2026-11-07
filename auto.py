@@ -156,6 +156,37 @@ def _au_etichetta(v):
 # ---------------------------------------------------------------------------------------------------------------------
 # i dati
 # ---------------------------------------------------------------------------------------------------------------------
+_AU_ELENCHI = ("documenti", "interventi", "pneumatici", "rifornimenti", "spese", "soh", "valutazioni", "cavi", "tessere", "sinistri", "usura", "viaggi", "diagnosi", "letture", "consulti")
+
+
+def au_normalizza_veicolo(v):
+    """Ripara i dati di un veicolo (si applica a ogni lettura e a ogni salvataggio):
+    • «pneumatici» deve essere l'ELENCO delle gomme montate: un testo scritto lì per errore (per esempio le pressioni) va nel campo giusto, e l'elenco torna vuoto;
+    • lunghezza e larghezza in metri lette come migliaia (1597 → 1.597);
+    • ogni elenco (documenti, interventi, scadenze…) deve essere un elenco."""
+    if not isinstance(v, dict):
+        return v
+    for k in _AU_ELENCHI:
+        x = v.get(k)
+        if x is None or isinstance(x, list):
+            continue
+        testo = str(x).strip()
+        v[k] = []
+        if k == "pneumatici" and testo:
+            if re.search(r"\bbar\b|\bpsi\b", testo.lower()) and not v.get("pressione_pneumatici"):
+                v["pressione_pneumatici"] = testo
+            elif not v.get("pneumatici_omologati"):
+                v["pneumatici_omologati"] = testo
+    for k in ("lunghezza_m", "larghezza_m"):
+        try:
+            n = float(str(v.get(k, "")).replace(",", "."))
+        except ValueError:
+            continue
+        if n >= 100:
+            v[k] = f"{n / 1000:g}"
+    return v
+
+
 def _au_dati():
     try:
         d = carica_dati(crea_archivio(), st.session_state["percorso"])
@@ -163,6 +194,8 @@ def _au_dati():
         return {"veicoli": []}
     a = dict(d.get("auto") or {})
     a.setdefault("veicoli", [])
+    for v in a["veicoli"]:
+        au_normalizza_veicolo(v)
     return a
 
 
@@ -170,6 +203,8 @@ def _au_salva(fn, msg):
     def _m(d):
         a = d.setdefault("auto", {})
         a.setdefault("veicoli", [])
+        for v in a["veicoli"]:
+            au_normalizza_veicolo(v)                                       # a ogni salvataggio i dati si riparano da soli
         fn(a)
     salva(_m, msg)
 
@@ -502,7 +537,7 @@ def au_scadenze(v, oggi_=None):
         if km_t and km_a:
             r = km_t - km_a
             out.append({"chiave": "usura_km_" + us["id"], "etichetta": f"🧩 {us.get('parte', 'Parte')} (km)", "data": None, "giorni": None, "km_restanti": r, "stato": "r" if r < 0 else "g" if r <= 1000 else "v", "avvisa": True})
-    for pn in v.get("pneumatici", []):
+    for pn in [x_ for x_ in (v.get("pneumatici") if isinstance(v.get("pneumatici"), list) else []) if isinstance(x_, dict)]:
         d_ = _au_d(pn.get("cambio_entro"))
         if d_ and pn.get("stato") != "In deposito":
             g = (d_ - oggi_).days

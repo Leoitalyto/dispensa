@@ -22,8 +22,8 @@ _SPEC_VEICOLO = [("tipo_veicolo", "Che mezzo è", "s", _AU_TIPI), ("nome", "Sopr
                  ("ricarica_ac_kw", "⚡ Potenza massima di ricarica AC (kW)", "n", None), ("ricarica_dc_kw", "⚡ Potenza massima di ricarica DC (kW)", "n", None), ("connettore", "🔌 Connettore di bordo", "s", _AU_CONNETTORI),
                  ("costruttore", "Costruttore", "t", None), ("codice_motore", "Codice motore (P.5)", "t", None), ("omologazione", "Omologazione (K)", "t", None), ("numero_carta", "Numero della carta di circolazione", "t", None),
                  ("categoria", "Categoria (J)", "t", None), ("uso", "Destinazione e uso (J.1)", "t", None), ("carrozzeria", "Carrozzeria (J.2)", "t", None), ("cambio", "Tipo di cambio", "t", None),
-                 ("lunghezza_m", "Lunghezza (m)", "n", None), ("larghezza_m", "Larghezza (m)", "n", None), ("co2", "Emissioni CO₂ (g/km)", "n", None), ("consumo", "Consumi dichiarati", "t", None),
-                 ("pneumatici", "Pneumatici omologati", "t", None), ("immatricolazione_attuale", "Data di immatricolazione attuale (I)", "d", None), ("intestatario", "Intestatario", "t", None),
+                 ("lunghezza_m", "Lunghezza (m)", "t", None), ("larghezza_m", "Larghezza (m)", "t", None), ("co2", "Emissioni CO₂ (g/km)", "n", None), ("consumo", "Consumi dichiarati", "t", None),
+                 ("pneumatici_omologati", "Pneumatici omologati (misure)", "t", None), ("immatricolazione_attuale", "Data di immatricolazione attuale (I)", "d", None), ("intestatario", "Intestatario", "t", None),
                  ("note", "Note", "a", None)]
 _SPEC_DOC = [("tipo", "Che documento è", "s", _AU_DOC_TIPI), ("titolo", "Titolo", "t", None), ("data", "Data del documento", "d", None), ("scadenza", "Scadenza (se c'è)", "d", None), ("importo", "Importo (€, se c'è)", "n", None), ("note", "Note", "a", None)]
 _SPEC_INT = [("categoria", "Categoria", "s", _AU_INT_CAT), ("data", "Data", "d", None), ("km", "Chilometri", "n", None), ("costo", "Costo (€)", "n", None), ("officina", "Officina", "t", None),
@@ -362,7 +362,7 @@ def tab_scheda(v):
             ("Autonomia dichiarata", (v["autonomia_km"] + " km") if v.get("autonomia_km") else ""), ("Potenza", (v["potenza_w"] + " W") if v.get("potenza_w") else ""),
             ("Costruttore", v.get("costruttore")), ("Codice motore", v.get("codice_motore")), ("Categoria", v.get("categoria")), ("Destinazione e uso", v.get("uso")), ("Carrozzeria", v.get("carrozzeria")), ("Cambio", v.get("cambio")),
             ("Lunghezza", (str(v["lunghezza_m"]) + " m") if v.get("lunghezza_m") else ""), ("Larghezza", (str(v["larghezza_m"]) + " m") if v.get("larghezza_m") else ""), ("Emissioni CO₂", (str(v["co2"]) + " g/km") if v.get("co2") else ""),
-            ("Consumi dichiarati", v.get("consumo")), ("Pneumatici omologati", v.get("pneumatici")), ("Omologazione", v.get("omologazione")), ("Numero carta di circolazione", v.get("numero_carta")),
+            ("Consumi dichiarati", v.get("consumo")), ("Pneumatici omologati", v.get("pneumatici_omologati")), ("Omologazione", v.get("omologazione")), ("Numero carta di circolazione", v.get("numero_carta")),
             ("Immatricolazione attuale", _au_it(v.get("immatricolazione_attuale")) if v.get("immatricolazione_attuale") else ""), ("Intestatario", v.get("intestatario"))]
     if _au_ha_batteria(v):
         dett += [("Batteria (nominale / utile)", " / ".join(x for x in ((v.get("batteria_nominale_kwh") or "") and v["batteria_nominale_kwh"] + " kWh", (v.get("batteria_utile_kwh") or "") and v["batteria_utile_kwh"] + " kWh") if x)),
