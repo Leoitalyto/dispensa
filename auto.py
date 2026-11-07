@@ -55,6 +55,7 @@ _AU_CSS = """<style>
 .st-key-au_h_soc button{background:linear-gradient(135deg,#ef5350,#b71c1c) !important}.st-key-au_h_tco button{background:linear-gradient(135deg,#66bb6a,#2e7d32) !important}
 .st-key-au_h_ric2 button{background:linear-gradient(135deg,#8d6e63,#4e342e) !important}
 .st-key-au_h_pat button{background:linear-gradient(135deg,#5c6bc0,#283593) !important}
+.st-key-au_h_diag button{background:linear-gradient(135deg,#00897b,#004d40) !important}
 .st-key-au_hub > div:nth-child(odd):last-child,.st-key-au_hub [data-testid='stVerticalBlock'] > div:nth-child(odd):last-child{grid-column:1 / -1}
 .au-v{background:#e8f5e9;border-left:6px solid #2e7d32;color:#1b5e20}.au-g{background:#fff8e1;border-left:6px solid #f9a825;color:#6d4c00}.au-r{background:#ffebee;border-left:6px solid #c62828;color:#7f1111}.au-n{background:#eceff1;border-left:6px solid #90a4ae;color:#37474f}
 </style>"""

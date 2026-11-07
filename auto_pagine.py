@@ -687,7 +687,7 @@ def tab_emergenza(v):
 # ---------------------------------------------------------------------------------------------------------------------
 # il GARAGE: la schermata iniziale (foto, stato, scadenze in evidenza, accessi rapidi, ultima posizione)
 # ---------------------------------------------------------------------------------------------------------------------
-_AU_SEZ = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza", "👤 Patente e multe"]
+_AU_SEZ = ["🪪 Scheda e documenti", "⏰ Scadenze", "🔧 Manutenzione", "⛽ Rifornimenti e spese", "🧰 Ricambi e valore", "🆘 Emergenza", "👤 Patente e multe", "🩺 Diagnostica veicoli"]
 
 
 def _au_vai(sezione, extra=None, vid=None):
@@ -769,7 +769,7 @@ def garage(v):
         t = [st.button("📖 Manuali e documenti", key="au_h_doc", width="stretch"), st.button("📷 Diagnosi spie (foto)", key="au_h_spie", width="stretch"),
              st.button(ric, key="au_h_ric", width="stretch"), st.button("🔧 Storico manutenzione", key="au_h_man", width="stretch"),
              st.button("🚨 Soccorso ed emergenza", key="au_h_soc", width="stretch"), st.button("📊 Spese e consumi (TCO)", key="au_h_tco", width="stretch"),
-             st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch"), st.button("🪪 Patente e multe", key="au_h_pat", width="stretch")]
+             st.button("🧰 Ricambi e valore", key="au_h_ric2", width="stretch"), st.button("🪪 Patente e multe", key="au_h_pat", width="stretch"), st.button("🩺 Diagnostica veicoli", key="au_h_diag", width="stretch")]
     if t[0]:
         _au_vai(_AU_SEZ[0])
     elif t[1]:
@@ -786,6 +786,9 @@ def garage(v):
         _au_vai(_AU_SEZ[4])
     elif t[7]:
         _au_vai(_AU_SEZ[6])
+    elif t[8]:
+        st.session_state.pop("dg_vista", None)
+        _au_vai(_AU_SEZ[7])
     st.caption("La diagnosi delle spie da una **foto** usa l'intelligenza artificiale (si attiva con la chiave nei Secrets); senza, la foto si confronta col catalogo delle spie.")
     # ---- ultima posizione
     pos = v.get("posizione") or {}
@@ -896,7 +899,7 @@ def schermata_auto():
         st.rerun()
     voci = _AU_SEZ
     scelta = _au_scegli("Che cosa vuoi vedere?", voci, "au_sezione")
-    {voci[0]: tab_scheda, voci[1]: tab_scadenze, voci[2]: tab_manutenzione, voci[3]: tab_rifornimenti, voci[4]: tab_ricambi, voci[5]: tab_emergenza, voci[6]: tab_conducente}[scelta](v)
+    {voci[0]: tab_scheda, voci[1]: tab_scadenze, voci[2]: tab_manutenzione, voci[3]: tab_rifornimenti, voci[4]: tab_ricambi, voci[5]: tab_emergenza, voci[6]: tab_conducente, voci[7]: globals().get("tab_diagnostica") or (lambda _v: st.info("La diagnostica non è caricata: carica i file diagnostica*.py."))}[scelta](v)
 
 
 # ---- lo smistamento: «auto» va alla sua pagina (con il controllo dei permessi), il resto come prima
@@ -917,7 +920,7 @@ if "_NOMI_SEZIONI" in globals():
     _GUIDE.setdefault("auto", [
         ("🚗 Cos'è la sezione Auto",
          """Qui tieni **tutto quello che riguarda i tuoi mezzi**: auto, moto, ciclomotori, **monopattini ed e-bike**, furgoni, **camion e autobus**, camper, mezzi agricoli (benzina, diesel, GPL, metano, ibridi ed elettrici). Si apre dal bottone **🚗 Auto**, **prima di Utilità**.
-In alto scegli il mezzo (se ne hai più di uno) e poi cosa vedere: **🪪 Scheda e documenti**, **⏰ Scadenze**, **🔧 Manutenzione** (con le **parti di usura**), **⛽ Rifornimenti e spese** (con **viaggi e rimborsi**), **🧰 Ricambi e valore**, **🆘 Emergenza**, **👤 Patente e multe**.""", "auto moto scooter monopattino bicicletta e-bike camion tir autobus furgone camper veicolo targa libretto mezzo"),
+In alto scegli il mezzo (se ne hai più di uno) e poi cosa vedere: **🪪 Scheda e documenti**, **⏰ Scadenze**, **🔧 Manutenzione** (con le **parti di usura**), **⛽ Rifornimenti e spese** (con **viaggi e rimborsi**), **🧰 Ricambi e valore**, **🆘 Emergenza**, **👤 Patente e multe**, **🩺 Diagnostica veicoli** (spie da foto, archivio in 14 categorie, codici di errore, dongle Bluetooth, storico guasti e assistente AI).""", "auto moto scooter monopattino bicicletta e-bike camion tir autobus furgone camper veicolo targa libretto mezzo"),
         ("➕ Aggiungere un veicolo",
          """1. Apri **🚗 Auto** → **➕ Aggiungi un mezzo**.
 2. Tocca **📷 Carica la Carta di Circolazione** e scegli il PDF o la foto con il **pulsante arancione**. Lo leggo e ti propongo **targa, marca, modello, anno, alimentazione, potenza, classe, telaio**.

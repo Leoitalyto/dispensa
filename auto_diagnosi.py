@@ -604,6 +604,11 @@ def _ad_storico(v):
         titolo = f"Diagnosi del {_au_it(d_.get('data'))}: " + ", ".join(s["nome"] for s in d_.get("spie", [])[:2])
         st.markdown(f"<div class='au-card'><b class='t'>🔍 {_h_ap.escape(titolo)}</b><br><small>{_h_ap.escape(d_.get('mezzo', ''))} · affidabilità {_h_ap.escape(d_.get('confidenza', ''))}</small></div>", unsafe_allow_html=True)
         _au_f_allegati(v["id"], "diagnosi", d_)
+        extra_d = [x for x in (("Stato: " + d_["stato"]) if d_.get("stato") else "", ("Intervento effettuato: " + d_["intervento"]) if d_.get("intervento") else "", ("Annotazioni: " + d_["note"]) if d_.get("note") else "") if x]
+        if extra_d:
+            st.caption(" · ".join(extra_d))
+        if "_SPEC_STORICO" in globals() and st.button("✏️ Stato, intervento e note", key=f"ad_cor_{d_['id']}", width="stretch"):
+            _au_dialogo_form(v["id"], "diagnosi", "Stato, intervento e note", _SPEC_STORICO, d_, False)
         b1, b2 = st.columns(2, gap="small")
         with b1:
             _fa_inv_voce(f"adv_{d_['id']}", "📤 Invia", titolo, [("Report", d_.get("sintesi", ""))], list(d_.get("files") or []))
@@ -617,6 +622,7 @@ def ad_pagina(v):
     st.markdown(_AD_CSS, unsafe_allow_html=True)
     top1, top2 = st.columns([1, 3], gap="small")
     if top1.button("← Chiudi", key="ad_chiudi", width="stretch"):
+        st.session_state.pop("dg_vista", None)                              # se si arriva da «Diagnostica veicoli», si torna ai sei pulsanti
         if vid:
             st.session_state[f"au_em_{vid}"] = "🚦 Spie del cruscotto"
         st.session_state.pop("ad_libera", None)
