@@ -57,7 +57,7 @@ AD_PROVIDER = {
     "anthropic": {"nome": "Claude (Anthropic)", "secret": "ANTHROPIC_API_KEY", "modello": AD_MODELLO, "chiave_link": "https://console.anthropic.com/", "gratis": "a pagamento (si paga a consumo)"},
     "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-2.0-flash", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
     "openai": {"nome": "ChatGPT (OpenAI)", "secret": "OPENAI_API_KEY", "modello": "gpt-4o-mini", "url": "https://api.openai.com/v1/chat/completions", "chiave_link": "https://platform.openai.com/api-keys", "gratis": "a pagamento (si paga a consumo)"},
-    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemma-4-31b-it:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
+    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemma-4-31b-it:free, nvidia/nemotron-nano-12b-v2-vl:free, google/gemma-3-27b-it:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
                    "gratis": "gratuita solo con i modelli che finiscono con «:free» (limiti: 20 richieste al minuto e 50 al giorno); gli altri modelli si pagano con i crediti"},
     "altra": {"nome": "Un'altra IA (compatibile con OpenAI)", "secret": "ALTRA_IA_KEY", "modello": "", "url": "", "chiave_link": "", "gratis": "dipende dal servizio"},
 }
@@ -219,7 +219,20 @@ def _ad_parse(testo):
 
 
 def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
-    """Una richiesta a UN fornitore. turni = [("u"|"a", testo), ...]; la foto va col primo turno dell'utente. Ritorna (testo, None) oppure (None, errore) con errore in: chiave, limite, rete, rifiuto, formato."""
+    """Una richiesta a UN fornitore. turni = [("u"|"a", testo), ...]; la foto va col primo turno dell'utente. Ritorna (testo, None) oppure (None, errore) con errore in: chiave, limite, rete, rifiuto, formato.
+    OpenRouter con più modelli separati da virgola: prova il primo e, se è occupato, sparito o non va, il successivo (i modelli gratuiti cambiano spesso)."""
+    elenco_m = [m_.strip() for m_ in str(cfg.get("modello", "")).split(",") if m_.strip()]
+    if prov == "openrouter" and len(elenco_m) > 1:
+        ultimo = "rete"
+        for m_ in elenco_m[:4]:
+            testo_, err_ = _ad_invia(prov, dict(cfg, modello=m_), system, turni, jpeg, max_tokens, json_out)
+            if not err_:
+                st.session_state["_ad_modello_usato"] = m_
+                return testo_, None
+            ultimo = err_
+            if err_ in ("chiave", "pagamento"):                   # inutile provare gli altri
+                break
+        return None, ultimo
     import requests
     img = base64.b64encode(jpeg).decode() if jpeg else ""
     try:
@@ -255,6 +268,12 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
             else:
                 corpo_oa["model"] = elenco_m[0] if elenco_m else cfg["modello"]
             r = requests.post(cfg["url"], timeout=(8, 60), headers={"Authorization": "Bearer " + cfg["key"], "content-type": "application/json"}, json=corpo_oa)
+        if r.status_code != 200:
+            try:
+                dett = (r.json().get("error") or {}).get("message") or str(r.text)[:200]
+            except Exception:
+                dett = str(getattr(r, "text", ""))[:200]
+            st.session_state["_ad_dettaglio"] = f"{AD_PROVIDER.get(prov, {}).get('nome', prov)} · modello «{cfg.get('modello', '')}» · risposta {r.status_code}: {str(dett)[:220]}"
         if r.status_code in (401, 403):
             return None, "chiave"
         if r.status_code == 400 and prov == "gemini" and "API key" in str(r.text if hasattr(r, "text") else r.json())[:400]:
@@ -293,7 +312,9 @@ def ad_analizza(jpeg, mezzo):
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
         return {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
-        return {"errore": "limite"}
+        st.session_state["_ad_dettaglio"] = "Tetto dell'app raggiunto (DIAGNOSI_MAX_GIORNO al giorno o 15 all'ora per sessione): la richiesta non è nemmeno partita."
+        return {"errore": "limite_app"}
+    st.session_state.pop("_ad_dettaglio", None)
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto.")], jpeg, 1500, json_out=True)
     if err:
         return {"errore": err}
@@ -724,9 +745,11 @@ def ad_pagina(v):
         ris = st.session_state["ad_ris"]
         err = ris.get("errore")
         if err:
-            msg = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "limite": "Hai raggiunto il limite di analisi (per ora o per oggi). Riprova più tardi.",
+            msg = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "limite": "Il servizio gratuito è occupato o ha finito le richieste (20 al minuto, 50 al giorno). Aspetta un minuto e tocca «Riprova»: se si ripete, domani si azzera.", "limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.",
                    "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "rifiuto": "Il servizio non ha potuto analizzare questa foto.", "formato": "La risposta non era leggibile. Riprova con una foto più nitida.",
                    "pagamento": "Questo modello è a pagamento e non ci sono crediti: scegli un modello che finisce con «:free».", "modello": "Questo modello non esiste più o non legge le immagini: cambia il nome del modello (scegline uno gratuito che accetti le immagini)."}.get(err, "Qualcosa non ha funzionato.")
+            if (st.session_state.get("sess") or {}).get("admin") and st.session_state.get("_ad_dettaglio"):
+                st.caption("🔎 **Solo per te (amministratore):** " + st.session_state["_ad_dettaglio"])
             st.warning(msg + " Intanto confronta la foto con il catalogo qui sotto.")
             if st.button("🔄 Riprova", key="ad_riprova", width="stretch"):
                 st.session_state.pop("ad_ris", None)
