@@ -62,22 +62,34 @@ def _bd_tok(t):
     return {w for w in re.findall(r"[a-z0-9]{3,}", _bd_norm(t)) if w not in _BD_STOP}
 
 
+def bd_auto():
+    """Modalità SENZA verifica (sconsigliata): con il Secret BASE_SPIE_AUTO = "si" le spie riconosciute dall'IA entrano da sole nella base, come prima. Di norma è spenta: serve la verifica dell'amministratore."""
+    try:
+        return str(st.secrets.get("BASE_SPIE_AUTO", "no")).strip().lower() in ("si", "sì", "yes", "true", "1")
+    except Exception:
+        return False
+
+
 def bd_scope(v=None):
     """Il mezzo per cui si cerca: il modello scritto a mano (facoltativo) oppure quello scelto. {tipo, marca, modello, anno} (marca e modello in minuscolo)."""
     marca = str(st.session_state.get("mz_marca", "") or "").strip()
     modello = str(st.session_state.get("mz_modello", "") or "").strip()
     anno = str(st.session_state.get("mz_anno", "") or "").strip()
-    tipo = (v or {}).get("tipo_veicolo") or ""
-    if not (marca or modello) and v:
-        marca, modello, anno = (v.get("marca") or ""), (v.get("modello") or ""), (v.get("anno") or "")
-    if not tipo:
-        sel = st.session_state.get("ad_mezzo")
-        tipo = sel if sel and sel != "Il veicolo scelto" else ""
+    sel = st.session_state.get("ad_mezzo")
+    scelto_a_mano = bool(sel) and sel != "Il veicolo scelto"                 # l'utente ha scelto «Camion / TIR» (o altro): vale QUELLO, non il veicolo registrato
+    if scelto_a_mano:
+        tipo = sel                                                          # marca e modello solo se scritti a mano nei campi facoltativi
+    else:
+        tipo = (v or {}).get("tipo_veicolo") or ""
+        if not (marca or modello) and v:
+            marca, modello, anno = (v.get("marca") or ""), (v.get("modello") or ""), (v.get("anno") or "")
     return {"tipo": tipo, "marca": _bd_norm(marca).strip(), "modello": _bd_norm(modello).strip(), "anno": anno}
 
 
 def bd_scope_desc(sc, v=None):
-    nome = " ".join(x for x in ((st.session_state.get("mz_marca") or (v or {}).get("marca") or sc.get("marca") or "").strip(), (st.session_state.get("mz_modello") or (v or {}).get("modello") or sc.get("modello") or "").strip(), sc.get("anno") or "") if x)
+    sel = st.session_state.get("ad_mezzo")
+    uso_v = None if (sel and sel != "Il veicolo scelto") else v                 # se hai scelto un tipo di mezzo a mano, non si usano i dati del veicolo registrato
+    nome = " ".join(x for x in ((st.session_state.get("mz_marca") or (uso_v or {}).get("marca") or sc.get("marca") or "").strip(), (st.session_state.get("mz_modello") or (uso_v or {}).get("modello") or sc.get("modello") or "").strip(), sc.get("anno") or "") if x)
     return (nome + (f" ({sc['tipo']})" if sc.get("tipo") else "")).strip() or sc.get("tipo") or "mezzo non specificato"
 
 
@@ -314,6 +326,8 @@ def bd_mostra_abbinamento(nome, colore=None, chiave="x"):
 
 def bd_checkbox_contribuisci():
     """La casella «Contribuisci…»: una sola volta per ridisegno (la usano sia la diagnosi sia la base)."""
+    if not bd_auto():
+        return                                                              # di norma le spie NON entrano da sole nella base: si propongono e le verifica l'amministratore (auto_proposte.py)
     giro = st.session_state.get("_tabs_giro")
     if st.session_state.get("_bd_cb_giro") == giro and giro is not None:
         return
@@ -340,8 +354,8 @@ def _bd_form_modello_vero():
 
 
 def _bd_form_aggiungi(scope, v):
-    with st.expander("➕ Aggiungi una spia o un guasto alla base (verificato da te)"):
-        st.caption("Hai trovato la risposta online o nel manuale? Scrivila qui: entra nella base e aiuta gli altri. Resta «da verificare» finché non la confermano.")
+    with st.expander("➕ Proponi una spia o un guasto alla base (la verifica l'amministratore)" if not _bd_admin() else "➕ Aggiungi una spia o un guasto alla base"):
+        st.caption("Hai trovato la risposta online o nel manuale? Scrivila qui. 🔒 **Non entra subito:** il salvataggio avviene **SOLO dopo la verifica dell'amministratore**." if not _bd_admin() else "Sei l'amministratore: la voce entra subito nella base, già verificata.")
         with st.form("bd_nuova", border=False, clear_on_submit=True):
             nome = st.text_input("Nome della spia o del guasto", key="bd_n_nome", placeholder="es. Spia pressione aria freni")
             c1, c2 = st.columns(2, gap="small")
@@ -352,8 +366,9 @@ def _bd_form_aggiungi(scope, v):
             azioni = st.text_area("Cosa fare (un passo per riga)", key="bd_n_azi", height=90)
             cause = st.text_area("Possibili cause (una per riga)", key="bd_n_cau", height=70)
             fonte = st.text_input("Dove l'hai verificato (sito, manuale, officina)", key="bd_n_fon", placeholder="es. manuale pag. 142, sito del costruttore")
+            tipo_m = st.selectbox("🚚 Per quale mezzo? (obbligatorio)", [""] + (list(_AU_TIPI) if "_AU_TIPI" in globals() else ["Auto", "Moto", "Camion / TIR"]), index=([""] + (list(_AU_TIPI) if "_AU_TIPI" in globals() else ["Auto", "Moto", "Camion / TIR"])).index(scope.get("tipo")) if scope.get("tipo") in (list(_AU_TIPI) if "_AU_TIPI" in globals() else []) else 0, format_func=lambda x: x or "— scegli —", key="bd_n_tipo")
             solo_mod = st.checkbox("Vale solo per questo modello" + (f" ({bd_scope_desc(scope, v)})" if (scope.get("marca") or scope.get("modello")) else " (scrivi prima il modello qui sopra)"), value=False, key="bd_n_mod")
-            ok = st.form_submit_button("💾 Aggiungi alla base", type="primary", width="stretch")
+            ok = st.form_submit_button("📤 Invia all'amministratore" if not _bd_admin() else "💾 Aggiungi alla base", type="primary", width="stretch")
         if ok:
             if len(nome.strip()) < 3:
                 st.error("Scrivi il nome della spia o del guasto.")
@@ -363,12 +378,16 @@ def _bd_form_aggiungi(scope, v):
                 sp = {"nome": nome.strip(), "colore": colore, "urgenza": urg, "aspetto": aspetto.strip(), "significato": sign.strip(),
                       "azioni": [x.strip() for x in azioni.splitlines() if x.strip()], "cause": [x.strip() for x in cause.splitlines() if x.strip()]}
                 sc = dict(scope) if solo_mod else {"tipo": scope.get("tipo", ""), "marca": "", "modello": "", "anno": ""}
-                _id, nuova = bd_registra(sp, sc, "Aggiunta da un utente", fonte.strip())
-                if _id:
-                    st.session_state["messaggio"] = "✅ Aggiunta alla base condivisa." if nuova else "✅ C'era già: ho contato un uso in più e aggiunto la fonte."
-                    st.rerun()
+                sc["tipo"] = tipo_m or sc.get("tipo", "")
+                if "pr_invia" not in globals():
+                    st.error("Il modulo delle proposte non è caricato: carica auto_proposte.py.")
                 else:
-                    st.error("Non sono riuscito a salvare nella base. Riprova fra poco.")
+                    ok_, msg_ = pr_invia(sp, sc, "manuale", None, ("Fonte: " + fonte.strip()) if fonte.strip() else "")
+                    if ok_:
+                        st.session_state["messaggio"] = msg_
+                        st.rerun()
+                    else:
+                        st.error(msg_)
 
 
 def _bd_admin_strumenti(voci):
@@ -409,7 +428,7 @@ def bd_pannello(v=None):
     voci = bd_leggi()
     n_ver = sum(1 for e in voci if bd_stato(e)[0] == "verificata")
     st.markdown("#### 📚 Base condivisa delle spie e dei guasti")
-    st.caption(f"**{len(voci)}** voci ({n_ver} verificate), a disposizione di **tutte le persone che usano l'app**. Cresce con l'uso: ogni spia riconosciuta dall'IA o aggiunta da qualcuno entra qui (**solo testo, mai foto**), così la prossima volta la ricerca è interna, gratis e subito.")
+    st.caption(f"**{len(voci)}** voci ({n_ver} verificate), a disposizione di **tutte le persone che usano l'app** (solo testo). 🔒 **Una spia entra nella base solo dopo la verifica dell'amministratore**: chi trova una spia giusta la propone con il pulsante «Proponi», e l'amministratore controlla foto e testo.")
     bd_checkbox_contribuisci()
     _bd_form_modello()
     scope = bd_scope(v)
@@ -421,7 +440,7 @@ def bd_pannello(v=None):
     c1.caption(f"Cerco per: {bd_scope_desc(scope, v)}")
     ris = bd_cerca(q, colore, scope, voci=voci)
     if not voci:
-        st.info("La base è ancora vuota: si riempie da sola con le spie che l'IA riconosce, e con quelle che aggiungete voi.")
+        st.info("La base è ancora vuota: si riempie con le spie che vengono proposte e verificate dall'amministratore.")
     elif not ris:
         st.info("Nessuna voce corrisponde nella base." if (q or colore) else "Scrivi qualcosa per cercare, oppure sfoglia le voci scegliendo un colore.")
     for e in (ris if (q or colore) else ris[:8]):
@@ -451,10 +470,17 @@ def bd_pannello(v=None):
             st.warning("L'IA non ha trovato una risposta sicura." + (" " + r["note"] if r.get("note") else " Prova a descrivere meglio la spia o il guasto."))
         else:
             _ad_risultato(r, v, bd_scope_desc(scope, v), "testo", None)
-            if st.session_state.get("bd_contrib", True) and not st.session_state.get(f"bd_reg_{q.strip()}"):
-                st.session_state[f"bd_reg_{q.strip()}"] = True
-                nuove, agg = bd_registra_risultato(r, scope, "IA (a parole)")
-                st.success(f"📚 Aggiunta alla base condivisa ({nuove} nuove, {agg} già presenti).")
+            if bd_auto():
+                if st.session_state.get("bd_contrib", True) and not st.session_state.get(f"bd_reg_{q.strip()}"):
+                    st.session_state[f"bd_reg_{q.strip()}"] = True
+                    nuove, agg = bd_registra_risultato(r, scope, "IA (a parole)")
+                    st.success(f"📚 Aggiunta alla base condivisa ({nuove} nuove, {agg} già presenti).")
+            elif "pr_form_proponi" in globals():
+                pr_form_proponi(r.get("spie", []), None, scope, "parole", "bdq" + hashlib.md5(q.strip().encode("utf-8")).hexdigest()[:8])
+    if "pr_le_mie" in globals() and not _bd_admin():
+        pr_le_mie()
+    if "pr_pannello_admin" in globals() and _bd_admin():
+        pr_pannello_admin()
     _bd_form_aggiungi(scope, v)
     _bd_admin_strumenti(voci)
 

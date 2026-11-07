@@ -308,7 +308,7 @@ def tab_diagnostica(v=None):
             st.session_state.pop("dg_vista", None)
             st.rerun()
         {"foto": lambda: ad_pagina(v), "archivio": lambda: (aa_pagina(v), bd_pannello(v)), "dispositivo": lambda: dg_dispositivo(v), "codici": lambda: dtc_pannello(v),
-         "storico": lambda: dg_storico(v), "assistente": lambda: dg_assistente(v)}.get(vista, lambda: None)()
+         "storico": lambda: dg_storico(v), "assistente": lambda: dg_assistente(v), "proposte": lambda: pr_pannello_admin()}.get(vista, lambda: None)()
         return
     st.markdown("<div style='background:linear-gradient(135deg,#00897b,#004d40);color:#fff;border-radius:18px;padding:14px 18px;margin:4px 0 8px'><b style='font-size:1.15rem'>🩺 Diagnostica veicoli</b><br>"
                 "<small>Capisci cosa vuol dire una spia o un codice di errore, e cosa fare. Vale per auto, moto, furgoni, camion, autobus e mezzi da lavoro. Nessun dispositivo è obbligatorio.</small></div>", unsafe_allow_html=True)
@@ -318,6 +318,11 @@ def tab_diagnostica(v=None):
     for (id_, _t, _k), premuto in zip(DG_VOCI, scelte):
         if premuto:
             st.session_state["dg_vista"] = id_
+            st.rerun()
+    if (st.session_state.get("sess") or {}).get("admin") and "pr_conta_attesa" in globals():          # solo per l'amministratore: le proposte degli utenti da verificare
+        n_pr = pr_conta_attesa()
+        if st.button(f"🛠️ Proposte da verificare ({n_pr})" + (" 🔔" if n_pr else ""), key="dg_proposte", type="primary" if n_pr else "secondary", width="stretch"):
+            st.session_state["dg_vista"] = "proposte"
             st.rerun()
     n_arch = len(_AE_SPIE) if "_AE_SPIE" in globals() else 0
     st.caption(f"📚 {n_arch} spie nel catalogo · 🔢 {len(dtc_db()) or len(DTC_IT)} codici di errore · tutto dentro l'app, senza IA e senza servizi esterni. L'IA è facoltativa e serve per l'analisi da foto e per l'assistente.")

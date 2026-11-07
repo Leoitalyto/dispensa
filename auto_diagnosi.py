@@ -42,8 +42,9 @@ REGOLE
 - Veicoli elettrici e ibridi: NON suggerire mai di toccare o tagliare i cavi arancioni ad alta tensione; distingui la rete a 12 V dall'alta tensione.
 - Azioni: passi brevi e numerati, il primo è sempre il più importante per la sicurezza. Niente consigli pericolosi (non aprire il tappo del radiatore a motore caldo, non lavorare su impianti ad alta tensione).
 - Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo e senza ``` , con questa forma:
-{"riconosciuta": true|false, "confidenza": "alta"|"media"|"bassa", "spie": [{"nome": "", "colore": "rosso"|"giallo"|"verde"|"blu"|"bianco", "urgenza": "critica"|"alta"|"media"|"informazione", "simbolo_iso": "", "aspetto": "", "significato": "", "azioni": ["", ""], "cause": ["", ""]}], "avviso_sicurezza": "", "note": ""}
+{"riconosciuta": true|false, "confidenza": "alta"|"media"|"bassa", "spie": [{"nome": "", "colore": "rosso"|"giallo"|"verde"|"blu"|"bianco", "urgenza": "critica"|"alta"|"media"|"informazione", "simbolo_iso": "", "aspetto": "", "catalogo": "", "significato": "", "azioni": ["", ""], "cause": ["", ""]}], "avviso_sicurezza": "", "note": ""}
 - «aspetto»: come è fatto il simbolo, in poche parole (es. «triangolo giallo con punto esclamativo», «oliatore rosso con goccia»).
+- «catalogo»: se insieme alla foto ti do un ELENCO DI SPIE NOTE e la spia corrisponde a una di quelle, scrivi qui il NOME ESATTO dell'elenco (guarda bene la FORMA del simbolo: non scegliere per somiglianza del nome o del colore); se nessuna corrisponde, lascia vuoto. Il mezzo che ti viene indicato è quello VERO: non dire che è un altro mezzo.
 - «avviso_sicurezza»: una frase di pericolo se serve fermarsi (altrimenti stringa vuota). «note»: consigli per rifare la foto o osservazioni (breve). Massimo 6 spie."""
 
 _AD_CHAT = """Sei un esperto di diagnostica dei veicoli e di soccorso stradale. Rispondi in italiano semplice, con frasi brevi e passi numerati, a domande su una spia del cruscotto già analizzata. Priorità alla sicurezza: se c'è pericolo dillo per primo.
@@ -354,7 +355,7 @@ def _ad_parse(testo):
         urg = str(s.get("urgenza") or "").lower().strip()
         spie.append({"nome": str(s["nome"]).strip()[:140], "colore": col if col in ("rosso", "giallo", "verde", "blu", "bianco") else "giallo",
                      "urgenza": urg if urg in ("critica", "alta", "media", "informazione") else ("critica" if col == "rosso" else "media"),
-                     "simbolo_iso": str(s.get("simbolo_iso") or "").strip()[:40], "aspetto": str(s.get("aspetto") or "").strip()[:120], "significato": str(s.get("significato") or "").strip()[:500],
+                     "simbolo_iso": str(s.get("simbolo_iso") or "").strip()[:40], "aspetto": str(s.get("aspetto") or "").strip()[:120], "catalogo": str(s.get("catalogo") or "").strip()[:140], "significato": str(s.get("significato") or "").strip()[:500],
                      "azioni": [str(x).strip()[:300] for x in (s.get("azioni") or []) if str(x).strip()][:8], "cause": [str(x).strip()[:160] for x in (s.get("cause") or []) if str(x).strip()][:8]})
     return {"riconosciuta": bool(d.get("riconosciuta")) and bool(spie), "confidenza": str(d.get("confidenza") or "bassa").lower(), "spie": spie,
             "avviso_sicurezza": str(d.get("avviso_sicurezza") or "").strip()[:400], "note": str(d.get("note") or "").strip()[:500]}
@@ -461,7 +462,7 @@ def ad_analizza(jpeg, mezzo):
         st.session_state["_ad_dettaglio"] = f"Richiesta non partita: motivo «{st.session_state.get('_ad_stop')}» (utente = analisi gratuite di oggi finite; giorno/ora = tetti dell'app)."
         return {"errore": ad_errore_stop()}
     st.session_state.pop("_ad_dettaglio", None)
-    testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto.")], jpeg, 1500, json_out=True)
+    testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", _ad_messaggio_utente(mezzo))], jpeg, 1800, json_out=True)
     if err:
         return {"errore": err}
     ris = _ad_parse(testo)
@@ -479,7 +480,7 @@ def ad_analizza_testo(domanda, mezzo):
         return {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
         return {"errore": ad_errore_stop()}
-    testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", f"Mezzo: {mezzo}. Problema descritto a parole: {str(domanda)[:400]}")], None, 1500, json_out=True)
+    testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", _ad_messaggio_utente(mezzo, domanda))], None, 1800, json_out=True)
     if err:
         return {"errore": err}
     ris = _ad_parse(testo)
@@ -507,21 +508,80 @@ def _ad_token(t):
     return {w for w in re.findall(r"[a-zà-ù0-9]{3,}", (t or "").lower()) if w not in _AD_STOP}
 
 
+_AD_GENERICHE = {"spia", "motore", "sistema", "avviso", "guasto", "impianto", "veicolo", "controllo", "anomalia", "segnale", "luce", "mezzo", "livello"}
+
+
+def ad_cat_esatto(nome):
+    """La voce del catalogo che l'IA ha scelto dall'elenco (nome esatto o quasi), oppure None."""
+    if "_AE_SPIE" not in globals() or not str(nome or "").strip():
+        return None
+    if "aa_prepara" in globals():
+        aa_prepara()                                                        # il catalogo esteso (87 voci) con «aspetto» e «solo»
+    n = str(nome).strip().lower()
+    for s in _AE_SPIE:
+        if s["nome"].lower() == n:
+            return s
+    a = _ad_token(nome)
+    for s in _AE_SPIE:
+        if a and a == _ad_token(s["nome"]):
+            return s
+    return None
+
+
 def ad_abbina_catalogo(nome):
-    """La voce del catalogo (verificato) più simile al nome che ha dato l'IA, oppure None."""
+    """La voce del catalogo (verificato) più simile al nome dato dall'IA: severo, per non abbinare spie diverse solo perché hanno una parola generica in comune (es. «motore»)."""
     if "_AE_SPIE" not in globals():
         return None
-    a = _ad_token(nome)
+    if "aa_prepara" in globals():
+        aa_prepara()
+    a = _ad_token(nome) - _AD_GENERICHE
     migliore, punti = None, 0.0
     for s in _AE_SPIE:
-        b = _ad_token(s["nome"])
+        b = _ad_token(s["nome"]) - _AD_GENERICHE
         if not a or not b:
             continue
         com = a & b
+        if not com:
+            continue
         sc = len(com) / max(1, min(len(a), len(b)))
-        if com and sc > punti:
+        if len(com) == 1 and not (len(next(iter(com))) >= 7 and sc >= 1.0):          # una sola parola in comune vale solo se è specifica
+            continue
+        if sc > punti:
             migliore, punti = s, sc
-    return migliore if punti >= 0.5 else None
+    return migliore if punti >= 0.66 else None
+
+
+def ad_elenco_candidate(mezzo_testo=""):
+    """L'elenco delle spie note adatte al tipo di mezzo scelto, da dare all'IA insieme alla foto: con una scelta guidata sbaglia molto meno che a indovinare a memoria."""
+    if "_AE_SPIE" not in globals():
+        return ""
+    if "aa_prepara" in globals():
+        aa_prepara()
+    base = f"{(st.session_state.get('ad_scope') or {}).get('tipo', '')} {mezzo_testo}".lower()
+    pesante = any(k in base for k in ("camion", "tir", "autobus", "pullman", "trattore", "agricol", "macchin"))
+    moto = any(k in base for k in ("moto", "scooter", "ciclomotore", "monopattino", "bici"))
+    elett = any(k in base for k in ("elettric", "ibrid", "bev", "hev"))
+    righe, pesanti = [], []
+    for s in _AE_SPIE:
+        solo = s.get("solo", "")
+        if solo == "moto" and not moto:
+            continue
+        if solo and solo != "moto" and not pesante:
+            continue
+        if s["tipo"] == "hv" and not elett:
+            continue
+        r = f"- {s['nome']} [{s['colore']}]" + (f" — simbolo: {s['aspetto']}" if s.get("aspetto") else "")
+        (pesanti if (solo and pesante) else righe).append(r)
+    return "\n".join(pesanti + righe)
+
+
+def _ad_messaggio_utente(mezzo, a_parole=None):
+    elenco = ad_elenco_candidate(mezzo)
+    testo = (f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto." if not a_parole else f"Mezzo: {mezzo}. Problema descritto a parole: {str(a_parole)[:400]}")
+    if elenco:
+        testo += ("\n\nELENCO DI SPIE NOTE per questo tipo di mezzo (se una spia corrisponde a una di queste scrivi in «catalogo» il NOME ESATTO dell'elenco; se nessuna corrisponde lascia «catalogo» vuoto e descrivi tu). "
+                  "Il mezzo indicato è quello vero" + (": considera per prime le spie dei mezzi pesanti" if "camion" in mezzo.lower() or "tir" in mezzo.lower() else "") + ".\n" + elenco)
+    return testo
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -723,7 +783,7 @@ def _ad_risultato(ris, v, mezzo, sha, jpeg):
             st.markdown("**📋 Azione suggerita:**\n" + "\n".join(f"{i}. {a}" for i, a in enumerate(s["azioni"], 1)))
         if s.get("cause"):
             st.caption("Possibili cause: " + ", ".join(s["cause"]) + ".")
-        cat = ad_abbina_catalogo(s["nome"])
+        cat = ad_cat_esatto(s.get("catalogo")) or ad_abbina_catalogo(s["nome"])
         if cat:
             with st.expander(f"✅ Nel catalogo verificato: {cat['icona']} {cat['nome']}"):
                 st.markdown(f"**Urgenza:** {cat['urgenza']}  \n**Significato:** {cat['significato']}")
@@ -920,12 +980,15 @@ def ad_pagina(v):
             ae_spie(v)
         else:
             _ad_risultato(ris, v, mezzo, sha, jpeg)
-            if "bd_registra_risultato" in globals() and bd_attiva() and st.session_state.get("bd_contrib", True) and not st.session_state.get(f"ad_reg_{sha}"):
-                st.session_state[f"ad_reg_{sha}"] = True                    # una volta per foto: le spie riconosciute entrano nella base condivisa (solo testo)
-                nuove, agg = bd_registra_risultato(ris, scope_ad, "IA (" + AD_PROVIDER[ad_provider_scelto()]["nome"].split(" (")[0] + ")")
-                st.session_state[f"ad_reg_msg_{sha}"] = f"📚 Aggiunta alla base condivisa: {nuove} nuove, {agg} già presenti (solo testo, senza la foto)." if (nuove or agg) else ""
-            if st.session_state.get(f"ad_reg_msg_{sha}"):
-                st.caption(st.session_state[f"ad_reg_msg_{sha}"])
+            if "bd_auto" in globals() and bd_auto():                       # modalità SENZA verifica (Secret BASE_SPIE_AUTO = "si"): come prima
+                if "bd_registra_risultato" in globals() and bd_attiva() and st.session_state.get("bd_contrib", True) and not st.session_state.get(f"ad_reg_{sha}"):
+                    st.session_state[f"ad_reg_{sha}"] = True
+                    nuove, agg = bd_registra_risultato(ris, scope_ad, "IA (" + AD_PROVIDER[ad_provider_scelto()]["nome"].split(" (")[0] + ")")
+                    st.session_state[f"ad_reg_msg_{sha}"] = f"📚 Aggiunta alla base condivisa: {nuove} nuove, {agg} già presenti (solo testo, senza la foto)." if (nuove or agg) else ""
+                if st.session_state.get(f"ad_reg_msg_{sha}"):
+                    st.caption(st.session_state[f"ad_reg_msg_{sha}"])
+            elif "pr_form_proponi" in globals():                           # la spia NON entra da sola nella base: si propone e la verifica l'amministratore
+                pr_form_proponi(ris["spie"], jpeg, scope_ad, "foto", sha[:10], mezzo)
             _ad_azioni(ris, v, mezzo, sha, jpeg, vid)
             _ad_chat(ris, mezzo, sha, jpeg)
     else:
