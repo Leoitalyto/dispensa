@@ -65,10 +65,37 @@ AD_ORDINE = ["anthropic", "gemini", "openai", "openrouter", "altra"]
 
 
 def _ad_secret(nome):
+    """Un valore dei Secrets: al livello principale, oppure dentro una «sezione» ([qualcosa]) se la riga è finita lì per errore; maiuscolo o minuscolo."""
     try:
-        return str(st.secrets.get(nome, "") or "").strip()
+        for n in (nome, nome.lower()):
+            x = st.secrets.get(n, "")
+            if x and not hasattr(x, "keys"):
+                return str(x).strip()
+        for k in list(st.secrets.keys()):
+            sub = st.secrets[k]
+            if hasattr(sub, "keys"):
+                for n in (nome, nome.lower()):
+                    x = sub.get(n, "")
+                    if x and not hasattr(x, "keys"):
+                        return str(x).strip()
     except Exception:
-        return ""
+        pass
+    return ""
+
+
+def _ad_nomi_secrets():
+    """SOLO i NOMI presenti nei Secrets (mai i valori): serve all'amministratore per capire perché una chiave non viene trovata."""
+    nomi = []
+    try:
+        for k in list(st.secrets.keys()):
+            sub = st.secrets[k]
+            if hasattr(sub, "keys"):
+                nomi.append(f"[{k}] → " + ", ".join(str(x) for x in sub.keys()))
+            else:
+                nomi.append(str(k))
+    except Exception:
+        pass
+    return nomi
 
 
 def _ad_chiave():
@@ -444,6 +471,10 @@ def _ad_scelta_ia():
         st.caption("✅ Uso la chiave messa dall'amministratore dell'app: il costo è suo, con i tetti giornalieri.")
     else:
         st.text_input(f"La tua chiave di {d['nome']}", type="password", key=f"ad_k_{scelta}", placeholder="incollala qui")
+        if (st.session_state.get("sess") or {}).get("admin"):
+            nomi_s = _ad_nomi_secrets()
+            st.caption(f"🔎 **Solo per te (amministratore):** non trovo «{d['secret']}» nei Secrets dell'app. Nomi che vedo: " + (", ".join(nomi_s) if nomi_s else "nessuno") + ". "
+                       "Controlla: 1) di aver toccato **Save changes** e poi **Reboot app**; 2) che il nome sia scritto uguale, tutto maiuscolo e con i trattini bassi; 3) che le virgolette siano dritte (\"), non storte; 4) che la riga non sia finita sotto una riga fra parentesi quadre come [qualcosa]. I valori non li mostro mai.")
         st.caption(f"La chiave resta **solo in questa sessione**: non viene salvata e va solo a {d['nome']}. Costo: {d['gratis']}.")
         if scelta == "openrouter":
             st.caption("🆓 Per restare **gratis** usa solo modelli con «:free» nel nome e che leggano le immagini. Se un giorno non risponde più, quel modello gratuito è stato tolto: cambia il nome. Puoi scriverne più di uno separati da virgola (il secondo è di riserva).")
