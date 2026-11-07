@@ -57,11 +57,46 @@ AD_PROVIDER = {
     "anthropic": {"nome": "Claude (Anthropic)", "secret": "ANTHROPIC_API_KEY", "modello": AD_MODELLO, "chiave_link": "https://console.anthropic.com/", "gratis": "a pagamento (si paga a consumo)"},
     "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-2.0-flash", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
     "openai": {"nome": "ChatGPT (OpenAI)", "secret": "OPENAI_API_KEY", "modello": "gpt-4o-mini", "url": "https://api.openai.com/v1/chat/completions", "chiave_link": "https://platform.openai.com/api-keys", "gratis": "a pagamento (si paga a consumo)"},
-    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemma-4-31b-it:free, nvidia/nemotron-nano-12b-v2-vl:free, google/gemma-3-27b-it:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
+    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "openrouter/free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
                    "gratis": "gratuita solo con i modelli che finiscono con «:free» (limiti: 20 richieste al minuto e 50 al giorno); gli altri modelli si pagano con i crediti"},
     "altra": {"nome": "Un'altra IA (compatibile con OpenAI)", "secret": "ALTRA_IA_KEY", "modello": "", "url": "", "chiave_link": "", "gratis": "dipende dal servizio"},
 }
 AD_ORDINE = ["anthropic", "gemini", "openai", "openrouter", "altra"]
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def ad_gratis_openrouter():
+    """I modelli GRATUITI (prezzo 0) che leggono le IMMAGINI, ora disponibili su OpenRouter: elenco pubblico, senza chiave, aggiornato ogni 6 ore. [] se non raggiungibile."""
+    try:
+        import requests
+        r = requests.get("https://openrouter.ai/api/v1/models", params={"input_modalities": "text,image"}, timeout=8)
+        if r.status_code != 200:
+            return []
+        out = []
+        for m in (r.json().get("data") or []):
+            p_ = m.get("pricing") or {}
+            try:
+                gratis = float(p_.get("prompt", 1)) == 0 and float(p_.get("completion", 1)) == 0
+            except (TypeError, ValueError):
+                gratis = False
+            if gratis and "image" in ((m.get("architecture") or {}).get("input_modalities") or []) and m.get("id") and not str(m["id"]).startswith("openrouter/"):
+                out.append((int(m.get("context_length") or 0), str(m["id"])))
+        out.sort(reverse=True)
+        return [i for _c, i in out][:6]
+    except Exception:
+        return []
+
+
+def ad_modelli_openrouter_auto():
+    """La scelta automatica per OpenRouter: prima «openrouter/free» (sceglie da solo un modello gratuito che legge le immagini), poi quelli trovati nell'elenco aggiornato; se l'elenco non risponde, due nomi di riserva."""
+    trovati = ad_gratis_openrouter()
+    if not trovati:
+        trovati = ["google/gemma-4-31b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free"]
+    ordine = ["openrouter/free"]
+    for m_ in trovati:
+        if m_ not in ordine:
+            ordine.append(m_)
+    return ordine[:4]
 
 
 def _ad_secret(nome):
@@ -109,7 +144,9 @@ def ad_cfg(prov):
     key, fonte = _ad_secret(d["secret"]), "app"
     if not key:
         key, fonte = str(st.session_state.get(f"ad_k_{prov}", "") or "").strip(), "mia"
-    mod = str(st.session_state.get(f"ad_m_{prov}", "") or "").strip() or _ad_secret("DIAGNOSI_MODELLO" if prov == "anthropic" else f"DIAGNOSI_MODELLO_{prov.upper()}") or d.get("modello", "")
+    mod = str(st.session_state.get(f"ad_m_{prov}", "") or "").strip() or _ad_secret("DIAGNOSI_MODELLO" if prov == "anthropic" else f"DIAGNOSI_MODELLO_{prov.upper()}")
+    if not mod:
+        mod = ", ".join(ad_modelli_openrouter_auto()) if prov == "openrouter" else d.get("modello", "")
     url = str(st.session_state.get(f"ad_u_{prov}", "") or "").strip() or _ad_secret(f"DIAGNOSI_URL_{prov.upper()}") or d.get("url", "")
     return {"key": key, "fonte": fonte if key else "", "modello": mod, "url": url}
 
@@ -223,15 +260,18 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
     OpenRouter con più modelli separati da virgola: prova il primo e, se è occupato, sparito o non va, il successivo (i modelli gratuiti cambiano spesso)."""
     elenco_m = [m_.strip() for m_ in str(cfg.get("modello", "")).split(",") if m_.strip()]
     if prov == "openrouter" and len(elenco_m) > 1:
-        ultimo = "rete"
+        ultimo, tentativi = "rete", []
         for m_ in elenco_m[:4]:
+            st.session_state.pop("_ad_dettaglio", None)
             testo_, err_ = _ad_invia(prov, dict(cfg, modello=m_), system, turni, jpeg, max_tokens, json_out)
             if not err_:
                 st.session_state["_ad_modello_usato"] = m_
                 return testo_, None
             ultimo = err_
+            tentativi.append(st.session_state.get("_ad_dettaglio") or f"{m_}: {err_}")
             if err_ in ("chiave", "pagamento"):                   # inutile provare gli altri
                 break
+        st.session_state["_ad_dettaglio"] = " ⟶ ".join(tentativi)
         return None, ultimo
     import requests
     img = base64.b64encode(jpeg).decode() if jpeg else ""
@@ -497,10 +537,13 @@ def _ad_scelta_ia():
             st.caption(f"🔎 **Solo per te (amministratore):** non trovo «{d['secret']}» nei Secrets dell'app. Nomi che vedo: " + (", ".join(nomi_s) if nomi_s else "nessuno") + ". "
                        "Controlla: 1) di aver toccato **Save changes** e poi **Reboot app**; 2) che il nome sia scritto uguale, tutto maiuscolo e con i trattini bassi; 3) che le virgolette siano dritte (\"), non storte; 4) che la riga non sia finita sotto una riga fra parentesi quadre come [qualcosa]. I valori non li mostro mai.")
         st.caption(f"La chiave resta **solo in questa sessione**: non viene salvata e va solo a {d['nome']}. Costo: {d['gratis']}.")
-        if scelta == "openrouter":
-            st.caption("🆓 Per restare **gratis** usa solo modelli con «:free» nel nome e che leggano le immagini. Se un giorno non risponde più, quel modello gratuito è stato tolto: cambia il nome. Puoi scriverne più di uno separati da virgola (il secondo è di riserva).")
         if d.get("chiave_link"):
             st.link_button(f"🔑 Ottieni una chiave di {d['nome'].split(' (')[0]}", d["chiave_link"], width="stretch")
+    if scelta == "openrouter":
+        st.caption("🆓 **Lascia il campo «Modello» vuoto**: l'app sceglie da sola i modelli gratuiti che leggono le immagini (elenco aggiornato da OpenRouter) e, se uno è occupato o sparito, prova il successivo. "
+                   "Se vuoi scegliere tu: usa solo nomi con «:free» (oppure `openrouter/free`, che sceglie lui un modello gratuito) e puoi scriverne più di uno separati da virgola.")
+        if scelta == "openrouter":
+            st.caption("Modelli gratuiti con immagini che vedo adesso: " + (", ".join(ad_gratis_openrouter()[:5]) or "elenco non raggiungibile (uso i nomi di riserva)") + ".")
     if scelta == "altra":
         st.text_input("Indirizzo del servizio (come https://…/v1/chat/completions)", key="ad_u_altra", placeholder="https://…")
         st.text_input("Nome del modello (che sa leggere le immagini)", key="ad_m_altra", placeholder="es. pixtral-12b")
