@@ -446,7 +446,7 @@ def bd_pannello(v=None):
         r = risp["ris"]
         if r.get("errore"):
             st.warning({"chiave": "La chiave dell'IA non è valida o manca.", "limite": "Limite di analisi raggiunto: riprova più tardi.", "rete": "Non riesco a collegarmi al servizio adesso.",
-                        "rifiuto": "Il servizio non ha potuto rispondere.", "formato": "La risposta non era leggibile."}.get(r["errore"], "Qualcosa non ha funzionato."))
+                        "rifiuto": "Il servizio non ha potuto rispondere.", "formato": "La risposta non era leggibile.", "pagamento": "Questo modello è a pagamento e non ci sono crediti: scegline uno «:free».", "modello": "Questo modello non esiste più: cambia il nome del modello."}.get(r["errore"], "Qualcosa non ha funzionato."))
         elif not r.get("riconosciuta"):
             st.warning("L'IA non ha trovato una risposta sicura." + (" " + r["note"] if r.get("note") else " Prova a descrivere meglio la spia o il guasto."))
         else:

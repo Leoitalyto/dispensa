@@ -57,8 +57,8 @@ AD_PROVIDER = {
     "anthropic": {"nome": "Claude (Anthropic)", "secret": "ANTHROPIC_API_KEY", "modello": AD_MODELLO, "chiave_link": "https://console.anthropic.com/", "gratis": "a pagamento (si paga a consumo)"},
     "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-2.0-flash", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
     "openai": {"nome": "ChatGPT (OpenAI)", "secret": "OPENAI_API_KEY", "modello": "gpt-4o-mini", "url": "https://api.openai.com/v1/chat/completions", "chiave_link": "https://platform.openai.com/api-keys", "gratis": "a pagamento (si paga a consumo)"},
-    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemini-2.0-flash-exp:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
-                   "gratis": "ha modelli gratuiti con limiti (scrivi un modello che finisce con «:free»)"},
+    "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "google/gemma-4-31b-it:free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
+                   "gratis": "gratuita solo con i modelli che finiscono con «:free» (limiti: 20 richieste al minuto e 50 al giorno); gli altri modelli si pagano con i crediti"},
     "altra": {"nome": "Un'altra IA (compatibile con OpenAI)", "secret": "ALTRA_IA_KEY", "modello": "", "url": "", "chiave_link": "", "gratis": "dipende dal servizio"},
 }
 AD_ORDINE = ["anthropic", "gemini", "openai", "openrouter", "altra"]
@@ -221,13 +221,23 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
                     msgs.append({"role": "user", "content": [{"type": "text", "text": testo}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]})
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
-            r = requests.post(cfg["url"], timeout=(8, 60), headers={"Authorization": "Bearer " + cfg["key"], "content-type": "application/json"}, json={"model": cfg["modello"], "max_tokens": max_tokens, "messages": msgs})
+            corpo_oa = {"max_tokens": max_tokens, "messages": msgs}
+            elenco_m = [m_.strip() for m_ in str(cfg["modello"]).split(",") if m_.strip()]
+            if prov == "openrouter" and len(elenco_m) > 1:
+                corpo_oa["models"] = elenco_m[:3]                              # OpenRouter prova i modelli in ordine: i gratuiti cambiano spesso
+            else:
+                corpo_oa["model"] = elenco_m[0] if elenco_m else cfg["modello"]
+            r = requests.post(cfg["url"], timeout=(8, 60), headers={"Authorization": "Bearer " + cfg["key"], "content-type": "application/json"}, json=corpo_oa)
         if r.status_code in (401, 403):
             return None, "chiave"
         if r.status_code == 400 and prov == "gemini" and "API key" in str(r.text if hasattr(r, "text") else r.json())[:400]:
             return None, "chiave"
         if r.status_code == 429:
             return None, "limite"
+        if r.status_code == 402:
+            return None, "pagamento"                                               # modello a pagamento e nessun credito
+        if r.status_code in (400, 404) and prov != "gemini":
+            return None, "modello"                                                 # il modello non esiste più o non legge le immagini
         if r.status_code != 200:
             return None, "rete"
         dati = r.json()
@@ -435,6 +445,8 @@ def _ad_scelta_ia():
     else:
         st.text_input(f"La tua chiave di {d['nome']}", type="password", key=f"ad_k_{scelta}", placeholder="incollala qui")
         st.caption(f"La chiave resta **solo in questa sessione**: non viene salvata e va solo a {d['nome']}. Costo: {d['gratis']}.")
+        if scelta == "openrouter":
+            st.caption("🆓 Per restare **gratis** usa solo modelli con «:free» nel nome e che leggano le immagini. Se un giorno non risponde più, quel modello gratuito è stato tolto: cambia il nome. Puoi scriverne più di uno separati da virgola (il secondo è di riserva).")
         if d.get("chiave_link"):
             st.link_button(f"🔑 Ottieni una chiave di {d['nome'].split(' (')[0]}", d["chiave_link"], width="stretch")
     if scelta == "altra":
@@ -676,7 +688,8 @@ def ad_pagina(v):
         err = ris.get("errore")
         if err:
             msg = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "limite": "Hai raggiunto il limite di analisi (per ora o per oggi). Riprova più tardi.",
-                   "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "rifiuto": "Il servizio non ha potuto analizzare questa foto.", "formato": "La risposta non era leggibile. Riprova con una foto più nitida."}.get(err, "Qualcosa non ha funzionato.")
+                   "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "rifiuto": "Il servizio non ha potuto analizzare questa foto.", "formato": "La risposta non era leggibile. Riprova con una foto più nitida.",
+                   "pagamento": "Questo modello è a pagamento e non ci sono crediti: scegli un modello che finisce con «:free».", "modello": "Questo modello non esiste più o non legge le immagini: cambia il nome del modello (scegline uno gratuito che accetti le immagini)."}.get(err, "Qualcosa non ha funzionato.")
             st.warning(msg + " Intanto confronta la foto con il catalogo qui sotto.")
             if st.button("🔄 Riprova", key="ad_riprova", width="stretch"):
                 st.session_state.pop("ad_ris", None)
