@@ -70,7 +70,7 @@ _AU_CONNETTORI = ["", "Type 2", "CCS Combo 2", "CHAdeMO", "Type 1", "Schuko / do
 _AU_DOC_TIPI = ["Carta di circolazione", "Certificato di proprietà", "Polizza assicurativa", "Bollo (ricevuta)", "Revisione (certificato)", "Garanzia", "Delega o permesso ZTL", "Fattura o ricevuta", "Perizia o sinistro", "Altro"]
 _AU_DOC_ICONE = {"Carta di circolazione": "🪪", "Certificato di proprietà": "📜", "Polizza assicurativa": "🛡️", "Bollo (ricevuta)": "💶", "Revisione (certificato)": "🔍", "Garanzia": "🧾", "Delega o permesso ZTL": "🅿️",
                  "Fattura o ricevuta": "🧾", "Perizia o sinistro": "📝", "Altro": "📄"}
-_AU_INT_CAT = ["Tagliando", "Meccanica (freni, distribuzione, frizione…)", "Impianto alta tensione", "Batteria 12V", "Batteria di trazione", "Carrozzeria e cristalli", "Pneumatici", "Altro"]
+_AU_INT_CAT = ["Tagliando", "Revisione", "Meccanica (freni, distribuzione, frizione…)", "Impianto alta tensione", "Batteria 12V", "Batteria di trazione", "Carrozzeria e cristalli", "Pneumatici", "Altro"]
 _AU_SPESE_CAT = ["Bollo", "Assicurazione", "Revisione", "Parcheggio", "Pedaggio", "Lavaggio", "Multa", "Altro"]
 _AU_STAG = ["Estive", "Invernali", "4 stagioni", "Estive EV (bassa resistenza)", "Invernali EV (bassa resistenza)"]
 _AU_RIC_LUOGO = ["Casa", "Colonnina pubblica AC", "Colonnina rapida DC", "Lavoro", "Altro"]

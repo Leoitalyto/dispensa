@@ -251,7 +251,7 @@ def dg_assistente(v):
                 prov = ad_provider_scelto()
                 cfg = ad_cfg(prov)
                 if cfg["fonte"] == "app" and not ad_puo():
-                    st.session_state["dg_ass_ris"] = {"errore": "limite"}
+                    st.session_state["dg_ass_ris"] = {"errore": ad_errore_stop()}
                 else:
                     with st.spinner("L'assistente sta ragionando…"):
                         testo, err = _ad_invia(prov, cfg, _SYS_ASS, [("u", contesto)], None, 1800, json_out=True)
@@ -271,7 +271,7 @@ def dg_assistente(v):
 
 def _dg_mostra_risposta(r, v):
     if not r.get("ok"):
-        st.warning({"limite": "Limite di analisi raggiunto: riprova più tardi.", "chiave": "La chiave dell'IA non è valida o manca.", "rete": "Non riesco a collegarmi al servizio adesso.", "rifiuto": "Il servizio non ha potuto rispondere.",
+        ad_mostra_errore(r.get("errore"), {"limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.", "limite": "Limite di analisi raggiunto: riprova più tardi.", "chiave": "La chiave dell'IA non è valida o manca.", "rete": "Non riesco a collegarmi al servizio adesso.", "rifiuto": "Il servizio non ha potuto rispondere.",
                     "formato": "La risposta non era leggibile: riprova.", "pagamento": "Questo modello è a pagamento: scegline uno «:free».", "modello": "Questo modello non esiste più o non legge il testo: cambia modello."}.get(r.get("errore"), "Qualcosa non ha funzionato."))
         return
     st.markdown(_DG_HUB_CSS, unsafe_allow_html=True)

@@ -20,6 +20,10 @@ _SPEC_VEICOLO = [("tipo_veicolo", "Che mezzo è", "s", _AU_TIPI), ("nome", "Sopr
                  ("posti", "Posti", "n", None), ("assi", "Numero di assi", "n", None), ("velocita_max", "Velocità massima (km/h)", "n", None), ("autonomia_km", "Autonomia dichiarata (km)", "n", None),
                  ("potenza_w", "Potenza (W, per monopattini e e-bike)", "n", None), ("batteria_nominale_kwh", "🔋 Batteria di trazione: capacità nominale (kWh)", "n", None), ("batteria_utile_kwh", "🔋 Batteria di trazione: capacità utile (kWh)", "n", None),
                  ("ricarica_ac_kw", "⚡ Potenza massima di ricarica AC (kW)", "n", None), ("ricarica_dc_kw", "⚡ Potenza massima di ricarica DC (kW)", "n", None), ("connettore", "🔌 Connettore di bordo", "s", _AU_CONNETTORI),
+                 ("costruttore", "Costruttore", "t", None), ("codice_motore", "Codice motore (P.5)", "t", None), ("omologazione", "Omologazione (K)", "t", None), ("numero_carta", "Numero della carta di circolazione", "t", None),
+                 ("categoria", "Categoria (J)", "t", None), ("uso", "Destinazione e uso (J.1)", "t", None), ("carrozzeria", "Carrozzeria (J.2)", "t", None), ("cambio", "Tipo di cambio", "t", None),
+                 ("lunghezza_m", "Lunghezza (m)", "n", None), ("larghezza_m", "Larghezza (m)", "n", None), ("co2", "Emissioni CO₂ (g/km)", "n", None), ("consumo", "Consumi dichiarati", "t", None),
+                 ("pneumatici", "Pneumatici omologati", "t", None), ("immatricolazione_attuale", "Data di immatricolazione attuale (I)", "d", None), ("intestatario", "Intestatario", "t", None),
                  ("note", "Note", "a", None)]
 _SPEC_DOC = [("tipo", "Che documento è", "s", _AU_DOC_TIPI), ("titolo", "Titolo", "t", None), ("data", "Data del documento", "d", None), ("scadenza", "Scadenza (se c'è)", "d", None), ("importo", "Importo (€, se c'è)", "n", None), ("note", "Note", "a", None)]
 _SPEC_INT = [("categoria", "Categoria", "s", _AU_INT_CAT), ("data", "Data", "d", None), ("km", "Chilometri", "n", None), ("costo", "Costo (€)", "n", None), ("officina", "Officina", "t", None),
@@ -73,6 +77,45 @@ def _au_chiudi(coda):
     st.session_state.pop("au_fin", None)
 
 
+def _au_mostra_lettura_libretto(c, chiave_l, mime):
+    """Dopo la lettura del libretto: quanti dati, quanto sono sicuri, il controllo con l'IA e le revisioni trovate sul retro."""
+    lb = st.session_state.get(chiave_l + "_lb")
+    if not lb:
+        return
+    campi, rev = lb["campi"], lb.get("revisioni") or []
+    conta = lambda k: sum(1 for x in campi.values() if x.get("affidabilita") == k)
+    st.success(f"Ho letto **{len(campi)} dati** dalla carta di circolazione (lettura: {lb.get('fonte', 'OCR')}): 🟢 {conta('alta')} sicuri · 🟡 {conta('media')} abbastanza · 🟠 {conta('bassa')} poco. "
+               "**Controlla e correggi** prima di salvare: i dati che non ho trovato restano vuoti.")
+    manca = [e for k, e in (("targa", "la targa"), ("telaio", "il telaio"), ("marca", "la marca"), ("modello", "il modello")) if k not in campi]
+    if manca:
+        st.warning("Non ho trovato: " + ", ".join(manca) + ". Scrivili tu qui sotto" + (" oppure prova «Controlla con l'intelligenza artificiale»." if "ad_attivo" in globals() and ad_attivo() else "."))
+    if "ad_attivo" in globals() and ad_attivo() and "lb_ia" in globals():
+        if lb.get("fonte") != "OCR + IA":
+            if st.button("🤖 Controlla con l'intelligenza artificiale (più preciso: rilegge tutto e anche i timbri delle revisioni)", key=f"lb_ia_{c['sha'][:8]}", width="stretch"):
+                with st.spinner("L'intelligenza artificiale rilegge le pagine…"):
+                    ia, err = lb_ia(lb_jpeg_pagine(c["nome"], mime, c["dati"]))
+                if ia:
+                    campi2, rev2 = lb_unisci(lb, ia)
+                    st.session_state[chiave_l + "_lb"] = dict(lb, campi=campi2, revisioni=rev2, fonte="OCR + IA")
+                    st.session_state[chiave_l] = (campi2, True)
+                    for k_ in [k_ for k_ in st.session_state if k_.startswith("au_fv_" + c["sha"][:8]) or k_.startswith(chiave_l + "_rev_")]:
+                        del st.session_state[k_]                                   # i campi si ridisegnano con i valori nuovi
+                    st.rerun()
+                ad_mostra_errore(err, {"chiave": "La chiave dell'IA non è valida o manca.", "rete": "Non riesco a collegarmi al servizio adesso.", "formato": "La risposta non era leggibile: riprova.", "limite": "Il servizio gratuito è occupato o ha finito le richieste: aspetta un minuto e riprova.",
+                                       "limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.", "pagamento": "Questo modello è a pagamento: scegline uno «:free».", "modello": "Questo modello non esiste più o non legge le immagini."}.get(err, "L'IA non ha risposto. Riprova fra poco."))
+    else:
+        st.caption("Per un controllo ancora più preciso puoi usare l'IA (anche gratuita): vedi «Diagnostica veicoli → Fotografa una spia → Quale intelligenza artificiale uso?».")
+    if rev:
+        st.markdown("**🔧 Revisioni lette sul retro** — spunta quelle giuste: le registro nel veicolo (ultima revisione, prossima scadenza e storico).")
+        for r_ in rev:
+            ic = {"alta": "🟢", "media": "🟡"}.get(r_.get("affidabilita"), "🟠")
+            testo = f"{_au_it(r_['data'])}" + (f" · scade {r_['scadenza'][5:]}/{r_['scadenza'][:4]}" if r_.get("scadenza") else "") + (f" · {r_['km']} km" if r_.get("km") else "") + (f" · {r_['esito']}" if r_.get("esito") else "") + f" {ic}"
+            st.checkbox(testo, value=r_.get("affidabilita") != "bassa" and bool(r_.get("scadenza")), key=f"{chiave_l}_rev_{r_['data']}")
+        st.caption("🟠 = letto con poca sicurezza: controlla la data e i chilometri sul libretto prima di spuntare.")
+    elif lb.get("pagine", 1) >= 2:
+        st.caption("Non sono riuscito a leggere i timbri delle revisioni sul retro: le potrai aggiungere tu in «Scadenze» e «Manutenzione».")
+
+
 def _au_corpo(coda):
     c = coda[0]
     modo = c["modo"]
@@ -84,14 +127,27 @@ def _au_corpo(coda):
             st.image(c["dati"], width=240)
         chiave_l = f"au_lett_{c['sha']}"
         if chiave_l not in st.session_state:
-            with st.spinner("Leggo il documento…"):
-                try:
-                    testo, _info = ca_estrai_testo(c["nome"], mime, c["dati"])
-                except Exception:
-                    testo = ""
-                st.session_state[chiave_l] = ((au_leggi_libretto(testo) if modo.startswith("libretto") else au_leggi_doc(testo)) if (testo or "").strip() else {}, bool((testo or "").strip()))
+            with st.spinner("Leggo il documento… (per il libretto può servire fino a un minuto: tolgo lo sfondo e leggo ogni riquadro)" if modo.startswith("libretto") else "Leggo il documento…"):
+                nuovo_lb = None
+                if modo.startswith("libretto") and "lb_leggi" in globals() and lb_disponibile():
+                    try:
+                        nuovo_lb = lb_leggi(c["nome"], mime, c["dati"])
+                    except Exception:
+                        nuovo_lb = None
+                if nuovo_lb and nuovo_lb.get("campi"):
+                    st.session_state[chiave_l + "_lb"] = nuovo_lb
+                    st.session_state[chiave_l] = (nuovo_lb["campi"], True)
+                else:
+                    try:
+                        testo, _info = ca_estrai_testo(c["nome"], mime, c["dati"])
+                    except Exception:
+                        testo = ""
+                    st.session_state[chiave_l] = ((au_leggi_libretto(testo) if modo.startswith("libretto") else au_leggi_doc(testo)) if (testo or "").strip() else {}, bool((testo or "").strip()))
         ric, letto = st.session_state[chiave_l]
-        if letto and ric:
+        if st.session_state.get(chiave_l + "_lb"):
+            _au_mostra_lettura_libretto(c, chiave_l, mime)
+            ric, letto = st.session_state[chiave_l]
+        elif letto and ric:
             st.success("Ho letto il documento. **Controlla e correggi**: i dati che non ho trovato restano vuoti.")
         else:
             st.info("Non sono riuscito a leggere tutto: compila tu i dati qui sotto.")
@@ -116,6 +172,17 @@ def _au_corpo(coda):
             nuovo = dict(val, id=vid, scadenze={}, documenti=[], interventi=[], pneumatici=[], rifornimenti=[], spese=[], soh=[], valutazioni=[], cavi=[], tessere=[], sinistri=[], ricambi={})
             if rif:
                 nuovo["documenti"] = [{"id": uuid.uuid4().hex[:10], "tipo": "Carta di circolazione", "titolo": "Carta di circolazione", "data": val.get("immatricolazione", ""), "scadenza": "", "importo": "", "note": "", "files": [rif]}]
+            lb_ = st.session_state.get(f"au_lett_{c['sha']}_lb") or {}
+            rev_sel = [r_ for r_ in (lb_.get("revisioni") or []) if st.session_state.get(f"au_lett_{c['sha']}_rev_{r_['data']}")]
+            if rev_sel and not _au_micro(nuovo):                           # le revisioni spuntate (dai timbri sul retro): ultima, prossima scadenza e storico
+                ult = rev_sel[0]
+                scad_iso = ""
+                if ult.get("scadenza"):
+                    y_, m_ = int(ult["scadenza"][:4]), int(ult["scadenza"][5:7])
+                    scad_iso = f"{y_}-{m_:02d}-{__import__('calendar').monthrange(y_, m_)[1]:02d}"
+                nuovo["scadenze"]["revisione"] = {"ultima": ult["data"], "km_ultima": ult.get("km", ""), "data": scad_iso}
+                nuovo["interventi"] = [{"id": uuid.uuid4().hex[:10], "categoria": "Revisione", "data": r_["data"], "km": r_.get("km", ""), "costo": "", "officina": "", "files": [],
+                                        "descrizione": "Revisione periodica" + (f" · esito: {r_['esito']}" if r_.get("esito") else "") + (f" · prossima entro {r_['scadenza'][5:]}/{r_['scadenza'][:4]}" if r_.get("scadenza") else "") + " (letta dai timbri sul retro del libretto)"} for r_ in rev_sel]
             _au_salva(lambda a, n=nuovo: a["veicoli"].append(n), "Auto: nuovo veicolo")
             if rif and "ls_segna_archiviato" in globals():
                 ls_segna_archiviato()
@@ -292,7 +359,11 @@ def tab_scheda(v):
             ("Classe", v.get("classe_euro")), ("Cilindrata", (v["cilindrata"] + " cc") if v.get("cilindrata") else ""), ("Telaio", v.get("telaio")), ("Prima immatricolazione", _au_it(v.get("immatricolazione"))),
             ("Pneumatici", v.get("pressione_pneumatici")), ("Serbatoio", (v["serbatoio_l"] + " L") if v.get("serbatoio_l") else ""), ("Bagagliaio", (v["bagagliaio_l"] + " L") if v.get("bagagliaio_l") else ""), ("Colore", v.get("colore")),
             ("Massa complessiva", (v["massa_kg"] + " kg") if v.get("massa_kg") else ""), ("Posti", v.get("posti")), ("Assi", v.get("assi")), ("Velocità massima", (v["velocita_max"] + " km/h") if v.get("velocita_max") else ""),
-            ("Autonomia dichiarata", (v["autonomia_km"] + " km") if v.get("autonomia_km") else ""), ("Potenza", (v["potenza_w"] + " W") if v.get("potenza_w") else "")]
+            ("Autonomia dichiarata", (v["autonomia_km"] + " km") if v.get("autonomia_km") else ""), ("Potenza", (v["potenza_w"] + " W") if v.get("potenza_w") else ""),
+            ("Costruttore", v.get("costruttore")), ("Codice motore", v.get("codice_motore")), ("Categoria", v.get("categoria")), ("Destinazione e uso", v.get("uso")), ("Carrozzeria", v.get("carrozzeria")), ("Cambio", v.get("cambio")),
+            ("Lunghezza", (str(v["lunghezza_m"]) + " m") if v.get("lunghezza_m") else ""), ("Larghezza", (str(v["larghezza_m"]) + " m") if v.get("larghezza_m") else ""), ("Emissioni CO₂", (str(v["co2"]) + " g/km") if v.get("co2") else ""),
+            ("Consumi dichiarati", v.get("consumo")), ("Pneumatici omologati", v.get("pneumatici")), ("Omologazione", v.get("omologazione")), ("Numero carta di circolazione", v.get("numero_carta")),
+            ("Immatricolazione attuale", _au_it(v.get("immatricolazione_attuale")) if v.get("immatricolazione_attuale") else ""), ("Intestatario", v.get("intestatario"))]
     if _au_ha_batteria(v):
         dett += [("Batteria (nominale / utile)", " / ".join(x for x in ((v.get("batteria_nominale_kwh") or "") and v["batteria_nominale_kwh"] + " kWh", (v.get("batteria_utile_kwh") or "") and v["batteria_utile_kwh"] + " kWh") if x)),
                  ("Ricarica max AC / DC", " / ".join(x for x in ((v.get("ricarica_ac_kw") or "") and v["ricarica_ac_kw"] + " kW", (v.get("ricarica_dc_kw") or "") and v["ricarica_dc_kw"] + " kW") if x)), ("Connettore", v.get("connettore"))]

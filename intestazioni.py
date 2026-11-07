@@ -83,3 +83,17 @@ if "schermata_farmacia" in globals() and "_ih_schermata_prima" not in globals():
         except Exception:
             pass
         return _ih_schermata_prima()
+
+
+# ---- Dispensa: l'immagine dei vasetti nel banner se ne va; al suo posto l'armadietto con la scritta, a sinistra come nelle altre sezioni
+def ih_hero_dispensa():
+    uri = ih_uri("dispensa.webp", 330)
+    if not uri or "t" not in globals():
+        return None
+    css = ("<style>.hero{height:auto !important;min-height:150px !important;padding:10px 16px 10px 14px !important;gap:16px !important;align-items:center !important}"
+           ".hero::after{display:none !important}"
+           ".hero .hero-img{height:136px;width:auto;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.5)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}"
+           ".hero-testi{max-width:none !important;min-width:0}</style>")
+    return (css + f"<div class='hero'><img class='hero-img' alt='Dispensa' src='{uri}'>"
+            f"<div class='hero-testi'><h1>{t('La nostra dispensa')}</h1><p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
+

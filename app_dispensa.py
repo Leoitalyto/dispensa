@@ -156,6 +156,8 @@ _AGGANCI = {
          '    if premuto_c:\n        st.session_state["sezione_home"] = "casa"\n        st.session_state["farmacia_aperta"] = True\n        st.rerun()\n    if premuto_u:\n'),
     ],
     "parte3.py": [
+        # banner della Dispensa: l'armadietto con la scritta al posto dell'immagine dei vasetti (se manca dispensa.webp resta il banner di prima)
+        ("\n\ndef leggi_utenti():", "\nHERO = (ih_hero_dispensa() if \"ih_hero_dispensa\" in globals() else None) or HERO\n\n\ndef leggi_utenti():"),
         # tabella: colonna «Acquisto»
         ('                t("Scadenza"): data_it(r.get("scadenza")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",\n',
          '                t("Scadenza"): data_it(r.get("scadenza")), "Acquisto": data_it(r.get("acquisto")), t("Stato"): f"{ICONE[s]} {testo_giorni(s, g)}",\n'),
@@ -274,7 +276,7 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     except Exception:
         pass
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
     _carica(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):

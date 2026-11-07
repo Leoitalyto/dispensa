@@ -445,7 +445,7 @@ def bd_pannello(v=None):
     if risp and q.strip() and risp.get("q") == q.strip():
         r = risp["ris"]
         if r.get("errore"):
-            st.warning({"chiave": "La chiave dell'IA non è valida o manca.", "limite": "Limite di analisi raggiunto: riprova più tardi.", "rete": "Non riesco a collegarmi al servizio adesso.",
+            ad_mostra_errore(r["errore"], {"chiave": "La chiave dell'IA non è valida o manca.", "limite": "Limite di analisi raggiunto: riprova più tardi.", "limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.", "limite_utente": ad_testo_limite_utente(), "rete": "Non riesco a collegarmi al servizio adesso.",
                         "rifiuto": "Il servizio non ha potuto rispondere.", "formato": "La risposta non era leggibile.", "pagamento": "Questo modello è a pagamento e non ci sono crediti: scegline uno «:free».", "modello": "Questo modello non esiste più: cambia il nome del modello."}.get(r["errore"], "Qualcosa non ha funzionato."))
         elif not r.get("riconosciuta"):
             st.warning("L'IA non ha trovato una risposta sicura." + (" " + r["note"] if r.get("note") else " Prova a descrivere meglio la spia o il guasto."))

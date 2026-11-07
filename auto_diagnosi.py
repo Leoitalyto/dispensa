@@ -141,9 +141,8 @@ def _ad_chiave():
 def ad_cfg(prov):
     """{key, fonte ('app' = messa dall'amministratore, 'mia' = scritta da chi usa l'app in questa sessione), modello, url}. La chiave 'mia' resta SOLO nella sessione: non viene salvata."""
     d = AD_PROVIDER.get(prov) or AD_PROVIDER["anthropic"]
-    key, fonte = _ad_secret(d["secret"]), "app"
-    if not key:
-        key, fonte = str(st.session_state.get(f"ad_k_{prov}", "") or "").strip(), "mia"
+    mia = str(st.session_state.get(f"ad_k_{prov}", "") or "").strip()
+    key, fonte = (mia, "mia") if mia else (_ad_secret(d["secret"]), "app")             # la chiave propria vince su quella dell'app: niente limite giornaliero
     mod = str(st.session_state.get(f"ad_m_{prov}", "") or "").strip() or _ad_secret("DIAGNOSI_MODELLO" if prov == "anthropic" else f"DIAGNOSI_MODELLO_{prov.upper()}")
     if not mod:
         mod = ", ".join(ad_modelli_openrouter_auto()) if prov == "openrouter" else d.get("modello", "")
@@ -180,6 +179,101 @@ def _ad_contatori():
     return {}
 
 
+@st.cache_resource
+def _ad_contatori_utente():
+    return {}
+
+
+def _ad_oggi():
+    """La data di oggi in Italia (il giorno cambia a mezzanotte italiana, non UTC)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Rome")).date().isoformat()
+    except Exception:
+        return date.today().isoformat()
+
+
+def _ad_uid():
+    return str((st.session_state.get("sess") or {}).get("uid") or "anon")
+
+
+def _ad_admin():
+    return bool((st.session_state.get("sess") or {}).get("admin"))
+
+
+def ad_limite_utente():
+    """Quante analisi gratuite al giorno per ogni utente con l'IA dell'app (Secrets: DIAGNOSI_MAX_UTENTE_GIORNO; predefinito 2; «no» o -1 = nessun limite). None = nessun limite."""
+    try:
+        x = str(st.secrets.get("DIAGNOSI_MAX_UTENTE_GIORNO", "2")).strip().lower()
+    except Exception:
+        x = "2"
+    if x in ("no", "illimitato", "off", "nessuno"):
+        return None
+    try:
+        n = int(x)
+    except ValueError:
+        return 2
+    return None if n < 0 else n
+
+
+def ad_usi_utente():
+    return _ad_contatori_utente().get((_ad_oggi(), _ad_uid()), 0)
+
+
+def ad_restano():
+    """Le analisi gratuite che restano oggi a questo utente con la chiave dell'app (None = senza limite: amministratore, o limite spento)."""
+    lim = ad_limite_utente()
+    if _ad_admin() or lim is None:
+        return None
+    return max(0, lim - ad_usi_utente())
+
+
+def ad_testo_limite_utente():
+    lim = ad_limite_utente()
+    return f"Hai finito le tue {lim} analisi gratuite di oggi con l'IA dell'app (domani ne avrai altre {lim})."
+
+
+def ad_guida_propria_chiave():
+    """Cosa fare quando le analisi gratuite di oggi sono finite: crearsi una chiave gratuita (spiegato passo passo, con le parole inglesi tradotte)."""
+    st.markdown("#### 🔑 Vuoi continuare adesso? Crea la tua chiave gratuita")
+    st.caption("Ci vogliono circa 3 minuti, non costa niente e con la tua chiave non c'è più il limite di analisi dell'app (restano i limiti del servizio, per esempio 50 al giorno con OpenRouter).")
+    st.markdown("**Opzione A · OpenRouter** (consigliata)")
+    st.markdown("1. Apri la pagina delle chiavi (tasto qui sotto). Se ti chiede di entrare tocca **Sign in** («Accedi») e usa il tuo account Google.\n"
+                "2. Tocca **Create API Key** («Crea chiave»). Nel campo **Name** («Nome») scrivi `dispensa`. Se c'è **Credit limit** («Limite di spesa») scrivi `1`. Tocca **Create** («Crea»).\n"
+                "3. Tocca l'icona con **due quadratini** (**Copy** = «Copia»). **La chiave si vede una sola volta.**\n"
+                "4. Torna in questa pagina, scegli **OpenRouter** nell'elenco qui sopra, tocca il campo **«La tua chiave…»**, tieni premuto il dito e scegli **Paste** («Incolla»).")
+    st.link_button("🔑 Apri la pagina delle chiavi di OpenRouter", "https://openrouter.ai/settings/keys", width="stretch")
+    st.markdown("**Opzione B · Google Gemini**")
+    st.markdown("1. Apri la pagina (tasto qui sotto) ed entra con il tuo account Google.\n2. Tocca **Create API key** («Crea chiave API») e poi copia la chiave.\n3. Qui sopra scegli **Google Gemini** e incolla la chiave nel campo.")
+    st.link_button("🔑 Apri la pagina delle chiavi di Google Gemini", "https://aistudio.google.com/apikey", width="stretch")
+    st.caption("La chiave resta **solo in questa sessione** (non viene salvata): la prossima volta che apri l'app dovrai incollarla di nuovo. Non darla a nessuno. Oppure aspetta domani: ricomincia con le analisi gratuite.")
+
+
+def ad_campo_chiave_propria(prov=None):
+    """Il campo dove incollare la propria chiave (una sola volta per ridisegno: lo usano anche altre schermate)."""
+    giro = st.session_state.get("_tabs_giro")
+    if st.session_state.get("_ad_campo_giro") == giro and giro is not None:
+        return
+    st.session_state["_ad_campo_giro"] = giro
+    prov = prov or ad_provider_scelto()
+    st.text_input(f"🔑 La tua chiave di {AD_PROVIDER[prov]['nome']}", type="password", key=f"ad_k_{prov}", placeholder="incollala qui")
+
+
+def ad_mostra_errore(err, testo=None):
+    """Un avviso per un errore dell'IA; se le analisi gratuite sono finite aggiunge la guida e il campo per incollare la propria chiave."""
+    if err == "limite_utente":
+        st.warning(ad_testo_limite_utente())
+        ad_guida_propria_chiave()
+        ad_campo_chiave_propria()
+    elif testo:
+        st.warning(testo)
+
+
+def ad_errore_stop():
+    """Perché ad_puo() ha detto no: «limite_utente» (ha finito le sue analisi di oggi) oppure «limite_app» (tetto dell'app)."""
+    return "limite_utente" if st.session_state.get("_ad_stop") == "utente" else "limite_app"
+
+
 def _ad_limite_giorno():
     try:
         return int(st.secrets.get("DIAGNOSI_MAX_GIORNO", 40))
@@ -190,17 +284,28 @@ def _ad_limite_giorno():
 def ad_puo(adesso=None):
     """True se i limiti (all'ora per sessione, al giorno per l'app) non sono superati; in tal caso conta l'analisi. Valgono solo per le chiavi dell'amministratore: chi usa la PROPRIA chiave ha i suoi limiti."""
     adesso = adesso or time.time()
+    st.session_state.pop("_ad_stop", None)
     orari = [t for t in st.session_state.get("_ad_orari", []) if adesso - t < 3600]
     if len(orari) >= AD_MAX_ORA:
         st.session_state["_ad_orari"] = orari
+        st.session_state["_ad_stop"] = "ora"
+        return False
+    rest = ad_restano()
+    if rest is not None and rest <= 0:                                     # ha usato le sue analisi gratuite di oggi
+        st.session_state["_ad_stop"] = "utente"
         return False
     oggi_ = date.today().isoformat()
     c = _ad_contatori()
     if c.get(oggi_, 0) >= _ad_limite_giorno():
+        st.session_state["_ad_stop"] = "giorno"
         return False
     for k in [k for k in c if k != oggi_]:
         c.pop(k, None)
     c[oggi_] = c.get(oggi_, 0) + 1
+    cu = _ad_contatori_utente()
+    for k in [k for k in cu if k[0] != _ad_oggi()]:
+        cu.pop(k, None)
+    cu[(_ad_oggi(), _ad_uid())] = cu.get((_ad_oggi(), _ad_uid()), 0) + 1
     orari.append(adesso)
     st.session_state["_ad_orari"] = orari
     return True
@@ -274,13 +379,14 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         st.session_state["_ad_dettaglio"] = " ⟶ ".join(tentativi)
         return None, ultimo
     import requests
-    img = base64.b64encode(jpeg).decode() if jpeg else ""
+    imgs = [base64.b64encode(j).decode() for j in (jpeg if isinstance(jpeg, (list, tuple)) else ([jpeg] if jpeg else []))]
+    img = imgs[0] if imgs else ""
     try:
         if prov == "anthropic":
             msgs = []
             for i, (ruolo, testo) in enumerate(turni):
-                if i == 0 and img:
-                    msgs.append({"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img}}, {"type": "text", "text": testo}]})
+                if i == 0 and imgs:
+                    msgs.append({"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b_}} for b_ in imgs] + [{"type": "text", "text": testo}]})
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
             r = requests.post(AD_URL, timeout=(8, 60), headers={"x-api-key": cfg["key"], "anthropic-version": "2023-06-01", "content-type": "application/json"},
@@ -288,7 +394,7 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         elif prov == "gemini":
             cont = []
             for i, (ruolo, testo) in enumerate(turni):
-                parti = ([{"inline_data": {"mime_type": "image/jpeg", "data": img}}] if (i == 0 and img) else []) + [{"text": testo}]
+                parti = ([{"inline_data": {"mime_type": "image/jpeg", "data": b_}} for b_ in imgs] if (i == 0 and imgs) else []) + [{"text": testo}]
                 cont.append({"role": "user" if ruolo == "u" else "model", "parts": parti})
             corpo = {"systemInstruction": {"parts": [{"text": system}]}, "contents": cont, "generationConfig": {"maxOutputTokens": max_tokens}}
             if json_out:
@@ -297,8 +403,8 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         else:                                                           # OpenAI, OpenRouter e ogni servizio compatibile
             msgs = [{"role": "system", "content": system}]
             for i, (ruolo, testo) in enumerate(turni):
-                if i == 0 and img:
-                    msgs.append({"role": "user", "content": [{"type": "text", "text": testo}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]})
+                if i == 0 and imgs:
+                    msgs.append({"role": "user", "content": [{"type": "text", "text": testo}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b_}} for b_ in imgs]})
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
             corpo_oa = {"max_tokens": max_tokens, "messages": msgs}
@@ -352,8 +458,8 @@ def ad_analizza(jpeg, mezzo):
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
         return {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
-        st.session_state["_ad_dettaglio"] = "Tetto dell'app raggiunto (DIAGNOSI_MAX_GIORNO al giorno o 15 all'ora per sessione): la richiesta non è nemmeno partita."
-        return {"errore": "limite_app"}
+        st.session_state["_ad_dettaglio"] = f"Richiesta non partita: motivo «{st.session_state.get('_ad_stop')}» (utente = analisi gratuite di oggi finite; giorno/ora = tetti dell'app)."
+        return {"errore": ad_errore_stop()}
     st.session_state.pop("_ad_dettaglio", None)
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", f"Mezzo: {mezzo}. Riconosci le spie accese in questa foto del cruscotto.")], jpeg, 1500, json_out=True)
     if err:
@@ -372,7 +478,7 @@ def ad_analizza_testo(domanda, mezzo):
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
         return {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
-        return {"errore": "limite"}
+        return {"errore": ad_errore_stop()}
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", f"Mezzo: {mezzo}. Problema descritto a parole: {str(domanda)[:400]}")], None, 1500, json_out=True)
     if err:
         return {"errore": err}
@@ -529,8 +635,15 @@ def _ad_scelta_ia():
     cfg = ad_cfg(scelta)
     d = AD_PROVIDER[scelta]
     if cfg["fonte"] == "app" and cfg["key"]:
-        st.caption("✅ Uso la chiave messa dall'amministratore dell'app: il costo è suo, con i tetti giornalieri.")
+        rest = ad_restano()
+        if rest is None:
+            st.caption("✅ Uso la chiave messa dall'amministratore dell'app: il costo è suo, con i tetti giornalieri.")
+        else:
+            st.caption(f"✅ Uso la chiave dell'app: ti restano **{rest}** analisi gratuite oggi (su {ad_limite_utente()}), poi ricominciano domani. " + ("**Per continuare adesso usa una tua chiave gratuita:** incollala qui sotto e segui la guida più in basso." if rest <= 0 else "Se vuoi toglierti il limite puoi usare una tua chiave gratuita (facoltativo)."))
+            st.session_state["_ad_campo_giro"] = st.session_state.get("_tabs_giro")
+            st.text_input(f"🔑 La tua chiave di {d['nome']} (facoltativa)", type="password", key=f"ad_k_{scelta}", placeholder="incollala qui")
     else:
+        st.session_state["_ad_campo_giro"] = st.session_state.get("_tabs_giro")
         st.text_input(f"La tua chiave di {d['nome']}", type="password", key=f"ad_k_{scelta}", placeholder="incollala qui")
         if (st.session_state.get("sess") or {}).get("admin"):
             nomi_s = _ad_nomi_secrets()
@@ -685,6 +798,8 @@ def _ad_chat(ris, mezzo, sha, jpeg):
             storia.append(("u", dom.strip()))
             with st.spinner("Sto pensando…"):
                 r = ad_chiedi(storia, jpeg, mezzo, ad_testo_report(ris, mezzo))
+            if not r and st.session_state.get("_ad_stop") == "utente":
+                r = ad_testo_limite_utente() + " Per continuare adesso crea una tua chiave gratuita (la guida compare quando fai una nuova analisi) oppure riprova domani."
             storia.append(("a", r or "Non riesco a rispondere adesso (rete o limite raggiunto). Riprova fra poco."))
             st.rerun()
 
@@ -788,12 +903,14 @@ def ad_pagina(v):
         ris = st.session_state["ad_ris"]
         err = ris.get("errore")
         if err:
-            msg = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "limite": "Il servizio gratuito è occupato o ha finito le richieste (20 al minuto, 50 al giorno). Aspetta un minuto e tocca «Riprova»: se si ripete, domani si azzera.", "limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.",
+            msg = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "limite": "Il servizio gratuito è occupato o ha finito le richieste (20 al minuto, 50 al giorno). Aspetta un minuto e tocca «Riprova»: se si ripete, domani si azzera.", "limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.", "limite_utente": ad_testo_limite_utente(),
                    "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "rifiuto": "Il servizio non ha potuto analizzare questa foto.", "formato": "La risposta non era leggibile. Riprova con una foto più nitida.",
                    "pagamento": "Questo modello è a pagamento e non ci sono crediti: scegli un modello che finisce con «:free».", "modello": "Questo modello non esiste più o non legge le immagini: cambia il nome del modello (scegline uno gratuito che accetti le immagini)."}.get(err, "Qualcosa non ha funzionato.")
             if (st.session_state.get("sess") or {}).get("admin") and st.session_state.get("_ad_dettaglio"):
                 st.caption("🔎 **Solo per te (amministratore):** " + st.session_state["_ad_dettaglio"])
-            st.warning(msg + " Intanto confronta la foto con il catalogo qui sotto.")
+            st.warning(msg + (" Intanto confronta la foto con il catalogo qui sotto." if err != "limite_utente" else ""))
+            if err == "limite_utente":
+                ad_guida_propria_chiave()
             if st.button("🔄 Riprova", key="ad_riprova", width="stretch"):
                 st.session_state.pop("ad_ris", None)
                 st.rerun()
@@ -818,6 +935,9 @@ def ad_pagina(v):
         c2.link_button("🆘 Chiama il 112", "tel:112", width="stretch")
         _ad_condividi_ia(jpeg, mezzo, sha)
         ae_spie(v)
+    _rest_ = ad_restano() if ad_attivo() else None
+    if _rest_ is not None and ad_cfg(ad_provider_scelto())["fonte"] == "app":
+        st.caption(f"Analisi gratuite rimaste oggi con l'IA dell'app: **{_rest_}** (su {ad_limite_utente()}).")
     if ad_attivo():
         _ad_condividi_ia(jpeg, mezzo, sha)
     if v:

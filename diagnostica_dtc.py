@@ -285,7 +285,7 @@ def dtc_ia(codice, info, mezzo=""):
     prov = ad_provider_scelto()
     cfg = ad_cfg(prov)
     if cfg["fonte"] == "app" and not ad_puo():
-        return None, "limite"
+        return None, ad_errore_stop()
     if info["stato"] == "generico" and info["db"]:
         r = info["db"]
         scheda = f"Codice {codice}. Titolo: {r[2]}. Descrizione: {r[3]} Cause: " + "; ".join(c[0] for c in r[4]) + ". Sintomi: " + "; ".join(r[5])
@@ -393,7 +393,7 @@ def _dtc_carta(c, v, mezzo, chiave):
                     if d:
                         dtc_note_salva(codice if info["stato"] == "generico" else f"{codice}|{(v or {}).get('marca', '').lower()}", d)
                         st.rerun()
-                    st.warning({"limite": "Limite di analisi raggiunto: riprova più tardi.", "chiave": "La chiave dell'IA non è valida.", "pagamento": "Questo modello è a pagamento: scegline uno «:free».",
+                    ad_mostra_errore(err, {"limite_app": "Hai raggiunto il tetto di analisi dell'app (per ora o per oggi). Riprova più tardi.", "limite": "Limite di analisi raggiunto: riprova più tardi.", "chiave": "La chiave dell'IA non è valida.", "pagamento": "Questo modello è a pagamento: scegline uno «:free».",
                                 "modello": "Questo modello non esiste più o non legge il testo: cambia modello."}.get(err, "L'IA non ha risposto. Riprova fra poco."))
             else:
                 st.caption("Per l'italiano senza pagare: copia queste istruzioni nella tua app di IA (ChatGPT, Gemini, Claude…).")

@@ -15,8 +15,9 @@ import streamlit as st
 
 _LV_MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
 _LV_CSS = """<style>
-.lv-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#78909c 0%,#455a64 55%,#263238 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.lv-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#0b1f4d 0%,#123c8c 55%,#1976d2 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
 .lv-hero .ico{font-size:3rem;line-height:1}
+.lv-hero .ico-img{height:122px;width:auto;max-width:36%;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.45)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}
 .lv-hero h1{margin:0;font-size:1.7rem;color:#fff}.lv-hero p{margin:2px 0 0;font-size:.95rem;opacity:.95}
 .lv-card{background:rgba(255,255,255,.88);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b}
 </style>"""
@@ -719,7 +720,9 @@ def schermata_lavoro():
     if "_CA_CSS" in globals():
         st.markdown(_CA_CSS, unsafe_allow_html=True)
     st.markdown(_LV_CSS, unsafe_allow_html=True)
-    st.markdown("<div class='lv-hero'><div class='ico'>💼</div><div><h1>Lavoro</h1><p>Le buste paga, anno per anno: netto, lordo e trattenute a confronto</p></div></div>", unsafe_allow_html=True)
+    _uri_lv = ih_uri("lavoro.webp", 330) if "ih_uri" in globals() else ""                         # l'icona blu e oro nell'intestazione; se manca il file resta l'emoji
+    _ico_lv = f"<img class='ico-img' alt='Lavoro' src='{_uri_lv}'>" if _uri_lv else "<div class='ico'>💼</div>"
+    st.markdown(f"<div class='lv-hero'>{_ico_lv}<div><h1>Lavoro</h1><p>Le buste paga, anno per anno: netto, lordo e trattenute a confronto</p></div></div>", unsafe_allow_html=True)
     if st.session_state.get("messaggio"):
         st.success(st.session_state.pop("messaggio"))
     if "pulsante_info" in globals():
