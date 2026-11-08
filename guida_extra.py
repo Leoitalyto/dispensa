@@ -12,18 +12,18 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.0"
+GUIDA_VERSIONE = "2.1"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
-    "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
+    "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
     "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
-    "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "cestino.py"]},
+    "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "assistente_extra.py", "cestino.py"]},
     "lavoro": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["lavoro.py", "casa.py", "cestino.py"]},
-    "auto": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "auto_soccorso.py", "auto_emergenza.py", "libretto.py",
+    "auto": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente_extra.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "auto_soccorso.py", "auto_emergenza.py", "libretto.py",
                                                                          "diagnostica.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica_spie.py", "cestino.py"]},
-    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["utilita.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py"]},
+    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py"]},
 }
 
 
@@ -102,6 +102,28 @@ def _gx_costruisci():
 
 Il Cestino riguarda **solo i tuoi dati personali**: la dispensa di famiglia ha già il suo storico con «Annulla» per l'amministratore.""",
       "cestino svuota ripristina recupera giorni conservazione eliminati tutto elenco utilità", ("recupera", None))
+
+    # ================= l'assistente: manuali e voce
+    manuali = ("📚 Cercare nei miei manuali e documenti",
+               """Sotto il pulsante **Informazioni** trovi **📚 Cerca nei miei manuali e documenti**.
+
+1. Tocca il pulsante e scrivi cosa cerchi, per esempio «pulire il filtro della lavatrice» o «pressione della caldaia».
+2. Tocca **🔎 Cerca**. L'app non legge tutto l'archivio: sceglie i documenti che c'entrano (per titolo, marca, modello, bene), li legge una volta sola e ti mostra **i 3 passaggi più adatti**, con il **nome del documento, la pagina** e **dove si trova** nell'app.
+3. **🔊 Leggi ad alta voce** li legge con la voce del telefono; **⏹ Ferma la voce** la ferma.
+
+Cerca **solo nei tuoi** manuali, garanzie e documenti dei beni di Casa e nei documenti dei veicoli. Ti mostra **le parole del manuale**: non le riassume né le spiega con l'intelligenza artificiale.
+
+**Se non trova niente** te lo dice e non inventa: prova con altre parole, oppure apri il documento. Se non hai ancora manuali, caricane uno da **Casa → 📚 Documenti**.""",
+               "manuale manuali istruzioni cercare cerca nei documenti pdf pagina leggere ad alta voce apparecchio lavatrice caldaia libretto uso manutenzione")
+    for sez in ("dispensa", "casa", "auto", "utilita"):
+        a(sez, "m_manuali_" + sez, *manuali, meta=("vedi", "documento"))
+    voce = ("🔊 La voce dell'assistente: più lenta o più veloce",
+            """Apri il robottino e tocca **🐢 Velocità della voce**: a ogni tocco passa da **normale** a **veloce**, poi **lenta**, poi di nuovo normale, e ti fa sentire una frase di prova. La scelta resta **salvata sul telefono**.
+
+Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; con **⏹ Silenzio** la fermi subito. Se il microfono o la voce non funzionano sul tuo telefono, puoi sempre **scrivere** la domanda.""",
+            "voce velocità lenta veloce parla piano più piano più veloce ascoltare assistente audio microfono")
+    a("dispensa", "d_voce", *voce, meta=("modifica", None))
+    a("utilita", "u_voce", *voce, meta=("modifica", None))
 
     # ================= la barra in basso
     barra = ("📱 La barra in basso: scorri fino all'ultima voce",
@@ -264,6 +286,8 @@ Descrivono l'app **come è oggi**. Se un pulsante o una scritta è **diverso** d
         ("2026-11-08", "🗑️", "Cestino", "Quello che elimini resta 30 giorni: «↩️ Annulla» in cima, Cestino in fondo a ogni sezione e in Utilità"),
         ("2026-11-08", "🗂️", "Archivio con guida", "Archivio → pulsante «Clicca per informazioni» con le istruzioni"),
         ("2026-11-08", "🩺", "Spie condivise e proposte", "Auto → Diagnostica veicoli → «📤 Proponi alla base condivisa»"),
+        ("2026-11-08", "📚", "Cerca nei miei manuali", "Sotto il pulsante «Informazioni»: «📚 Cerca nei miei manuali e documenti»"),
+        ("2026-11-08", "🐢", "Velocità della voce", "Nel pannello del robottino: «🐢 Velocità della voce» (lenta, normale, veloce)"),
         ("2026-11-08", "📱", "Barra in basso", "Scorri le voci con il dito verso sinistra fino all'ultima (per esempio Vaccini)"),
     ])
 
