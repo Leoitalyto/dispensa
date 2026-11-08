@@ -17,10 +17,10 @@ from datetime import datetime
 import streamlit as st
 
 AR_SP_FOTO = "conoscenza/foto_spie/{}.json"
-_AR_STATI = {"Tutte": "", "✅ Verificate": "verificata", "🟡 Da verificare": "da_verificare", "⚠️ Contestate": "contestata"}
+_AS_STATI = {"Tutte": "", "✅ Verificate": "verificata", "🟡 Da verificare": "da_verificare", "⚠️ Contestate": "contestata"}
 
 
-def _ar_admin():
+def _as_admin():
     return bool((st.session_state.get("sess") or {}).get("admin"))
 
 
@@ -38,7 +38,7 @@ def ar_sp_foto_leggi(eid):
 
 def ar_sp_foto_salva(eid, jpeg, solo_se_manca=False):
     """Allega la foto (compressa) alla voce. Ritorna True se l'ha salvata."""
-    if not _ar_admin() or not jpeg or not eid:
+    if not _as_admin() or not jpeg or not eid:
         return False
     if solo_se_manca and ar_sp_foto_leggi(eid):
         return False
@@ -53,7 +53,7 @@ def ar_sp_foto_salva(eid, jpeg, solo_se_manca=False):
 
 
 def ar_sp_foto_togli(eid):
-    if not _ar_admin():
+    if not _as_admin():
         return
     try:
         salva_file(AR_SP_FOTO.format(eid), lambda d: d.__setitem__("foto", ""), "Spia: foto tolta")
@@ -75,7 +75,7 @@ def ar_foto_da_diagnosi(ref):
 # ---------------------------------------------------------------------------------------------------------------------
 def bd_modifica(eid, spia, scope):
     """Solo amministratore: corregge nome, colore, urgenza, significato, azioni, cause, aspetto e mezzo di una voce. Ritorna True se l'ha fatto."""
-    if not _ar_admin():
+    if not _as_admin():
         return False
     colore = str(spia.get("colore") or "").lower()
     nome = str(spia.get("nome") or "").strip()
@@ -96,7 +96,7 @@ def bd_modifica(eid, spia, scope):
         return False
 
 
-def _ar_dialogo_correggi(e):
+def _as_dialogo_correggi(e):
     @st.dialog("✏️ Correggi la voce")
     def _f():
         k = f"arc_{e['id']}"
@@ -119,7 +119,7 @@ def _ar_dialogo_correggi(e):
     _f()
 
 
-def _ar_dialogo_elimina(e):
+def _as_dialogo_elimina(e):
     @st.dialog("🗑️ Eliminare questa voce?")
     def _f():
         st.warning(f"Elimino **{e.get('nome', '')}** dalla base condivisa (e la sua foto). Non si può annullare.")
@@ -134,7 +134,7 @@ def _ar_dialogo_elimina(e):
     _f()
 
 
-def _ar_dialogo_foto(e, v):
+def _as_dialogo_foto(e, v):
     @st.dialog("📷 Foto della voce")
     def _f():
         k = f"arf_{e['id']}"
@@ -168,7 +168,7 @@ def _ar_dialogo_foto(e, v):
 # ---------------------------------------------------------------------------------------------------------------------
 # la pagina
 # ---------------------------------------------------------------------------------------------------------------------
-def _ar_scheda(e, v, n):
+def _as_scheda(e, v, n):
     stato, su, giu = bd_stato(e)
     ic = _BD_ICONA.get(e.get("colore"), "⚪")
     etic = {"verificata": "✅ Verificata", "contestata": "⚠️ Contestata", "da_verificare": "🟡 Da verificare"}[stato]
@@ -201,18 +201,18 @@ def _ar_scheda(e, v, n):
             st.rerun()
         c1, c2, c3 = st.columns(3, gap="small")
         if c1.button("✏️ Correggi", key=f"arm_{n}_{e['id']}", width="stretch"):
-            _ar_dialogo_correggi(e)
+            _as_dialogo_correggi(e)
         if c2.button("📷 Foto", key=f"arp_{n}_{e['id']}", width="stretch"):
-            _ar_dialogo_foto(e, v)
+            _as_dialogo_foto(e, v)
         if c3.button("🗑️ Elimina", key=f"ard_{n}_{e['id']}", width="stretch"):
-            _ar_dialogo_elimina(e)
+            _as_dialogo_elimina(e)
 
 
 def ar_pagina_admin(v=None):
     """La pagina «🗄️ Archivio completo»: proposte, voci della base con foto, diagnosi salvate."""
-    if not _ar_admin():
+    if not _as_admin():
         return
-    st.markdown("<style>.st-key-ar_pag [data-testid='stExpander'] summary p{font-weight:800}</style>", unsafe_allow_html=True)
+    st.markdown("<style>.st-key-as_pag [data-testid='stExpander'] summary p{font-weight:800}</style>", unsafe_allow_html=True)
     voci = bd_leggi()
     n_ver = sum(1 for e in voci if bd_stato(e)[0] == "verificata")
     n_foto = sum(1 for e in voci if ar_sp_foto_leggi(e["id"]))                  # pochi file, solo amministratore
@@ -220,23 +220,23 @@ def ar_pagina_admin(v=None):
     st.success(f"**{len(voci)}** voci nella base ({n_ver} verificate) · **{n_foto}** con foto · **{pr_conta_attesa() if 'pr_conta_attesa' in globals() else 0}** proposte da verificare. Qui trovi tutto insieme: testo e foto.")
     if st.session_state.get("messaggio"):
         st.info(st.session_state.pop("messaggio"))
-    with st.container(key="ar_pag"):
+    with st.container(key="as_pag"):
         n_att = pr_conta_attesa() if "pr_conta_attesa" in globals() else 0
         if "pr_pannello_admin" in globals():
             with st.expander(f"🛠️ 1 · Proposte da verificare ({n_att})" + (" 🔔" if n_att else "")):
                 pr_pannello_admin()
         st.markdown("#### 📚 2 · Le voci della base, con la foto")
         c1, c2 = st.columns([3, 2], gap="small")
-        q = c1.text_input("🔍 Cerca (nome, significato, mezzo…)", key="ar_q", placeholder="es. gasolio, freni, camion")
-        stato_s = c2.selectbox("Stato", list(_AR_STATI), key="ar_stato")
+        q = c1.text_input("🔍 Cerca (nome, significato, mezzo…)", key="as_q", placeholder="es. gasolio, freni, camion")
+        stato_s = c2.selectbox("Stato", list(_AS_STATI), key="as_stato")
         d1, d2 = st.columns(2, gap="small")
-        col_s = d1.selectbox("Colore", ["Tutti"] + [f"{_BD_ICONA[c]} {c}" for c in _BD_COLORI], key="ar_col")
+        col_s = d1.selectbox("Colore", ["Tutti"] + [f"{_BD_ICONA[c]} {c}" for c in _BD_COLORI], key="as_col")
         tipi = sorted({e.get("tipo_mezzo") for e in voci if e.get("tipo_mezzo")})
-        tipo_s = d2.selectbox("Mezzo", ["Tutti"] + tipi, key="ar_tipo")
-        solo_foto = st.checkbox("Mostra solo le voci con foto", key="ar_solofoto")
+        tipo_s = d2.selectbox("Mezzo", ["Tutti"] + tipi, key="as_tipo")
+        solo_foto = st.checkbox("Mostra solo le voci con foto", key="as_solofoto")
         sel = []
         for e in sorted(voci, key=lambda x: (x.get("ultima") or "", x.get("creata") or ""), reverse=True):
-            if _AR_STATI[stato_s] and bd_stato(e)[0] != _AR_STATI[stato_s]:
+            if _AS_STATI[stato_s] and bd_stato(e)[0] != _AS_STATI[stato_s]:
                 continue
             if col_s != "Tutti" and e.get("colore") != col_s.split(" ", 1)[1]:
                 continue
@@ -252,13 +252,13 @@ def ar_pagina_admin(v=None):
             st.info("La base è ancora vuota: si riempie con le spie che aggiungi tu o che approvi dalle proposte.")
         elif not sel:
             st.info("Nessuna voce corrisponde ai filtri.")
-        limite = st.session_state.get("ar_limite", 12)
+        limite = st.session_state.get("as_limite", 12)
         for e in sel[:limite]:
-            _ar_scheda(e, v, "l")
+            _as_scheda(e, v, "l")
         if len(sel) > limite:
             st.caption(f"Ne mostro {limite} su {len(sel)}.")
-            if st.button("➕ Mostra altre", key="ar_altre", width="stretch"):
-                st.session_state["ar_limite"] = limite + 12
+            if st.button("➕ Mostra altre", key="as_altre", width="stretch"):
+                st.session_state["as_limite"] = limite + 12
                 st.rerun()
         st.markdown("#### 📷 3 · Le diagnosi salvate nel veicolo")
         diag = sorted((v or {}).get("diagnosi", []), key=lambda x: x.get("data", ""), reverse=True)
