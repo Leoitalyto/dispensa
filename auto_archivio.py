@@ -97,7 +97,7 @@ def bd_modifica(eid, spia, scope):
 
 
 def _as_dialogo_correggi(e):
-    @st.dialog("✏️ Correggi la voce")
+    @st.dialog("✏️ Modifica la voce")
     def _f():
         k = f"arc_{e['id']}"
         nome = st.text_input("Nome della spia", value=e.get("nome", ""), key=f"{k}_n")
@@ -141,7 +141,7 @@ def _as_dialogo_foto(e, v):
         att = ar_sp_foto_leggi(e["id"])
         if att:
             st.image(att, caption="Foto attuale (la vedi solo tu)", width="stretch")
-            if st.button("🗑️ Togli questa foto", key=f"{k}_t", width="stretch"):
+            if st.button("🗑️ Elimina questa foto", key=f"{k}_t", width="stretch"):
                 ar_sp_foto_togli(e["id"])
                 st.session_state["messaggio"] = "Foto tolta."
                 st.rerun()
@@ -200,7 +200,7 @@ def _as_scheda(e, v, n):
             bd_admin(e["id"], "contesta" if stato != "contestata" else "ripristina")
             st.rerun()
         c1, c2, c3 = st.columns(3, gap="small")
-        if c1.button("✏️ Correggi", key=f"arm_{n}_{e['id']}", width="stretch"):
+        if c1.button("✏️ Modifica", key=f"arm_{n}_{e['id']}", width="stretch"):
             _as_dialogo_correggi(e)
         if c2.button("📷 Foto", key=f"arp_{n}_{e['id']}", width="stretch"):
             _as_dialogo_foto(e, v)

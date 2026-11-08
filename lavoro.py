@@ -307,7 +307,7 @@ def _lv_dialogo_togli_lavoro(lid, nome):
             st.rerun()
         if s2.button("No, tienilo", key=f"lv_lav_no_{lid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli il lavoro")(_finestra)()
+    st.dialog("🗑️ Elimina il lavoro")(_finestra)()
 
 
 def lv_selettore_lavoro(c, chiave="lv_lavoro_p"):
@@ -482,7 +482,7 @@ def _lv_dialogo_togli_contatto(cid, nome, modo="lavoro"):
             st.rerun()
         if s2.button("No, tienilo", key=f"lv_ct_no_{cid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli dalla rubrica")(_finestra)()
+    st.dialog("🗑️ Elimina dalla rubrica")(_finestra)()
 
 
 def _lv_form_contatto(m=None, modo="lavoro"):
@@ -575,7 +575,7 @@ def lv_tab_contatti(c, modo="lavoro"):
         if d1.button("✏️ Modifica", key=f"{pref}_c_e_{m['id']}", width="stretch"):
             st.session_state[f"{pref}_cont_mod"] = m["id"]
             st.rerun()
-        if d2.button("🗑️ Togli", key=f"{pref}_c_t_{m['id']}", width="stretch"):
+        if d2.button("🗑️ Elimina", key=f"{pref}_c_t_{m['id']}", width="stretch"):
             _lv_dialogo_togli_contatto(m["id"], m.get("nome") or m.get("referente") or "questo contatto", modo)
         with d3:
             if "_fa_inv_voce" in globals():
@@ -796,7 +796,7 @@ Sotto, **il confronto con gli anni prima**, in euro e in percentuale. Per l'anno
 Puoi **scaricare** il riepilogo (HTML o PDF) e **inviarlo** per email, WhatsApp o Telegram.""", "grafico anno confronto netto lordo trattenute percentuale riepilogo esporta"),
         ("🤝 Sindacato, CAF, Patronato: la rubrica",
          """Scegli **🤝 Sindacato · CAF · Patronato**. Tocca **➕ Aggiungi un contatto**, scegli il **badge** (Sindacato, CAF, Patronato, Consulente del lavoro, Commercialista, Avvocato, INPS, Agenzia delle Entrate, Altro) e scrivi nome, persona di riferimento, telefono, **cellulare**, email, indirizzo, orari e note.
-Su ogni contatto: **📞 Chiama**, **💬 WhatsApp** (compare se hai scritto un cellulare), **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito**, poi **✏️ Modifica**, **🗑️ Togli** (ti chiedo conferma) e **📤 Invia**.
+Su ogni contatto: **📞 Chiama**, **💬 WhatsApp** (compare se hai scritto un cellulare), **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito**, poi **✏️ Modifica**, **🗑️ Elimina** (ti chiedo conferma) e **📤 Invia**.
 In alto puoi **filtrare per badge** e **cercare**. In fondo **scarichi** la rubrica o la **invii**.""", "sindacato caf patronato rubrica contatti telefono whatsapp email indirizzo badge consulente commercialista"),
         ("📑 Certificazione Unica (CU)",
          """Scegli **📑 Certificazione Unica**. Carica il PDF o una foto: l'app **la riconosce da sola** come Certificazione Unica e legge l'**anno**, **chi l'ha emessa**, il **reddito**, le **ritenute IRPEF** e le **addizionali**. Controlli e confermi.

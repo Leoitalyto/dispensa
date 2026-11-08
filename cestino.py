@@ -19,7 +19,11 @@ import streamlit as st
 CS = "cestino"
 CS_FILE = "cestino_file"
 CS_MAX = 400
-_CS_ESCLUDI = {CS, CS_FILE, "storico", "registro", "eventi", "spesa", "provati", "cronologia", "log", "sessioni"}
+CS_REG = "registro_mod"
+RM_MAX = 300
+RM_GIORNI = 180
+_RM_NOISE = {"aggiornato", "aggiornata", "modificato", "modificato_il", "modificata_il", "ultimo_avviso", "gia_avvisato", "versione", "letto", "visto", "ultimo_accesso", "ts", "creato_il_agg"}
+_CS_ESCLUDI = {CS, CS_FILE, CS_REG, "storico", "registro", "eventi", "spesa", "provati", "cronologia", "log", "sessioni"}
 _CS_SEZIONI = {"articoli": "Dispensa", "farmacia": "Salute", "casa": "Casa", "auto": "Auto"}
 _CS_TIPI_LAVORO = {"Busta paga", "Certificazione Unica (CU)", "Documento INPS"}
 _CS_GIORNI = [7, 15, 30, 60, 90]
@@ -64,7 +68,7 @@ def _cs_ids(o, ids):
         if isinstance(x, str):
             ids.add(x)
         for k, v in o.items():
-            if k not in (CS, CS_FILE):
+            if k not in (CS, CS_FILE, CS_REG):
                 _cs_ids(v, ids)
     elif isinstance(o, list):
         for v in o:
@@ -135,9 +139,9 @@ def _cs_file_di(voce):
 def _cs_applica(prima, d, escludi=()):
     """Dentro il salvataggio: sposta nel Cestino ciò che è stato eliminato e toglie ciò che è scaduto. Ritorna (nuovi record, id file da cancellare davvero)."""
     ids_dopo = set()
-    _cs_ids({k: v for k, v in d.items() if k not in (CS, CS_FILE)}, ids_dopo)
+    _cs_ids({k: v for k, v in d.items() if k not in (CS, CS_FILE, CS_REG)}, ids_dopo)
     rimossi = []
-    _cs_rimossi({k: v for k, v in prima.items() if k not in (CS, CS_FILE)}, ids_dopo, [], rimossi)
+    _cs_rimossi({k: v for k, v in prima.items() if k not in (CS, CS_FILE, CS_REG)}, ids_dopo, [], rimossi)
     cest = d.get(CS)
     if not isinstance(cest, list):
         cest = d[CS] = []
@@ -147,7 +151,7 @@ def _cs_applica(prima, d, escludi=()):
     for percorso, x in rimossi[:200]:
         if x["id"] in gia or x["id"] in escludi:                       # già nel Cestino, oppure un prodotto finito/buttato (statistiche): non è un'eliminazione da annullare
             continue
-        rec = {"id": "cs" + x["id"][:10] + ora[-5:].replace(":", ""), "voce": copy.deepcopy(x), "percorso": percorso, "sezione": _cs_sezione(percorso, x), "etichetta": _cs_etichetta(x), "eliminato_il": ora, "gruppo": gruppo}
+        rec = {"id": "cs" + x["id"][:10] + ora[-5:].replace(":", ""), "voce": copy.deepcopy(x), "percorso": percorso, "sezione": _cs_sezione(percorso, x), "etichetta": _cs_etichetta(x), "eliminato_il": ora, "gruppo": gruppo, "c": str(x.get("casa_id") or "")}
         cest.append(rec)
         nuovi.append(rec)
     da_cancellare = []
@@ -175,6 +179,76 @@ def _cs_applica(prima, d, escludi=()):
     if not cest:
         d.pop(CS, None)
     return nuovi, list(dict.fromkeys(i for i in da_cancellare if i))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# STORICO DELLE MODIFICHE: il registro delle OPERAZIONI (aggiunto, modificato, eliminato, ripristinato, quando e in quale sezione).
+# Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato): qui NON c'è il contenuto, solo il nome dell'elemento e i NOMI dei campi cambiati.
+# ---------------------------------------------------------------------------------------------------------------------
+def _rm_elementi(o, percorso, out):
+    """{id: (percorso, dizionario)} di ogni elemento con «id» dentro una lista (qualsiasi profondità), senza i registri."""
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k not in _CS_ESCLUDI:
+                _rm_elementi(v, percorso + [k], out)
+    elif isinstance(o, list):
+        for x in o:
+            if isinstance(x, dict) and isinstance(x.get("id"), str):
+                out[x["id"]] = (percorso, x)
+                for k, v in x.items():
+                    if k not in _CS_ESCLUDI:
+                        _rm_elementi(v, percorso + [["id", x["id"]], k], out)
+
+
+def _rm_scalari(x):
+    """I campi semplici di un elemento (testo, numeri, sì/no, elenchi di testo): quelli annidati con altri elementi si seguono a parte."""
+    out = {}
+    for k, v in x.items():
+        if k in _RM_NOISE or k.startswith("_") or k == "id":
+            continue
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        elif isinstance(v, list) and all(isinstance(z, (str, int, float, bool)) for z in v):
+            out[k] = v
+        elif isinstance(v, dict) and "id" not in v and all(isinstance(z, (str, int, float, bool, type(None))) for z in v.values()):
+            out[k] = v
+    return out
+
+
+def _rm_calcola(prima, d, nuovi):
+    """Le righe del registro per questo salvataggio: [(azione, sezione, etichetta, [campi])]."""
+    a, b = {}, {}
+    _rm_elementi({k: v for k, v in prima.items() if k not in (CS, CS_FILE, CS_REG)}, [], a)
+    _rm_elementi({k: v for k, v in d.items() if k not in (CS, CS_FILE, CS_REG)}, [], b)
+    righe = []
+    for i, (perc, x) in b.items():
+        if i not in a:
+            righe.append(("aggiunto", _cs_sezione(perc, x), _cs_etichetta(x), [], str(x.get("casa_id") or "")))
+        else:
+            sa, sb = _rm_scalari(a[i][1]), _rm_scalari(x)
+            campi = sorted(k for k in set(sa) | set(sb) if sa.get(k) != sb.get(k))
+            if campi:
+                righe.append(("modificato", _cs_sezione(perc, x), _cs_etichetta(x), campi[:8], str(x.get("casa_id") or "")))
+    for r in nuovi:                                                                             # gli eliminati: quelli finiti nel Cestino
+        righe.append(("eliminato", r.get("sezione", "Altro"), r.get("etichetta", "Elemento"), [], r.get("c", "")))
+    return righe
+
+
+def _rm_scrivi(d, righe, quando):
+    if not righe:
+        return
+    reg = d.get(CS_REG)
+    if not isinstance(reg, list):
+        reg = d[CS_REG] = []
+    for az, sez, et, campi, *resto in righe[:20]:
+        reg.append({"q": quando, "az": az, "sez": sez, "e": et, "campi": campi, "c": (resto[0] if resto else "")})
+    if len(righe) > 20:
+        reg.append({"q": quando, "az": "altro", "sez": "Altro", "e": f"…e altre {len(righe) - 20} operazioni", "campi": []})
+    try:
+        limite = (datetime.strptime(quando, "%Y-%m-%d %H:%M") - timedelta(days=RM_GIORNI)).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        limite = ""
+    d[CS_REG] = [r for r in reg if isinstance(r, dict) and r.get("q", "") >= limite][-RM_MAX:]
 
 
 def _cs_percorso_personale():
@@ -210,6 +284,10 @@ def salva_file(nome, fn, messaggio):
         st.session_state["_cs_eventi"] = set()
         fn(d)
         esito["nuovi"], esito["file"] = _cs_applica(prima, d, st.session_state.pop("_cs_eventi", set()))
+        try:
+            _rm_scrivi(d, _rm_calcola(prima, d, esito["nuovi"]), _cs_ora())
+        except Exception:
+            pass                                                                                # il registro non deve mai impedire un salvataggio
     st.session_state["_cs_nel_salvataggio"] = True
     try:
         r = _cs_salva_file_prima(nome, _fn2, messaggio)
@@ -342,6 +420,11 @@ def cs_ripristina(rid):
             d.pop(CS, None)
         esito["n"] = fatti
         nome = mem[0].get("etichetta", "Elemento")
+        if fatti:
+            try:
+                _rm_scrivi(d, [("ripristinato", mem[0].get("sezione", "Altro"), nome + (f" e altri {fatti - 1}" if fatti > 1 else ""), [], mem[0].get("c", ""))], _cs_ora())
+            except Exception:
+                pass
         if fatti == len(mem):
             esito["ok"], esito["msg"] = True, f"✅ «{nome}» è tornato al suo posto" + (f", con {fatti - 1} elementi collegati." if fatti > 1 else ".")
         elif fatti:
@@ -438,10 +521,23 @@ def _cs_dialogo_per_sempre(rids, etichetta):
     _f()
 
 
+def _cs_casa_vista():
+    """La casa guardata adesso in Casa («» = la principale): nella sezione Casa si vedono solo le cose di quella casa."""
+    return str(st.session_state.get("ca_casa_sel") or "")
+
+
+def _cs_della_sezione(r, sezione):
+    if sezione and r.get("sezione") != sezione:
+        return False
+    if sezione == "Casa" and str(r.get("c", "") or "") != _cs_casa_vista():
+        return False
+    return True
+
+
 def cs_pagina(sezione=None, chiave="cs"):
     """Il Cestino: elenco, ripristina, elimina per sempre. `sezione` = solo quella sezione."""
     recs, giorni = cs_leggi()
-    mie = [r for r in recs if (not sezione or r.get("sezione") == sezione)]
+    mie = [r for r in recs if _cs_della_sezione(r, sezione)]
     if not mie:
         st.caption("Il Cestino è vuoto." + (" Quello che elimini finisce qui e lo puoi ripristinare per " + str(giorni) + " giorni." if not sezione else ""))
     gruppi = {}
@@ -469,14 +565,49 @@ def cs_pagina(sezione=None, chiave="cs"):
             st.rerun()
 
 
+_RM_ICONE = {"aggiunto": "➕ Aggiunto", "modificato": "✏️ Modificato", "eliminato": "🗑️ Eliminato", "ripristinato": "↩️ Ripristinato", "altro": "…"}
+
+
+def rm_leggi():
+    pers = _cs_percorso_personale()
+    if not pers:
+        return []
+    try:
+        d = carica_dati(crea_archivio(), pers)
+    except Exception:
+        return []
+    return [r for r in (d.get(CS_REG) or []) if isinstance(r, dict)]
+
+
+def rm_pagina(sezione=None, chiave="rm", massimo=30):
+    """Lo storico delle modifiche: cosa è stato aggiunto, modificato, eliminato o ripristinato, e quando (senza il contenuto)."""
+    reg = [r for r in rm_leggi() if (not sezione or (r.get("sez") == sezione and (sezione != "Casa" or str(r.get("c", "") or "") == _cs_casa_vista())))]
+    st.caption("È il **registro delle operazioni** (non l'elenco dei contenuti): ogni riga dice cosa è stato fatto e quando. Non contiene i dati veri, solo il nome dell'elemento e quali campi sono cambiati.")
+    if not reg:
+        st.caption("Per ora non c'è niente: le prossime operazioni compariranno qui.")
+        return
+    for r in sorted(reg, key=lambda x: x.get("q", ""), reverse=True)[:massimo]:
+        try:
+            dt = datetime.strptime(r["q"], "%Y-%m-%d %H:%M")
+            quando = dt.strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            quando = r.get("q", "")
+        campi = (" — campi: " + ", ".join(r["campi"])) if r.get("campi") else ""
+        st.markdown(f"{_RM_ICONE.get(r.get('az'), r.get('az'))} · **{r.get('e', 'Elemento')}**" + (f" · {r.get('sez')}" if not sezione else "") + f"  \n<small>{quando}{campi}</small>", unsafe_allow_html=True)
+    if len(reg) > massimo:
+        st.caption(f"Ho mostrato le ultime {massimo} operazioni su {len(reg)}.")
+
+
 def cs_riquadro(sezione):
     """Una linguetta «🗑️ Cestino (N)» in fondo a una sezione, solo con gli elementi di quella sezione."""
     if not cs_attivo():
         return
     recs, _g = cs_leggi()
-    n = sum(1 for r in recs if r.get("sezione") == sezione)
+    n = sum(1 for r in recs if _cs_della_sezione(r, sezione))
     with st.expander(f"🗑️ Cestino di questa sezione ({n})"):
         cs_pagina(sezione, "cs_" + sezione.lower())
+    with st.expander("🕘 Storico delle modifiche di questa sezione"):
+        rm_pagina(sezione, "rm_" + sezione.lower())
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -521,6 +652,8 @@ def schermata_utilita():
             recs, _g = cs_leggi()
             with st.expander(f"🗑️ Cestino ({len(recs)})"):
                 cs_pagina(None, "cs_ut")
+            with st.expander("🕘 Storico delle modifiche"):
+                rm_pagina(None, "rm_ut")
     except Exception:
         pass
     return r

@@ -942,7 +942,7 @@ def ad_pagina(v):
         _ad_storico(v) if v else None
         return
     st.image(jpeg, width="stretch", caption="La tua foto")
-    if st.button("🗑️ Togli questa foto", key="ad_togli", width="stretch"):
+    if st.button("🗑️ Elimina questa foto", key="ad_togli", width="stretch"):
         for k in ("ad_foto", "ad_sha", "ad_ris"):
             st.session_state.pop(k, None)
         st.session_state["ca_giro"] = st.session_state.get("ca_giro", 0) + 1

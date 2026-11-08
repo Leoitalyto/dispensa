@@ -299,7 +299,7 @@ def _au_dialogo_togli_file(vid, coll, iid, ref):
             st.rerun()
         if s2.button("No", key=f"au_fdn_{ref.get('id')}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli il file")(_finestra)()
+    st.dialog("🗑️ Elimina il file")(_finestra)()
 
 
 def _au_dialogo_form(vid, coll, titolo_finestra, spec, it=None, aggiorna_km=True):
@@ -371,7 +371,7 @@ def _au_elenco(v, coll, titolo_sez, spec, titolo_fn, righe_fn, vuoto, nome_nuovo
         if b1.button("📎 Allega un file", key=f"au_all_{it['id']}", width="stretch"):
             st.session_state["au_allega"] = {"vid": vid, "coll": coll, "id": it["id"], "titolo": titolo_fn(it)}
             st.rerun()
-        if b2.button("✏️ Correggi", key=f"au_cor_{it['id']}", width="stretch"):
+        if b2.button("✏️ Modifica", key=f"au_cor_{it['id']}", width="stretch"):
             _au_dialogo_form(vid, coll, "Correggi", spec, it, aggiorna_km)
         b3, b4 = st.columns(2, gap="small")
         with b3:

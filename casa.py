@@ -1807,7 +1807,7 @@ def _ca_dialogo_togli_casa(cid, nome):
             st.rerun()
         if s2.button("No, tienila", key=f"ca_casa_no_{cid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli la casa")(_finestra)()
+    st.dialog("🗑️ Elimina la casa")(_finestra)()
 
 
 def ca_selettore_casa(c):
@@ -2153,7 +2153,7 @@ def _ca_riga_documento(d, beni_nomi, pre="", docs=None):
     else:
         b1.caption("⚠️ Il file non è più disponibile.")
     b3, b4 = st.columns(2, gap="small")
-    if b3.button("✏️ Correggi", key=f"ca_cor_{k}", width="stretch"):
+    if b3.button("✏️ Modifica", key=f"ca_cor_{k}", width="stretch"):
         st.session_state["ca_correggi"] = d["id"]
         st.rerun()
     if b4.button("🗑️ Elimina", key=f"ca_del_{k}", width="stretch"):
@@ -3391,13 +3391,13 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
 
 
 def _ca_correzione(c, beni):
-    """Il modulo «✏️ Correggi» di un documento (compare quando tocchi Correggi su una scheda). Serve a Casa e a Lavoro."""
+    """Il modulo «✏️ Modifica» di un documento (compare quando tocchi Correggi su una scheda). Serve a Casa e a Lavoro."""
     # ---- correzione e cancellazione
     cid = st.session_state.get("ca_correggi")
     if cid:
         d = next((x for x in c.get("documenti", []) if x["id"] == cid), None)
         if d:
-            st.markdown(f"##### ✏️ Correggi: {_ca_testo(d.get('titolo'))}")
+            st.markdown(f"##### ✏️ Modifica: {_ca_testo(d.get('titolo'))}")
             if st.button("🔄 Rileggi il file e completa i dati mancanti", key=f"ca_rileggi_{cid}", width="stretch",
                          help="Rilegge il file con il lettore aggiornato e riempie SOLO i campi ancora vuoti: quello che hai già scritto o corretto non si tocca."):
                 f_ = d.get("file") or {}
@@ -3889,7 +3889,7 @@ Anche i messaggi che metti nell'etichetta Gmail **«Casa»** arrivano qui. I mes
 **🔄 Controlla la posta adesso** apre GitHub per far partire subito il controllo (tocca **Run workflow**).""",
          "posta email inoltrare gmail allegato condividere app fornitore bolletta screenshot casa dispensa"),
         ("✏️ Correggere o eliminare un documento",
-         """Nell'elenco dei documenti tocca **✏️ Correggi** per cambiare argomento, azienda, importo, date, tipo, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
+         """Nell'elenco dei documenti tocca **✏️ Modifica** per cambiare argomento, azienda, importo, date, tipo, marca, modello, bene collegato e il resto: l'originale e i dati letti dal programma restano com'erano.
 Tocca **🗑️ Elimina** per toglierlo (ti chiedo conferma). **📤 Invia** lo manda per email, WhatsApp o Telegram.""",
          "correggere modificare eliminare cancellare documento manuale inviare condividere"),
     ])

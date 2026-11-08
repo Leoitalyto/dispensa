@@ -1351,7 +1351,7 @@ def _fa_presc_dettaglio_corpo(pre_id, pid):
                             st.rerun()
                     q2.button("Annulla", key=f"fa_pcn_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, None))
                 else:
-                    st.button("🗑️ Togli questo file", key=f"fa_pct_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, True))
+                    st.button("🗑️ Elimina questo file", key=f"fa_pct_{a_['id']}", width="stretch", on_click=_doc_imposta, args=(k_c, True))
     else:
         st.info("Nessuna foto o PDF allegato. Tocca «Modifica» per aggiungere la ricetta.")
 
@@ -2737,7 +2737,7 @@ def _fa_scegli_da_archivio(f, ck):
             if c1.button("✔ Usa questa foto", key="fa_arch_usa_" + ck, type="primary", width="stretch"):
                 st.session_state[chiave] = scelto
                 st.rerun()
-            if c2.button("🗑️ Togli dall'archivio", key="fa_arch_del_" + ck, width="stretch"):
+            if c2.button("🗑️ Elimina dall'archivio", key="fa_arch_del_" + ck, width="stretch"):
                 try:
                     _fa_salva(lambda f: f.__setitem__("archivio_foto", [e for e in f.get("archivio_foto", []) if e["id"] != scelto]),
                               "Salute: archivio foto")
@@ -4053,7 +4053,7 @@ def campo_foto_doc(chiave, titolo):
         st.warning(f"L'editor di ritocco non è partito ({type(ex).__name__}); salvo la foto già sistemata in automatico.")
     st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
     st.caption(f"✅ {titolo}: foto pronta. Sarà salvata quando tocchi «Salva il documento».")
-    if st.button("🗑️ Togli questa foto", key=f"docscarta_{chiave}"):
+    if st.button("🗑️ Elimina questa foto", key=f"docscarta_{chiave}"):
         st.session_state[f"{chiave}_scartata"] = ident_f
         st.rerun()
     return nuova
@@ -4226,7 +4226,7 @@ def _fa_modulo_tessera(pid):
                                   label_visibility="collapsed")
             b1, b2 = st.columns(2)
             salva_b = b1.form_submit_button("💾 Salva", type="primary", width="stretch")
-            togli_b = b2.form_submit_button("🗑️ Togli il link" if url else "Annulla", width="stretch")
+            togli_b = b2.form_submit_button("🗑️ Elimina il link" if url else "Annulla", width="stretch")
         if salva_b:
             valido = _fa_url_valido(nuovo)
             if valido is None:

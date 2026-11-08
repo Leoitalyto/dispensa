@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.1"
+GUIDA_VERSIONE = "2.2"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -124,6 +124,21 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
             "voce velocità lenta veloce parla piano più piano più veloce ascoltare assistente audio microfono")
     a("dispensa", "d_voce", *voce, meta=("modifica", None))
     a("utilita", "u_voce", *voce, meta=("modifica", None))
+
+    # ================= lo storico delle modifiche
+    for sez in ("farmacia", "documenti", "archivio", "casa", "lavoro", "auto", "utilita", "dispensa"):
+        dove = ("Apri **Home → 🧰 Utilità** e tocca **🕘 Storico delle modifiche**." if sez in ("dispensa", "utilita") else
+                "In fondo alla pagina apri **🕘 Storico delle modifiche di questa sezione** (per le operazioni di tutte le sezioni: **Utilità → 🕘 Storico delle modifiche**).")
+        a(sez, "rm_" + sez, "🕘 Storico delle modifiche: cosa è stato fatto e quando",
+          f"""È il **registro delle operazioni**: dice che cosa è stato **aggiunto, modificato, eliminato o ripristinato** e **quando**.
+
+{dove}
+
+- Ogni riga ha il nome dell'elemento, la data e l'ora e, per le modifiche, **quali campi sono cambiati** (per esempio «campi: nome, scadenza»).
+- **Non contiene i dati veri** (non vedi il vecchio e il nuovo valore): serve a sapere cosa è successo, non a tornare indietro. Per tornare indietro su un'eliminazione usa il **Cestino**.
+- Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
+- Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
+          "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
 
     # ================= la barra in basso
     barra = ("📱 La barra in basso: scorri fino all'ultima voce",
@@ -249,7 +264,7 @@ Se un canale non può mandare il file allegato, l'app te lo dice e ti propone di
 
 All'amministratore arrivano **la foto, il testo, il tipo di ricerca, il mezzo e il modello**. Tu vedi lo stato in **📬 Le mie proposte** (in attesa, approvata, rifiutata con il motivo). Massimo **5 proposte al giorno**.
 
-**Se sei l'amministratore:** **🛠️ Proposte da verificare** e **🗄️ Archivio completo (testo e foto insieme)** (voci con foto, ricerca, Conferma/Contesta, Correggi, Foto, Elimina).""",
+**Se sei l'amministratore:** **🛠️ Proposte da verificare** e **🗄️ Archivio completo (testo e foto insieme)** (voci con foto, ricerca, Conferma/Contesta, Modifica, Foto, Elimina).""",
       "proporre proposta spia base condivisa verifica amministratore approvare rifiutare archivio completo foto testo", ("aggiungi", None))
     a("auto", "au_patente", "👤 Patente e multe",
       """Da **Auto → 👤 Patente e multe** (anche senza veicoli):
@@ -286,6 +301,7 @@ Descrivono l'app **come è oggi**. Se un pulsante o una scritta è **diverso** d
         ("2026-11-08", "🗑️", "Cestino", "Quello che elimini resta 30 giorni: «↩️ Annulla» in cima, Cestino in fondo a ogni sezione e in Utilità"),
         ("2026-11-08", "🗂️", "Archivio con guida", "Archivio → pulsante «Clicca per informazioni» con le istruzioni"),
         ("2026-11-08", "🩺", "Spie condivise e proposte", "Auto → Diagnostica veicoli → «📤 Proponi alla base condivisa»"),
+        ("2026-11-08", "🕘", "Storico delle modifiche", "In fondo a ogni sezione e in Utilità: cosa è stato aggiunto, modificato o eliminato, e quando"),
         ("2026-11-08", "📚", "Cerca nei miei manuali", "Sotto il pulsante «Informazioni»: «📚 Cerca nei miei manuali e documenti»"),
         ("2026-11-08", "🐢", "Velocità della voce", "Nel pannello del robottino: «🐢 Velocità della voce» (lenta, normale, veloce)"),
         ("2026-11-08", "📱", "Barra in basso", "Scorri le voci con il dito verso sinistra fino all'ultima (per esempio Vaccini)"),

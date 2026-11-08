@@ -257,7 +257,7 @@ In alto scegli **🏷️ Che cos'è?**: oltre ai farmaci puoi inserire integrato
 2. Torna qui, **incollalo** nella casella giusta.
 3. Tocca **💾 Salva**.
 4. Da quel momento compare un pulsante **🔗**: toccandolo si apre direttamente la pagina.
-5. Per cambiare il link tocca **✏️ Modifica**; per toglierlo tocca **🗑️ Togli il link**.
+5. Per cambiare il link tocca **✏️ Modifica**; per toglierlo tocca **🗑️ Elimina il link**.
 
 I collegamenti sono separati per ogni profilo della famiglia.""",
          "tessera sanitaria fascicolo sanitario elettronico fse link collegamento indirizzo vaccinazioni online spese sanitarie detraibili fronte retro badge azzurro 730 detrazioni"),
@@ -323,7 +323,7 @@ Se vuoi solo fermare i promemoria per un po', apri **Modifica** e cambia lo **st
 2. **Tocca la prescrizione**: si apre il dettaglio.
 3. In fondo tocca **🗑️ Elimina** e conferma con **Sì, elimina**.
 
-Per togliere **solo la foto o il PDF** della ricetta, nel dettaglio tocca **👁️ Mostra la ricetta** e poi **🗑️ Togli questo file**.""",
+Per togliere **solo la foto o il PDF** della ricetta, nel dettaglio tocca **👁️ Mostra la ricetta** e poi **🗑️ Elimina questo file**.""",
          "prescrizione ricetta eliminare togliere cancellare rimuovere file foto pdf"),
         ("🗑️ Eliminare una visita o un esame",
          """1. Apri **Salute** → scheda **🩺 Visite**.
@@ -333,7 +333,7 @@ Per togliere **solo la foto o il PDF** della ricetta, nel dettaglio tocca **👁
          """1. Apri **Salute** → scheda **💉 Vaccini**.
 2. Sulla **scheda della vaccinazione** tocca **Elimina** (con conferma) oppure **Modifica** per cambiare data o richiamo.""",
          "vaccino vaccinazione eliminare togliere cancellare modificare richiamo"),
-        ("🗑️ Togliere una persona (profilo)",
+        ("🗑️ Eliminaere una persona (profilo)",
          """1. Apri **Salute** e scegli la persona nel menu **👤 Profilo**.
 2. Apri **👥 Gestisci profili** e scorri in fondo.
 3. Spunta **Elimina il profilo…** (vedi quanti medicinali, terapie, visite e documenti ha) e tocca **Elimina profilo**.
@@ -435,7 +435,7 @@ L'app ti avvisa **6 mesi prima** (primo avviso, arancione) e **3 mesi prima** (s
 3. Sotto compare l'**editor**: trascina il **righello** per girare e la **cornice** per tagliare.
 4. Quando è perfetta tocca **💾 Salva posizione e ritaglio**.
 5. Se il documento è stato tagliato male spunta **«Tieni anche lo sfondo»**: l'immagine resta intera e la sistemi solo a mano.
-6. Se hai sbagliato foto tocca **🗑️ Togli questa foto**.
+6. Se hai sbagliato foto tocca **🗑️ Elimina questa foto**.
 7. Alla fine tocca **💾 Salva il documento**: le foto vengono salvate insieme ai dati.
 
 Per un **PDF** o altre pagine usa il campo **«Altri file»** sotto il modulo.""",

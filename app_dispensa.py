@@ -241,6 +241,48 @@ if _MEMORIA_CODICE is None:                                             # soprav
     _MEMORIA_CODICE.codice = {}
 
 
+# CARICAMENTO PROGRESSIVO DELLE SCHEDE: solo la scheda aperta viene disegnata (le altre restano vuote finché non le tocchi). Prima ogni ridisegno
+# costruiva e mandava al telefono anche tutte le schede nascoste (nella Dispensa circa 1300 elementi su 2200). Vale solo per le schede che non
+# si passano variabili fra loro (controllato con l'analisi del codice); la scheda principale (Dispensa, Medicinali) è sempre disegnata.
+# Si spegne con CARICAMENTO_PROGRESSIVO = "no" nei Secrets. Se la scheda non sa dire se è aperta (`.open` manca), resta tutto com'era.
+# NON pigre (di proposito): «Aggiungi», «Gestisci» e «Utenti» hanno moduli con testo scritto a metà: se la scheda non viene disegnata, Streamlit dimentica
+# quello che hai scritto e passando a un'altra scheda e tornando lo perderesti (provato). Restano sempre disegnate.
+_TABS_PIGRE = {"parte4.py": {"tab_spesa", "tab_messaggi", "tab_info", "tab_statistiche"},
+               "farmacia.py": {"tab_ter", "tab_pre", "tab_vis", "tab_vac"}}
+
+
+def _tab_aperta(_t):
+    try:
+        _a = getattr(_t, "open", True)
+        return True if _a is None else bool(_a)
+    except Exception:
+        return True
+
+
+def _pigre_attivo():
+    try:
+        import streamlit as _st_pg
+        return str(_st_pg.secrets.get("CARICAMENTO_PROGRESSIVO", "si")).strip().lower() not in ("no", "off", "0", "spento")
+    except Exception:
+        return True
+
+
+def _compila_con_schede_pigre(_testo, _percorso, _nomi):
+    import ast as _ast
+    _albero = _ast.parse(_testo, _percorso)
+
+    class _Pigra(_ast.NodeTransformer):
+        def visit_With(self, n):
+            self.generic_visit(n)
+            if len(n.items) == 1 and n.items[0].optional_vars is None and isinstance(n.items[0].context_expr, _ast.Name) and n.items[0].context_expr.id in _nomi and n.body:
+                _guardia = _ast.If(test=_ast.Call(func=_ast.Name(id="_tab_aperta", ctx=_ast.Load()), args=[_ast.Name(id=n.items[0].context_expr.id, ctx=_ast.Load())], keywords=[]), body=n.body, orelse=[])
+                n.body = [_ast.copy_location(_guardia, n.body[0])]
+            return n
+    _albero = _Pigra().visit(_albero)
+    _ast.fix_missing_locations(_albero)
+    return compile(_albero, _percorso, "exec")
+
+
 def _carica(percorso):
     with open(percorso, encoding="utf-8") as _f:
         _testo = _f.read()
@@ -253,10 +295,11 @@ def _carica(percorso):
             else:
                 import streamlit as _st
                 _st.sidebar.caption("⚠️ Farmacia: punto di aggancio non trovato in " + os.path.basename(percorso))
-    _chiave = (percorso, _hashlib_cc.md5(_testo.encode("utf-8")).hexdigest())
+    _nomi_pigri = _TABS_PIGRE.get(os.path.basename(percorso)) if _pigre_attivo() else None
+    _chiave = (percorso, _hashlib_cc.md5(_testo.encode("utf-8")).hexdigest(), bool(_nomi_pigri))
     _codice = _MEMORIA_CODICE.codice.get(_chiave)
     if _codice is None:
-        _codice = compile(_testo, percorso, "exec")
+        _codice = _compila_con_schede_pigre(_testo, percorso, _nomi_pigri) if _nomi_pigri else compile(_testo, percorso, "exec")
         for _vecchia in [k for k in _MEMORIA_CODICE.codice if k[0] == percorso]:                  # di ogni file si tiene solo l'ultima versione
             del _MEMORIA_CODICE.codice[_vecchia]
         _MEMORIA_CODICE.codice[_chiave] = _codice

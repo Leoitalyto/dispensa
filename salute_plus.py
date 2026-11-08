@@ -162,7 +162,7 @@ def _sp_dialogo_togli_file(pid, chiave, ref):
             st.rerun()
         if s2.button("No, tienilo", key=f"sp_ftogli_no_{ref['id']}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli il documento")(_finestra)()
+    st.dialog("🗑️ Elimina il documento")(_finestra)()
 
 
 def _sp_file_voce(pid, chiave, titolo):
@@ -182,7 +182,7 @@ def _sp_file_voce(pid, chiave, titolo):
             if b1.button("🙈 Chiudi" if aperto else "👁️ Vedi / scarica", key=f"sp_v_{r['id']}", width="stretch"):
                 vedi.remove(r["id"]) if aperto else vedi.append(r["id"])
                 st.rerun()
-            if b2.button("🗑️ Togli", key=f"sp_t_{r['id']}", width="stretch"):
+            if b2.button("🗑️ Elimina", key=f"sp_t_{r['id']}", width="stretch"):
                 _sp_dialogo_togli_file(pid, chiave, r)
             if aperto:
                 _sp_mostra(r)
@@ -256,7 +256,7 @@ def _sp_modulo_tessera(pid):
                 nuovo = st.text_input(titolo, value=url, placeholder="incolla qui il link, per esempio https://…", label_visibility="collapsed")
                 b1, b2 = st.columns(2)
                 salva_b = b1.form_submit_button("💾 Salva il link", type="primary", width="stretch")
-                togli_b = b2.form_submit_button("🗑️ Togli il link" if url else "Annulla", width="stretch")
+                togli_b = b2.form_submit_button("🗑️ Elimina il link" if url else "Annulla", width="stretch")
             if salva_b:
                 valido = _fa_url_valido(nuovo)
                 if valido is None:
@@ -339,7 +339,7 @@ def _sp_dialogo_togli_medico(pid, mid, nome):
             st.rerun()
         if s2.button("No, tienilo", key=f"sp_mtogli_no_{mid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli dalla rubrica")(_finestra)()
+    st.dialog("🗑️ Elimina dalla rubrica")(_finestra)()
 
 
 def _sp_form_medico(pid, m=None):
@@ -404,7 +404,7 @@ def sp_modulo_medici(pid):
             st.session_state["sp_med_mod"] = m["id"]
             st.rerun()
         d1, d2 = st.columns(2, gap="small")
-        if d1.button("🗑️ Togli", key=f"sp_med_t_{m['id']}", width="stretch"):
+        if d1.button("🗑️ Elimina", key=f"sp_med_t_{m['id']}", width="stretch"):
             _sp_dialogo_togli_medico(pid, m["id"], m.get("nome") or m.get("struttura") or "questo riferimento")
         with d2:
             _fa_inv_voce(f"sp_med_{m['id']}", "📤 Invia", f"{m.get('ruolo', '')} di {p.get('nome', '')}",
@@ -761,7 +761,7 @@ def sp_modulo_scheda(pid):
                     st.rerun()
                 else:
                     st.warning("Non sono riuscito a preparare la sintesi adesso (rete o limiti). La scheda qui sopra resta valida: riprova più tardi.")
-            if ai_ok and st.button("🗑️ Togli la sintesi salvata", key=f"sp_ai_via_{pid}", width="stretch"):
+            if ai_ok and st.button("🗑️ Elimina la sintesi salvata", key=f"sp_ai_via_{pid}", width="stretch"):
                 _sp_salva_profilo(pid, lambda pr: pr.__setitem__("sp", {k: v for k, v in (pr.get("sp") or {}).items() if k != "racconto_ai"}), "Salute: sintesi tolta")
                 st.rerun()
 
@@ -829,7 +829,7 @@ def _sp_dialogo_togli_voce(pid, sez, vid, testo):
             st.rerun()
         if s2.button("No, tienila", key=f"sp_vt_no_{vid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli la voce")(_finestra)()
+    st.dialog("🗑️ Elimina la voce")(_finestra)()
 
 
 def _sp_form_voce(pid, sez, v=None):
@@ -889,7 +889,7 @@ def _sp_editor_sezione(pid, p, sez, vuoto):
         if c1.button("✏️ Modifica", key=f"sp_b_e_{v['id']}", width="stretch"):
             st.session_state[f"sp_bmod_{sez}"] = v["id"]
             st.rerun()
-        if c2.button("🗑️ Togli", key=f"sp_b_t_{v['id']}", width="stretch"):
+        if c2.button("🗑️ Elimina", key=f"sp_b_t_{v['id']}", width="stretch"):
             _sp_dialogo_togli_voce(pid, sez, v["id"], testo)
         if st.session_state.get(f"sp_bmod_{sez}") == v["id"]:
             _sp_form_voce(pid, sez, v)
@@ -1696,7 +1696,7 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
         if c1.button("🙈 Chiudi" if aperto else "👁️ Vedi / scarica", key=f"sp_dsv_{d['id']}", width="stretch"):
             vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
             st.rerun()
-    if c2.button("✏️ Correggi", key=f"sp_dsc_{d['id']}", width="stretch"):
+    if c2.button("✏️ Modifica", key=f"sp_dsc_{d['id']}", width="stretch"):
         st.session_state["sp_ds_cor"] = None if st.session_state.get("sp_ds_cor") == d["id"] else d["id"]
         st.rerun()
     if ref.get("id") and ref["id"] in vedi:
@@ -2091,7 +2091,7 @@ def _sp_dialogo_togli_param(pid, mid, testo):
             st.rerun()
         if s2.button("No, tienilo", key=f"sp_pt_no_{mid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli il valore")(_finestra)()
+    st.dialog("🗑️ Elimina il valore")(_finestra)()
 
 
 def _sp_form_param(pid, m=None, tipo_pre=None):
@@ -2156,7 +2156,7 @@ def sp_modulo_parametri(pid):
         if c1.button("✏️ Modifica", key=f"sp_pe_{m['id']}", width="stretch"):
             st.session_state["sp_param_mod"] = None if st.session_state.get("sp_param_mod") == m["id"] else m["id"]
             st.rerun()
-        if c2.button("🗑️ Togli", key=f"sp_pt_{m['id']}", width="stretch"):
+        if c2.button("🗑️ Elimina", key=f"sp_pt_{m['id']}", width="stretch"):
             _sp_dialogo_togli_param(pid, m["id"], testo)
         if st.session_state.get("sp_param_mod") == m["id"]:
             _sp_form_param(pid, m)
@@ -2224,7 +2224,7 @@ def _sp_dialogo_togli_controllo(pid, cid, nome):
             st.rerun()
         if s2.button("No, tienilo", key=f"sp_ct_no_{cid}", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli il promemoria")(_finestra)()
+    st.dialog("🗑️ Elimina il promemoria")(_finestra)()
 
 
 def _sp_form_controllo(pid, c=None):
@@ -2286,7 +2286,7 @@ def sp_modulo_controlli(pid):
         if b2.button("✏️ Modifica", key=f"sp_ce_{c['id']}", width="stretch"):
             st.session_state["sp_ctrl_mod"] = None if st.session_state.get("sp_ctrl_mod") == c["id"] else c["id"]
             st.rerun()
-        if b3.button("🗑️ Togli", key=f"sp_ctt_{c['id']}", width="stretch"):
+        if b3.button("🗑️ Elimina", key=f"sp_ctt_{c['id']}", width="stretch"):
             _sp_dialogo_togli_controllo(pid, c["id"], c.get("nome", ""))
         if st.session_state.get("sp_ctrl_mod") == c["id"]:
             _sp_form_controllo(pid, c)
@@ -2375,13 +2375,13 @@ Le informazioni sono quelle che inserisci tu: la scheda non è certificata da un
 2. Tocca il **pulsante arancione «📎 Scegli il PDF o il file»** (oppure **📷 Scatta foto** o **🖼️ Dalla galleria**) e scegli un referto, un esame, un'ecografia, una ricetta, una lettera di dimissione, un certificato.
 3. Si apre **una finestra sopra la pagina**: ti propongo **di chi è**, **che documento è**, l'**area medica** (Cardiologia, Oculistica, Analisi di laboratorio…), il **tipo di prestazione** (visita, esame, terapia, screening, controllo), la **data dell'esame o della visita** (distinta da quella del referto), il medico, la struttura, gli **esami contenuti**, le **conclusioni copiate dal documento** e l'eventuale **controllo consigliato dal medico**. Sotto c'è scritto **perché** ho scelto quell'area. I pallini dicono quanto sono sicuro: 🟢 sicuro, 🟡 abbastanza, 🟠 poco.
 4. **Controlli e correggi**, poi **✅ Conferma e archivia**. Non invento niente: se un dato non c'è nel documento, resta vuoto.
-**Ritrovarli:** sotto, una **linguetta per ogni tipo di documento**, oppure **per specialità**, oppure **per anno** (scegli in alto). Tocca la linguetta: dentro vedi i documenti, con **👁️ Vedi / scarica**, **✏️ Correggi**, **📤 Invia** e **🗑️ Elimina**. C'è anche la ricerca.""",
+**Ritrovarli:** sotto, una **linguetta per ogni tipo di documento**, oppure **per specialità**, oppure **per anno** (scegli in alto). Tocca la linguetta: dentro vedi i documenti, con **👁️ Vedi / scarica**, **✏️ Modifica**, **📤 Invia** e **🗑️ Elimina**. C'è anche la ricerca.""",
      "documenti sanitari referto esame ecografia ricetta dimissione pulsante arancione specialita linguetta carica leggi conferma"),
     ("s_esenzioni", "🪪 Invalidità ed esenzioni",
      """In **Salute** tocca **🪪 Invalidità ed esenzioni** (in fondo ai bottoni). Qui tieni i documenti di **invalidità civile**, **Legge 104**, **indennità di accompagnamento**, **esenzioni ticket** (per patologia, per invalidità, per reddito/età/disoccupazione, per gravidanza), **contrassegno disabili**, **agevolazioni auto**.
 1. Tocca il **pulsante arancione «📎 Scegli il PDF o il file»** (o scatta una foto). Lo leggo e ti propongo **tipo, codice dell'esenzione, percentuale di invalidità, ente, numero del verbale, date di validità e di revisione**. Quello che non trovo resta vuoto.
 2. **Controlli e correggi**, poi **✅ Conferma e archivia**. Oppure **✍️ Aggiungi a mano** senza file.
-3. Ogni tipo ha la sua **linguetta**: dentro, per ogni voce, **👁️ Vedi / scarica**, **✏️ Correggi**, **📤 Invia**, **🗑️ Elimina**. Se è **permanente** spunta «♾️ È permanente».
+3. Ogni tipo ha la sua **linguetta**: dentro, per ogni voce, **👁️ Vedi / scarica**, **✏️ Modifica**, **📤 Invia**, **🗑️ Elimina**. Se è **permanente** spunta «♾️ È permanente».
 **Avvisi:** se una voce scade (o va rivista) entro 60 giorni, o è già scaduta, la Home lampeggia e Salute lo dice; con gli avvisi accesi ricevi anche il promemoria sui tuoi canali.""",
      "invalidita esenzione ticket legge 104 accompagnamento contrassegno disabili percentuale codice esenzione verbale scadenza revisione"),
     ("s_storico", "📚 Storico per specialità (Visite)",
@@ -2391,7 +2391,7 @@ In cima c'è **📎 Carica un referto, un esame o una ricetta (lo leggo io)**: t
      """In **Salute → 👥 Gestisci profili** trovi **✏️ Cambia il nome dei profili aggiuntivi**: per ogni persona aggiunta c'è un campo con il suo nome. Scrivi il nuovo nome e tocca **💾**. Non puoi usare un nome già presente. Il tuo profilo non si rinomina da qui.""", "profilo nome cambiare rinominare persona gestisci profili"),
     ("s_medici", "👩‍⚕️ Medici e riferimenti (anche il pediatra)",
      """Tocca **👩‍⚕️ Medici e riferimenti**. In alto trovi il **medico di base** (la sua scheda completa è quella di prima). Sotto puoi aggiungere con **➕ Aggiungi un riferimento**: **pediatra**, specialisti, dentista, fisioterapista…, con studio, telefono, email, indirizzo, orari e sostituto.
-Su ognuno: **📞 Chiama**, **✉️ Scrivi**, **✏️ Modifica**, **🗑️ Togli**, **📤 Invia**. Per un bambino l'app ti ricorda di aggiungere il pediatra.""",
+Su ognuno: **📞 Chiama**, **✉️ Scrivi**, **✏️ Modifica**, **🗑️ Elimina**, **📤 Invia**. Per un bambino l'app ti ricorda di aggiungere il pediatra.""",
      "medici pediatra specialista dentista rubrica telefono orari riferimenti"),
     ("s_bimbo", "👶 Percorso del bambino",
      """Per un bambino, nei **🆘 Dati per l'emergenza** spunta **È un bambino o una bambina**: compare **👶 Percorso del bambino**.

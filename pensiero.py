@@ -366,7 +366,7 @@ def _pe_dialogo_togli(ids):
             st.rerun()
         if s2.button("No, tienile", key="pe_togli_no", width="stretch"):
             st.rerun()
-    st.dialog("🗑️ Togli i miei pensieri")(_finestra)()
+    st.dialog("🗑️ Elimina i miei pensieri")(_finestra)()
 
 
 def _pe_aggiungi_cb():
@@ -404,7 +404,7 @@ def pensiero_miei_pannello():
             st.success(st.session_state.pop("pe_msg"))
         if miei:
             scelte = st.multiselect("Togli alcune delle mie frasi", [x["id"] for x in miei], key="pe_togli_sel", format_func=lambda i: next((f"{x['t'][:60]}…" if len(x['t']) > 60 else x['t']) + (f" — {x['a']}" if x.get("a") else "") for x in miei if x["id"] == i))
-            if scelte and st.button("🗑️ Togli le selezionate", key="pe_togli_btn", width="stretch"):
+            if scelte and st.button("🗑️ Elimina le selezionate", key="pe_togli_btn", width="stretch"):
                 _pe_dialogo_togli(set(scelte))
 
 

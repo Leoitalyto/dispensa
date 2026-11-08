@@ -5,7 +5,7 @@ Si registra ogni documento di invalidità o di esenzione: verbale di invalidità
 disoccupazione, per gravidanza), contrassegno disabili, agevolazioni auto… Per ognuno: tipo, motivo o patologia, CODICE dell'esenzione, PERCENTUALE di invalidità, ente, numero del verbale,
 data di rilascio, VALIDITÀ (dal… fino al…, oppure «permanente»), prossima REVISIONE, note e il FILE originale (PDF o foto).
 Si carica con il pulsante arancione: lo leggo io, propongo i dati e archivio SOLO dopo la tua conferma. Le scadenze e le revisioni entrano negli avvisi (Home che lampeggia, Salute, promemoria).
-Per ogni voce: 👁️ Vedi / scarica · ✏️ Correggi · 📤 Invia · 🗑️ Elimina. Dati in profilo['esenzioni'] (persona per persona). Caricato dopo salute_plus.py."""
+Per ogni voce: 👁️ Vedi / scarica · ✏️ Modifica · 📤 Invia · 🗑️ Elimina. Dati in profilo['esenzioni'] (persona per persona). Caricato dopo salute_plus.py."""
 import hashlib
 import html as _h_se
 import re
@@ -354,7 +354,7 @@ def _se_riga(e, pid, f, p, vedi):
             st.rerun()
     else:
         c1.caption("Nessun file allegato")
-    if c2.button("✏️ Correggi", key=f"se_c_{e['id']}", width="stretch"):
+    if c2.button("✏️ Modifica", key=f"se_c_{e['id']}", width="stretch"):
         st.session_state["se_cor"] = None if st.session_state.get("se_cor") == e["id"] else e["id"]
         st.rerun()
     if ref.get("id") and ref["id"] in vedi:
