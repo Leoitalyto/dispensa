@@ -211,6 +211,11 @@ def schermata_archivio():
     st.markdown("<div class='ar-hero' style='display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#311b92 0%,#4527a0 55%,#7e57c2 100%);color:#fff;padding:16px 22px;border-radius:24px;"
                 "margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.15)'>" + _ico_ar + "<div><h1 style='margin:0;font-size:1.8rem;color:#fff;padding:0'>" + ("Archivio" if _uri_ar else "🗂️ Archivio") + "</h1>"
                 "<p style='margin:4px 0 0;opacity:.92'>Bugiardini, foto e documenti: tutto in un posto, sempre a portata di mano</p></div></div>", unsafe_allow_html=True)
+    if "pulsante_info" in globals():                                        # il pulsante «Informazioni» (come in ogni altra sezione)
+        try:
+            pulsante_info("archivio")
+        except Exception:
+            pass
     f = _fa_dati()
     profili = _fa_profili(f)
     nomi = {p["id"]: p["nome"] for p in profili}
