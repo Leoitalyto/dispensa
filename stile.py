@@ -150,7 +150,8 @@ CSS = CSS.replace("</style>", """
 [role="tablist"]::-webkit-scrollbar{display:none}
 /* telefoni: la barra resta dov'è (in basso) ma NON arriva fino al bordo destro: l'angolo è occupato dal rettangolo rosso di Streamlit (ai visitatori) e dalla linguetta «Manage app» (all'amministratore, che ha la sua regola più stretta in navigazione.py).
    Le voci che non entrano si fanno scorrere con il dito verso sinistra fino a «Vaccini». */
-@media (max-width:700px){[role="tablist"]{left:12px !important;transform:none !important;width:calc(100vw - 12px - 80px) !important;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}}
+@media (max-width:700px){[role="tablist"]{left:12px !important;transform:none !important;width:calc(100vw - 12px - 128px) !important;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;padding-right:12px !important}}
+/* angolo in basso a destra: il rettangolo rosso di Streamlit (~60 px) E, accanto, il cerchio con l'icona del profilo (fino a ~108 px dal bordo): la barra finisce PRIMA di entrambi (128 px liberi) */
 [role="tab"]{flex:1 0 auto;min-width:54px;border-radius:999px !important;padding:8px 8px !important;height:auto !important;background:transparent;
  transition:all .15s;border-bottom:0 !important}
 [role="tab"] p{display:flex;flex-direction:column;align-items:center;gap:3px;margin:0 !important;font-weight:800 !important;font-size:.7rem !important;line-height:1.1}
