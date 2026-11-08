@@ -12,10 +12,10 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.2"
+GUIDA_VERSIONE = "2.3"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
-    "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
+    "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
     "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
@@ -102,6 +102,20 @@ def _gx_costruisci():
 
 Il Cestino riguarda **solo i tuoi dati personali**: la dispensa di famiglia ha già il suo storico con «Annulla» per l'amministratore.""",
       "cestino svuota ripristina recupera giorni conservazione eliminati tutto elenco utilità", ("recupera", None))
+
+    # ================= i colori dei comandi
+    colori = ("🎨 I colori dei comandi: sempre uguali",
+              """In tutta l'app i pulsanti più usati hanno **sempre lo stesso colore**, così li riconosci anche senza leggere:
+
+- **Rosso** → **Elimina** (🗑️). Quello che elimini va nel Cestino e lo puoi recuperare.
+- **Blu** → **Modifica** (✏️).
+- **Verde** → **Invia** o **Condividi** (📤, ✉️, 💬).
+- **Grigio** → **Indietro** (←).
+
+I pulsanti grandi e colorati in alto (Dispensa, Salute, Casa…) servono per cambiare sezione; quelli verdi scuri con la scritta bianca sono le azioni principali, come **Salva** o **Conferma**.""",
+              "colori pulsanti rosso blu verde grigio elimina modifica invia indietro riconoscere comandi")
+    a("dispensa", "d_colori_cmd", *colori, meta=("vedi", None))
+    a("utilita", "u_colori_cmd", *colori, meta=("vedi", None))
 
     # ================= tanti prodotti
     a("dispensa", "d_mostra_altri", "📃 Tanti prodotti: «Mostra altri»",
