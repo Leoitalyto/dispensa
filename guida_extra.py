@@ -103,6 +103,15 @@ def _gx_costruisci():
 Il Cestino riguarda **solo i tuoi dati personali**: la dispensa di famiglia ha già il suo storico con «Annulla» per l'amministratore.""",
       "cestino svuota ripristina recupera giorni conservazione eliminati tutto elenco utilità", ("recupera", None))
 
+    # ================= tanti prodotti
+    a("dispensa", "d_mostra_altri", "📃 Tanti prodotti: «Mostra altri»",
+      """Per tenere l'app veloce, in ogni gruppo della Dispensa (per esempio «Scadono entro 2 mesi» o «Ancora buoni») si vedono **30 schede per volta**.
+
+Se ce ne sono di più, sotto l'ultima trovi il pulsante **⬇ Mostra altri** (con scritto quanti prodotti aggiunge, quanti ne vedi e quanti ce ne sono). Toccalo per vederne altri 30.
+
+Per trovare subito un prodotto senza scorrere, usa la **ricerca** in alto. Con la vista **📋 Tabella** vedi tutti i prodotti in una lista unica scorrevole.""",
+      "tanti prodotti mostra altri schede lente veloce elenco lungo scorrere troppi cercare trovare", ("vedi", "prodotto"))
+
     # ================= l'assistente: manuali e voce
     manuali = ("📚 Cercare nei miei manuali e documenti",
                """Sotto il pulsante **Informazioni** trovi **📚 Cerca nei miei manuali e documenti**.

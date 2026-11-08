@@ -2595,7 +2595,17 @@ def _ca_riduci_foto(nome, dati, massimo=None):
 # POSTA IN ARRIVO: i file arrivati per email (inoltrati a «…+casa@gmail.com» o con l'etichetta «Casa») li mette nell'archivio il programma posta.py, ogni poche ore;
 # qui si vedono, si leggono e si archiviano come tutti gli altri documenti.
 # ---------------------------------------------------------------------------------------------------------------------
-_CA_INDIRIZZO_POSTA = "leoitalyto+casa@gmail.com"
+def _ca_indirizzo_posta():
+    """L'indirizzo a cui si mandano i documenti dalla posta. NON sta più scritto nel codice (che è pubblico): si mette nei Secrets di Streamlit come POSTA_INDIRIZZO.
+    Il programma della posta riconosce qualsiasi indirizzo che contiene «+casa»: conviene un'etichetta difficile da indovinare (per esempio nome+casa-k7x29@gmail.com)."""
+    try:
+        v = str(st.secrets.get("POSTA_INDIRIZZO", "") or "").strip()
+    except Exception:
+        v = ""
+    return v or "il-tuo-indirizzo+casa@gmail.com"
+
+
+_CA_INDIRIZZO_POSTA = _ca_indirizzo_posta()
 
 
 def _ca_posta_percorso():

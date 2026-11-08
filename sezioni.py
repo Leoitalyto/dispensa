@@ -34,6 +34,8 @@ def sv_nascoste():
 
 def sv_selettore(u):
     """Nella scheda Utenti (amministratore): le sezioni che una persona può usare. Si salva appena cambi."""
+    if not bool((st.session_state.get("sess") or {}).get("admin")):                 # difesa in più: solo l'amministratore sceglie le sezioni delle persone
+        return
     nasc = sv_da_utente(u)
     visibili = [s for s in SV_SEZIONI if s not in nasc]
     scelte = st.multiselect("Sezioni che questa persona può usare", list(SV_SEZIONI), default=visibili, key=f"sv_{u['id']}", format_func=lambda k: SV_SEZIONI[k],

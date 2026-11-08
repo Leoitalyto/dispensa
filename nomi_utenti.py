@@ -51,7 +51,12 @@ def nu_valida(nuovo, elenco, uid):
 
 
 def nu_cambia(uid, vecchio, nuovo):
-    """Scrive il nome nuovo nell'elenco delle persone e nel profilo principale (p0) della sua Salute, se aveva ancora il nome di prima."""
+    """Scrive il nome nuovo nell'elenco delle persone e nel profilo principale (p0) della sua Salute, se aveva ancora il nome di prima.
+    Difesa in più: lo può fare solo l'amministratore (per chiunque) o la persona stessa (per sé)."""
+    _sessione = st.session_state.get("sess") or {}
+    if not (_sessione.get("admin") or (uid and _sessione.get("uid") == uid)):
+        raise PermissionError("Solo l'amministratore può cambiare il nome di un'altra persona.")
+
     def _utenti(d):
         for x in d.get("utenti", []):
             if x.get("id") == uid:

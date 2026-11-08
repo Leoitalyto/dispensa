@@ -297,8 +297,11 @@ with tab_dispensa:
             st.caption(t("Nessun prodotto in questa sezione."))
             continue
         if vista == "schede":
-            for _i in range(0, len(gruppo), 3):
-                for _col, (r, _, _) in zip(st.columns(3), gruppo[_i:_i + 3]):
+            _lim_k = "lim_" + str(sezione)                                  # si disegnano 30 schede per volta (con tanti prodotti la pagina sarebbe pesantissima)
+            _lim = st.session_state.get(_lim_k, 30)
+            _vis = gruppo[:_lim]
+            for _i in range(0, len(_vis), 3):
+                for _col, (r, _, _) in zip(st.columns(3), _vis[_i:_i + 3]):
                     with _col:
                         st.markdown(scheda_html(r, data_oggi, allergie_di(sezione)), unsafe_allow_html=True)
                         with st.container(key="azioni_" + r["id"]):
@@ -309,6 +312,10 @@ with tab_dispensa:
                                 apri_guida()
                             if _b_mo.button(t("Modifica"), icon=":material/edit:", key="modif_" + r["id"], width="stretch"):
                                 apri_modifica(r["id"])
+            if len(gruppo) > _lim:
+                if st.button(f"⬇ Mostra altri {min(30, len(gruppo) - _lim)} prodotti (ne vedi {_lim} su {len(gruppo)})", key="altri_" + str(sezione), width="stretch"):
+                    st.session_state[_lim_k] = _lim + 30
+                    st.rerun()
         else:
             tab = pd.DataFrame([{
                 t("Foto"): src_sicuro(r.get("immagine") or "") or _FOTO_VUOTA,
