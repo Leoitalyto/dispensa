@@ -2595,14 +2595,44 @@ def _ca_riduci_foto(nome, dati, massimo=None):
 # POSTA IN ARRIVO: i file arrivati per email (inoltrati a «…+casa@gmail.com» o con l'etichetta «Casa») li mette nell'archivio il programma posta.py, ogni poche ore;
 # qui si vedono, si leggono e si archiviano come tutti gli altri documenti.
 # ---------------------------------------------------------------------------------------------------------------------
-def _ca_indirizzo_posta():
-    """L'indirizzo a cui si mandano i documenti dalla posta. NON sta più scritto nel codice (che è pubblico): si mette nei Secrets di Streamlit come POSTA_INDIRIZZO.
-    Il programma della posta riconosce qualsiasi indirizzo che contiene «+casa»: conviene un'etichetta difficile da indovinare (per esempio nome+casa-k7x29@gmail.com)."""
+def _ca_secret_ovunque(nome):
+    """Un Secret di Streamlit, anche se per errore è finito dentro una [sezione] (per esempio sotto [github])."""
     try:
-        v = str(st.secrets.get("POSTA_INDIRIZZO", "") or "").strip()
+        v = st.secrets.get(nome)
+        if v:
+            return str(v).strip()
+        for chiave in list(st.secrets.keys()):
+            sub = st.secrets.get(chiave)
+            if hasattr(sub, "get") and not isinstance(sub, str):
+                w = sub.get(nome)
+                if w:
+                    return str(w).strip()
     except Exception:
-        v = ""
-    return v or "il-tuo-indirizzo+casa@gmail.com"
+        pass
+    return ""
+
+
+def _ca_posta_valida(testo):
+    """L'indirizzo per la posta: un indirizzo email che contiene «+casa» (il programma della posta riconosce questo)."""
+    t = (testo or "").strip().replace("“", "").replace("”", "").replace('"', "").replace("'", "").strip()
+    return t if re.fullmatch(r"[^@\s]+\+[^@\s]*casa[^@\s]*@[^@\s]+\.[A-Za-z]{2,}", t, flags=re.I) else ""
+
+
+def _ca_indirizzo_posta():
+    """L'indirizzo a cui si mandano i documenti dalla posta. NON sta nel codice (che è pubblico). Si cerca, in ordine: (1) il Secret POSTA_INDIRIZZO di Streamlit,
+    (2) l'indirizzo scritto dentro l'app (Casa → Documenti → Posta in arrivo → «Scrivi qui il tuo indirizzo»), salvato nei tuoi dati privati, (3) un esempio.
+    Il programma della posta riconosce qualsiasi indirizzo che contiene «+casa»: conviene un'etichetta difficile da indovinare (per esempio nome+casa-k7x29@gmail.com)."""
+    v = _ca_posta_valida(_ca_secret_ovunque("POSTA_INDIRIZZO"))
+    if v:
+        return v
+    try:
+        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        v = _ca_posta_valida(((d or {}).get("impostazioni") or {}).get("posta_indirizzo"))
+        if v:
+            return v
+    except Exception:
+        pass
+    return "il-tuo-indirizzo+casa@gmail.com"
 
 
 _CA_INDIRIZZO_POSTA = _ca_indirizzo_posta()
@@ -2815,7 +2845,26 @@ def _ca_posta_riquadro(c):
                 _ca_finestra_scarta_posta(it)
         if len(items) > 15:
             st.caption(f"…e altri {len(items) - 15}: archivia questi per vedere i prossimi.")
-        st.markdown(f"**Come ci mandi un documento dalla posta:** inoltralo (o scrivi, allegando il file) a **{_CA_INDIRIZZO_POSTA}**, oppure dalle app dei fornitori tocca **Condividi → Gmail** e usa quell'indirizzo. "
+        if bool((st.session_state.get("sess") or {}).get("admin")):
+            with st.expander("✏️ Scrivi qui il tuo indirizzo per la posta"):
+                st.caption("È l'indirizzo Gmail con **+casa** dentro, per esempio **nome+casa-k7x29@gmail.com** (al posto di «nome» il tuo, e dopo «+casa» puoi aggiungere lettere e numeri a piacere, per renderlo difficile da indovinare). Resta nei tuoi dati privati, non nel codice pubblico.")
+                _att = _ca_indirizzo_posta()
+                _nuovo = st.text_input("Il tuo indirizzo per la posta", value="" if _att.startswith("il-tuo-") else _att, key="ca_posta_ind", placeholder="nome+casa-k7x29@gmail.com", label_visibility="collapsed")
+                if st.button("💾 Salva l'indirizzo", key="ca_posta_ind_salva", width="stretch"):
+                    _ok = _ca_posta_valida(_nuovo)
+                    if not _nuovo.strip():
+                        salva(lambda d: (d.get("impostazioni") or {}).pop("posta_indirizzo", None), "Posta: indirizzo tolto")
+                        st.success("Indirizzo tolto.")
+                    elif not _ok:
+                        st.error("Non va bene: deve essere un indirizzo email che contiene **+casa**, per esempio nome+casa-k7x29@gmail.com. Controlla di non aver scritto virgolette o spazi.")
+                    else:
+                        salva(lambda d, v=_ok: d.setdefault("impostazioni", {}).__setitem__("posta_indirizzo", v), "Posta: indirizzo")
+                        try:
+                            carica_dati.clear()
+                        except Exception:
+                            pass
+                        st.success("✅ Salvato. Ricorda di usare questo stesso indirizzo quando mandi i documenti.")
+        st.markdown(f"**Come ci mandi un documento dalla posta:** inoltralo (o scrivi, allegando il file) a **{_ca_indirizzo_posta()}**, oppure dalle app dei fornitori tocca **Condividi → Gmail** e usa quell'indirizzo. "
                     "Anche i messaggi con l'etichetta Gmail **«Casa»** arrivano qui. Il programma controlla la posta alcune volte al giorno.")
         st.link_button("🔄 Controlla la posta adesso", "https://github.com/Leoitalyto/dispensa-dati/actions/workflows/posta.yml", width="stretch")
         st.caption("Si apre GitHub: tocca **Run workflow** e poi **Run workflow**; dopo circa un minuto torna qui e ricarica la pagina.")
@@ -3894,6 +3943,7 @@ In cima alla pagina Casa compaiono gli avvisi di **garanzie** in scadenza e **ma
          "manutenzione intervento controllo caldaia tecnico ditta prossimo controllo scadenza garanzia"),
         ("📥 Mandare documenti dalla posta o dalle app dei fornitori",
          f"""Inoltra un messaggio con un PDF o una foto (o scrivine uno, allegando il file) a **{_CA_INDIRIZZO_POSTA}**: il programma controlla la posta alcune volte al giorno e mette i file nel riquadro **📥 Posta in arrivo** della scheda Documenti. Lì tocchi **📖 Leggi e archivia** e il documento viene classificato come tutti gli altri.
+Il tuo indirizzo lo scrivi **una volta sola** in **Documenti → 📥 Posta in arrivo → ✏️ Scrivi qui il tuo indirizzo per la posta** (oppure nei Secrets, come POSTA_INDIRIZZO).
 Dalle **app dei fornitori** (luce, gas, telefono…) tocca **Condividi** (o «Invia») sul PDF o sullo screenshot, scegli **Gmail** e come destinatario **{_CA_INDIRIZZO_POSTA}** (salvalo in rubrica come «Casa dispensa»).
 Anche i messaggi che metti nell'etichetta Gmail **«Casa»** arrivano qui. I messaggi senza allegati (per esempio «Abbiamo ricevuto il tuo pagamento…») diventano un file di testo, e si leggono lo stesso.
 **🔄 Controlla la posta adesso** apre GitHub per far partire subito il controllo (tocca **Run workflow**).""",
