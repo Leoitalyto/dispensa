@@ -90,10 +90,15 @@ def ih_hero_dispensa():
     uri = ih_uri("dispensa.webp", 330)
     if not uri or "t" not in globals():
         return None
-    css = ("<style>.hero{height:auto !important;min-height:150px !important;padding:10px 16px 10px 14px !important;gap:16px !important;align-items:center !important}"
-           ".hero::after{display:none !important}"
-           ".hero .hero-img{height:136px;width:auto;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.5)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}"
-           ".hero-testi{max-width:none !important;min-width:0}</style>")
+    # IDENTICO al garage di Auto (che è «perfetto»): flex, icona a sinistra, testo a destra centrato in verticale, stessi spazi e stessi caratteri (h1 1,7 rem, sottotitolo 0,95 rem)
+    # «.hero.hero» = più forte di ogni altra regola «.hero» dello stile (che arrivano in ordine diverso e fissavano altezza 158 px, margini a 0 e testo largo 150 px)
+    css = ("<style>.hero.hero{display:flex !important;flex-direction:row !important;align-items:center !important;justify-content:flex-start !important;gap:16px !important;height:auto !important;min-height:0 !important;padding:18px 22px !important;"
+           "border-radius:24px !important;border:none !important;overflow:hidden !important;box-shadow:0 6px 18px rgba(0,60,40,.4) !important;background:linear-gradient(135deg,#0a4d3a 0%,#168a6c 55%,#6cc7b3 100%) !important}"
+           ".hero.hero::after{display:none !important}"
+           ".hero.hero .hero-img{height:150px !important;width:auto !important;max-width:42% !important;flex:0 0 auto !important;filter:drop-shadow(0 0 7px rgba(255,255,255,.55)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}"
+           ".hero.hero .hero-testi{flex:1 1 0 !important;max-width:none !important;min-width:0 !important;display:block !important;background:none !important;backdrop-filter:none !important;box-shadow:none !important;padding:0 !important;margin:0 !important}"
+           ".hero.hero h1{margin:0 !important;font-size:1.7rem !important;line-height:1.15 !important;white-space:normal !important;color:#fff !important}"
+           ".hero.hero p{margin:2px 0 0 !important;font-size:.95rem !important;font-weight:700 !important;line-height:1.35 !important;max-width:none !important;opacity:.95 !important;color:#fff !important}</style>")
     return (css + f"<div class='hero'><img class='hero-img' alt='Dispensa' src='{uri}'>"
             f"<div class='hero-testi'><h1>{t('La nostra dispensa')}</h1><p>{t('Scorte, scadenze e allergeni sempre sotto controllo')}</p></div></div>")
 

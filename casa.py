@@ -1872,9 +1872,9 @@ def _ca_ora():
 _CA_AFF = {"alta": "🟢", "media": "🟡", "bassa": "🟠"}
 _CA_CSS = """<style>
 .ca-hero{background:linear-gradient(135deg,#7a5c00 0%,#d4a017 45%,#4aa3df 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;
-box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:14px}
-.ca-hero img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))}
-.ca-hero h1{margin:0;font-size:1.8rem;color:#fff;padding:0}.ca-hero p{margin:4px 0 0;opacity:.95}
+box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:16px}
+.ca-hero img{height:132px;width:auto;max-width:40%;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.55)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}
+.ca-hero h1{margin:0;font-size:1.7rem;line-height:1.15;color:#fff;padding:0}.ca-hero p{margin:2px 0 0;font-size:.95rem;opacity:.95}
 .ca-card{background:#ffffffcc;border:1px solid #e3d9b8;border-radius:18px;padding:12px 14px;margin:6px 0}
 .ca-card b{font-size:1.02rem}.ca-chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.78rem;font-weight:700;margin:2px 4px 2px 0}
 .ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
