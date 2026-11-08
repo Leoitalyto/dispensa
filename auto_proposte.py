@@ -111,7 +111,8 @@ def pr_invia(spia, scope, tipo_ricerca, jpeg=None, nota=""):
     if _pr_admin():
         sc = {"tipo": scope.get("tipo", ""), "marca": (scope.get("marca") or "").strip().lower(), "modello": (scope.get("modello") or "").strip().lower(), "anno": scope.get("anno", "")}
         eid = _pr_inserisci_diretto(sp, sc, "Inserita dall'amministratore", nota)
-        return (True, "✅ Inserita nella base (sei l'amministratore: è già verificata).") if eid else (False, "Non sono riuscito a salvare nella base.")
+        foto_ok = bool(eid and jpeg and "ar_sp_foto_salva" in globals() and ar_sp_foto_salva(eid, jpeg, solo_se_manca=True))      # la foto resta con la voce (la vedi solo tu, in «Archivio completo»)
+        return (True, "✅ Inserita nella base (sei l'amministratore: è già verificata)." + (" 📷 La foto è allegata alla voce: la trovi in «🗄️ Archivio completo»." if foto_ok else "")) if eid else (False, "Non sono riuscito a salvare nella base.")
     uid, nome = _pr_utente()
     oggi = _pr_oggi()
     esistenti = pr_leggi()
@@ -148,6 +149,8 @@ def pr_decidi(pid, azione, spia=None, scope=None, motivo=""):
         if not eid:
             return False, "Non sono riuscito a inserirla nella base."
         nuovo_stato = "approvata"
+        if voce.get("ha_foto") and "ar_sp_foto_salva" in globals():             # la foto della proposta passa alla voce della base (solo amministratore) prima di essere svuotata
+            ar_sp_foto_salva(eid, pr_foto(pid), solo_se_manca=True)
     else:
         nuovo_stato = "rifiutata"
 
