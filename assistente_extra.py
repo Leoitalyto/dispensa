@@ -147,8 +147,8 @@ _MR_STOP = set("il lo la le gli un una uno di da del dello della dei degli delle
 _MR_TIPI_LAVORO = {"Busta paga", "Certificazione Unica (CU)", "Documento INPS"}
 # i tipi VERI di Casa (CA_TIPI) che sono manuali o istruzioni; gli altri documenti (bollette, contratti…) si cercano solo se il nome o il bene c'entrano con la domanda
 _MR_TIPI_MANUALE = ("Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto", "Dichiarazione di conformità", "Istruzioni di montaggio")
-MR_MAX_DOC = 3
-MR_MAX_DOC_TUTTI = 8
+MR_MAX_DOC = 5              # al massimo 5 documenti letti per ricerca: prima quelli che c'entrano per nome o bene (fino a 3), poi i manuali
+MR_MAX_DOC_TUTTI = 12
 MR_MAX_BYTE = 25 * 1024 * 1024
 MR_MAX_PAGINE = 150
 
@@ -187,7 +187,8 @@ def mr_documenti(d):
         manuale = tipo_x in _MR_TIPI_MANUALE or tipo_x.startswith("Manuale") or tipo_x in ("Garanzia", "Manuale") or x.get("argomento") == "Manuali e istruzioni" or bool(x.get("bene_id"))
         bene = beni.get(x.get("bene_id")) or {}
         meta = " ".join(str(v) for v in (x.get("titolo"), x.get("tipo"), x.get("argomento"), x.get("marca"), x.get("modello"), x.get("categoria"), x.get("sottocategoria"), bene.get("nome"), bene.get("marca"), bene.get("modello")) if v)
-        out.append({"id": x.get("id"), "titolo": x.get("titolo") or rif.get("nome") or "Documento", "dove": "Casa → 📚 Documenti" + (f" (bene: {bene.get('nome')})" if bene.get("nome") else ""), "riferimenti": [rif], "meta": meta, "fonte": "casa", "manuale": manuale})
+        out.append({"id": x.get("id"), "titolo": x.get("titolo") or rif.get("nome") or "Documento", "dove": "Casa → 📚 Documenti" + (f" (bene: {bene.get('nome')})" if bene.get("nome") else ""), "riferimenti": [rif], "meta": meta, "fonte": "casa", "manuale": manuale,
+                    "marchio": " ".join(str(v) for v in (x.get("marca"), x.get("modello"), bene.get("nome"), bene.get("marca"), bene.get("modello")) if v)})
     for v in ((d or {}).get("auto") or {}).get("veicoli", []) or []:
         if not isinstance(v, dict):
             continue
@@ -199,7 +200,7 @@ def mr_documenti(d):
             if not ris:
                 continue
             out.append({"id": x.get("id"), "titolo": (x.get("titolo") or x.get("tipo") or "Documento") + (f" · {v.get('targa')}" if v.get("targa") else ""), "dove": "Auto → " + (nome_v or "veicolo") + " → 🪪 Scheda e documenti",
-                        "riferimenti": ris[:2], "meta": " ".join(str(z) for z in (x.get("titolo"), x.get("tipo"), x.get("categoria"), nome_v) if z), "fonte": "auto", "manuale": "manuale" in _mr_norm(x.get("titolo", "") + " " + str(x.get("tipo", "")))})
+                        "riferimenti": ris[:2], "meta": " ".join(str(z) for z in (x.get("titolo"), x.get("tipo"), x.get("categoria"), nome_v) if z), "fonte": "auto", "marchio": nome_v, "manuale": "manuale" in _mr_norm(x.get("titolo", "") + " " + str(x.get("tipo", "")))})
     return out
 
 
@@ -213,10 +214,26 @@ def mr_scegli(documenti, domanda, tutti=False):
         punti.append((p, 1 if doc.get("manuale") else 0, doc))
     punti.sort(key=lambda z: (-z[0], -z[1]))
     limite = MR_MAX_DOC_TUTTI if tutti else MR_MAX_DOC
-    con = [z for z in punti if z[0] > 0]
-    scelti = [z[2] for z in (con if con else punti)][:limite]                                # se nessuno c'entra per nome: prima i manuali, poi gli altri
-    if tutti:
-        scelti = [z[2] for z in punti][:limite]
+    con = [z[2] for z in punti if z[0] > 0]                                  # quelli che c'entrano per nome, marca, modello o bene
+    resto = [z[2] for z in punti if z[0] == 0]
+    # «dello stesso apparecchio»: il manuale della caldaia può non avere «caldaia» nel nome ma ha la stessa marca o lo stesso modello della fattura o del bene che lo hanno
+    segni = set()
+    for doc in con:
+        segni.update(_mr_ridotte(doc.get("marchio", "")))
+    segni -= set(tok)
+    segni = {x for x in segni if len(x) >= 4}
+    stesso = []
+    for doc in resto:
+        if segni & set(_mr_ridotte(doc["meta"])):
+            stesso.append(dict(doc, rel=True))
+    stesso_id = {(d_["id"], d_["titolo"]) for d_ in stesso}
+    manuali = [d_ for d_ in resto if d_.get("manuale") and (d_["id"], d_["titolo"]) not in stesso_id]
+    altri = [d_ for d_ in resto if not d_.get("manuale") and (d_["id"], d_["titolo"]) not in stesso_id]
+    scelti = con[:3 if not tutti else limite]
+    for doc in stesso + manuali + altri:
+        if len(scelti) >= limite:
+            break
+        scelti.append(doc)
     return scelti, max(0, len(documenti) - len(scelti))
 
 
@@ -293,7 +310,7 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
     for doc in scelti:
         rif = doc["riferimenti"][0]
         meta_doc = set(_mr_ridotte(doc["meta"]))
-        hit_doc = sum(1 for t in tok if t in meta_doc)                         # parole della domanda già presenti nel nome del documento / del bene
+        hit_doc = sum(1 for t in tok if t in meta_doc) + (1 if doc.get("rel") else 0)   # parole della domanda già nel nome del documento / del bene (o stesso apparecchio)
         pagine = []
         for r in doc["riferimenti"]:
             pagine = _mr_pagine_file((st.session_state.get("sess") or {}).get("uid", ""), r.get("id"), r.get("nome", ""), r.get("mime", ""), int(r.get("dimensione") or 0)) or pagine
