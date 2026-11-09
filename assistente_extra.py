@@ -259,11 +259,12 @@ def _mr_pagine_file(uid, fid, nome, mime, dimensione):
             doc = _mu.open(stream=dati, filetype="pdf")
             for i in range(min(MR_MAX_PAGINE, doc.page_count)):
                 try:
-                    t = doc[i].get_text("text", sort=True) or ""
+                    pagina = doc[i]
+                    t = _mr_testo_pagina(pagina.get_text("blocks"), float(pagina.rect.width))
                 except Exception:
                     t = ""
                 if t.strip():
-                    pagine.append((i + 1, t[:8000]))
+                    pagine.append((i + 1, t[:9000]))
             doc.close()
         except Exception:
             pagine = []
@@ -277,7 +278,39 @@ def _mr_pagine_file(uid, fid, nome, mime, dimensione):
     return pagine
 
 
-def _mr_passaggi(pagine, lung=650):
+def _mr_pulisci(t):
+    """Un paragrafo da leggere: le parole spezzate a fine riga («spe-\ngne») si riattaccano e le righe diventano una frase continua."""
+    t = re.sub(r"(\w)-\s*\n\s*([a-zàèéìòùäöü])", r"\1\2", t or "")
+    t = re.sub(r"\s*\n\s*", " ", t)
+    return re.sub(r"[ \t]+", " ", t).strip()
+
+
+def _mr_ordina_blocchi(blocchi, larghezza):
+    """I blocchi di testo di una pagina nell'ordine in cui si leggono: le pagine dei manuali sono spesso su DUE colonne; tra due elementi a tutta larghezza (titoli, tabelle)
+    si legge prima tutta la colonna di sinistra, poi tutta quella di destra."""
+    larghi = sorted([b for b in blocchi if (b[2] - b[0]) >= 0.6 * larghezza], key=lambda b: b[1])
+    stretti = [b for b in blocchi if (b[2] - b[0]) < 0.6 * larghezza]
+    out, y0 = [], -1.0
+    for lg in larghi + [None]:
+        y1 = lg[1] if lg is not None else 1e9
+        fascia = [b for b in stretti if y0 <= b[1] < y1]
+        sx = sorted([b for b in fascia if (b[0] + b[2]) / 2 < larghezza / 2], key=lambda b: (round(b[1]), b[0]))
+        dx = sorted([b for b in fascia if (b[0] + b[2]) / 2 >= larghezza / 2], key=lambda b: (round(b[1]), b[0]))
+        out += sx + dx
+        if lg is not None:
+            out.append(lg)
+            y0 = lg[3] - 0.01
+    return out
+
+
+def _mr_testo_pagina(blocchi, larghezza):
+    """Il testo di una pagina: un paragrafo per blocco, nell'ordine di lettura, separati da una riga vuota."""
+    veri = [b for b in blocchi if len(b) >= 5 and (len(b) < 7 or b[6] == 0) and str(b[4]).strip()]
+    paragrafi = [_mr_pulisci(b[4]) for b in _mr_ordina_blocchi(veri, larghezza or 595.0)]
+    return "\n\n".join(x for x in paragrafi if x)
+
+
+def _mr_passaggi(pagine, lung=900):
     out = []
     for n, t in pagine:
         blocchi = [b.strip() for b in re.split(r"\n\s*\n", t) if b.strip()] or [t.strip()]
@@ -285,12 +318,15 @@ def _mr_passaggi(pagine, lung=650):
         for b in blocchi:
             b = re.sub(r"[ \t]+", " ", b)
             if len(cur) + len(b) <= lung:
-                cur = (cur + "\n" + b).strip()
+                cur = (cur + "\n\n" + b).strip()
             else:
                 if cur:
                     out.append((n, cur))
-                while len(b) > lung:                                                           # un blocco lungo: si spezza alla fine di una frase
-                    taglio = max(b.rfind(". ", 0, lung), b.rfind("; ", 0, lung), lung // 2)
+                while len(b) > lung:                                                           # un paragrafo lungo: si spezza alla fine di una frase, mai a metà parola
+                    taglio = max(b.rfind(". ", 0, lung), b.rfind("; ", 0, lung), b.rfind(": ", 0, lung))
+                    if taglio < lung // 3:
+                        taglio = b.rfind(" ", 0, lung)
+                    taglio = taglio if taglio > 0 else lung
                     out.append((n, b[:taglio + 1].strip()))
                     b = b[taglio + 1:].strip()
                 cur = b
@@ -317,15 +353,16 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
             if pagine:
                 break
         letti.append(doc["titolo"])
+        testi_pagina = {n_: t_ for n_, t_ in pagine}
         for n, testo in _mr_passaggi(pagine):
             parole = set(_mr_ridotte(testo))
             n_tot += 1
             for t in tok:
                 if t in parole:
                     df[t] = df.get(t, 0) + 1
-            cand.append((doc, n, testo, parole, hit_doc))
+            cand.append((doc, n, testo, parole, hit_doc, testi_pagina.get(n, testo)))
     ris = []
-    for doc, n, testo, parole, hit_doc in cand:
+    for doc, n, testo, parole, hit_doc, pag_intera in cand:
         trovate = [t for t in tok if t in parole]
         if not trovate:
             continue
@@ -335,7 +372,7 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
         if len(trovate) < servono:
             continue
         punteggio = sum(math.log(1 + n_tot / (1 + df.get(t, 0))) for t in trovate) * (1.0 + 0.5 * (len(trovate) - 1)) + 2.0 * hit_doc
-        ris.append({"titolo": doc["titolo"], "pagina": n, "testo": testo, "dove": doc["dove"], "punteggio": round(punteggio, 2), "parole": trovate})
+        ris.append({"titolo": doc["titolo"], "pagina": n, "testo": testo, "dove": doc["dove"], "punteggio": round(punteggio, 2), "parole": trovate, "pagina_testo": pag_intera})
     ris.sort(key=lambda r: -r["punteggio"])
     visti, out = set(), []
     for r in ris:
@@ -393,7 +430,12 @@ def _mr_dialogo(sezione):
                 with st.container(border=True):
                     st.markdown(f"**📄 {p['titolo']}** · pagina {p['pagina']}")
                     st.caption(f"📍 Dove si trova: {p['dove']}")
-                    st.markdown(p["testo"])
+                    st.markdown(p["testo"].replace("\n\n", "\n\n"))
+                    if len(p.get("pagina_testo", "")) > len(p["testo"]) + 40:
+                        with st.expander("📖 Leggi tutta la pagina " + str(p["pagina"])):
+                            st.markdown(p["pagina_testo"])
+                            if st.button("🔊 Leggi la pagina intera", key=f"mr_leggi_p_{i}", width="stretch"):
+                                _inietta(_mr_js_voce(p["pagina_testo"]))
                     c1, c2 = st.columns(2, gap="small")
                     if c1.button("🔊 Leggi ad alta voce", key=f"mr_leggi_{i}", width="stretch"):
                         _inietta(_mr_js_voce(p["testo"]))
