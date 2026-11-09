@@ -12,11 +12,11 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.6"
+GUIDA_VERSIONE = "3.7"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
-    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
+    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "avvisi_prova.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
     "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "assistente_extra.py", "cestino.py"]},
@@ -191,6 +191,19 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= avvisi: la prova
+    a("farmacia", "f_avvisi_prova", "Provare se gli avvisi funzionano (messaggio di prova)",
+      """Dopo aver scelto un canale non devi aspettare giorni per sapere se hai fatto giusto: puoi fare una **prova**.
+
+1. Apri la tendina degli avvisi, scegli i canali (Telegram, email, WhatsApp…), compila i campi e tocca **Salva**.
+2. In fondo alla tendina tocca **«📨 Mandami un messaggio di prova»**. L'app manda un messaggio di prova su **tutti i canali che hai spuntato e salvato**.
+3. **Aspetta**: il messaggio parte al prossimo controllo automatico, di solito **entro 30 minuti** (di notte, al mattino). Vedi la scritta «⏳ Richiesta fatta».
+4. Tocca **«🔄 Controlla se è arrivato»**. Per ogni canale vedi ✅ (inviato) oppure ❌ / ⚠️ con **cosa fare**: per esempio «tocca Avvia nel bot» (Telegram), «il numero non sembra giusto», «controlla la chiave» (WhatsApp), «avvisa l'amministratore» (se un servizio non è attivato).
+5. Se è tutto ✅ ma non vedi il messaggio: Telegram, controlla di aver toccato *Avvia*; email, guarda in **Spam** o **Promozioni**; WhatsApp, a volte arriva con qualche minuto di ritardo.
+
+Puoi rifare la prova dopo 10 minuti (o appena arriva l'esito). **Non** serve per gli avvisi di scadenza veri: quelli partono da soli.""",
+      "prova messaggio di prova avvisi funziona controllare telegram email whatsapp esito mandami", ("prova", "avvisi"))
 
     # ================= avvisi: WhatsApp e come funzionano
     a("farmacia", "f_avvisi_whatsapp", "Avvisi su WhatsApp (gratuito, con CallMeBot)", _TESTO_WHATSAPP,

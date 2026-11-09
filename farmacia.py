@@ -1925,6 +1925,11 @@ def _fa_blocco_avvisi():
                    "Qui sotto trovi la spiegazione completa, in parole semplici.")
         with st.expander("ℹ️ Come funzionano gli avvisi, in breve"):
             st.markdown(_TESTO_COME_FUNZIONANO_AVVISI.replace("{ADMIN}", nome_admin() if "nome_admin" in globals() else "chi gestisce l'app"))
+        if "av_prova_ui" in globals():                                            # «📨 Mandami un messaggio di prova» (avvisi_prova.py)
+            try:
+                av_prova_ui(d)
+            except Exception as _e_av:
+                st.caption(f"(la prova dei messaggi non è disponibile adesso: {type(_e_av).__name__})")
     if ok:
         v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\s.\-]", "", v_sm)
         if v_sm and re.fullmatch(r"3\d{8,9}", v_sm):               # cellulare italiano scritto senza prefisso
@@ -3888,13 +3893,16 @@ _TESTO_COME_FUNZIONANO_AVVISI = """**Quando arrivano**
 - Se spunti «Nei messaggi non scrivere i nomi dei medicinali», nel messaggio compare solo **quanti** sono. Gli SMS non riportano **mai** i nomi dei medicinali.
 - Gli avvisi partono da un programma automatico, una volta al giorno (e ogni mezz'ora per le assunzioni): **non servono né la tua password né altre impostazioni**.
 
+**Per controllare subito che funzioni**
+- In fondo alla tendina degli avvisi tocca **«📨 Mandami un messaggio di prova»**: l'app manda un messaggio su **tutti i canali che hai spuntato e salvato**. Parte al prossimo controllo automatico (di solito entro 30 minuti; di notte, al mattino). Poi tocca **«🔄 Controlla se è arrivato»**: vedi ✅ o ❌ per ogni canale, con cosa fare se qualcosa non va.
+
 **Famiglia**
 - Chi fa parte della **dispensa di famiglia** può ricevere anche gli avvisi dei prodotti comuni (e, ogni lunedì, quelli in esaurimento). **Ognuno sceglie sui propri canali.**
 - Il **capo famiglia** può ricevere ogni mattina il riepilogo di tutta la famiglia e un avviso se una persona non registra una dose entro 90 minuti.
 
 **Se non arriva niente**
 1. Controlla di aver toccato **Salva** e che il canale sia **spuntato** e il campo compilato.
-2. Aspetta il **prossimo invio**: gli avvisi non partono nel momento in cui salvi, ma a ogni controllo automatico (di solito la mattina dopo).
+2. Fai la **prova**: tocca **«📨 Mandami un messaggio di prova»** e dopo circa mezz'ora **«🔄 Controlla se è arrivato»**: ti dice su quale canale c'è il problema. Gli avvisi veri partono al controllo automatico (di solito la mattina dopo), non nel momento in cui salvi.
 3. Per **Telegram**: hai toccato *Avvia* nel bot? Per l'**email**: guarda anche in Spam o Promozioni. Per **WhatsApp**: a volte il messaggio arriva con qualche minuto di ritardo.
 4. Se dopo un giorno non è arrivato nulla, **dillo a {ADMIN}**: potrebbe mancare l'attivazione del canale."""
 
