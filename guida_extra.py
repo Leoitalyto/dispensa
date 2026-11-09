@@ -12,11 +12,11 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.2"
+GUIDA_VERSIONE = "3.3"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
-    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_tutto.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
+    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
     "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "assistente_extra.py", "cestino.py"]},
@@ -178,6 +178,18 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= rilettura dei documenti sanitari
+    a("farmacia", "f_rilettura", "🔄 Rileggere i documenti sanitari già archiviati",
+      """Se un referto è stato archiviato con un **titolo sbagliato o senza dire che esame è** (per esempio un esame delle urine che compariva col nome della Regione), puoi farlo rileggere.
+
+1. Apri **🗂️ Documenti sanitari** della persona.
+2. Sotto l'elenco tocca **🔄 Rileggi i documenti già archiviati** e poi **🔍 Controlla cosa posso migliorare**.
+3. L'app rilegge i file e ti **mostra cosa cambierebbe**: il titolo di prima e quello nuovo, gli **esami contenuti** (urine, emocromo…), il medico, la struttura e le conclusioni sbagliati.
+4. Se ti va bene tocca **✅ Applica**; altrimenti **✖ Non applicare** e non cambia niente.
+
+L'app **non tocca quello che hai scritto tu a mano**: riempie i campi vuoti e ripara quelli chiaramente sbagliati (per esempio «Paziente» finito nel nome del medico, o le intestazioni di una tabella al posto delle conclusioni). Se un documento è una foto sfocata o una scansione che non si legge, te lo dice: in quel caso apri **Modifica** e scrivi tu il nome dell'esame. Anche i documenti **nuovi** ora vengono letti meglio.""",
+      "rileggi rilettura rileggere documenti sanitari titolo sbagliato esame urine emocromo esami contenuti medico struttura conclusioni", ("sanitari", "esame"))
 
     # ================= tutto di una persona
     a("farmacia", "f_tutto", "📋 Tutti i dati e documenti di una persona (per il medico)",

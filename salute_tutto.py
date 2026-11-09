@@ -326,12 +326,18 @@ def _stt_righe_docsan(p):
     righe = []
     for d in sorted(pr.get("docsan", []) or [], key=lambda x: x.get("data") or x.get("data_referto") or "", reverse=True):
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else "") or d.get("esame", "")
-        righe.append([_stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), d.get("medico", ""), d.get("struttura", ""),
-                      (str(d.get("conclusioni", ""))[:160] + ("…" if len(str(d.get("conclusioni", ""))) > 160 else "")), _stt_nomi_file(d)])
+        medico = sr_medico_pulito(d.get("medico")) if "sr_medico_pulito" in globals() else d.get("medico", "")
+        strut = sr_struttura_pulita(d.get("struttura"), pr.get("nome", "")) if "sr_struttura_pulita" in globals() else d.get("struttura", "")
+        concl = d.get("conclusioni", "")
+        if "sr_conclusioni_valide" in globals() and not sr_conclusioni_valide(concl):
+            concl = ""
+        contenuto = d.get("esami_elenco") or concl                                      # per gli esami: cosa contengono; per le visite: le conclusioni
+        righe.append([_stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), medico, strut,
+                      (str(contenuto)[:160] + ("…" if len(str(contenuto)) > 160 else "")), _stt_nomi_file(d)])
     return righe
 
 
-_STT_H_DOCSAN = ["Data", "Tipo", "Titolo", "Specialità", "Medico", "Struttura", "Conclusioni", "File"]
+_STT_H_DOCSAN = ["Data", "Tipo", "Titolo", "Specialità", "Medico", "Struttura", "Contenuto", "File"]
 
 
 def _stt_righe_esenzioni(p):
