@@ -325,17 +325,38 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     except Exception:
         pass
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_tutto.py", "salute_rilettura.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py",
+# CARICAMENTO A PROVA DI GUASTO: se una parte non essenziale dell'app non si carica (per esempio dopo un aggiornamento di Streamlit), le altre continuano a funzionare e l'amministratore
+# vede un avviso nella barra laterale e in Utilità → «Controllo tecnico». Le quattro parti essenziali (parte1-4) invece, se si rompono, fermano l'app come prima.
+_MODULI_FALLITI = []
+_ESSENZIALI_CC = {"parte1.py", "parte2.py", "parte3.py", "parte4.py"}
+
+
+def _carica_sicuro(_p):
+    try:
+        _carica(_p)
+    except Exception as _e_cs:                                  # le interruzioni di Streamlit (stop, rerun) non sono «Exception»: passano
+        if os.path.basename(_p) in _ESSENZIALI_CC:
+            raise
+        _MODULI_FALLITI.append((os.path.basename(_p), type(_e_cs).__name__ + ": " + str(_e_cs)[:160]))
+
+
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py"):
-    _carica(os.path.join(_cartella, _nome))
+    _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
-    _carica(_percorso)
+    _carica_sicuro(_percorso)
 try:
     for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
-        _carica(os.path.join(_cartella, _nome))
+        _carica_sicuro(os.path.join(_cartella, _nome))
 finally:
     if "fd_ripristina" in globals():
         fd_ripristina()                                   # a fine pagina il percorso torna sempre quello personale
+_st_pos.session_state["_moduli_falliti"] = list(_MODULI_FALLITI)
+if _MODULI_FALLITI and (_st_pos.session_state.get("sess") or {}).get("admin"):
+    try:
+        _st_pos.sidebar.warning("⚠️ " + str(len(_MODULI_FALLITI)) + " parti dell'app non si sono caricate (il resto funziona): " + ", ".join(n_ for n_, _e in _MODULI_FALLITI[:4]) + ". Vedi Utilità → Controllo tecnico.")
+    except Exception:
+        pass
 try:                                                      # la sezione in cui sei si scrive nell'indirizzo (senza ridisegnare): serve a ritrovarla se la pagina riparte
     if "sess" in _st_pos.session_state:
         _sez_ora = "dispensa" if not _st_pos.session_state.get("farmacia_aperta") else (_st_pos.session_state.get("sezione_home") or "salute")

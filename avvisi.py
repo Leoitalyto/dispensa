@@ -281,8 +281,11 @@ def _elenco_avviso():
     if _suono_ok:
         _wav = suono_avviso(situazioni_presenti())
         try:
-            import streamlit.components.v1 as _comp
-            _comp.html(player_html(_wav), height=96)
+            if hasattr(st, "iframe"):
+                st.iframe(player_html(_wav), height=96)                      # la funzione nuova di Streamlit (components.v1.html sta per essere tolta)
+            else:
+                import streamlit.components.v1 as _comp
+                _comp.html(player_html(_wav), height=96)
         except Exception:
             st.audio(_wav, format="audio/wav", autoplay=True)
     for titolo, righe, classe in (("⚫ " + t("Scaduti"), scaduti, "s-scaduti"), ("🔴 " + t("Scadono entro 1 mese"), rossi, "s-rossi"),

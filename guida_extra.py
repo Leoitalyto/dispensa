@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.3"
+GUIDA_VERSIONE = "3.4"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -23,7 +23,7 @@ GUIDA_VERSIONI = {
     "lavoro": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["lavoro.py", "casa.py", "cestino.py"]},
     "auto": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente_extra.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "auto_soccorso.py", "auto_emergenza.py", "libretto.py",
                                                                          "diagnostica.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica_spie.py", "cestino.py"]},
-    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py"]},
+    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py", "controllo_tecnico.py"]},
 }
 
 
@@ -178,6 +178,21 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= controllo tecnico
+    a("utilita", "u_tecnico", "Controllo tecnico dell'app (solo amministratore)",
+      """In **Utilità**, solo per te come amministratore, c'è il riquadro **🩺 Controllo tecnico dell'app**. Serve a vedere in un colpo d'occhio se tutto quello che l'app usa è a posto, soprattutto **dopo un aggiornamento**.
+
+Mostra, con un pallino:
+- 🟢 **tutto a posto**, 🟡 **da guardare** (funziona, ma c'è qualcosa da sistemare), 🔴 **da sistemare** (una parte non funziona);
+- la **versione di Streamlit** in uso e se è **fissata** nel file `requirements.txt` (se è fissata non cambia da sola);
+- le **funzioni di Streamlit** che l'app usa, e cosa smette di funzionare se una manca;
+- i **programmi di lettura** di documenti e foto (riconoscimento del testo, PDF, immagini);
+- l'**archivio dei dati** e la memoria veloce dei salvataggi;
+- le **parti dell'app che non si sono caricate**: l'app continua a funzionare, ma quella parte no, e in quel caso compare anche un avviso nella barra laterale.
+
+Se dopo un aggiornamento vedi un 🟡 o un 🔴 nuovo, **dimmelo** e lo sistemo. Il riquadro non modifica niente.""",
+      "controllo tecnico aggiornamento versione streamlit requirements funzioni parti non caricate amministratore diagnosi", ("tecnico", "aggiornamento"))
 
     # ================= rilettura dei documenti sanitari
     a("farmacia", "f_rilettura", "🔄 Rileggere i documenti sanitari già archiviati",
