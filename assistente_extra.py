@@ -145,6 +145,8 @@ except NameError:
 # ---------------------------------------------------------------------------------------------------------------------
 _MR_STOP = set("il lo la le gli un una uno di da del dello della dei degli delle in con su per tra fra che chi cosa come dove quando perche non mi ti si ci vi ho ha hai sono e ed o ma se piu poco molto questo questa questi queste quello quella al allo alla ai agli alle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle puo posso devo fare fatto faccio vuole voglio vorrei anche solo gia ancora quanto quale quali".split())
 _MR_TIPI_LAVORO = {"Busta paga", "Certificazione Unica (CU)", "Documento INPS"}
+# i tipi VERI di Casa (CA_TIPI) che sono manuali o istruzioni; gli altri documenti (bollette, contratti…) si cercano solo se il nome o il bene c'entrano con la domanda
+_MR_TIPI_MANUALE = ("Manuale d'uso", "Manuale di installazione", "Manuale di manutenzione", "Scheda tecnica", "Certificato di garanzia", "Libretto di impianto", "Dichiarazione di conformità", "Istruzioni di montaggio")
 MR_MAX_DOC = 3
 MR_MAX_DOC_TUTTI = 8
 MR_MAX_BYTE = 25 * 1024 * 1024
@@ -181,12 +183,11 @@ def mr_documenti(d):
         rif = x.get("file") if isinstance(x.get("file"), dict) else None
         if not rif or not rif.get("id"):
             continue
-        manuale = x.get("tipo") in ("Manuale", "Garanzia") or x.get("argomento") == "Manuali e istruzioni" or bool(x.get("bene_id"))
-        if not manuale:
-            continue
+        tipo_x = str(x.get("tipo") or "")
+        manuale = tipo_x in _MR_TIPI_MANUALE or tipo_x.startswith("Manuale") or tipo_x in ("Garanzia", "Manuale") or x.get("argomento") == "Manuali e istruzioni" or bool(x.get("bene_id"))
         bene = beni.get(x.get("bene_id")) or {}
         meta = " ".join(str(v) for v in (x.get("titolo"), x.get("tipo"), x.get("argomento"), x.get("marca"), x.get("modello"), x.get("categoria"), x.get("sottocategoria"), bene.get("nome"), bene.get("marca"), bene.get("modello")) if v)
-        out.append({"id": x.get("id"), "titolo": x.get("titolo") or rif.get("nome") or "Documento", "dove": "Casa → 📚 Documenti" + (f" (bene: {bene.get('nome')})" if bene.get("nome") else ""), "riferimenti": [rif], "meta": meta, "fonte": "casa", "manuale": x.get("tipo") == "Manuale"})
+        out.append({"id": x.get("id"), "titolo": x.get("titolo") or rif.get("nome") or "Documento", "dove": "Casa → 📚 Documenti" + (f" (bene: {bene.get('nome')})" if bene.get("nome") else ""), "riferimenti": [rif], "meta": meta, "fonte": "casa", "manuale": manuale})
     for v in ((d or {}).get("auto") or {}).get("veicoli", []) or []:
         if not isinstance(v, dict):
             continue
@@ -291,6 +292,8 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
     letti, cand, df, n_tot = [], [], {}, 0
     for doc in scelti:
         rif = doc["riferimenti"][0]
+        meta_doc = set(_mr_ridotte(doc["meta"]))
+        hit_doc = sum(1 for t in tok if t in meta_doc)                         # parole della domanda già presenti nel nome del documento / del bene
         pagine = []
         for r in doc["riferimenti"]:
             pagine = _mr_pagine_file((st.session_state.get("sess") or {}).get("uid", ""), r.get("id"), r.get("nome", ""), r.get("mime", ""), int(r.get("dimensione") or 0)) or pagine
@@ -303,15 +306,18 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
             for t in tok:
                 if t in parole:
                     df[t] = df.get(t, 0) + 1
-            cand.append((doc, n, testo, parole))
+            cand.append((doc, n, testo, parole, hit_doc))
     ris = []
-    for doc, n, testo, parole in cand:
+    for doc, n, testo, parole, hit_doc in cand:
         trovate = [t for t in tok if t in parole]
         if not trovate:
             continue
-        punteggio = sum(math.log(1 + n_tot / (1 + df.get(t, 0))) for t in trovate) * (1.0 + 0.5 * (len(trovate) - 1))
-        if len(tok) >= 3 and len(trovate) < 2:                                                 # con una domanda lunga, una sola parola in comune non basta
+        # con due o più parole nella domanda, nel passaggio ne servono almeno due, meno quelle che già dicono di che documento si parla (nome o bene):
+        # «pressione caldaia» in un documento della caldaia basta «pressione»; in un manuale di altro (un giradischi) servono tutte e due
+        servono = max(1, min(2, len(tok)) - hit_doc)
+        if len(trovate) < servono:
             continue
+        punteggio = sum(math.log(1 + n_tot / (1 + df.get(t, 0))) for t in trovate) * (1.0 + 0.5 * (len(trovate) - 1)) + 2.0 * hit_doc
         ris.append({"titolo": doc["titolo"], "pagina": n, "testo": testo, "dove": doc["dove"], "punteggio": round(punteggio, 2), "parole": trovate})
     ris.sort(key=lambda r: -r["punteggio"])
     visti, out = set(), []
