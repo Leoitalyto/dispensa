@@ -4298,8 +4298,9 @@ def _doc_tesseract(img, psm):
     with _tmp_doc.TemporaryDirectory() as cartella:
         percorso = os.path.join(cartella, "doc.png")
         img.save(percorso)
+        # un solo thread per processo (OMP_THREAD_LIMIT=1): misurato 2,7 volte più veloce su una foto di referto (28 s → 10 s) con lo stesso identico testo; tempo massimo 90 s
         r = _sp_doc.run(["tesseract", percorso, "stdout", "-l", _doc_ocr_lingue(), "--psm", psm],
-                        capture_output=True, text=True, timeout=45)
+                        capture_output=True, text=True, timeout=90, env=dict(os.environ, OMP_THREAD_LIMIT="1"))
     return r.stdout or ""
 
 

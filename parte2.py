@@ -41,9 +41,64 @@ class ArchivioLocale:
             pass
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# MEMORIA DELLE LETTURE E DELLE SCRITTURE (velocità): prima ogni salvataggio faceva 3 richieste a GitHub (leggere, scrivere, rileggere per ridisegnare la pagina) e ogni file
+# nuovo ne faceva 2 (una lettura che dava «non esiste» e la scrittura). Ora si ricorda l'ultimo contenuto e la sua impronta («sha»): il salvataggio parte subito con la scrittura
+# (se nel frattempo qualcuno ha cambiato il file GitHub risponde «conflitto» e si rilegge, come sempre: i dati sono al sicuro) e dopo aver scritto non serve rileggere.
+# Solo file piccoli (i dati), per poco tempo (60 secondi, come la memoria delle letture); i file grandi (foto, PDF) non si tengono in memoria. Si spegne con ARCHIVIO_VELOCE = "no".
+# ---------------------------------------------------------------------------------------------------------------------
+import copy as _gh_copy
+import threading as _gh_thr
+@st.cache_resource
+def _gh_memoria_globale():
+    """La memoria è UNA per tutto il server (e resta fra un ridisegno e l'altro: questo file si rilegge a ogni ridisegno, un semplice {} si svuoterebbe ogni volta)."""
+    return {}, _gh_thr.Lock()
+
+
+_GH_MEMORIA, _GH_BLOCCO = _gh_memoria_globale()               # (archivio, ramo, nome) -> {"dati", "sha", "t"}
+_GH_TTL, _GH_MAX_BYTE, _GH_MAX_VOCI = 60.0, 600 * 1024, 40
+
+
+def _gh_veloce():
+    try:
+        return str(st.secrets.get("ARCHIVIO_VELOCE", "si")).strip().lower() not in ("no", "off", "0", "spento")
+    except Exception:
+        return True
+
+
 class ArchivioGitHub:
     """Salva i file JSON in un repository GitHub privato (i dati restano per sempre)."""
     permanente = True
+
+    def _mem_chiave(self, nome):
+        return (self.repo, self.ramo or "", nome)
+
+    def _mem_leggi(self, nome):
+        if not _gh_veloce():
+            return None
+        with _GH_BLOCCO:
+            e = _GH_MEMORIA.get(self._mem_chiave(nome))
+            if e and time.time() - e["t"] <= _GH_TTL:
+                return _gh_copy.deepcopy(e["dati"]), e["sha"]
+        return None
+
+    def _mem_metti(self, nome, dati, sha):
+        if not _gh_veloce() or not sha:
+            return self._mem_togli(nome)
+        try:
+            if len(json.dumps(dati, ensure_ascii=False)) > _GH_MAX_BYTE:              # file grandi (foto, PDF): non si tengono in memoria
+                return self._mem_togli(nome)
+            copia = _gh_copy.deepcopy(dati)
+        except Exception:
+            return self._mem_togli(nome)
+        with _GH_BLOCCO:
+            _GH_MEMORIA[self._mem_chiave(nome)] = {"dati": copia, "sha": sha, "t": time.time()}
+            while len(_GH_MEMORIA) > _GH_MAX_VOCI:
+                del _GH_MEMORIA[min(_GH_MEMORIA, key=lambda k: _GH_MEMORIA[k]["t"])]
+
+    def _mem_togli(self, nome):
+        with _GH_BLOCCO:
+            _GH_MEMORIA.pop(self._mem_chiave(nome), None)
 
     def __init__(self, token, repo, ramo=None, http=requests):
         self.repo, self.ramo, self.http = repo, ramo, http
@@ -68,11 +123,16 @@ class ArchivioGitHub:
             b.raise_for_status()
             grezzo = base64.b64decode(b.json()["content"])
         try:
-            return json.loads(grezzo.decode("utf-8")), j["sha"]
+            dati_ = json.loads(grezzo.decode("utf-8"))
         except json.JSONDecodeError:
-            return {}, j["sha"]
+            dati_ = {}
+        self._mem_metti(nome, dati_, j["sha"])
+        return dati_, j["sha"]
 
     def leggi(self, nome):
+        m = self._mem_leggi(nome)                                   # appena letto o scritto da noi: niente richiesta
+        if m is not None:
+            return m[0]
         dati, _ = self._leggi(nome)
         return dati if dati is not None else {}
 
@@ -85,13 +145,25 @@ class ArchivioGitHub:
             corpo["branch"] = self.ramo
         r = self.http.put(self._url(nome), headers=self.intest, json=corpo, timeout=30)
         if r.status_code in (409, 422):
+            self._mem_togli(nome)
             raise Conflitto()
         r.raise_for_status()
+        try:
+            nuovo_sha = ((r.json() or {}).get("content") or {}).get("sha")
+        except Exception:
+            nuovo_sha = None
+        self._mem_metti(nome, dati, nuovo_sha)                       # così il ridisegno della pagina non deve rileggere il file
 
     def modifica(self, nome, fn, messaggio=""):
         for tentativo in range(4):
-            dati, sha = self._leggi(nome)
-            dati = dati if dati is not None else {}
+            m = self._mem_leggi(nome) if tentativo == 0 else None
+            if m is not None:
+                dati, sha = m                                        # lo so già: parto direttamente dalla scrittura (se è cambiato, GitHub risponde «conflitto» e si rilegge)
+            elif tentativo == 0 and nome.startswith("documenti/") and _gh_veloce():
+                dati, sha = {}, None                                 # un file di documento è quasi sempre NUOVO: provo a crearlo senza leggere prima
+            else:
+                dati, sha = self._leggi(nome)
+                dati = dati if dati is not None else {}
             fn(dati)
             try:
                 self._scrivi(nome, dati, sha, messaggio)
@@ -101,6 +173,7 @@ class ArchivioGitHub:
         raise RuntimeError(t("Non riesco a salvare: troppe modifiche contemporanee. Riprova."))
 
     def elimina(self, nome, messaggio=""):
+        self._mem_togli(nome)
         _, sha = self._leggi(nome)
         if sha is None:
             return
@@ -108,6 +181,7 @@ class ArchivioGitHub:
         if self.ramo:
             corpo["branch"] = self.ramo
         r = self.http.delete(self._url(nome), headers=self.intest, json=corpo, timeout=30)
+        self._mem_togli(nome)
         if r.status_code != 404:
             r.raise_for_status()
 

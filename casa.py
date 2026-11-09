@@ -128,6 +128,19 @@ def _ca_norm(t):
 # ---------------------------------------------------------------------------------------------------------------------
 # Lettura del testo
 # ---------------------------------------------------------------------------------------------------------------------
+def _ca_ocr_due(im):
+    """I due modi di leggere una foto (testo in righe e testo sparso). Se il server ha più di un processore, insieme (si dimezza l'attesa); il testo è lo stesso."""
+    try:
+        if (os.cpu_count() or 1) >= 2:
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            with _TPE(2) as _ex:
+                a_, b_ = _ex.submit(_doc_tesseract, im, "6"), _ex.submit(_doc_tesseract, im, "11")
+                return [a_.result(), b_.result()]
+    except Exception:
+        pass
+    return [_doc_tesseract(im, "6"), _doc_tesseract(im, "11")]
+
+
 def _ca_ocr_pdf(dati, max_pagine=3):
     """Per i PDF che sono solo immagini (scansioni): trasforma le prime pagine in immagini e le legge con l'OCR, come una foto. Ritorna il testo (vuoto se non riesce)."""
     if not ("_doc_ocr_lingue" in globals() and "_doc_tesseract" in globals() and _doc_ocr_lingue()):
@@ -232,7 +245,7 @@ def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
             from PIL import Image, ImageOps
             im = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
             im.thumbnail((2400, 2400))
-            testi = [_doc_tesseract(im, "6"), _doc_tesseract(im, "11")]
+            testi = _ca_ocr_due(im)
             info["metodo"] = "lettura della foto (OCR)"
             return "\n".join(testi)[:max_car], info
         except Exception:
