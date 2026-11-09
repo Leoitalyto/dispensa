@@ -26,6 +26,11 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){min-height:4
 [data-testid="stHeaderActionElements"]{display:none !important}
 /* il pulsante «Salva in dispensa» resta sempre in vista mentre si compila il modulo (che è lungo): fisso sopra la barra in basso, lasciando libero il robottino a destra */
 .st-key-salva_dispensa{position:fixed !important;left:12px;right:104px;bottom:84px;z-index:60;width:auto !important}
+/* la linguetta della radio (cuffie) sul bordo sinistro non deve più coprire l'inizio delle scritte: è più stretta e il contenuto parte un po' più a destra (solo se la radio è attiva) */
+@media (max-width:700px){
+#mu-tab{width:24px !important}
+body:has(#mu-tab:not([style*="display: none"])) [data-testid="stMainBlockContainer"]{padding-left:30px !important}
+}
 [data-testid="stExpander"] summary{min-height:44px;display:flex;align-items:center}
 .vc-mic{width:44px !important;height:44px !important;right:2px !important}
 [data-testid="stMultiSelect"] [data-baseweb="tag"],[data-testid="stMultiSelectTagsContainer"] span{min-height:36px}
