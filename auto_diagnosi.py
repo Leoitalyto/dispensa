@@ -361,7 +361,7 @@ def _ad_parse(testo):
             "avviso_sicurezza": str(d.get("avviso_sicurezza") or "").strip()[:400], "note": str(d.get("note") or "").strip()[:500]}
 
 
-def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
+def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False, extra=None):
     """Una richiesta a UN fornitore. turni = [("u"|"a", testo), ...]; la foto va col primo turno dell'utente. Ritorna (testo, None) oppure (None, errore) con errore in: chiave, limite, rete, rifiuto, formato.
     OpenRouter con più modelli separati da virgola: prova il primo e, se è occupato, sparito o non va, il successivo (i modelli gratuiti cambiano spesso)."""
     elenco_m = [m_.strip() for m_ in str(cfg.get("modello", "")).split(",") if m_.strip()]
@@ -369,7 +369,7 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
         ultimo, tentativi = "rete", []
         for m_ in elenco_m[:4]:
             st.session_state.pop("_ad_dettaglio", None)
-            testo_, err_ = _ad_invia(prov, dict(cfg, modello=m_), system, turni, jpeg, max_tokens, json_out)
+            testo_, err_ = _ad_invia(prov, dict(cfg, modello=m_), system, turni, jpeg, max_tokens, json_out, extra)
             if not err_:
                 st.session_state["_ad_modello_usato"] = m_
                 return testo_, None
@@ -409,6 +409,8 @@ def _ad_invia(prov, cfg, system, turni, jpeg, max_tokens, json_out=False):
                 else:
                     msgs.append({"role": "user" if ruolo == "u" else "assistant", "content": testo})
             corpo_oa = {"max_tokens": max_tokens, "messages": msgs}
+            if extra:
+                corpo_oa.update(extra)                                         # es. {"temperature": 0.2, "reasoning": {"exclude": True}}: il servizio ignora ciò che non conosce
             elenco_m = [m_.strip() for m_ in str(cfg["modello"]).split(",") if m_.strip()]
             if prov == "openrouter" and len(elenco_m) > 1:
                 corpo_oa["models"] = elenco_m[:3]                              # OpenRouter prova i modelli in ordine: i gratuiti cambiano spesso

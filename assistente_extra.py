@@ -456,12 +456,55 @@ def mr_cerca(d, domanda, tutti=False, massimo=3, ocr=None):
 # ---------------------------------------------------------------------------------------------------------------------
 MR_IA_MAX_UTENTE = 10
 _MR_IA_SISTEMA = """Sei un assistente che spiega, in italiano molto semplice, un passaggio di un manuale d'uso a una persona poco esperta di tecnologia.
-REGOLE: (1) usa SOLO quello che c'è scritto nel passaggio: non aggiungere numeri, valori, passaggi o avvertenze che non ci sono; (2) se il passaggio è incompleto, tagliato o confuso, dillo chiaramente («Il testo è incompleto: apri la pagina intera») e spiega solo la parte chiara; (3) frasi brevi e parole comuni, al massimo 120 parole; (4) se ci sono dei passi, scrivili in un elenco numerato; (5) se si parla di gas, corrente elettrica, pressione, acqua calda o altri rischi, aggiungi una frase: «Segui le avvertenze del manuale e, se non sei sicuro, chiama un tecnico»; (6) non fare diagnosi, non dare consigli tuoi, non parlare di te."""
+FORMATO OBBLIGATORIO: rispondi SOLO con la spiegazione, scritta in ITALIANO, dentro i tag <spiegazione> e </spiegazione>. Fuori dai tag non scrivere niente. Non scrivere analisi, ragionamenti, passaggi di lavoro, traduzioni o parole in inglese, e non ricopiare il testo del manuale.
+REGOLE: (1) usa SOLO quello che c'è scritto nel passaggio: non aggiungere numeri, valori, passaggi o avvertenze che non ci sono; (2) se il passaggio è incompleto, tagliato o confuso, dillo («Il testo è incompleto: apri la pagina intera») e spiega solo la parte chiara; (3) frasi brevi e parole comuni, al massimo 120 parole; (4) se ci sono dei passi, scrivili in un elenco numerato; (5) se si parla di gas, corrente elettrica, pressione, acqua calda o altri rischi, aggiungi una frase: «Segui le avvertenze del manuale e, se non sei sicuro, chiama un tecnico»; (6) non fare diagnosi, non dare consigli tuoi, non parlare di te."""
+_MR_IA_PROMEMORIA = "\n\nScrivi ora SOLO la spiegazione in italiano tra <spiegazione> e </spiegazione>: niente ragionamenti, niente inglese, niente copia del testo."
+
+# parole per riconoscere le righe in inglese (il ragionamento che alcuni modelli gratuiti scrivono per errore) e le tracce di lavoro
+_MR_EN = set("the and is are was were to of for with this that it be must will should not from you your user passage text explain simple italian wait let but output draft refine check constraint constraints role source translate translation sentence step response answer which have has been into than then also only".split())
+_MR_IT = set("il lo la gli le un una uno di del dello della dei degli delle che per con non è e sono si se da nel nella nei sul sulla alla al ai alle ma come quando puoi può devi deve fai fare prima dopo poi anche ha hanno più dove cui quindi perché ti tuo tua suo sua questo questa quello".split())
+_MR_TRACCIA = re.compile(r"(analy[sz]e|source text|role:|constraints?\b|draft(ing)?\b|self[- ]?correct|wait,|let'?s\b|step \d|final (polish|check)|refin(e|ing)|output generation|thinking|reasoning|translation artifact|re-?read|check against|\bplan:|\bgoal:|request:)", re.I)
 
 
-_MR_IA_MSG = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "formato": "La risposta non era leggibile: riprova.",
+def mr_pulisci_risposta(t, sorgente=""):
+    """Toglie da una risposta dell'IA tutto ciò che non è la spiegazione: ragionamenti, righe in inglese, copie del testo originale. Ritorna il testo pulito oppure None se non resta una spiegazione utilizzabile."""
+    t = str(t or "").replace("\r", "")
+    t = re.sub(r"<(think|thinking|reasoning)>.*?</\1>", "", t, flags=re.S | re.I)
+    m = re.findall(r"<spiegazione>(.*?)(?:</spiegazione>|$)", t, flags=re.S | re.I)
+    if m and m[-1].strip():
+        t = m[-1]
+    else:
+        fin = list(re.finditer(r"(?i)(final (answer|output|response|version|text)|risposta finale|spiegazione finale|versione finale)\W{0,3}[:：]\s*", t))
+        if fin and len(t[fin[-1].end():].strip()) >= 40:
+            t = t[fin[-1].end():]
+    src = set(re.findall(r"[a-zàèéìòù']+", str(sorgente or "").lower()))
+    righe = []
+    for r in t.split("\n"):
+        r0 = r.strip().lstrip("*-•○■#>0123456789.) (").strip().strip("*_ ")
+        if not r0:
+            righe.append("")
+            continue
+        if _MR_TRACCIA.search(r0):
+            continue
+        w = re.findall(r"[a-zàèéìòù']+", r0.lower())
+        en = sum(1 for x in w if x in _MR_EN)
+        it = sum(1 for x in w if x in _MR_IT)
+        if (en > it and en >= 2) or (en >= 3 and en >= 0.3 * len(w)):
+            continue                                                                    # riga in inglese
+        if len(w) >= 8 and src and sum(1 for x in w if x in src) / len(w) >= 0.8:
+            continue                                                                    # riga che ricopia il testo del manuale
+        righe.append(r.rstrip())
+    out = re.sub(r"\n{3,}", "\n\n", "\n".join(righe)).strip()
+    w_tot = re.findall(r"[a-zàèéìòù']+", out.lower())
+    if len(out) < 40 or len(w_tot) < 8 or sum(1 for x in w_tot if x in _MR_EN) > 0.15 * len(w_tot):
+        return None
+    return out[:1500]
+
+
+_MR_IA_MSG = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.",
+              "formato": "Il servizio gratuito ha risposto in modo confuso (anche dopo qualche tentativo). Riprova fra un minuto, oppure leggi il testo del manuale qui sopra.",
               "limite": "Il servizio gratuito è occupato o ha finito le richieste: aspetta un minuto e riprova.", "limite_app": "Hai raggiunto il tetto di spiegazioni dell'app per oggi. Riprova più tardi.",
-              "pagamento": "Il modello scelto è a pagamento: nel servizio gratuito scegline uno con «:free» nel nome."}
+              "pagamento": "Il modello scelto è a pagamento: nel servizio gratuito scegline uno con «:free» nel nome.", "modello": "Il modello gratuito scelto non c'è più o non funziona: riprova fra poco."}
 
 
 def mr_ia_attiva():
@@ -512,7 +555,8 @@ def date_oggi_iso():
 
 
 def mr_spiega(testo):
-    """(spiegazione, None) oppure (None, errore) con errore in: chiave, limite_utente, rete, limite… (gli stessi messaggi delle spie)."""
+    """(spiegazione, None) oppure (None, errore) con errore in: chiave, limite_utente, rete, limite, formato… (gli stessi messaggi delle spie).
+    Se il servizio gratuito risponde in modo confuso (ragionamento in inglese, copia del testo), si pulisce; se non resta niente di buono si riprova con un altro modello (fino a 3 tentativi)."""
     try:
         prov = ad_provider_scelto()
         cfg = ad_cfg(prov)
@@ -520,11 +564,25 @@ def mr_spiega(testo):
             return None, "chiave"
         if not mr_ia_puo(cfg):
             return None, "limite_utente"
-        t, err = _ad_invia(prov, cfg, _MR_IA_SISTEMA, [("u", "Passaggio del manuale:\n\n" + str(testo)[:2500])], None, 600)
-        if err:
-            return None, err
-        t = (t or "").strip()
-        return (t[:1500], None) if t else (None, "formato")
+        modelli = [m_.strip() for m_ in str(cfg.get("modello", "")).split(",") if m_.strip()]
+        tentativi = [cfg] + ([dict(cfg, modello=m_) for m_ in modelli[1:3]] if (prov == "openrouter" and len(modelli) > 1) else [cfg])
+        utente = "Passaggio del manuale:\n\n" + str(testo)[:2500] + _MR_IA_PROMEMORIA
+        ultimo = "formato"
+        for c_ in tentativi[:3]:
+            try:
+                t, err = _ad_invia(prov, c_, _MR_IA_SISTEMA, [("u", utente)], None, 900, False, {"temperature": 0.2, "reasoning": {"exclude": True}})
+            except TypeError:                                                           # una versione di _ad_invia senza i parametri in più
+                t, err = _ad_invia(prov, c_, _MR_IA_SISTEMA, [("u", utente)], None, 900)
+            if err:
+                if err in ("chiave", "pagamento", "limite"):
+                    return None, err
+                ultimo = err
+                continue
+            pulito = mr_pulisci_risposta(t, testo)
+            if pulito:
+                return pulito, None
+            ultimo = "formato"
+        return None, ultimo
     except Exception:
         return None, "rete"
 
