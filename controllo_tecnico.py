@@ -47,8 +47,17 @@ def ct_controlli(percorso_requirements=None):
     else:
         out.append(("attenzione", "Comandi JavaScript in «st.html»", "non disponibili: alcune funzioni usano l'altra strada (st.iframe)."))
     try:
-        sch = _ct_firma(globals().get("_tabs_originale") or st.tabs)                  # la funzione VERA di Streamlit (st.tabs è sostituita dall'app con una versione che ricorda la scheda)
-        out.append(("ok" if "on_change" in sch else "attenzione", "Schede che ricordano dove eri", "disponibili." if "on_change" in sch else "non disponibili: dopo ogni azione si torna alla prima scheda."))
+        w = st.tabs                                                                     # st.tabs è sostituita dall'app con una versione che ricorda la scheda: se ne legge lo stato vero
+        if getattr(w, "_ricorda", False):
+            attiva = bool(getattr(w, "_attiva", False))
+        else:
+            attiva = False
+        if attiva:
+            out.append(("ok", "Schede che ricordano dove eri", "attive."))
+        else:
+            vera = getattr(w, "_originale", None) or w
+            ha_param = "on_change" in _ct_firma(vera) and "key" in _ct_firma(vera)
+            out.append(("attenzione", "Schede che ricordano dove eri", "non attive: dopo ogni azione si torna alla prima scheda." + ("" if ha_param else " Questa versione di Streamlit non ha le funzioni che servono.")))
     except Exception:
         pass
     for nome, voce in (("dialog", "Finestre sopra la pagina"), ("fragment", "Aggiornamenti parziali"), ("pills", "Scelte a pillole"), ("toggle", "Interruttori"), ("popover", "Riquadri a comparsa")):
@@ -90,9 +99,9 @@ def ct_pannello():
     n_att = sum(1 for e, _v, _d in c if e == "attenzione")
     n_err = sum(1 for e, _v, _d in c if e == "errore")
     if n_err:
-        st.error(f"🔴 {n_err} cose da sistemare" + (f" e {n_att} da guardare" if n_att else "") + ".")
+        st.error("🔴 " + ("1 cosa da sistemare" if n_err == 1 else f"{n_err} cose da sistemare") + (f" e {n_att} da guardare" if n_att else "") + ".")
     elif n_att:
-        st.warning(f"🟡 Tutto funziona, {n_att} cose da guardare.")
+        st.warning("🟡 Tutto funziona, " + ("1 cosa da guardare." if n_att == 1 else f"{n_att} cose da guardare."))
     else:
         st.success("🟢 Tutto a posto.")
     for esito, voce, dettaglio in c:

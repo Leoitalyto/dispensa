@@ -41,6 +41,8 @@ if not getattr(_st_tab.tabs, "_ricorda", False):
         except Exception:
             return _tabs_originale(tabs, **kw)
     _tabs_con_memoria._ricorda = True
+    _tabs_con_memoria._attiva = bool(_tabs_ok)                     # lo legge il «Controllo tecnico»: dopo il primo ridisegno questo codice non si riesegue
+    _tabs_con_memoria._originale = _tabs_originale
     _st_tab.tabs = _tabs_con_memoria
 import streamlit as _st_giro
 _st_giro.session_state["_tabs_giro"] = _st_giro.session_state.get("_tabs_giro", 0) + 1     # ogni ridisegno è un «giro»: serve a dare chiavi stabili alle schede
