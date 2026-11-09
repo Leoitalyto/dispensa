@@ -108,13 +108,24 @@ with tab_aggiungi:
         ingredienti = st.text_area(t("Ingredienti"), key=K("ingredienti"), height=90)
     note = st.text_input(t("Note (facoltative)"), key=K("note"), placeholder=t("es. aperto, aprire dopo il 10"))
 
-    if st.button("💾 " + t("Salva in dispensa"), type="primary", width="stretch"):
+    _slot_errori = st.container()                                                     # gli avvisi compaiono QUI, sopra i pulsanti (sotto sarebbero nascosti dalla barra in basso)
+
+    def _avviso(_msg):
+        _slot_errori.error(_msg)
+        try:
+            st.toast(_msg, icon="⚠️")                                                  # e un avviso che si vede comunque, anche se la pagina è scorsa
+        except Exception:
+            pass
+    st.caption("👇 Per salvare tocca **💾 Salva in dispensa** (il tasto Invio della tastiera non salva).")
+    _salva_torna = st.button("💾 " + t("Salva in dispensa"), type="primary", width="stretch", key="salva_dispensa")
+    _salva_altro = st.button("➕ Salva e aggiungi un altro prodotto", width="stretch", key="salva_e_altro")
+    if _salva_torna or _salva_altro:
         if not nome.strip():
-            st.error(t("Scrivi il nome del prodotto."))
+            _avviso(t("Scrivi il nome del prodotto."))
         elif not piu_scad and quant <= 0:
-            st.error(t("Indica quante unità hai (almeno 1)."))
+            _avviso(t("Indica quante unità hai (almeno 1)."))
         elif piu_scad and not any(q > 0 for q, _ in lotti):
-            st.error(t("Indica almeno una scadenza con almeno 1 unità."))
+            _avviso(t("Indica almeno una scadenza con almeno 1 unità."))
         else:
             immagine = st.session_state.get(K("foto_pronta")) or st.session_state.get(K("immagine"), "")
             base = {
@@ -145,9 +156,10 @@ with tab_aggiungi:
                 st.session_state["n_form"] = n + 1
                 st.session_state["ultimo_per_chi"] = per_chi_sel
                 st.session_state["ultimo_posto"] = posto
+                st.session_state["_vai_tab_dispensa"] = bool(_salva_torna)           # «Salva in dispensa» torna alla Dispensa; «Salva e aggiungi un altro» resta qui
                 st.rerun()
             except Exception as e:
-                st.error(t("Non sono riuscito a salvare: {e}", e=e))
+                _avviso(t("Non sono riuscito a salvare: {e}", e=e))
 
 # ---------------------------------------------------------------------
 # GESTISCI

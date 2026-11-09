@@ -24,6 +24,8 @@ ACC_CSS = """
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){min-height:44px;box-sizing:border-box}
 [data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p,[data-testid="stCaptionContainer"] small{font-size:max(.88rem,13.5px) !important}
 [data-testid="stHeaderActionElements"]{display:none !important}
+/* il pulsante «Salva in dispensa» resta sempre in vista mentre si compila il modulo (che è lungo): fisso sopra la barra in basso, lasciando libero il robottino a destra */
+.st-key-salva_dispensa{position:fixed !important;left:12px;right:104px;bottom:84px;z-index:60;width:auto !important}
 [data-testid="stExpander"] summary{min-height:44px;display:flex;align-items:center}
 .vc-mic{width:44px !important;height:44px !important;right:2px !important}
 [data-testid="stMultiSelect"] [data-baseweb="tag"],[data-testid="stMultiSelectTagsContainer"] span{min-height:36px}

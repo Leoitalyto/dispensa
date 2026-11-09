@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.3"
+GUIDA_VERSIONE = "2.4"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -102,6 +102,18 @@ def _gx_costruisci():
 
 Il Cestino riguarda **solo i tuoi dati personali**: la dispensa di famiglia ha già il suo storico con «Annulla» per l'amministratore.""",
       "cestino svuota ripristina recupera giorni conservazione eliminati tutto elenco utilità", ("recupera", None))
+
+    # ================= salvare un prodotto
+    a("dispensa", "d_salva", "💾 Salvare un prodotto: i due pulsanti",
+      """Nella scheda **Aggiungi**, dopo aver scritto il nome e quante unità hai, ci sono due modi per salvare:
+
+- **💾 Salva in dispensa** (il pulsante verde che resta sempre in vista sopra la barra in basso): salva il prodotto e **ti riporta alla scheda Dispensa**, dove lo vedi nell'elenco.
+- **➕ Salva e aggiungi un altro prodotto**: salva e **resta nella scheda Aggiungi** con il modulo vuoto, comodo quando ne inserisci tanti.
+
+**Il tasto Invio della tastiera non salva**: serve solo a confermare quello che hai scritto in quel campo. Per salvare tocca sempre il pulsante.
+
+Se manca qualcosa (il nome o le unità) compare **un avviso sopra i pulsanti** e un messaggio giallo in alto, e il prodotto non viene salvato finché non lo completi.""",
+      "salvare aggiungere prodotto pulsante salva invio tastiera non salva torna dispensa un altro pannello non si chiude unità nome", ("aggiungi", "prodotto"))
 
     # ================= i colori dei comandi
     colori = ("🎨 I colori dei comandi: sempre uguali",

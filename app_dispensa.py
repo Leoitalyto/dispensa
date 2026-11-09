@@ -26,6 +26,12 @@ if not getattr(_st_tab.tabs, "_ricorda", False):
             return _tabs_originale(tabs, **kw)
         vistE = _st_tab.session_state.setdefault("_tabs_viste", {})
         base = "tabm_" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
+        try:                                                                       # dopo «Salva in dispensa» si torna alla scheda Dispensa (la prima delle schede principali)
+            if _st_tab.session_state.get("_vai_tab_dispensa") and any("Aggiungi" in str(t) for t in tabs) and len(tabs) >= 5:
+                _st_tab.session_state.pop("_vai_tab_dispensa", None)
+                _st_tab.session_state[base] = tabs[0]
+        except Exception:
+            pass
         giro = _st_tab.session_state.get("_tabs_giro", 0)
         n = vistE.get(base)
         n = (n[1] + 1) if (n and n[0] == giro) else 0
