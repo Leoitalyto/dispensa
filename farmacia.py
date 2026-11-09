@@ -1527,7 +1527,7 @@ def _fa_esporta(f, pid, nomi):
             st.markdown("**📤 Invia o esporta (PDF, Excel, email, WhatsApp, Telegram…)**")
             p_ = next((p for p in f.get("profili", []) if p["id"] == pid), {"id": pid, "nome": nomi[pid]})
             inv_hub(f"profilo_{pid}", [{"chiave": "io:" + pid, "nome": nomi[pid], "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}],
-                    _inv_dati_conto(), "Salute " + nomi[pid])
+                    _inv_dati_conto(), "Salute – " + nomi[pid])
             st.divider()
         st.download_button("⬇ Scarica i dati (JSON, per tecnici)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
                            file_name=f"salute_{nomi[pid].replace(' ', '_')}.json", mime="application/json")

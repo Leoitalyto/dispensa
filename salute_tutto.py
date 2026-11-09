@@ -237,7 +237,7 @@ def stt_pagina(pid):
                    "Scegli le sezioni, tocca **Prepara i file** e poi stampa, scarica o invia come hai sempre fatto.")
         try:
             p_ = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {"id": pid, "nome": nome})
-            inv_hub(f"profilo_{pid}_pagina", [{"chiave": "io:" + pid, "nome": nome, "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}], _inv_dati_conto(), "Salute " + nome)
+            inv_hub(f"profilo_{pid}_pagina", [{"chiave": "io:" + pid, "nome": nome, "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}], _inv_dati_conto(), "Salute – " + nome)
         except Exception as ex:
             st.error(f"Non riesco ad aprire l'esportazione ({type(ex).__name__}): riprova.")
         st.divider()

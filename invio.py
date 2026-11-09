@@ -603,7 +603,7 @@ def inv_hub_miei(chiave="miei", preselezione=None, aperto=False):
                               on_change=_inv_apri, args=(chiave_exp,))
         sel = profili if scelta == "Tutti i profili" else [p for p in profili if p["id"] == scelta]
         persone = [{"chiave": "io:" + p["id"], "nome": p["nome"], "origine": "", "d": d, "f": f, "pid": p["id"], "p": p} for p in sel]
-        inv_hub(f"{chiave}_{scelta}", persone, d, "Salute " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
+        inv_hub(f"{chiave}_{scelta}", persone, d, "Salute – " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
                 chiave_exp=chiave_exp)
 
 
@@ -612,5 +612,5 @@ def inv_hub_famiglia(persone, scelta_nome, chiave="fam"):
     d_capo = _inv_dati_conto()
     chiave_exp = f"inv_exp_{chiave}"
     with st.expander("📤 Invia tutto: PDF, email, WhatsApp, Telegram…", expanded=bool(st.session_state.get(chiave_exp))):
-        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Salute famiglia" if len(persone) > 1 else "Salute " + persone[0]["nome"],
+        inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Salute famiglia" if len(persone) > 1 else "Salute – " + persone[0]["nome"],
                 chiave_exp=chiave_exp)
