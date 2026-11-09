@@ -3467,6 +3467,11 @@ def _ca_correzione(c, beni):
     # ---- correzione e cancellazione
     cid = st.session_state.get("ca_correggi")
     if cid:
+        _giro_c = st.session_state.get("_tabs_giro", 0)
+        if st.session_state.get("_ca_corr_giro") == _giro_c:
+            return                                                  # già disegnato in questo ridisegno (due volte darebbe errore: stessi campi)
+        st.session_state["_ca_corr_giro"] = _giro_c
+    if cid:
         d = next((x for x in c.get("documenti", []) if x["id"] == cid), None)
         if d:
             st.markdown(f"##### ✏️ Modifica: {_ca_testo(d.get('titolo'))}")
@@ -3659,6 +3664,14 @@ def _ca_tab_beni(c):
             _ca_scheda_bene(c, b, nomi)
 
 
+def _ca_correzione_qui(c, d):
+    """Se hai toccato «✏️ Modifica» su QUESTO documento, il modulo di correzione si apre subito sotto di lui: anche dentro la scheda di un bene o fra le manutenzioni
+    (prima si apriva solo nella scheda «Documenti»: da un bene, toccando Modifica, non succedeva niente)."""
+    if d and st.session_state.get("ca_correggi") == d.get("id"):
+        st.markdown("<div id='ca-corr-qui'></div>", unsafe_allow_html=True)
+        _ca_correzione(c, c.get("beni", []))
+
+
 def _ca_scheda_bene(c, b, nomi):
     docs = [d for d in c.get("documenti", []) if d.get("bene_id") == b["id"]]
     dettagli = [("Marca", b.get("marca")), ("Modello", b.get("modello")), ("Numero di serie", b.get("seriale")), ("Dove", b.get("stanza")),
@@ -3668,6 +3681,7 @@ def _ca_scheda_bene(c, b, nomi):
     if docs:
         for d in docs:
             _ca_riga_documento(d, nomi, "b")
+            _ca_correzione_qui(c, d)
     else:
         st.caption("Nessun documento collegato: caricane uno nella scheda «Documenti» e scegli questo bene.")
     liberi = [d for d in c.get("documenti", []) if not d.get("bene_id")]
@@ -3848,6 +3862,7 @@ def _ca_tab_manutenzioni(c):
                 with st.expander(("📎 Fattura: " + _ca_etichetta_bolletta(dm)) if dm else "📎 Aggiungi la fattura o il documento dell'intervento", expanded=False):
                     if dm:
                         _ca_riga_documento(dm, nomi, "mm" + m["id"], docs)
+                        _ca_correzione_qui(c, dm)
                         if st.button("↩️ Scollega dalla manutenzione", key=f"ca_mscoll_{m['id']}"):
                             _ca_salva(lambda cc, mid=m["id"]: next((x.pop("documento_id", None) for x in cc.get("manutenzioni", []) if x.get("id") == mid), None), "Casa: fattura scollegata")
                             st.rerun()

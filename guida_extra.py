@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.4"
+GUIDA_VERSIONE = "3.5"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -178,6 +178,13 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= Casa: correggere un documento dal bene
+    a("casa", "c_correggi_dal_bene", "Correggere un documento o il nome di un bene",
+      """**Un documento:** nella scheda **🏠 Beni** tocca **Apri** sul bene, poi su un suo documento tocca **✏️ Modifica**: il modulo di correzione si apre **subito sotto quel documento** (titolo, marca, bene collegato…). Lo stesso vale per il documento di una manutenzione. Dentro puoi anche usare **🔄 Rileggi il file e completa i dati mancanti**.
+
+**Il nome del bene:** sempre dentro il bene, in fondo alla scheda, tocca **✏️ Modifica i dati**, cambia il nome e tocca **💾 Salva**. Se un bene ha un nome strano (per esempio testo copiato da un documento), è da qui che lo sistemi.""",
+      "modifica correggi documento bene nome sporco rinominare caldaia manutenzione", ("bene", "nome"))
 
     # ================= controllo tecnico
     a("utilita", "u_tecnico", "Controllo tecnico dell'app (solo amministratore)",
