@@ -23,7 +23,9 @@ CS_REG = "registro_mod"
 RM_MAX = 300
 RM_GIORNI = 180
 _RM_NOISE = {"aggiornato", "aggiornata", "modificato", "modificato_il", "modificata_il", "ultimo_avviso", "gia_avvisato", "versione", "letto", "visto", "ultimo_accesso", "ts", "creato_il_agg"}
-_CS_ESCLUDI = {CS, CS_FILE, CS_REG, "storico", "registro", "eventi", "spesa", "provati", "cronologia", "log", "sessioni"}
+FD_FILE = "famiglia/dispensa.json"
+_CS_NO_IDS = {CS, CS_FILE, CS_REG, "operazioni"}          # «operazioni» = storico della dispensa condivisa: contiene COPIE dei prodotti (anche di quelli appena eliminati), quindi non conta per sapere cosa c'è ancora
+_CS_ESCLUDI = {CS, CS_FILE, CS_REG, "operazioni", "storico", "registro", "eventi", "spesa", "provati", "cronologia", "log", "sessioni"}
 _CS_SEZIONI = {"articoli": "Dispensa", "farmacia": "Salute", "casa": "Casa", "auto": "Auto"}
 _CS_TIPI_LAVORO = {"Busta paga", "Certificazione Unica (CU)", "Documento INPS"}
 _CS_GIORNI = [7, 15, 30, 60, 90]
@@ -68,7 +70,7 @@ def _cs_ids(o, ids):
         if isinstance(x, str):
             ids.add(x)
         for k, v in o.items():
-            if k not in (CS, CS_FILE, CS_REG):
+            if k not in _CS_NO_IDS:
                 _cs_ids(v, ids)
     elif isinstance(o, list):
         for v in o:
@@ -139,9 +141,9 @@ def _cs_file_di(voce):
 def _cs_applica(prima, d, escludi=()):
     """Dentro il salvataggio: sposta nel Cestino ciò che è stato eliminato e toglie ciò che è scaduto. Ritorna (nuovi record, id file da cancellare davvero)."""
     ids_dopo = set()
-    _cs_ids({k: v for k, v in d.items() if k not in (CS, CS_FILE, CS_REG)}, ids_dopo)
+    _cs_ids({k: v for k, v in d.items() if k not in _CS_NO_IDS}, ids_dopo)
     rimossi = []
-    _cs_rimossi({k: v for k, v in prima.items() if k not in (CS, CS_FILE, CS_REG)}, ids_dopo, [], rimossi)
+    _cs_rimossi({k: v for k, v in prima.items() if k not in _CS_NO_IDS}, ids_dopo, [], rimossi)
     cest = d.get(CS)
     if not isinstance(cest, list):
         cest = d[CS] = []
@@ -274,7 +276,8 @@ if "_cs_salva_file_prima" not in globals():
 
 
 def salva_file(nome, fn, messaggio):
-    personale = str(nome).startswith("dispense/") and str(nome).endswith(".json")
+    famiglia = str(nome) == FD_FILE
+    personale = (str(nome).startswith("dispense/") and str(nome).endswith(".json")) or famiglia
     if not personale or not cs_attivo() or st.session_state.get("_cs_pausa"):
         return _cs_salva_file_prima(nome, fn, messaggio)
     esito = {"nuovi": [], "file": []}
@@ -284,10 +287,11 @@ def salva_file(nome, fn, messaggio):
         st.session_state["_cs_eventi"] = set()
         fn(d)
         esito["nuovi"], esito["file"] = _cs_applica(prima, d, st.session_state.pop("_cs_eventi", set()))
-        try:
-            _rm_scrivi(d, _rm_calcola(prima, d, esito["nuovi"]), _cs_ora())
-        except Exception:
-            pass                                                                                # il registro non deve mai impedire un salvataggio
+        if not famiglia:
+            try:
+                _rm_scrivi(d, _rm_calcola(prima, d, esito["nuovi"]), _cs_ora())
+            except Exception:
+                pass                                                                            # il registro non deve mai impedire un salvataggio
     st.session_state["_cs_nel_salvataggio"] = True
     try:
         r = _cs_salva_file_prima(nome, _fn2, messaggio)
@@ -297,7 +301,7 @@ def salva_file(nome, fn, messaggio):
     if coda:                                                                   # file «da cancellare» arrivati mentre si stava già salvando: ora si segnano
         _cs_segna_file(coda)
     if esito["nuovi"]:
-        st.session_state["cs_ultimo"] = {"ids": [esito["nuovi"][0]["gruppo"]], "n": len(esito["nuovi"]), "etichetta": sorted(esito["nuovi"], key=lambda x: len(x["percorso"]))[0]["etichetta"], "quando": datetime.now().timestamp()}
+        st.session_state["cs_ultimo"] = {"ids": [esito["nuovi"][0]["gruppo"]], "n": len(esito["nuovi"]), "etichetta": sorted(esito["nuovi"], key=lambda x: len(x["percorso"]))[0]["etichetta"], "quando": datetime.now().timestamp(), "p": str(nome) if famiglia else ""}
     elif st.session_state.get("cs_ultimo") and not st.session_state.get("_cs_ripristino"):
         st.session_state.pop("cs_ultimo", None)                           # un'altra operazione: l'avviso «annulla» non vale più
     if esito["file"]:
@@ -371,8 +375,8 @@ def _cs_risolvi(d, percorso):
     return o if isinstance(o, list) else None
 
 
-def cs_leggi():
-    pers = _cs_percorso_personale()
+def cs_leggi(percorso=None):
+    pers = percorso or _cs_percorso_personale()
     if not pers:
         return [], 30
     try:
@@ -393,9 +397,9 @@ def _cs_gruppo(d, rid):
     return sorted(mem, key=lambda r: len(r.get("percorso") or []))
 
 
-def cs_ripristina(rid):
+def cs_ripristina(rid, percorso=None):
     """Rimette a posto l'elemento (o tutto il gruppo eliminato insieme) con quello che contiene. Ritorna (ok, messaggio)."""
-    pers = _cs_percorso_personale()
+    pers = percorso or _cs_percorso_personale()
     esito = {"ok": False, "msg": "Non l'ho trovato nel Cestino.", "n": 0}
 
     def _m(d):
@@ -418,6 +422,8 @@ def cs_ripristina(rid):
                 d[CS_FILE] = [p_ for p_ in pend if p_.get("id") not in fil]
         if not d.get(CS):
             d.pop(CS, None)
+        if fatti and pers == FD_FILE:
+            d["versione"] = int(d.get("versione", 0) or 0) + 1                                    # la dispensa condivisa: gli altri vedono il cambiamento
         esito["n"] = fatti
         nome = mem[0].get("etichetta", "Elemento")
         if fatti:
@@ -440,9 +446,9 @@ def cs_ripristina(rid):
     return esito["ok"], esito["msg"]
 
 
-def cs_elimina_per_sempre(rids):
+def cs_elimina_per_sempre(rids, percorso=None):
     """Elimina per sempre (con i file allegati) uno o più elementi/gruppi. Ritorna quanti elementi."""
-    pers = _cs_percorso_personale()
+    pers = percorso or _cs_percorso_personale()
     risultato = {"n": 0, "file": []}
 
     def _m(d):
@@ -499,7 +505,7 @@ def cs_barra():
         st.session_state["_cs_ripristino"] = True
         msg = ""
         for rid in u["ids"]:
-            ok, m = cs_ripristina(rid)
+            ok, m = cs_ripristina(rid, u.get("p") or None)
             msg = m
         st.session_state.pop("_cs_ripristino", None)
         st.session_state.pop("cs_ultimo", None)
@@ -507,13 +513,13 @@ def cs_barra():
         st.rerun()
 
 
-def _cs_dialogo_per_sempre(rids, etichetta):
+def _cs_dialogo_per_sempre(rids, etichetta, percorso=None):
     @st.dialog("🗑️ Eliminare per sempre?")
     def _f():
         st.warning(f"Elimino per sempre **{etichetta}**" + (" e tutti gli allegati" if rids else "") + ". Questa operazione non si può annullare.")
         c1, c2 = st.columns(2, gap="small")
         if c1.button("🗑️ Sì, per sempre", key="cs_perse_ok", type="primary", width="stretch"):
-            n = cs_elimina_per_sempre(set(rids))
+            n = cs_elimina_per_sempre(set(rids), percorso)
             st.session_state["messaggio"] = f"🗑️ Eliminati per sempre: {n}."
             st.rerun()
         if c2.button("No", key="cs_perse_no", width="stretch"):
@@ -534,9 +540,9 @@ def _cs_della_sezione(r, sezione):
     return True
 
 
-def cs_pagina(sezione=None, chiave="cs"):
-    """Il Cestino: elenco, ripristina, elimina per sempre. `sezione` = solo quella sezione."""
-    recs, giorni = cs_leggi()
+def cs_pagina(sezione=None, chiave="cs", percorso=None):
+    """Il Cestino: elenco, ripristina, elimina per sempre. `sezione` = solo quella sezione. `percorso` = un altro file (la dispensa di famiglia)."""
+    recs, giorni = cs_leggi(percorso)
     mie = [r for r in recs if _cs_della_sezione(r, sezione)]
     if not mie:
         st.caption("Il Cestino è vuoto." + (" Quello che elimini finisce qui e lo puoi ripristinare per " + str(giorni) + " giorni." if not sezione else ""))
@@ -550,15 +556,15 @@ def cs_pagina(sezione=None, chiave="cs"):
         st.caption(_cs_quando(r, giorni) + (" · con allegati" if con_file else "") + (" · eliminati insieme" if len(mem) > 1 else ""))
         c1, c2 = st.columns(2, gap="small")
         if c1.button("↩️ Ripristina", key=f"{chiave}_rip_{gid}", width="stretch"):
-            ok, m = cs_ripristina(gid)
+            ok, m = cs_ripristina(gid, percorso)
             st.session_state["messaggio"] = m
             st.rerun()
         if c2.button("🗑️ Elimina per sempre", key=f"{chiave}_del_{gid}", width="stretch"):
-            _cs_dialogo_per_sempre([gid], r.get("etichetta", "questo elemento") + (f" e altri {len(mem) - 1}" if len(mem) > 1 else ""))
+            _cs_dialogo_per_sempre([gid], r.get("etichetta", "questo elemento") + (f" e altri {len(mem) - 1}" if len(mem) > 1 else ""), percorso)
     if len(gruppi) > 1 and not sezione:
         if st.button("🗑️ Svuota tutto il Cestino", key=f"{chiave}_svuota", width="stretch"):
-            _cs_dialogo_per_sempre(list(gruppi), f"tutti gli elementi ({len(mie)})")
-    if not sezione:
+            _cs_dialogo_per_sempre(list(gruppi), f"tutti gli elementi ({len(mie)})", percorso)
+    if not sezione and not percorso:
         g = st.selectbox("Per quanti giorni tenere gli elementi eliminati", _CS_GIORNI, index=_CS_GIORNI.index(giorni), format_func=lambda x: f"{x} giorni", key=f"{chiave}_giorni")
         if g != giorni:
             cs_imposta_giorni(g)
@@ -654,6 +660,12 @@ def schermata_utilita():
                 cs_pagina(None, "cs_ut")
             with st.expander("🕘 Storico delle modifiche"):
                 rm_pagina(None, "rm_ut")
+            if bool((st.session_state.get("sess") or {}).get("admin")):
+                _rf, _g = cs_leggi(FD_FILE)
+                if _rf:
+                    with st.expander(f"🗑️ Cestino della dispensa di famiglia ({len(_rf)})"):
+                        st.caption("Sono i prodotti che hai eliminato dalla **dispensa di famiglia** (quella condivisa). Solo tu, come amministratore, li vedi e li puoi ripristinare.")
+                        cs_pagina(None, "cs_fam", FD_FILE)
     except Exception:
         pass
     return r

@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.4"
+GUIDA_VERSIONE = "2.5"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -100,7 +100,7 @@ def _gx_costruisci():
 4. **🗑️ Svuota tutto il Cestino** toglie tutto.
 5. In fondo scegli **per quanti giorni tenere** gli elementi: 7, 15, 30, 60 o 90.
 
-Il Cestino riguarda **solo i tuoi dati personali**: la dispensa di famiglia ha già il suo storico con «Annulla» per l'amministratore.""",
+Il Cestino comprende **i tuoi dati personali** e, se sei l'amministratore, anche i prodotti eliminati dalla **dispensa di famiglia** (quella condivisa): li trovi in **🗑️ Cestino della dispensa di famiglia**, solo tu li vedi e li puoi ripristinare. Se condividi la tua dispensa con altre persone, anche i prodotti eliminati da loro finiscono nel tuo Cestino.""",
       "cestino svuota ripristina recupera giorni conservazione eliminati tutto elenco utilità", ("recupera", None))
 
     # ================= salvare un prodotto
