@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.0"
+GUIDA_VERSIONE = "3.1"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -183,17 +183,15 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
     a("farmacia", "f_tutto", "📋 Tutti i dati e documenti di una persona (per il medico)",
       """Se un medico, in un'urgenza, ti chiede referti o esami, apri la persona e tocca **📋 Tutti i dati e documenti** (sotto i tre riquadri, oppure da **📦 Esporta i dati di questo profilo**).
 
-1. Vedi **l'elenco completo** di quello che abbiamo: documenti sanitari (referti, esami, ricette), prescrizioni, visite, vaccinazioni, invalidità ed esenzioni, fascicolo, documenti personali, medicinali, terapie, parametri, controlli, medici e dati per l'emergenza. Ogni riga ha titolo, data e dettagli, e **📎** se c'è un file.
-2. **Cerca** per parola (per esempio «emocromo», «cardiologo», «2025»), scegli i gruppi, oppure tocca **«Solo le voci con file»**.
-3. **Spunta** quello che serve, oppure tocca **☑️ Seleziona tutto**.
-4. Poi scegli cosa fare:
-   - **📄 Prepara l'elenco**: i titoli di tutto, da **stampare o mostrare** (PDF o pagina web) o da inviare come testo;
+1. In cima c'è **il documento completo**: è il **report di sempre** (PDF, Excel o da stampare), ora **completo**. Scegli le sezioni, tocca **📦 Prepara i file** e poi stampa, scarica o invia come hai sempre fatto.
+2. Sotto vedi **cosa abbiamo a disposizione**: documenti sanitari (referti, esami, ricette), prescrizioni, visite, vaccinazioni, invalidità ed esenzioni, fascicolo, documenti personali, medicinali, terapie, parametri, controlli, medici e dati per l'emergenza. Ogni riga ha titolo, data e dettagli, e **📎** se c'è un file.
+3. Se un medico chiede **solo certi referti o esami**: **cerca** per parola (per esempio «emocromo», «cardiologo», «2025»), **spunta** le voci che servono (oppure **☑️ Seleziona tutto**) e poi scegli:
    - **⬇ Prepara lo ZIP**: i **file** delle voci scelte, con la data nel nome e un indice dentro;
    - **📤 Invia**: le voci scelte con i modi già previsti (email, WhatsApp, Telegram…). Se un canale non può mandare il file, te lo dice e ti propone di scaricarlo.
 
 Vale per **ogni persona**, anche per chi non sei tu: l'elenco mostra solo le cose di quella persona.
 
-Anche il **report classico** («📦 Esporta i dati di questo profilo» → «Prepara i file», in PDF, Excel o da stampare) ora comprende tutto: documenti sanitari, esenzioni, parametri, controlli, medici, dati per l'emergenza e fascicolo. Nel report ci sono i **titoli e i dati**; i **file veri** (foto e PDF) si scaricano dallo ZIP di «Tutti i dati e documenti» o dalla scheda di ogni documento. Per **un solo** documento puoi anche usare **🗂️ Documenti sanitari → Vedi / Scarica / Invia**.""",
+Nel report ci sono i **titoli e i dati**; i **file veri** (foto e PDF) si scaricano dallo ZIP o dalla scheda di ogni documento. Per **un solo** documento puoi anche usare **🗂️ Documenti sanitari → Vedi / Scarica / Invia**.""",
       "esportare esporta tutto tutti i dati documenti referti esami medico urgenza stampare scaricare inviare elenco zip pdf madre profilo persona", ("esporta", "documento"))
 
     # ================= la barra in basso

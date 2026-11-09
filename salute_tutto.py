@@ -228,9 +228,20 @@ def stt_pagina(pid):
         st.session_state.pop("sp_modulo", None)
         st.rerun()
     st.subheader(f"📋 Tutti i dati e documenti · {nome}")
-    st.caption("Qui vedi **tutto quello che abbiamo** di questa persona. Se un medico chiede qualcosa, **spunta le voci che servono** e poi scaricale, stampale o inviale. "
-               "L'**elenco** (con tutti i titoli) si può stampare o mostrare anche da solo.")
+    st.caption("Qui vedi **tutto quello che abbiamo** di questa persona. Il **documento completo** (sopra) è il PDF di sempre. Se un medico chiede **solo certi referti o esami**, "
+               "spunta le voci che servono e scarica o invia i loro file.")
     voci = stt_inventario(f, pid)
+    if "inv_hub" in globals():
+        st.markdown("### 📄 1 · Il documento completo")
+        st.caption("È il **report di sempre** (PDF, Excel o da stampare, con tutte le voci), ora **completo**: comprende anche documenti sanitari, esenzioni, parametri, controlli, medici e dati per l'emergenza. "
+                   "Scegli le sezioni, tocca **Prepara i file** e poi stampa, scarica o invia come hai sempre fatto.")
+        try:
+            p_ = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {"id": pid, "nome": nome})
+            inv_hub(f"profilo_{pid}_pagina", [{"chiave": "io:" + pid, "nome": nome, "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}], _inv_dati_conto(), "Salute " + nome)
+        except Exception as ex:
+            st.error(f"Non riesco ad aprire l'esportazione ({type(ex).__name__}): riprova.")
+        st.divider()
+        st.markdown("### 📋 2 · Cosa abbiamo a disposizione (e i file da dare al medico)")
     if not voci:
         st.info("Per ora non c'è niente di registrato per questa persona.")
         return
@@ -263,20 +274,8 @@ def stt_pagina(pid):
     scelte = [v for v in voci if st.session_state.get("stt_s_" + v["id"]) and not v["solo_info"]]
     n_file_sc = sum(len(v["files"]) for v in scelte)
     st.divider()
-    st.markdown(f"### Cosa vuoi fare? · ☑️ {len(scelte)} {'voce scelta' if len(scelte) == 1 else 'voci scelte'} ({n_file_sc} file)")
-    st.markdown("**1 · L'elenco da stampare o mostrare** (tutte le voci che vedi sopra, solo i titoli)")
-    if st.button("📄 Prepara l'elenco", key="stt_prep_elenco", width="stretch"):
-        h = stt_html_elenco(nome, visibili)
-        st.session_state["stt_el"] = {"html": h, "pdf": sp_pdf_da_html(h) if "sp_pdf_da_html" in globals() else None, "txt": stt_testo_elenco(nome, visibili), "n": len(visibili)}
-    el = st.session_state.get("stt_el")
-    if el:
-        base = "elenco_" + re.sub(r"\W+", "_", nome)
-        if el.get("pdf"):
-            st.download_button(f"⬇ Scarica l'elenco in PDF ({el['n']} voci)", el["pdf"], file_name=base + ".pdf", mime="application/pdf", key="stt_dl_pdf", width="stretch")
-        st.download_button("⬇ Scarica l'elenco come pagina web (si stampa dal telefono)", el["html"].encode("utf-8"), file_name=base + ".html", mime="text/html", key="stt_dl_html", width="stretch")
-        if "inv_voce" in globals():
-            _fa_inv_voce("stt_el_" + pid, "📤 Invia l'elenco (titoli)", f"Elenco dei documenti di {nome}", [("Elenco", el["txt"][:3500])], [])
-    st.markdown("**2 · I file delle voci scelte**")
+    st.markdown(f"#### Cosa vuoi fare? · ☑️ {len(scelte)} {'voce scelta' if len(scelte) == 1 else 'voci scelte'} ({n_file_sc} file)")
+    st.markdown("**I file delle voci scelte** (foto e PDF veri, in uno ZIP o inviati)")
     if not scelte:
         st.caption("Spunta almeno una voce qui sopra (o tocca «Seleziona tutto»).")
     else:
@@ -328,7 +327,7 @@ def _stt_righe_docsan(p):
     for d in sorted(pr.get("docsan", []) or [], key=lambda x: x.get("data") or x.get("data_referto") or "", reverse=True):
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else "") or d.get("esame", "")
         righe.append([_stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), d.get("medico", ""), d.get("struttura", ""),
-                      str(d.get("conclusioni", ""))[:400], _stt_nomi_file(d)])
+                      (str(d.get("conclusioni", ""))[:160] + ("…" if len(str(d.get("conclusioni", ""))) > 160 else "")), _stt_nomi_file(d)])
     return righe
 
 
