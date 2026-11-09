@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.5"
+GUIDA_VERSIONE = "3.6"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -25,6 +25,19 @@ GUIDA_VERSIONI = {
                                                                          "diagnostica.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica_spie.py", "cestino.py"]},
     "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py", "controllo_tecnico.py"]},
 }
+
+
+_TESTO_WHATSAPP = """**Cosa serve:** WhatsApp sul telefono e due minuti. È **gratuito**, ma usa un servizio esterno non ufficiale (si chiama CallMeBot ed è scritto in inglese): per gli avvisi importanti tieni acceso anche **Telegram** o l'**email**.
+
+1. **Apri la pagina del servizio** dal telefono: https://www.callmebot.com/blog/free-api-whatsapp-messages/ . È in inglese: cerca la riga che dice «**Add the phone number** … **into your Phone Contacts**» (cioè «aggiungi questo numero ai tuoi contatti»). Quel numero è il **numero del servizio** e **cambia ogni tanto**: per questo non lo scrivo qui, prendilo da quella pagina.
+2. **Salva quel numero in rubrica**, col nome che vuoi (per esempio «CallMeBot»).
+3. Apri **WhatsApp** e scrivi a quel contatto **esattamente questa frase, in inglese** (puoi copiarla da qui toccandola a lungo):
+
+   `I allow callmebot to send me messages`
+4. **Aspetta fino a 2 minuti.** Il servizio ti risponde con un messaggio che contiene **APIKEY** seguito da un numero: è la **tua chiave personale**.
+5. **Torna in questa pagina.** Apri la tendina degli avvisi, spunta **WhatsApp**, scrivi il tuo **numero di WhatsApp** (con +39 davanti) e **incolla la chiave** nel campo «Chiave personale di CallMeBot». Poi tocca **Salva**.
+
+**Se la chiave non arriva:** controlla di aver scritto la frase giusta, senza errori, e riprova dopo 24 ore (a volte il servizio è occupato). **Ricorda:** è un servizio gratuito per uso personale: se un giorno si ferma, gli avvisi su WhatsApp si fermano, ma Telegram ed email continuano."""
 
 
 def _gx_aggiungi(sez, cid, titolo, corpo, chiavi, meta=None):
@@ -178,6 +191,13 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= avvisi: WhatsApp e come funzionano
+    a("farmacia", "f_avvisi_whatsapp", "Avvisi su WhatsApp (gratuito, con CallMeBot)", _TESTO_WHATSAPP,
+      "avvisi whatsapp callmebot chiave apikey numero gratuito messaggi telefono", ("whatsapp", "chiave"))
+    a("farmacia", "f_avvisi_come", "Come funzionano gli avvisi (quando arrivano, canali, privacy)",
+      globals().get("_TESTO_COME_FUNZIONANO_AVVISI", "").replace("{ADMIN}", "chi gestisce l'app"),
+      "avvisi quando arrivano canali telegram email whatsapp sms privacy famiglia casa assunzioni non arriva niente", ("avvisi", "arrivano"))
 
     # ================= Casa: correggere un documento dal bene
     a("casa", "c_correggi_dal_bene", "Correggere un documento o il nome di un bene",
@@ -397,3 +417,30 @@ Descrivono l'app **come è oggi**. Se un pulsante o una scritta è **diverso** d
 
 
 _gx_costruisci()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# AVVISI: le istruzioni dentro la tendina «Scegli come ricevere gli avvisi» ora hanno anche WhatsApp
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+if "_ge_guida_avvisi_prima" not in globals() and "guida_avvisi" in globals():
+    _ge_guida_avvisi_prima = guida_avvisi
+
+
+def guida_avvisi():                                                                 # noqa: F811
+    """Le istruzioni dentro la tendina degli avvisi: Telegram, email e WhatsApp (in italiano; per le altre lingue resta la versione di prima)."""
+    try:
+        if (_lingua_guida() if "_lingua_guida" in globals() else "it") == "it" and "_TESTO_TELEGRAM" in globals():
+            t_tg, t_ml, t_wa = st.tabs(["📱 Come attivo Telegram", "✉️ Come attivo l'email", "🟢 Come attivo WhatsApp"])
+            with t_tg:
+                st.markdown(_TESTO_TELEGRAM)
+            with t_ml:
+                st.markdown(_TESTO_EMAIL)
+            with t_wa:
+                st.markdown(_TESTO_WHATSAPP)
+            return
+    except Exception:
+        pass
+    if "_ge_guida_avvisi_prima" in globals():
+        return _ge_guida_avvisi_prima()

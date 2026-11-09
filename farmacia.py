@@ -1921,17 +1921,10 @@ def _fa_blocco_avvisi():
                 fd_e = st.checkbox("📉 …e dei prodotti in esaurimento (ne resta una sola unità; ogni lunedì)",
                                    value=bool(d.get("avvisi_famiglia_esaurimento")))
             ok = st.form_submit_button("Salva")
-        st.caption("Gli avvisi arrivano quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso, e ogni lunedì "
-                   "per ciò che è già scaduto; per le prescrizioni a 14, 7, 3 e 1 giorno e il giorno stesso. "
-                   "Chi fa parte della dispensa di famiglia può ricevere anche gli avvisi di scadenza dei prodotti comuni e, ogni lunedì, quelli "
-                   "in esaurimento: ognuno sceglie se riceverli, sui suoi canali. "
-                   "Il capo famiglia può ricevere ogni mattina il riepilogo di tutta la famiglia (chi ha «Parte della famiglia» attivo) "
-                   "e un avviso se una persona non registra una dose entro 90 minuti. Gli SMS sono brevi e non riportano mai i nomi dei medicinali. "
-                   "Perché i messaggi partano, l'amministratore deve aver attivato ogni canale su GitHub; "
-                   "gli SMS richiedono anche un abbonamento a un servizio di invio, con un costo per messaggio. "
-                   "I promemoria delle assunzioni partono ogni mezz'ora: l'avviso arriva nella mezz'ora che contiene "
-                   "l'orario della terapia (per esempio quello delle 8:15 arriva tra le 8:00 e le 8:30) e non arriva "
-                   "se hai già toccato «✔ Ho preso la medicina». Sono un aiuto in più, non un allarme preciso.")
+        st.caption("Gli avvisi arrivano quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso, e ogni lunedì per ciò che è già scaduto. "
+                   "Qui sotto trovi la spiegazione completa, in parole semplici.")
+        with st.expander("ℹ️ Come funzionano gli avvisi, in breve"):
+            st.markdown(_TESTO_COME_FUNZIONANO_AVVISI.replace("{ADMIN}", nome_admin() if "nome_admin" in globals() else "chi gestisce l'app"))
     if ok:
         v_tg, v_ml, v_sm = v_tg.strip(), v_ml.strip(), re.sub(r"[\s.\-]", "", v_sm)
         if v_sm and re.fullmatch(r"3\d{8,9}", v_sm):               # cellulare italiano scritto senza prefisso
@@ -3878,6 +3871,32 @@ import re as _re_doc
 import hashlib as _hl_doc
 
 _VERSIONE_FOTO_DOC = 1
+
+
+_TESTO_COME_FUNZIONANO_AVVISI = """**Quando arrivano**
+- **Prodotti e medicinali in scadenza:** quando mancano 60, 30, 14, 7 giorni, 1 giorno e il giorno stesso; poi **ogni lunedì** finché sono scaduti.
+- **Ricette (prescrizioni):** a 14, 7, 3 e 1 giorno e il giorno stesso.
+- **Assunzioni programmate** (se spunti «⏰ Avvisami anche all'ora delle assunzioni»): l'avviso arriva nella mezz'ora che contiene l'orario. Per esempio quello delle 8:15 arriva tra le 8:00 e le 8:30, e non arriva se hai già toccato «✔ Ho preso la medicina». **È un aiuto in più, non un allarme preciso.** Solo su Telegram ed email.
+- **Casa** (se spunti «🏡 Avvisami anche di Casa»): bollette e fatture da pagare, garanzie e manutenzioni.
+
+**Su quali canali**
+- Puoi **accendere più canali insieme**: l'avviso arriva su tutti quelli che spunti.
+- **Telegram, email e WhatsApp sono gratuiti.** Gli **SMS sono a pagamento** (un costo per messaggio) e potrebbero non essere attivi: chiedi a {ADMIN}.
+- Trovi i passi per ogni canale nelle schede qui sopra («Come attivo Telegram», «…l'email», «…WhatsApp»).
+
+**La tua privacy**
+- Se spunti «Nei messaggi non scrivere i nomi dei medicinali», nel messaggio compare solo **quanti** sono. Gli SMS non riportano **mai** i nomi dei medicinali.
+- Gli avvisi partono da un programma automatico, una volta al giorno (e ogni mezz'ora per le assunzioni): **non servono né la tua password né altre impostazioni**.
+
+**Famiglia**
+- Chi fa parte della **dispensa di famiglia** può ricevere anche gli avvisi dei prodotti comuni (e, ogni lunedì, quelli in esaurimento). **Ognuno sceglie sui propri canali.**
+- Il **capo famiglia** può ricevere ogni mattina il riepilogo di tutta la famiglia e un avviso se una persona non registra una dose entro 90 minuti.
+
+**Se non arriva niente**
+1. Controlla di aver toccato **Salva** e che il canale sia **spuntato** e il campo compilato.
+2. Aspetta il **prossimo invio**: gli avvisi non partono nel momento in cui salvi, ma a ogni controllo automatico (di solito la mattina dopo).
+3. Per **Telegram**: hai toccato *Avvia* nel bot? Per l'**email**: guarda anche in Spam o Promozioni. Per **WhatsApp**: a volte il messaggio arriva con qualche minuto di ritardo.
+4. Se dopo un giorno non è arrivato nulla, **dillo a {ADMIN}**: potrebbe mancare l'attivazione del canale."""
 
 
 def _fa_guida_avvisi():
