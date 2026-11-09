@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.7"
+GUIDA_VERSIONE = "2.8"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -148,7 +148,7 @@ Per trovare subito un prodotto senza scorrere, usa la **ricerca** in alto. Con l
 2. Tocca **🔎 Cerca**. L'app non legge tutto l'archivio: sceglie i documenti che c'entrano (per titolo, marca, modello, bene), li legge una volta sola e ti mostra **i 3 passaggi più adatti**, con il **nome del documento, la pagina** e **dove si trova** nell'app.
 3. **🔊 Leggi ad alta voce** li legge con la voce del telefono; **⏹ Ferma la voce** la ferma.
 
-Cerca **solo nei tuoi** manuali, garanzie e documenti dei beni di Casa e nei documenti dei veicoli. Ti mostra **le parole del manuale**: non le riassume né le spiega con l'intelligenza artificiale.
+Cerca **solo nei tuoi** manuali, garanzie e documenti dei beni di Casa e nei documenti dei veicoli. Ti mostra **le parole del manuale**. Se un passaggio è difficile, sotto trovi **✨ Spiegami in parole semplici** (facoltativo): manda **solo quel passaggio** a un servizio di intelligenza artificiale gratuito e ti risponde con frasi semplici. **Può sbagliare**: controlla sempre il testo del manuale. Con la chiave dell'app hai 10 spiegazioni al giorno; con una tua chiave gratuita nessun limite.
 
 Se un manuale è una **scansione** (un PDF fatto solo di foto delle pagine), l'app lo legge con il riconoscimento del testo, **10 pagine alla volta** (è lento) e te lo dice. Se il passaggio che cerchi è più avanti, tocca **🔎 Leggi altre** pagine: le pagine già lette non si rileggono. Il testo letto così può contenere qualche errore.
 

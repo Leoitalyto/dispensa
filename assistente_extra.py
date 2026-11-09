@@ -6,6 +6,7 @@
 3) DOMANDE SENZA RISPOSTA: l'assistente non inventa. Se non trova una procedura lo dice con onestà («non voglio indicarti una procedura che potrebbe non funzionare») e suggerisce come proseguire.
 4) 📚 CERCA NEI MIEI MANUALI E DOCUMENTI: una finestra (sotto il pulsante «Informazioni» di Dispensa, Casa, Auto, Utilità) che cerca nei manuali, nelle garanzie e nei documenti dei beni di Casa e nei documenti dei veicoli dell'UTENTE (mai di altre persone). Non carica tutto l'archivio: sceglie al massimo 3 documenti in base a titolo, marca, modello e bene, ne legge il testo UNA volta (tenuto in memoria un'ora), lo divide in passaggi e mostra i 3 più pertinenti con documento, pagina e posizione. Il passaggio si può far leggere ad alta voce. Non spiega e non riassume con l'intelligenza artificiale (servirebbe inviare il manuale a un servizio esterno): mostra le parole del manuale. Se non trova niente, lo dice senza inventare.
 Nessun dato lascia l'app. Solo italiano. Caricato dopo assistente.py e guida_extra.py."""
+import hashlib
 import json
 import math
 import re
@@ -448,6 +449,86 @@ def mr_cerca(d, domanda, tutti=False, massimo=3, ocr=None):
     return {"passaggi": out, "letti": letti, "non_letti": non_letti, "nessun_documento": False, "scansioni": scansioni}
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# ✨ «Spiegami in parole semplici»: facoltativo. Usa lo STESSO collegamento gratuito delle spie (stessa chiave dell'amministratore o chiave propria
+# gratuita di chi usa l'app). Manda al servizio SOLO il testo del passaggio che si tocca (niente titolo, nomi, indirizzi o altri documenti).
+# Spegnibile con MANUALI_IA = "no" nei Secrets. Limite per persona: MANUALI_IA_MAX_UTENTE_GIORNO (predefinito 10) con la chiave dell'app; la chiave propria non ha limite.
+# ---------------------------------------------------------------------------------------------------------------------
+MR_IA_MAX_UTENTE = 10
+_MR_IA_SISTEMA = """Sei un assistente che spiega, in italiano molto semplice, un passaggio di un manuale d'uso a una persona poco esperta di tecnologia.
+REGOLE: (1) usa SOLO quello che c'è scritto nel passaggio: non aggiungere numeri, valori, passaggi o avvertenze che non ci sono; (2) se il passaggio è incompleto, tagliato o confuso, dillo chiaramente («Il testo è incompleto: apri la pagina intera») e spiega solo la parte chiara; (3) frasi brevi e parole comuni, al massimo 120 parole; (4) se ci sono dei passi, scrivili in un elenco numerato; (5) se si parla di gas, corrente elettrica, pressione, acqua calda o altri rischi, aggiungi una frase: «Segui le avvertenze del manuale e, se non sei sicuro, chiama un tecnico»; (6) non fare diagnosi, non dare consigli tuoi, non parlare di te."""
+
+
+_MR_IA_MSG = {"chiave": "La chiave dell'intelligenza artificiale non è valida o è scaduta.", "rete": "Non riesco a collegarmi al servizio adesso. Riprova fra poco.", "formato": "La risposta non era leggibile: riprova.",
+              "limite": "Il servizio gratuito è occupato o ha finito le richieste: aspetta un minuto e riprova.", "limite_app": "Hai raggiunto il tetto di spiegazioni dell'app per oggi. Riprova più tardi.",
+              "pagamento": "Il modello scelto è a pagamento: nel servizio gratuito scegline uno con «:free» nel nome."}
+
+
+def mr_ia_attiva():
+    try:
+        spento = str(st.secrets.get("MANUALI_IA", "")).strip().lower() in ("no", "off", "0", "false", "spento")
+    except Exception:
+        spento = False
+    return (not spento) and "ad_provider_scelto" in globals() and "_ad_invia" in globals()
+
+
+@st.cache_resource
+def _mr_ia_conteggi():
+    return {}
+
+
+def _mr_ia_limite():
+    try:
+        v = str(st.secrets.get("MANUALI_IA_MAX_UTENTE_GIORNO", MR_IA_MAX_UTENTE)).strip().lower()
+        return None if v in ("no", "-1", "illimitato") else int(v)
+    except Exception:
+        return MR_IA_MAX_UTENTE
+
+
+def mr_ia_puo(cfg):
+    """Con la chiave dell'app c'è un limite al giorno per persona (l'amministratore e chi usa la PROPRIA chiave non hanno limite). Conta l'uso."""
+    if cfg.get("fonte") != "app":
+        return True
+    sess = st.session_state.get("sess") or {}
+    if sess.get("admin"):
+        return True
+    lim = _mr_ia_limite()
+    if lim is None:
+        return True
+    oggi_ = _ad_oggi() if "_ad_oggi" in globals() else date_oggi_iso()
+    c = _mr_ia_conteggi()
+    for k in [k for k in c if k[0] != oggi_]:
+        c.pop(k, None)
+    chiave = (oggi_, sess.get("uid", ""))
+    if c.get(chiave, 0) >= lim:
+        return False
+    c[chiave] = c.get(chiave, 0) + 1
+    return True
+
+
+def date_oggi_iso():
+    import datetime as _dt
+    return _dt.date.today().isoformat()
+
+
+def mr_spiega(testo):
+    """(spiegazione, None) oppure (None, errore) con errore in: chiave, limite_utente, rete, limite… (gli stessi messaggi delle spie)."""
+    try:
+        prov = ad_provider_scelto()
+        cfg = ad_cfg(prov)
+        if not cfg.get("key") or (prov == "altra" and not (cfg.get("url") and cfg.get("modello"))):
+            return None, "chiave"
+        if not mr_ia_puo(cfg):
+            return None, "limite_utente"
+        t, err = _ad_invia(prov, cfg, _MR_IA_SISTEMA, [("u", "Passaggio del manuale:\n\n" + str(testo)[:2500])], None, 600)
+        if err:
+            return None, err
+        t = (t or "").strip()
+        return (t[:1500], None) if t else (None, "formato")
+    except Exception:
+        return None, "rete"
+
+
 def _mr_js_voce(testo):
     """Legge ad alta voce un passaggio con la velocità scelta nel pannello dell'assistente."""
     pulito = re.sub(r"\s+", " ", re.sub(r"[*_`#]", "", testo)).strip()
@@ -513,6 +594,33 @@ def _mr_dialogo(sezione):
                         _inietta(_mr_js_voce(p["testo"]))
                     if c2.button("⏹ Ferma la voce", key=f"mr_ferma_{i}", width="stretch"):
                         _inietta("(function(){try{window.speechSynthesis.cancel()}catch(e){}})();")
+                    if mr_ia_attiva():
+                        kspieg = hashlib.md5((str(p["pagina"]) + p["testo"][:120]).encode("utf-8")).hexdigest()[:12]
+                        if st.button("✨ Spiegami in parole semplici", key=f"mr_ia_{i}", width="stretch"):
+                            if not ad_attivo():
+                                st.info("Per le spiegazioni serve una **chiave gratuita** (di OpenRouter o di Google Gemini): segui la guida qui sotto, è facoltativo.")
+                                try:
+                                    ad_guida_propria_chiave()
+                                    ad_campo_chiave_propria()
+                                except Exception:
+                                    pass
+                            else:
+                                with st.spinner("Preparo la spiegazione…"):
+                                    sp_t, sp_e = mr_spiega(p["testo"])
+                                if sp_e:
+                                    ad_mostra_errore(sp_e, _MR_IA_MSG.get(sp_e, "Non sono riuscito a preparare la spiegazione. Riprova fra poco."))
+                                else:
+                                    mm = dict(st.session_state.get("mr_spiega") or {})
+                                    mm[kspieg] = sp_t
+                                    st.session_state["mr_spiega"] = mm
+                        else:
+                            st.caption("✨ Invia **solo questo passaggio** a un servizio di intelligenza artificiale gratuito (facoltativo).")
+                        sp_vista = (st.session_state.get("mr_spiega") or {}).get(kspieg)
+                        if sp_vista:
+                            st.info("✨ **In parole semplici:**\n\n" + sp_vista)
+                            st.caption("Spiegazione automatica: **può sbagliare**. Controlla sempre il manuale qui sopra.")
+                            if st.button("🔊 Leggi la spiegazione", key=f"mr_ia_voce_{i}", width="stretch"):
+                                _inietta(_mr_js_voce(sp_vista))
             st.caption("Sono le parole del manuale, non una mia spiegazione: se qualcosa non è chiaro, chiedi a una persona di fiducia. Per cambiare la velocità della voce usa il robottino: «🐢 Velocità della voce».")
     _f()
 
