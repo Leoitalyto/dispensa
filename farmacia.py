@@ -1511,8 +1511,18 @@ def _fa_esporta(f, pid, nomi):
             dati[k] = [x for x in f.get(k, []) if x.get("profilo", "p0") == pid]
         dati["allergie_dichiarate"] = (f.get("allergie") or {}).get(pid, [])
         dati["registro_assunzioni"] = [r for r in (f.get("registro") or {}).values() if r.get("p", "p0") == pid]
+        if "stt_dati_completi" in globals():                                          # anche i dati nuovi: documenti sanitari, parametri, controlli, esenzioni, medici, dati per l'emergenza
+            try:
+                dati.update({"tutto_il_resto": stt_dati_completi(f, pid)})
+            except Exception:
+                pass
         st.caption("Qui puoi scaricare o inviare tutto di questa persona: medicinali, terapie, prescrizioni, visite, vaccinazioni, documenti. "
                    "Le foto e i PDF si inviano uno per uno dalla scheda di ogni voce (tasto «Invia»).")
+        if "stt_pagina" in globals():
+            st.info("📋 **Per vedere tutto quello che abbiamo** (referti, esami, documenti sanitari…) e scegliere cosa scaricare, stampare o inviare, apri **«📋 Tutti i dati e documenti»**.")
+            if st.button("📋 Apri «Tutti i dati e documenti»", key="fa_apri_tutto_" + pid, width="stretch"):
+                st.session_state["sp_modulo"] = {"vista": "tutto", "pid": pid}
+                st.rerun()
         if "inv_hub" in globals():
             st.markdown("**📤 Invia o esporta (PDF, Excel, email, WhatsApp, Telegram…)**")
             p_ = next((p for p in f.get("profili", []) if p["id"] == pid), {"id": pid, "nome": nomi[pid]})

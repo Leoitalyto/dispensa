@@ -304,7 +304,8 @@ def sp_riga_azioni(pid):
         h = st.button("⏰ Controlli periodici" + (f" · {n_c} da fare" if n_c else ""), key="sp_a_controlli", width="stretch")
         n_e = len(sp_esenzioni_scadenti(p)) if "sp_esenzioni_scadenti" in globals() else 0
         i_ = st.button("🪪 Invalidità ed esenzioni" + (f" · {n_e} in scadenza" if n_e else ""), key="sp_a_esenzioni", width="stretch")
-    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri"), (h, "controlli"), (i_, "esenzioni")):
+        j_ = st.button("📋 Tutti i dati e documenti", key="sp_a_tutto", width="stretch")
+    for premuto, vista in ((a, "medici"), (b, "critici"), (c, "scheda"), (d, "bambino"), (e, "docsan"), (g, "parametri"), (h, "controlli"), (i_, "esenzioni"), (j_, "tutto")):
         if premuto:
             st.session_state["sp_modulo"] = {"vista": vista, "pid": pid}
             st.rerun()
@@ -323,7 +324,7 @@ def _sp_intestazione(titolo, pid):
 
 def _sp_dispatch(m):
     vista, pid = m.get("vista"), m.get("pid")
-    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri, "controlli": sp_modulo_controlli, "esenzioni": globals().get("sp_modulo_esenzioni")}.get(vista, lambda _p: None)(pid)
+    {"medici": sp_modulo_medici, "critici": sp_modulo_critici, "scheda": sp_modulo_scheda, "bambino": sp_modulo_bambino, "docsan": sp_modulo_docsan, "parametri": sp_modulo_parametri, "controlli": sp_modulo_controlli, "esenzioni": globals().get("sp_modulo_esenzioni"), "tutto": globals().get("stt_pagina")}.get(vista, lambda _p: None)(pid)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
