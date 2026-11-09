@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.5"
+GUIDA_VERSIONE = "2.6"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -123,6 +123,8 @@ Se manca qualcosa (il nome o le unità) compare **un avviso sopra i pulsanti** e
 - **Blu** → **Modifica** (✏️).
 - **Verde** → **Invia** o **Condividi** (📤, ✉️, 💬).
 - **Grigio** → **Indietro** (←).
+
+Quando i comandi sono **uno accanto all'altro** l'ordine è sempre lo stesso: **Modifica**, poi **Invia**, e **Elimina per ultimo**, così non lo tocchi per sbaglio.
 
 I pulsanti grandi e colorati in alto (Dispensa, Salute, Casa…) servono per cambiare sezione; quelli verdi scuri con la scritta bianca sono le azioni principali, come **Salva** o **Conferma**.""",
               "colori pulsanti rosso blu verde grigio elimina modifica invia indietro riconoscere comandi")

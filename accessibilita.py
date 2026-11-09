@@ -44,6 +44,10 @@ button[data-cmd="modifica"][data-testid="stBaseButton-secondary"]{border:2px sol
 button[data-cmd="invia"][data-testid="stBaseButton-secondary"]{border:2px solid #2e7d32 !important;color:#1b5e20 !important;background:#f3fbf4 !important}
 button[data-cmd="indietro"][data-testid="stBaseButton-secondary"]{border:2px solid #546e7a !important;color:#37474f !important;background:#f4f6f7 !important}
 button[data-cmd] p,button[data-cmd] span{color:inherit !important}
+/* quando i comandi stanno uno accanto all'altro l'ordine è sempre lo stesso: Modifica, Invia, e ELIMINA per ultimo (così non si tocca per sbaglio) */
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(button[data-cmd="modifica"]){order:3}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(button[data-cmd="invia"]){order:5}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(button[data-cmd="elimina"]){order:9}
 """
 _ACC_JS_CMD = r"""(function(){var w=window,d=w.document;if(w.__cmdColori)return;w.__cmdColori=1;
 var R=[['elimina',/(Elimina|Togli|Svuota)/],['modifica',/(Modifica|Correggi)/],['invia',/(Invia|Condividi|Manda)/],['indietro',/^\s*(←|◀|⬅️)/]];
