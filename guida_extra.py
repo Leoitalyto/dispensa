@@ -12,11 +12,11 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.8"
+GUIDA_VERSIONE = "3.0"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
-    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
+    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "salute_tutto.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
     "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "assistente_extra.py", "cestino.py"]},
@@ -178,6 +178,23 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= tutto di una persona
+    a("farmacia", "f_tutto", "📋 Tutti i dati e documenti di una persona (per il medico)",
+      """Se un medico, in un'urgenza, ti chiede referti o esami, apri la persona e tocca **📋 Tutti i dati e documenti** (sotto i tre riquadri, oppure da **📦 Esporta i dati di questo profilo**).
+
+1. Vedi **l'elenco completo** di quello che abbiamo: documenti sanitari (referti, esami, ricette), prescrizioni, visite, vaccinazioni, invalidità ed esenzioni, fascicolo, documenti personali, medicinali, terapie, parametri, controlli, medici e dati per l'emergenza. Ogni riga ha titolo, data e dettagli, e **📎** se c'è un file.
+2. **Cerca** per parola (per esempio «emocromo», «cardiologo», «2025»), scegli i gruppi, oppure tocca **«Solo le voci con file»**.
+3. **Spunta** quello che serve, oppure tocca **☑️ Seleziona tutto**.
+4. Poi scegli cosa fare:
+   - **📄 Prepara l'elenco**: i titoli di tutto, da **stampare o mostrare** (PDF o pagina web) o da inviare come testo;
+   - **⬇ Prepara lo ZIP**: i **file** delle voci scelte, con la data nel nome e un indice dentro;
+   - **📤 Invia**: le voci scelte con i modi già previsti (email, WhatsApp, Telegram…). Se un canale non può mandare il file, te lo dice e ti propone di scaricarlo.
+
+Vale per **ogni persona**, anche per chi non sei tu: l'elenco mostra solo le cose di quella persona.
+
+Anche il **report classico** («📦 Esporta i dati di questo profilo» → «Prepara i file», in PDF, Excel o da stampare) ora comprende tutto: documenti sanitari, esenzioni, parametri, controlli, medici, dati per l'emergenza e fascicolo. Nel report ci sono i **titoli e i dati**; i **file veri** (foto e PDF) si scaricano dallo ZIP di «Tutti i dati e documenti» o dalla scheda di ogni documento. Per **un solo** documento puoi anche usare **🗂️ Documenti sanitari → Vedi / Scarica / Invia**.""",
+      "esportare esporta tutto tutti i dati documenti referti esami medico urgenza stampare scaricare inviare elenco zip pdf madre profilo persona", ("esporta", "documento"))
 
     # ================= la barra in basso
     barra = ("📱 La barra in basso: scorri fino all'ultima voce",
