@@ -151,6 +151,8 @@ MR_MAX_DOC = 5              # al massimo 5 documenti letti per ricerca: prima qu
 MR_MAX_DOC_TUTTI = 12
 MR_MAX_BYTE = 25 * 1024 * 1024
 MR_MAX_PAGINE = 150
+MR_OCR_PAGINE = 10                # pagine di una scansione lette con il riconoscimento del testo ad ogni ricerca (per documento); si possono chiedere altre pagine con un pulsante
+MR_OCR_PASSO = 12
 
 
 def _mr_norm(t):
@@ -239,17 +241,17 @@ def mr_scegli(documenti, domanda, tutti=False):
 
 @st.cache_data(ttl=3600, max_entries=16, show_spinner=False)
 def _mr_pagine_file(uid, fid, nome, mime, dimensione):
-    """[(pagina, testo)] di un file (lo si legge UNA volta e si tiene un'ora in memoria). `uid` fa parte della chiave: la memoria è per persona."""
+    """([(pagina, testo)], pagine totali, [indici delle pagine senza testo]) di un file (lo si legge UNA volta e si tiene un'ora in memoria). `uid` fa parte della chiave: la memoria è per persona."""
     try:
         file_ = _ca_leggi_file({"id": fid, "nome": nome, "mime": mime})
     except Exception:
-        return []
+        return [], 0, []
     if not file_:
-        return []
+        return [], 0, []
     nome_, mime_, dati = file_[0]
     if not dati or len(dati) > MR_MAX_BYTE:
-        return []
-    pagine = []
+        return [], 0, []
+    pagine, totale, vuote = [], 0, []
     if mime_ == "application/pdf":
         try:
             try:
@@ -257,7 +259,8 @@ def _mr_pagine_file(uid, fid, nome, mime, dimensione):
             except Exception:
                 import fitz as _mu
             doc = _mu.open(stream=dati, filetype="pdf")
-            for i in range(min(MR_MAX_PAGINE, doc.page_count)):
+            totale = min(MR_MAX_PAGINE, doc.page_count)
+            for i in range(totale):
                 try:
                     pagina = doc[i]
                     t = _mr_testo_pagina(pagina.get_text("blocks"), float(pagina.rect.width))
@@ -265,17 +268,19 @@ def _mr_pagine_file(uid, fid, nome, mime, dimensione):
                     t = ""
                 if t.strip():
                     pagine.append((i + 1, t[:9000]))
+                if len(t.strip()) < 25:                                          # pagina che è solo un'immagine (scansione)
+                    vuote.append(i)
             doc.close()
         except Exception:
-            pagine = []
-    if not pagine:                                                                             # foto o scansione: lettura con OCR (una pagina sola)
+            pagine, totale, vuote = [], 0, []
+    if not pagine and mime_ != "application/pdf":                                              # una FOTO: lettura con OCR (una pagina sola); le scansioni in PDF si leggono a blocchi, in mr_cerca
         try:
             testo, _info = ca_estrai_testo(nome_, mime_, dati, max_pagine=3, max_car=12000)
             if (testo or "").strip():
                 pagine.append((1, testo))
         except Exception:
             pass
-    return pagine
+    return pagine, totale, vuote
 
 
 def _mr_pulisci(t):
@@ -310,6 +315,43 @@ def _mr_testo_pagina(blocchi, larghezza):
     return "\n\n".join(x for x in paragrafi if x)
 
 
+def _mr_ocr_disponibile():
+    return "_doc_ocr_lingue" in globals() and "_doc_tesseract" in globals() and bool(_doc_ocr_lingue())
+
+
+def _mr_apri_pdf(dati):
+    try:
+        import pymupdf as _mu
+    except Exception:
+        import fitz as _mu
+    return _mu.open(stream=dati, filetype="pdf")
+
+
+@st.cache_data(ttl=3600, max_entries=60, show_spinner=False)
+def _mr_ocr_blocco(uid, fid, nome, mime, dimensione, indici):
+    """Legge con il riconoscimento del testo (OCR) alcune pagine di una scansione. [(numero pagina, testo)]. Lento: si tiene il risultato un'ora."""
+    out = []
+    try:
+        from PIL import Image
+        file_ = _ca_leggi_file({"id": fid, "nome": nome, "mime": mime})
+        doc = _mr_apri_pdf(file_[0][2])
+        for i in indici:
+            if i >= doc.page_count:
+                continue
+            pix = doc[i].get_pixmap(dpi=160, alpha=False)
+            im = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            im.thumbnail((2400, 2400))
+            grezzo = _doc_tesseract(im, "6") or ""
+            paragrafi = [_mr_pulisci(b) for b in re.split(r"\n\s*\n", grezzo)]
+            testo = "\n\n".join(x for x in paragrafi if x)
+            if testo.strip():
+                out.append((i + 1, testo[:9000]))
+        doc.close()
+    except Exception:
+        pass
+    return out
+
+
 def _mr_passaggi(pagine, lung=900):
     out = []
     for n, t in pagine:
@@ -335,11 +377,14 @@ def _mr_passaggi(pagine, lung=900):
     return out
 
 
-def mr_cerca(d, domanda, tutti=False, massimo=3):
-    """Cerca nei documenti dell'utente. Ritorna {"passaggi": [...], "letti": [titoli], "non_letti": n, "nessun_documento": bool}."""
+def mr_cerca(d, domanda, tutti=False, massimo=3, ocr=None):
+    """Cerca nei documenti dell'utente. Ritorna {"passaggi": [...], "letti": [titoli], "non_letti": n, "nessun_documento": bool, "scansioni": [...]}.
+    `ocr` = {id del file: pagine di scansione in più da leggere con il riconoscimento del testo}."""
+    ocr = ocr or {}
+    scansioni = []
     docs = mr_documenti(d)
     if not docs:
-        return {"passaggi": [], "letti": [], "non_letti": 0, "nessun_documento": True}
+        return {"passaggi": [], "letti": [], "non_letti": 0, "nessun_documento": True, "scansioni": []}
     tok = mr_token(domanda)
     scelti, non_letti = mr_scegli(docs, domanda, tutti)
     letti, cand, df, n_tot = [], [], {}, 0
@@ -347,11 +392,28 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
         rif = doc["riferimenti"][0]
         meta_doc = set(_mr_ridotte(doc["meta"]))
         hit_doc = sum(1 for t in tok if t in meta_doc) + (1 if doc.get("rel") else 0)   # parole della domanda già nel nome del documento / del bene (o stesso apparecchio)
-        pagine = []
+        pagine, totale, vuote, r_usato = [], 0, [], doc["riferimenti"][0]
         for r in doc["riferimenti"]:
-            pagine = _mr_pagine_file((st.session_state.get("sess") or {}).get("uid", ""), r.get("id"), r.get("nome", ""), r.get("mime", ""), int(r.get("dimensione") or 0)) or pagine
-            if pagine:
+            pg_, tot_, vu_ = _mr_pagine_file((st.session_state.get("sess") or {}).get("uid", ""), r.get("id"), r.get("nome", ""), r.get("mime", ""), int(r.get("dimensione") or 0))
+            if pg_ or vu_:
+                pagine, totale, vuote, r_usato = pg_, tot_, vu_, r
                 break
+        # le pagine che sono solo immagini (scansioni) si leggono con il riconoscimento del testo, poche alla volta (è lento)
+        try:
+            uid_ = (st.session_state.get("sess") or {}).get("uid", "")
+            r0 = r_usato
+            if r0.get("mime") == "application/pdf" and _mr_ocr_disponibile():
+                if vuote:
+                    extra = int(ocr.get(r0.get("id"), 0))
+                    blocchi = [vuote[:MR_OCR_PAGINE]] + [vuote[MR_OCR_PAGINE + k * MR_OCR_PASSO:MR_OCR_PAGINE + (k + 1) * MR_OCR_PASSO] for k in range(extra // MR_OCR_PASSO)]
+                    lette = 0
+                    for bl in blocchi:                                           # a blocchi fissi: ogni blocco letto una volta resta in memoria e non si rilegge
+                        if bl:
+                            pagine = sorted(list(pagine) + _mr_ocr_blocco(uid_, r0.get("id"), r0.get("nome", ""), r0.get("mime", ""), int(r0.get("dimensione") or 0), tuple(bl)))
+                            lette += len(bl)
+                    scansioni.append({"titolo": doc["titolo"], "fid": r0.get("id"), "lette": lette, "vuote": len(vuote), "totale": totale})
+        except Exception:
+            pass
         letti.append(doc["titolo"])
         testi_pagina = {n_: t_ for n_, t_ in pagine}
         for n, testo in _mr_passaggi(pagine):
@@ -383,7 +445,7 @@ def mr_cerca(d, domanda, tutti=False, massimo=3):
         out.append(r)
         if len(out) >= massimo:
             break
-    return {"passaggi": out, "letti": letti, "non_letti": non_letti, "nessun_documento": False}
+    return {"passaggi": out, "letti": letti, "non_letti": non_letti, "nessun_documento": False, "scansioni": scansioni}
 
 
 def _mr_js_voce(testo):
@@ -410,8 +472,18 @@ def _mr_dialogo(sezione):
             except Exception:
                 st.error("Non riesco a leggere i tuoi documenti ora. Riprova fra poco.")
                 return
-            with st.spinner("Leggo i documenti…"):
-                r = mr_cerca(d, q, tutti=tutti)
+            with st.spinner("Leggo i documenti… (se un manuale è una scansione ci vuole un po': lo leggo pagina per pagina)"):
+                r = mr_cerca(d, q, tutti=tutti, ocr=st.session_state.get("mr_ocr") or {})
+            for sc in r.get("scansioni", []):
+                if sc["lette"] < sc["vuote"]:
+                    st.caption(f"📄 «{sc['titolo']}» è una **scansione** (solo immagini): ho letto {sc['lette']} pagine su {sc['vuote']} con il riconoscimento del testo.")
+                    if st.button(f"🔎 Leggi altre {MR_OCR_PASSO} pagine di «{sc['titolo'][:30]}» (più lento)", key="mr_ocr_" + str(sc["fid"]), width="stretch"):
+                        mo = dict(st.session_state.get("mr_ocr") or {})
+                        mo[sc["fid"]] = int(mo.get(sc["fid"], 0)) + MR_OCR_PASSO
+                        st.session_state["mr_ocr"] = mo
+                        st.rerun(scope="fragment")
+                else:
+                    st.caption(f"📄 «{sc['titolo']}» è una scansione: il testo è letto con il riconoscimento ottico e può contenere qualche errore.")
             if r["nessun_documento"]:
                 st.info("Non hai ancora manuali o documenti archiviati. Apri **Casa → 📚 Documenti** e carica un manuale (PDF o foto): poi potrò cercare dentro.")
                 return

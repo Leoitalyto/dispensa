@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "2.6"
+GUIDA_VERSIONE = "2.7"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -149,6 +149,8 @@ Per trovare subito un prodotto senza scorrere, usa la **ricerca** in alto. Con l
 3. **🔊 Leggi ad alta voce** li legge con la voce del telefono; **⏹ Ferma la voce** la ferma.
 
 Cerca **solo nei tuoi** manuali, garanzie e documenti dei beni di Casa e nei documenti dei veicoli. Ti mostra **le parole del manuale**: non le riassume né le spiega con l'intelligenza artificiale.
+
+Se un manuale è una **scansione** (un PDF fatto solo di foto delle pagine), l'app lo legge con il riconoscimento del testo, **10 pagine alla volta** (è lento) e te lo dice. Se il passaggio che cerchi è più avanti, tocca **🔎 Leggi altre** pagine: le pagine già lette non si rileggono. Il testo letto così può contenere qualche errore.
 
 **Se non trova niente** te lo dice e non inventa: prova con altre parole, oppure apri il documento. Se non hai ancora manuali, caricane uno da **Casa → 📚 Documenti**.""",
                "manuale manuali istruzioni cercare cerca nei documenti pdf pagina leggere ad alta voce apparecchio lavatrice caldaia libretto uso manutenzione")
