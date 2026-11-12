@@ -224,7 +224,7 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
       "contatti professionisti idraulico elettricista interventi costo preventivi preferiti rubrica categoria", ("professionista", "intervento"))
     a("casa", "c_raccolta", "Raccolta differenziata e ritiro ingombranti",
       """In **Amministrazione → Raccolta differenziata** costruisci il calendario della tua zona.
-1. Tocca **➕ Crea il calendario**: compare la tabella con i **sette giorni** (GIORNO, TIPO DI RIFIUTO, NOTE; niente orari).
+1. Tocca **➕ Crea il calendario**: compare la tabella con i **sette giorni** (Giorno, Tipo di rifiuto, Note; niente orari; il giorno di oggi è evidenziato in verde).
 2. Tocca un giorno (Lun, Mar…) e scegli **uno o più tipi**: organico, indifferenziato, carta, vetro, plastica, metalli o un tipo tuo. Lo **stesso tipo può stare in più giorni**. Puoi spuntare **«Nessuna raccolta»**.
 3. **Variazioni**: per un festivo o un giorno straordinario aggiungi una data con i rifiuti di quel giorno oppure «nessuna raccolta».
 4. **Programmi**: **➕ Programma** o **📑 Duplica** creano un altro calendario (per esempio «Estate»); **✅ Usa questo programma** decide quale segue gli avvisi.

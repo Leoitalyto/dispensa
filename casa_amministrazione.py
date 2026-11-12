@@ -1317,17 +1317,25 @@ def _amm_schermata_raccolta(c):
                      + (f" <i>· {_amm_h.escape(nota)}</i>" if nota else "") + (" <b>(variazione)</b>" if orig == "variazione" else ""))
     st.markdown("<div class='amm-card' style='background:rgba(232,245,233,.92)'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
     # la tabella settimanale (GIORNO · TIPO DI RIFIUTO · NOTE, senza orari)
-    TD = "padding:6px;border-top:1px solid rgba(0,0,0,.08);vertical-align:top"
+    # lo stile della tabella di riferimento di Leonardo: griglia sottile, intestazione grigio-verde, giorni abbreviati, riga di OGGI verde e in grassetto
+    BORDO = "1px solid rgba(60,80,75,.28)"
+    TD = f"padding:12px 8px;border-right:{BORDO};border-bottom:{BORDO};vertical-align:middle;color:#1b2b2a;font-size:1.02rem"
     tr = ""
     for g in range(7):
         info = p["giorni"].get(str(g), {})
-        celle = "🚫 <i>nessuna raccolta</i>" if info.get("nessuna") else ("".join(_amm_chip_html(t) for t in info.get("tipi", [])) or "<span style='opacity:.5'>—</span>")
-        oggi_riga = "background:rgba(255,235,59,.35);" if g == oggi_.weekday() else ""
-        tr += (f"<tr style='{oggi_riga}'><td style='{TD};font-weight:800;white-space:nowrap'>{AMM_GIORNI[g]}</td><td style='{TD}'>{celle}</td>"
-               f"<td style='{TD};font-size:.88rem'>{_amm_h.escape(info.get('nota', ''))}</td></tr>")
-    st.markdown("<table style='width:100%;border-collapse:collapse;background:rgba(255,255,255,.86);border-radius:14px;overflow:hidden'><thead><tr style='background:#2e7d32;color:#fff'>"
-                "<th style='padding:7px;text-align:left'>GIORNO</th><th style='padding:7px;text-align:left'>TIPO DI RIFIUTO</th><th style='padding:7px;text-align:left'>NOTE</th></tr></thead><tbody>"
-                + tr + "</tbody></table>", unsafe_allow_html=True)
+        if info.get("nessuna"):
+            celle = "🚫 nessuna raccolta"
+        else:
+            celle = "<br>".join(f"{amm_icona_rifiuto(t)}&nbsp;{_amm_h.escape(t)}" for t in info.get("tipi", [])) or "<span style='opacity:.45'>—</span>"
+        oggi_r = g == oggi_.weekday()
+        sfondo = "background:#c8e6c9;font-weight:800;" if oggi_r else "background:rgba(240,250,246,.92);"
+        tr += (f"<tr style='{sfondo}'><td style='{TD};white-space:nowrap'>{AMM_GIORNI[g][:3]}</td><td style='{TD}'>{celle}</td>"
+               f"<td style='{TD};font-size:.92rem;border-right:none'>{_amm_h.escape(info.get('nota', ''))}</td></tr>")
+    TH = f"padding:12px 8px;text-align:left;font-weight:800;color:#1b2b2a;border-right:{BORDO};border-bottom:{BORDO};background:#e3e9e6;font-size:.98rem;white-space:nowrap"
+    st.markdown(f"<div style='border-radius:16px;overflow:hidden;border:{BORDO};margin:8px 0'><table style='width:100%;border-collapse:collapse;table-layout:fixed'>"
+                f"<colgroup><col style='width:22%'><col style='width:48%'><col style='width:30%'></colgroup>"
+                f"<thead><tr><th style='{TH}'>Giorno</th><th style='{TH}'>Tipo di rifiuto</th><th style='{TH};border-right:none'>Note</th></tr></thead><tbody>"
+                + tr + "</tbody></table></div>", unsafe_allow_html=True)
     st.caption("Tocca un giorno per scegliere cosa si ritira (anche più tipi, anche lo stesso tipo in giorni diversi).")
     for riga in (range(0, 4), range(4, 7)):
         cols = st.columns(len(riga), gap="small")
