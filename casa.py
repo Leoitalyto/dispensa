@@ -1768,7 +1768,7 @@ def _ca_dati():
     return c
 
 
-_CA_LISTE_CASA = ("beni", "documenti", "manutenzioni", "contatti_casa")
+_CA_LISTE_CASA = ("beni", "documenti", "manutenzioni", "contatti_casa", "amministratori", "spese_amm", "contatti_extra", "interventi_prof", "raccolta", "raccolta_ecc", "ingombranti")   # le ultime quattro: quinta area «🏢 Amministrazione» (casa_amministrazione.py)
 
 
 def _ca_salva(fn, messaggio):
@@ -3906,13 +3906,15 @@ def schermata_casa():
         st.warning(f"🛡️ La garanzia di **{nome}** scade tra {g} giorni.")
     for nome, voce, g in sc["manutenzioni"][:3]:
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+    for nome, g, imp in sc.get("spese", [])[:4]:                                      # rate dell'amministrazione (casa_amministrazione.py)
+        st.warning(f"🏢 **{nome}** (€ {ca_importo_fmt(imp)}) — " + (f"scaduta da {-g} giorni: registra il pagamento in Amministrazione → Spese e scadenze" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
     for nome, g, imp in sc.get("bollette", [])[:4]:
         st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
     sel_c = ca_selettore_casa(c)
     cv = ca_vista_casa(c, sel_c)
     if len(ca_case(c)) > 1:
         st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
-    t1, t2, t3, t4 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])
+    t1, t2, t3, t4, t5 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti", "🏢 Amministrazione"])
     with t1:
         if getattr(t1, "open", True):                                  # si disegna solo la scheda aperta (più veloce)
             _ca_tab_beni(cv)
@@ -3928,6 +3930,12 @@ def schermata_casa():
                 lv_tab_contatti(cv, "casa")
             else:
                 st.info("La rubrica dei riferimenti non è disponibile.")
+    with t5:
+        if getattr(t5, "open", True):
+            if "ca_amm_tab" in globals():                                  # la quinta area (casa_amministrazione.py); se manca, le altre quattro funzionano uguale
+                ca_amm_tab(cv)
+            else:
+                st.info("L'amministrazione della casa non è disponibile adesso.")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -3942,7 +3950,7 @@ if "_NOMI_SEZIONI" in globals():                                    # la guida d
     _GUIDE.setdefault("casa", [
         ("🏡 Cos'è la sezione Casa",
          """La sezione **Casa** raccoglie **i beni della tua casa** (caldaia, climatizzatori, elettrodomestici, TV, allarmi, impianti), **tutti i documenti di casa** (manuali, garanzie, bollette di luce, gas e acqua, fatture, polizze…) e **le manutenzioni**.
-Ha quattro schede: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni** e **📇 Riferimenti**. Se hai più case (**➕ Aggiungi un'altra casa**), in alto scegli quale guardare.
+Ha cinque schede: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni**, **📇 Riferimenti** e **🏢 Amministrazione** (spese condominiali, contatti, raccolta differenziata). Se hai più case (**➕ Aggiungi un'altra casa**), in alto scegli quale guardare.
 Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
          "casa abitazione beni inventario caldaia lavatrice manuali manutenzioni sezione"),
         ("📚 Archiviare un documento (manuale, bolletta, fattura…)",
@@ -4003,7 +4011,7 @@ def casa_pulsante():
     if not (_fa_file_uri("casa.webp") if "_fa_file_uri" in globals() else ""):
         return False
     sc = ca_scadenze(_ca_dati(), oggi())
-    n_av = len(sc["garanzie"]) + len(sc["manutenzioni"]) + len(sc.get("bollette", []))
+    n_av = len(sc["garanzie"]) + len(sc["manutenzioni"]) + len(sc.get("bollette", [])) + len(sc.get("spese", []))
     premuto = st.button("Casa", key="casa_icona", help="Apri Casa: beni, manuali e manutenzioni")
     if n_av:
         st.markdown(f"<div style='width:80px;text-align:center;font-weight:800;font-size:.6rem;color:#e65100'>⚠️ {n_av} da controllare</div>", unsafe_allow_html=True)

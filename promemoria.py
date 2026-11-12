@@ -209,6 +209,8 @@ def invia_telegram(chat, testo):
             with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", dati, timeout=20) as r:
                 if r.status != 200:
                     return f"errore: Telegram risponde {r.status}"
+        except urllib.error.HTTPError as e:                          # 403: la persona non ha toccato «Avvia» nel bot; 400: il numero (Chat ID) non è giusto
+            return f"errore: Telegram risponde {e.code}"
         except Exception as e:
             return f"errore: {type(e).__name__}"
     return "ok"
@@ -626,6 +628,130 @@ def raccogli_bollette(d, oggi):
     return sorted(out, key=lambda t: t[0])
 
 
+SOGLIE_AMM_DEFAULT = (30, 15, 7, 3, 1, 0)      # se la spesa non ha i suoi giorni di preavviso
+
+
+def raccogli_spese_amm(d, oggi):
+    """Rate dell'AMMINISTRAZIONE di Casa (spese condominiali…) non ancora pagate del tutto: [(giorni, «Descrizione · rata 2/4 · Casa», residuo, scadenza)].
+    Avviso nei giorni di preavviso scelti per quella spesa (30, 15, 7, 3, 1 e il giorno stesso se non ne ha scelti); dopo la scadenza ogni giorno per i primi 30 giorni, poi ogni lunedì fino a un anno.
+    Le spese con l'avviso spento non compaiono. Con più case il nome della casa è nella riga."""
+    casa = d.get("casa") or {}
+    case = {x.get("id"): x.get("nome") or "Seconda casa" for x in (casa.get("case") or []) if isinstance(x, dict) and x.get("id")}
+    out = []
+    for sp in casa.get("spese_amm", []):
+        if not isinstance(sp, dict) or sp.get("avvisi_attivi") is False:
+            continue
+        try:
+            giorni = {int(g) for g in (sp.get("avvisi_giorni") or SOGLIE_AMM_DEFAULT)}
+        except (TypeError, ValueError):
+            giorni = set(SOGLIE_AMM_DEFAULT)
+        rate = sorted([r for r in sp.get("rate", []) if isinstance(r, dict)], key=lambda r: r.get("scadenza") or "")
+        for k, r in enumerate(rate, 1):
+            s_ = data_di(r.get("scadenza"))
+            try:
+                residuo = round(float(r.get("importo") or 0) - sum(float(x.get("importo") or 0) for x in r.get("pagamenti", []) if isinstance(x, dict)), 2)
+            except (TypeError, ValueError):
+                continue
+            if not s_ or residuo <= 0.004:
+                continue
+            g = (s_ - oggi).days
+            if g in giorni or (-30 <= g < 0) or (-365 <= g < -30 and oggi.weekday() == 0):
+                nome = f"{sp.get('descrizione') or 'Spesa'} · rata {r.get('n') or k}/{len(rate)}"
+                if case and (sp.get("casa_id") or "") != "":
+                    nome += f" · {case.get(sp.get('casa_id'), 'altra casa')}"
+                elif case:
+                    nome += " · Casa principale"
+                out.append((g, nome, residuo, s_))
+    return sorted(out, key=lambda t: (t[0], t[1]))
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# ♻️ RACCOLTA DIFFERENZIATA e 🛋️ INGOMBRANTI (Casa → Amministrazione): promemoria la sera prima, la mattina stessa e un secondo promemoria. Si controllano a ogni giro «ogni mezz'ora»
+# (--dosi): un promemoria parte nel giro della mezz'ora che contiene l'ora scelta (come per le assunzioni). Solo a chi ha acceso «Avvisami anche di Casa», sui canali che ha scelto.
+# ----------------------------------------------------------------------------------------------------------------------
+GIORNI_IT = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+ICONE_RIFIUTI = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🔵", "Vetro": "🟢", "Plastica": "🟡", "Metalli": "🔘"}
+AVVISI_RACCOLTA_DEFAULT = {"sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
+
+
+def piano_rifiuti(programma, eccezioni, giorno):
+    """(tipi, nota, nessuna raccolta): una variazione per quella data vale più del programma."""
+    for e in eccezioni:
+        if e.get("data") == giorno.isoformat():
+            return ([] if e.get("nessuna") else list(e.get("tipi") or [])), e.get("nota") or "", bool(e.get("nessuna"))
+    g = ((programma.get("giorni") or {}).get(str(giorno.weekday())) or {})
+    return ([] if g.get("nessuna") else list(g.get("tipi") or [])), g.get("nota") or "", bool(g.get("nessuna"))
+
+
+def raccogli_rifiuti(d, adesso):
+    """[(tipo di promemoria, testo)] da mandare nella mezz'ora corrente (00-29 o 30-59)."""
+    casa = d.get("casa") or {}
+    programmi = [p for p in casa.get("raccolta", []) if isinstance(p, dict) and p.get("id")]
+    if not programmi:
+        return []
+    eccezioni = [e for e in casa.get("raccolta_ecc", []) if isinstance(e, dict)]
+    ingombranti = [m for m in casa.get("ingombranti", []) if isinstance(m, dict) and m.get("prossimo_ritiro")]
+    case = {x.get("id"): x.get("nome") or "Seconda casa" for x in (casa.get("case") or []) if isinstance(x, dict) and x.get("id")}
+    ini = adesso.replace(minute=0 if adesso.minute < 30 else 30, second=0, microsecond=0)
+    fin = ini + timedelta(minutes=30)
+    oggi = adesso.date()
+    per_casa = {}
+    for p in programmi:
+        cid = p.get("casa_id") or ""
+        if cid not in per_casa or (p.get("attivo") and not per_casa[cid].get("attivo")):
+            per_casa[cid] = p
+    out = []
+    for cid, p in per_casa.items():
+        av = {**AVVISI_RACCOLTA_DEFAULT, **(p.get("avvisi") or {})}
+        spenti = set(av.get("tipi_spenti") or [])
+        ecc = [e for e in eccezioni if (e.get("programma_id") or p["id"]) == p["id"] and (e.get("casa_id") or "") == cid]
+        for chiave, ora_k, giorno, intro in (("sera", "ora_sera", oggi + timedelta(days=1), "Domani"), ("mattina", "ora_mattina", oggi, "Oggi"), ("secondo", "ora_secondo", oggi + timedelta(days=1), "⏰ Promemoria: domani")):
+            if not av.get(chiave):
+                continue
+            try:
+                h, m = str(av.get(ora_k)).split(":")
+                momento = datetime.combine(oggi, datetime.min.time()).replace(hour=int(h), minute=int(m))
+            except ValueError:
+                continue
+            if not (ini <= momento < fin):
+                continue
+            tipi, nota, nessuna = piano_rifiuti(p, ecc, giorno)
+            tipi = [t for t in tipi if t not in spenti]
+            righe = []
+            if tipi:
+                righe += [f"• {ICONE_RIFIUTI.get(t, '🟣')} {t}" for t in tipi]
+                if nota:
+                    righe.append(f"({nota})")
+            for mi in ingombranti:
+                if (mi.get("casa_id") or "") == cid and mi.get("prossimo_ritiro") == giorno.isoformat():
+                    righe.append(f"🛋️ Ritiro ingombranti prenotato: {mi.get('nome', '')}" + (f" – {mi['orari']}" if mi.get("orari") else ""))
+            if not righe:
+                continue
+            casa_n = f" ({case.get(cid, 'altra casa') if cid else 'Casa principale'})" if case else ""
+            out.append((chiave, f"♻️ Raccolta differenziata{casa_n} – {intro.lower() if chiave == 'secondo' else intro}, {GIORNI_IT[giorno.weekday()]} {giorno.strftime('%d/%m')}:\n" + "\n".join(righe)
+                        if chiave != "secondo" else f"♻️ {intro}, {GIORNI_IT[giorno.weekday()]} {giorno.strftime('%d/%m')}{casa_n}, si ritira:\n" + "\n".join(righe) + "\nRicordati di esporre."))
+    return out
+
+
+def avvisi_raccolta(adesso, bloccati, registra):
+    for uid, d in utenti_attivi(bloccati):
+        if not d.get("avvisi_casa") or not canali_di(d):
+            continue
+        for chiave, testo in raccogli_rifiuti(d, adesso):
+            for canale in canali_di(d):
+                if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                    esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
+                elif canale == "email" and (d.get("avviso_email") or "").strip():
+                    esito = invia_email(d["avviso_email"].strip(), "Raccolta differenziata - La nostra dispensa", testo)
+                elif canale == "sms" and (d.get("avviso_sms") or "").strip():
+                    esito = invia_sms(d["avviso_sms"].strip(), testo.replace("\n", " ")[:150])
+                elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                    esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
+                else:
+                    continue
+                registra(f"{uid}-raccolta-{chiave}", canale, esito)
+
+
 def _euro(v):
     try:
         return "€ " + f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -633,8 +759,10 @@ def _euro(v):
         return ""
 
 
-def testo_casa(oggi, garanzie, manut, bollette=()):
+def testo_casa(oggi, garanzie, manut, bollette=(), spese=()):
     righe = [f"🏡 Casa – promemoria del {oggi.strftime('%d/%m/%Y')}"]
+    if spese:
+        righe += ["", "🏢 Amministrazione – rate da pagare:"] + [f"• {nome}: {_euro(imp)} – {quando(g)} ({s_.strftime('%d/%m/%Y')})" for g, nome, imp, s_ in spese]
     if bollette:
         righe += ["", "💶 Bollette da pagare:"] + [f"• {nome}" + (f" ({_euro(imp)})" if _euro(imp) else "") + f" – {quando(g)} ({s_.strftime('%d/%m/%Y')})" for g, nome, imp, s_ in bollette]
     if garanzie:
@@ -644,8 +772,10 @@ def testo_casa(oggi, garanzie, manut, bollette=()):
     return "\n".join(righe)
 
 
-def testo_sms_casa(oggi, garanzie, manut, bollette=()):
+def testo_sms_casa(oggi, garanzie, manut, bollette=(), spese=()):
     parti = []
+    if spese:
+        parti.append(f"{len(spese)} rat{'a' if len(spese) == 1 else 'e'} dell'amministrazione da pagare")
     if bollette:
         parti.append(f"{len(bollette)} bollett{'a' if len(bollette) == 1 else 'e'} da pagare")
     if garanzie:
@@ -674,31 +804,32 @@ def avvisi_casa(oggi, bloccati, registra):
         _pagate = {x.get("collegato_a") for x in ((d.get("casa") or {}).get("documenti") or []) if isinstance(x, dict) and x.get("collegato_a")}
         _non_pagate = [x for x in _docs if not x.get("pagata_il") and x.get("id") not in _pagate]
         _scadute = [x for x in _non_pagate if data_di(x.get("scadenza_doc")) and data_di(x.get("scadenza_doc")) < oggi]
-        print(f"[{uid}] Casa: {len(_non_pagate)} bollette non pagate ({len(_scadute)} scadute) · avvisi di Casa: {'SPUNTATI' if d.get('avvisi_casa') else 'NON spuntati'} · canali scelti: {', '.join(canali_di(d)) or 'nessuno'} · oggi {oggi.strftime('%d/%m/%Y')} ({'lunedì' if oggi.weekday() == 0 else 'non è lunedì'}) · da avvisare oggi: {len(raccogli_bollette(d, oggi))}")
+        print(f"[{uid}] Casa: {len(raccogli_spese_amm(d, oggi))} rate dell'amministrazione da avvisare oggi · {len(_non_pagate)} bollette non pagate ({len(_scadute)} scadute) · avvisi di Casa: {'SPUNTATI' if d.get('avvisi_casa') else 'NON spuntati'} · canali scelti: {', '.join(canali_di(d)) or 'nessuno'} · oggi {oggi.strftime('%d/%m/%Y')} ({'lunedì' if oggi.weekday() == 0 else 'non è lunedì'}) · da avvisare oggi: {len(raccogli_bollette(d, oggi))}")
         if not d.get("avvisi_casa"):
-            if raccogli_bollette(d, oggi) or raccogli_casa(d, oggi) != ([], []):
+            if raccogli_bollette(d, oggi) or raccogli_spese_amm(d, oggi) or raccogli_casa(d, oggi) != ([], []):
                 print(f"[{uid}] ci sono cose da avvisare in Casa (bollette, garanzie o manutenzioni) ma «Avvisami anche di Casa» NON è spuntato: nessun messaggio. "
                       f"Spuntalo in Salute → Scegli come ricevere gli avvisi.")
             continue
         garanzie, manut = raccogli_casa(d, oggi)
         bollette = raccogli_bollette(d, oggi)
+        spese = raccogli_spese_amm(d, oggi)
         if not canali_di(d):
             print(f"[{uid}] «Avvisami anche di Casa» è spuntato ma non c'è nessun canale scelto (Telegram, email, WhatsApp, SMS): nessun messaggio.")
             continue
-        if not PROVA and not (garanzie or manut or bollette):
+        if not PROVA and not (garanzie or manut or bollette or spese):
             continue
         for canale in canali_di(d):
             if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
-                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette, spese)
                 esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
             elif canale == "email" and (d.get("avviso_email") or "").strip():
-                testo = "Prova riuscita: da oggi ricevi via email gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                testo = "Prova riuscita: da oggi ricevi via email gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette, spese)
                 esito = invia_email(d["avviso_email"].strip(), "Casa - La nostra dispensa", testo)
             elif canale == "sms" and (d.get("avviso_sms") or "").strip():
-                testo = "Casa: prova riuscita." if PROVA else testo_sms_casa(oggi, garanzie, manut, bollette)
+                testo = "Casa: prova riuscita." if PROVA else testo_sms_casa(oggi, garanzie, manut, bollette, spese)
                 esito = invia_sms(d["avviso_sms"].strip(), testo)
             elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
-                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette)
+                testo = "✅ Prova riuscita: da oggi ricevi qui gli avvisi di Casa." if PROVA else testo_casa(oggi, garanzie, manut, bollette, spese)
                 esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
             else:
                 continue
@@ -819,6 +950,118 @@ def avvisi_controlli(oggi, bloccati, registra):
             registra(f"{uid}-controlli", canale, esito)
 
 
+# ----------------------------------------------------------------------------------------------------------------------
+# «📨 Mandami un messaggio di prova»: la persona tocca il pulsante nell'app (che scrive d["avviso_prova"] = {id, quando} nei suoi dati). Qui, a ogni controllo automatico
+# (ogni mezz'ora di giorno e ogni mattina), si manda il messaggio di prova su OGNI canale che ha scelto e si scrive l'ESITO in prove_avvisi/<persona>.json: l'app lo legge e
+# mostra ✅ o ❌ per canale, con cosa fare. Serve il permesso di scrittura del workflow (permissions: contents: write + GITHUB_TOKEN, come per la posta): se manca, il messaggio
+# parte lo stesso ma solo per richieste recenti (al massimo 35 minuti), per non ripeterlo a ogni controllo.
+# ----------------------------------------------------------------------------------------------------------------------
+CARTELLA_PROVE = "prove_avvisi"
+ORE_VALIDITA_PROVA = 26
+TESTO_PROVA = "✅ Prova riuscita! Da oggi ricevi qui gli avvisi di «La nostra dispensa». Se stai leggendo questo messaggio, questo canale funziona."
+
+
+class ArchivioEsiti:
+    """Scrive i file dell'esito con le API di GitHub (GITHUB_TOKEN e GITHUB_REPOSITORY, come in posta.py)."""
+
+    def __init__(self, repo, token, ramo="main"):
+        self.repo, self.token, self.ramo = repo, token, ramo
+
+    def _chiama(self, metodo, percorso, corpo=None):
+        url = f"https://api.github.com/repos/{self.repo}/contents/{percorso}" + (f"?ref={self.ramo}" if metodo == "GET" else "")
+        req = urllib.request.Request(url, method=metodo, data=json.dumps(corpo).encode() if corpo is not None else None,
+                                     headers={"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github+json",
+                                              "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "DispensaFamiglia/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode("utf-8") or "{}")
+
+    def sha(self, percorso):
+        try:
+            return self._chiama("GET", percorso).get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            raise
+
+    def scrivi(self, percorso, dati, messaggio):
+        corpo = {"message": messaggio, "branch": self.ramo,
+                 "content": base64.b64encode(json.dumps(dati, ensure_ascii=False).encode("utf-8")).decode()}
+        sha = self.sha(percorso)
+        if sha:
+            corpo["sha"] = sha
+        return self._chiama("PUT", percorso, corpo)
+
+
+def _invia_prova(canale, d):
+    """L'esito («ok», «errore: …» o «saltato: …») dell'invio del messaggio di prova su un canale."""
+    if canale == "telegram":
+        if not str(d.get("telegram_chat_id") or "").strip():
+            return "saltato: manca il Chat ID di Telegram"
+        return invia_telegram(str(d["telegram_chat_id"]).strip(), TESTO_PROVA)
+    if canale == "email":
+        if not (d.get("avviso_email") or "").strip():
+            return "saltato: manca l'indirizzo email"
+        return invia_email(d["avviso_email"].strip(), "Prova riuscita - La nostra dispensa", TESTO_PROVA)
+    if canale == "sms":
+        if not (d.get("avviso_sms") or "").strip():
+            return "saltato: manca il numero di cellulare"
+        return invia_sms(d["avviso_sms"].strip(), "Dispensa: prova riuscita, qui ricevi gli avvisi.")
+    if canale == "whatsapp":
+        if not (d.get("avviso_whatsapp") or "").strip():
+            return "saltato: manca il numero di WhatsApp"
+        return invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), TESTO_PROVA)
+    return "saltato: canale sconosciuto"
+
+
+def prove_richieste(adesso, bloccati, archivio=None):
+    """Elabora le richieste «Mandami un messaggio di prova». Ritorna quante ne ha elaborate. Non fa mai fallire il programma (non tocca il codice di uscita)."""
+    fatte = 0
+    if archivio is None and E("GITHUB_TOKEN") and E("GITHUB_REPOSITORY") and not DRY:
+        archivio = ArchivioEsiti(E("GITHUB_REPOSITORY"), E("GITHUB_TOKEN"))
+    for percorso in sorted(glob.glob("dispense/*.json")):
+        uid = os.path.splitext(os.path.basename(percorso))[0]
+        if uid in bloccati:
+            continue
+        d = leggi(percorso)
+        rich = d.get("avviso_prova")
+        if not (isinstance(rich, dict) and rich.get("id")):
+            continue
+        if leggi(f"{CARTELLA_PROVE}/{uid}.json").get("id") == rich["id"]:
+            continue                                                       # già fatta (o in corso da un altro controllo)
+        try:
+            quando = datetime.fromisoformat(str(rich.get("quando")))
+        except ValueError:
+            continue
+        if adesso - quando > timedelta(hours=ORE_VALIDITA_PROVA) or quando > adesso + timedelta(hours=1):
+            continue                                                       # troppo vecchia o con l'ora sbagliata: non si manda più
+        file_esito = f"{CARTELLA_PROVE}/{uid}.json"
+        puo_scrivere = False
+        if archivio is not None:
+            try:                                                           # 1) segno subito «in corso»: così un altro controllo non la ripete
+                archivio.scrivi(file_esito, {"id": rich["id"], "stato": "in corso", "richiesta": rich.get("quando")}, "Prova avvisi: in corso")
+                puo_scrivere = True
+            except Exception as e:
+                print(f"[{uid}] prova: non riesco a scrivere l'esito ({type(e).__name__}): serve «permissions: contents: write» nel file promemoria.yml")
+        if not DRY and not puo_scrivere and adesso - quando > timedelta(minutes=35):
+            continue                                                       # senza poter scrivere l'esito (manca il permesso o GITHUB_TOKEN) si manda solo se è recente: al massimo 2 volte
+        canali = canali_di(d)
+        esiti = {}
+        for canale in canali:
+            esiti[canale] = _invia_prova(canale, d)
+            print(f"[{uid}] prova {canale}: {esiti[canale]}")
+        risultato = {"id": rich["id"], "stato": "fatto" if canali else "nessun canale", "richiesta": rich.get("quando"),
+                     "inviata": adesso.isoformat(timespec="minutes"), "esiti": esiti}
+        if puo_scrivere:
+            try:
+                archivio.scrivi(file_esito, risultato, "Prova avvisi: esito")
+            except Exception as e:
+                print(f"[{uid}] prova: esito non salvato ({type(e).__name__})")
+        elif archivio is None:
+            print(f"[{uid}] prova: {json.dumps(risultato, ensure_ascii=False)}")
+        fatte += 1
+    return fatte
+
+
 def canali_di(d):
     canali = d.get("avvisi_canali")
     if canali is None:                                    # chi ha solo il Chat ID di Telegram
@@ -842,6 +1085,17 @@ def main():
         else:
             errori += 1
 
+    try:
+        n_prove = prove_richieste(adesso, bloccati)                    # le richieste «📨 Mandami un messaggio di prova» fatte dall'app
+        if n_prove:
+            print(f"Messaggi di prova richiesti dalle persone: {n_prove}")
+    except Exception as e:
+        print(f"Prove richieste dalle persone: errore ({type(e).__name__}: {e})")
+    if DOSI and not PROVA:                                             # promemoria della raccolta differenziata (nella mezz'ora che contiene l'ora scelta)
+        try:
+            avvisi_raccolta(adesso, bloccati, registra)
+        except Exception as e:
+            print(f"Raccolta differenziata: errore ({type(e).__name__}: {e})")
     for percorso in sorted(glob.glob("dispense/*.json")):
         uid = os.path.splitext(os.path.basename(percorso))[0]
         d = leggi(percorso)

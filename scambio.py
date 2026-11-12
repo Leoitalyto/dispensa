@@ -22,7 +22,7 @@ _SC_MAGIA = b"DSP1"
 SC_SEZIONI = {
     "dispensa": ("🥫 Dispensa", "i tuoi prodotti e le scadenze"),
     "salute": ("🩺 Salute, 📁 I miei documenti, 🗂️ Archivio", "le persone, medicinali, terapie, visite, ricette, vaccini, i documenti personali e i loro file"),
-    "casa": ("🏡 Casa", "beni, documenti, manutenzioni e riferimenti della casa"),
+    "casa": ("🏡 Casa", "beni, documenti, manutenzioni, riferimenti e amministrazione della casa"),
     "lavoro": ("💼 Lavoro", "buste paga, Certificazioni Uniche, documenti INPS, sindacato/CAF e link INPS"),
 }
 
@@ -45,7 +45,11 @@ def sc_estrai(d, sezione):
     tipi = _sc_lavoro_tipi()
     if sezione == "casa":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") not in tipi]
-        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", []), "case": c.get("case", [])})
+        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", []), "case": c.get("case", []),
+                              # Amministrazione di Casa (casa_amministrazione.py): scheda dell'amministratore, spese con rate e pagamenti, professionisti e interventi, raccolta differenziata, ingombranti
+                              "amministratori": c.get("amministratori", []), "spese_amm": c.get("spese_amm", []), "contatti_extra": c.get("contatti_extra", []), "interventi_prof": c.get("interventi_prof", []),
+                              "raccolta": c.get("raccolta", []), "raccolta_ecc": c.get("raccolta_ecc", []), "ingombranti": c.get("ingombranti", []), "tipi_rifiuto": c.get("tipi_rifiuto", []),
+                              "categorie_prof": c.get("categorie_prof", [])})
     if sezione == "lavoro":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") in tipi]
         out = {"documenti": docs, "contatti_lavoro": c.get("contatti_lavoro", []), "lavori": c.get("lavori", [])}
@@ -86,7 +90,8 @@ def sc_conta(dati):
 
 
 _SC_NOMI = {"articoli": "prodotti", "profili": "persone", "medicinali": "medicinali", "terapie": "terapie", "visite": "visite", "prescrizioni": "ricette", "vaccinazioni": "vaccinazioni",
-            "documenti": "documenti", "archivio_foto": "foto", "case": "case", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "contatti_lavoro": "contatti", "lavori": "lavori"}
+            "documenti": "documenti", "archivio_foto": "foto", "case": "case", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "amministratori": "amministratori", "spese_amm": "spese", "interventi_prof": "interventi dei professionisti",
+            "raccolta": "programmi di raccolta", "raccolta_ecc": "variazioni", "ingombranti": "servizi ingombranti", "contatti_lavoro": "contatti", "lavori": "lavori"}
 
 
 def sc_riassunto(dati):

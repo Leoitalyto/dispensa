@@ -12,14 +12,14 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.7"
+GUIDA_VERSIONE = "3.8"
 GUIDA_DATA = "2026-11-08"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
     "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "avvisi_prova.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
-    "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "assistente_extra.py", "cestino.py"]},
+    "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "casa_amministrazione.py", "assistente_extra.py", "cestino.py"]},
     "lavoro": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["lavoro.py", "casa.py", "cestino.py"]},
     "auto": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente_extra.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "auto_soccorso.py", "auto_emergenza.py", "libretto.py",
                                                                          "diagnostica.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica_spie.py", "cestino.py"]},
@@ -191,6 +191,47 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 - Non è lo «storico dei contenuti» (gli elenchi di ciò che hai registrato: terapie fatte, visite passate, consumi…): quelli restano nelle loro schede.
 - Restano le ultime 300 operazioni, per al massimo 180 giorni. Vale per i tuoi dati personali; la dispensa di famiglia ha il suo storico con «Annulla» per l'amministratore.""",
           "storico modifiche registro cronologia cosa ho cambiato quando chi ha modificato aggiunto eliminato log operazioni", ("vedi", None))
+
+    # ================= Casa → Amministrazione
+    a("casa", "c_amministrazione", "Amministrazione della casa: cos'è",
+      """In **Casa** c'è la quinta scheda, **Amministrazione**. Ha cinque pulsanti colorati:
+1. **Dati amministrazione**: la scheda dell'amministratore (studio, telefoni, email, PEC, IBAN…) con **Chiama**, **Scrivi** e **Scrivi alla PEC** a un tocco.
+2. **Spese e scadenze**: spese condominiali e rate, con pagamenti e promemoria.
+3. **Contatti e interventi**: i professionisti (idraulico, elettricista…) e gli interventi che hanno fatto.
+4. **Raccolta differenziata**: il calendario settimanale dei rifiuti, con i promemoria.
+5. **Ritiro ingombranti**: i servizi da chiamare per mobili e materassi.
+
+Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alto. Quello che cancelli va nel **Cestino**. Gli avvisi arrivano sui canali scelti in Salute (Telegram, email, WhatsApp, SMS) con la casella «Avvisami anche di Casa» accesa.""",
+      "amministrazione casa condominio amministratore spese rate contatti raccolta differenziata ingombranti", ("amministrazione", "casa"))
+    a("casa", "c_spese_rate", "Spese condominiali, rate e pagamenti",
+      """In **Amministrazione → Spese e scadenze** tocca **➕ Nuova spesa**.
+1. Scrivi la **descrizione** (per esempio «Rate condominio 2026»), la categoria, l'**importo totale**, il **numero di rate** e la **scadenza della prima**. Scegli **ogni quanto** scadono (ogni mese, trimestre, anno…). L'app **crea da sola tutte le scadenze** e ti mostra l'anteprima.
+2. Scegli **quanti giorni prima** vuoi essere avvisato (di solito 30, 15, 7, 3 e 1) e, se vuoi, l'amministratore.
+3. Per ogni rata tocca **💶 Pagata**: puoi registrare anche un **pagamento parziale** (resta il residuo). **✏️ Modifica** cambia data e importo **senza perdere i pagamenti già fatti**; **↩️ Annulla pagamento** toglie l'ultimo.
+4. Gli stati: 🔵 **da pagare**, 🟠 **in scadenza** (entro 15 giorni), 🟢 **pagata**, 🔴 **scaduta**. In cima c'è il **riepilogo**: totale dell'anno, già pagato, ancora da pagare e rate scadute, più lo **storico dei pagamenti**.
+5. **📎 Allega** collega avvisi di pagamento e ricevute **già archiviati** in Documenti (per aggiungerne uno nuovo caricalo prima in Documenti).
+
+**Spese che si ripetono sempre** (assicurazione, quote annuali): spunta «La spesa si ripete sempre»: dopo ogni pagamento l'app aggiunge le scadenze future, senza doppioni.
+
+**Avvisi:** arrivano sui tuoi canali e le rate in scadenza o scadute compaiono anche **in cima a Casa** e fanno **lampeggiare** il pulsante nella Home. Per far **suonare il telefono** anche con tutto chiuso, scarica il **calendario (.ics)**: le scadenze si aggiornano, non si duplicano.""",
+      "spese rate condominio pagamento parziale scadenze stato scaduta pagata riepilogo calendario ics allarme", ("spesa", "rata"))
+    a("casa", "c_contatti_interventi", "Contatti e interventi (professionisti)",
+      """In **Amministrazione → Contatti e interventi** trovi i professionisti per guasti e lavori. È **la stessa rubrica di Riferimenti**: se cambi un contatto in un posto cambia anche nell'altro.
+- **➕ Nuovo professionista**: scegli la **categoria** (elettricista, idraulico, muratore, tecnico caldaia, antennista…) o creane una nuova; scrivi telefono, cellulare, email, indirizzo, **orari**, **specializzazione** e **costo o tariffario**.
+- Su ogni scheda: **Chiama**, **WhatsApp**, **Scrivi**, **Mappa**, **⭐ Preferito** (i preferiti stanno in alto), **Modifica**, **Elimina** e **Preventivi** (documenti già archiviati).
+- **Cerca** per nome o categoria e filtra per categoria o solo i preferiti.
+- **🔧 Registra un intervento**: scegli chi è intervenuto, la **data**, il **problema**, il **costo**, l'eventuale **bene** e i **documenti**. Nello storico vedi quanto hai speso per ogni professionista e nell'anno.""",
+      "contatti professionisti idraulico elettricista interventi costo preventivi preferiti rubrica categoria", ("professionista", "intervento"))
+    a("casa", "c_raccolta", "Raccolta differenziata e ritiro ingombranti",
+      """In **Amministrazione → Raccolta differenziata** costruisci il calendario della tua zona.
+1. Tocca **➕ Crea il calendario**: compare la tabella con i **sette giorni** (GIORNO, TIPO DI RIFIUTO, NOTE; niente orari).
+2. Tocca un giorno (Lun, Mar…) e scegli **uno o più tipi**: organico, indifferenziato, carta, vetro, plastica, metalli o un tipo tuo. Lo **stesso tipo può stare in più giorni**. Puoi spuntare **«Nessuna raccolta»**.
+3. **Variazioni**: per un festivo o un giorno straordinario aggiungi una data con i rifiuti di quel giorno oppure «nessuna raccolta».
+4. **Programmi**: **➕ Programma** o **📑 Duplica** creano un altro calendario (per esempio «Estate»); **✅ Usa questo programma** decide quale segue gli avvisi.
+5. **Avvisi**: la **sera prima** (di solito alle 20:00), la **mattina stessa** e un **secondo promemoria**, a ore tue e solo per i tipi che scegli. Il messaggio arriva **entro mezz'ora dall'ora scelta**. Per un **allarme del telefono** scarica il calendario (.ics).
+
+In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiuti, ditte), **come si prenota**, i giorni di ritiro, il costo e la data del **prossimo ritiro prenotato**: il giorno prima ricevi un promemoria insieme alla raccolta.""",
+      "raccolta differenziata calendario rifiuti organico carta plastica vetro ingombranti ritiro promemoria festivo variazione", ("raccolta", "rifiuti"))
 
     # ================= avvisi: la prova
     a("farmacia", "f_avvisi_prova", "Provare se gli avvisi funzionano (messaggio di prova)",

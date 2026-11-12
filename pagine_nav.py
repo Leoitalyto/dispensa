@@ -135,6 +135,8 @@ def pn_scadenze():
                 out.setdefault("casa", []).append(f"🛠️ Garanzia {nome}: " + ("scade tra %d giorni" % g))
             for nome, voce, g in sc.get("manutenzioni", []):
                 out.setdefault("casa", []).append(f"🔧 {nome} · {voce}: " + ("in ritardo di %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
+            for nome, g, imp in sc.get("spese", []):                                  # rate dell'amministrazione
+                out.setdefault("casa", []).append(f"🏢 {nome}: " + ("scaduta da %d giorni" % -g if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
             for nome, g, imp in sc.get("bollette", []):
                 out.setdefault("casa", []).append(f"💶 {nome}: " + ("scaduta da %d giorni" % -g if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
     except Exception:
