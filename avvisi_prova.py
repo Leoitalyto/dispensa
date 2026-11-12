@@ -92,6 +92,9 @@ def av_prova_ui(d):
     """Il riquadro «📨 Prova se funziona»: pulsante, attesa ed esito."""
     uid = av_uid()
     admin = nome_admin() if "nome_admin" in globals() else "chi gestisce l'app"
+    msg = st.session_state.pop("av_toast", None)
+    if msg:
+        st.toast(msg)
     st.markdown("##### 📨 Prova se funziona")
     canali = av_canali_salvati(d)
     if not canali:
@@ -117,6 +120,8 @@ def av_prova_ui(d):
         except Exception as e:
             st.error(f"Non sono riuscito a registrare la richiesta: {e}")
             return
+        st.session_state["av_aperta"] = True                       # la tendina resta aperta: così vedi subito «Richiesta fatta»
+        st.session_state["av_toast"] = "📨 Richiesta fatta! Il messaggio di prova arriva entro circa 30 minuti."
         st.rerun()
     if blocca:
         st.caption(f"Hai già fatto la richiesta {_av_ora(rich.get('quando'))}: puoi rifarla fra {max(1, int(_AV_ATTESA_MIN - (minuti or 0)))} minuti.")
@@ -140,4 +145,29 @@ def av_prova_ui(d):
                 "Quando è passato un po', tocca **🔄 Controlla se è arrivato**.")
     if st.button("🔄 Controlla se è arrivato", key="av_prova_ricontrolla", width="stretch"):
         av_leggi_esito(uid, forza=True)
+        st.session_state["av_aperta"] = True
         st.rerun()
+
+
+def av_stato_breve(d):
+    """Una riga FUORI dalla tendina (sotto «Avvisi di scadenza attivi»): lo stato dell'ultima prova, così si vede anche con la tendina chiusa."""
+    rich = d.get("avviso_prova") if isinstance(d.get("avviso_prova"), dict) else {}
+    if not rich.get("id") or not av_canali_salvati(d):
+        return
+    try:
+        if (adesso() - datetime.fromisoformat(str(rich.get("quando")))).total_seconds() > 24 * 3600:
+            return                                                          # una prova di ieri non interessa più
+    except Exception:
+        return
+    esito = av_leggi_esito(av_uid())
+    if esito.get("id") == rich["id"] and esito.get("stato") == "fatto":
+        esiti = esito.get("esiti") or {}
+        if esiti and all(e == "ok" for e in esiti.values()):
+            st.caption(f"📨 Ultima prova ({_av_ora(rich.get('quando'))}): ✅ messaggio inviato su tutti i canali.")
+        else:
+            st.caption(f"📨 Ultima prova ({_av_ora(rich.get('quando'))}): ci sono problemi: apri «Scegli come ricevere gli avvisi» per vedere cosa fare.")
+    elif esito.get("id") == rich["id"] and esito.get("stato") == "nessun canale":
+        st.caption("📨 Ultima prova: non risultava nessun canale attivo.")
+    else:
+        st.caption(f"📨 Prova richiesta {_av_ora(rich.get('quando'))}: in attesa del prossimo controllo automatico (entro circa 30 minuti). "
+                   "Poi apri «Scegli come ricevere gli avvisi» e tocca «Controlla se è arrivato».")

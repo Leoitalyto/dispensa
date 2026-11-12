@@ -1895,7 +1895,12 @@ def _fa_blocco_avvisi():
                     unsafe_allow_html=True)
     else:
         st.markdown(f"<div style='{stile}'>🔕 Nessun avviso di scadenza attivo</div>", unsafe_allow_html=True)
-    with st.expander("🔔 Scegli come ricevere gli avvisi"):
+    if "av_stato_breve" in globals():
+        try:
+            av_stato_breve(d)                                           # «📨 Prova richiesta alle 22:39: in attesa» visibile anche a tendina chiusa
+        except Exception:
+            pass
+    with st.expander("🔔 Scegli come ricevere gli avvisi", _aperta=bool(st.session_state.get("av_aperta"))):
         st.caption("Puoi attivare più canali insieme: gli avvisi arrivano su tutti quelli che spunti.")
         _fa_guida_avvisi()
         fam_m = fam_r = fd_s = fd_e = None

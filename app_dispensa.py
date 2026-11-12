@@ -113,8 +113,8 @@ import streamlit as _st_chiuse
 if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
     _expander_originale = _st_chiuse.expander
 
-    def _expander_sempre_chiusa(label, expanded=False, **kw):
-        return _expander_originale(label, expanded=False, **kw)
+    def _expander_sempre_chiusa(label, expanded=False, _aperta=False, **kw):
+        return _expander_originale(label, expanded=bool(_aperta), **kw)          # «_aperta=True» solo se chi la disegna lo chiede (es. dopo che hai toccato un pulsante dentro la tendina)
     _expander_sempre_chiusa._sempre_chiusa = True
     _st_chiuse.expander = _expander_sempre_chiusa
 

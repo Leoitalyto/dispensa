@@ -26,6 +26,16 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){min-height:4
 [data-testid="stHeaderActionElements"]{display:none !important}
 /* il pulsante «Salva in dispensa» resta sempre in vista mentre si compila il modulo (che è lungo): fisso sopra la barra in basso, lasciando libero il robottino a destra */
 .st-key-salva_dispensa{position:fixed !important;left:12px;right:104px;bottom:84px;z-index:60;width:auto !important}
+/* le schede che stanno DENTRO una tendina o una finestra (per esempio «Come attivo Telegram / l'email / WhatsApp») sono schede NORMALI, nel testo: non la barra fissa in basso della pagina
+   (prima fluttuavano sopra il contenuto, larghe 186 px, e si vedeva una sola scheda su tre) */
+html body [data-testid="stExpander"] [role="tablist"], html body [data-testid="stDialog"] [role="tablist"]{
+ position:static !important;left:auto !important;right:auto !important;top:auto !important;bottom:auto !important;transform:none !important;
+ width:100% !important;max-width:100% !important;z-index:auto !important;flex-wrap:wrap !important;gap:6px !important;
+ background:rgba(255,255,255,.55) !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;border-radius:16px !important;
+ padding:6px !important;margin:6px 0 10px 0 !important;box-shadow:none !important;overflow:visible !important}
+html body [data-testid="stExpander"] [role="tablist"] [data-baseweb="tab-highlight"], html body [data-testid="stExpander"] [role="tablist"] [data-baseweb="tab-border"],
+html body [data-testid="stDialog"] [role="tablist"] [data-baseweb="tab-highlight"], html body [data-testid="stDialog"] [role="tablist"] [data-baseweb="tab-border"]{display:none !important}
+html body [data-testid="stExpander"] [role="tablist"] [role="tab"], html body [data-testid="stDialog"] [role="tablist"] [role="tab"]{flex:1 1 auto !important;white-space:normal !important;text-align:center !important}
 /* la linguetta della radio (cuffie) sul bordo sinistro non deve più coprire l'inizio delle scritte: è più stretta e il contenuto parte un po' più a destra (solo se la radio è attiva) */
 @media (max-width:700px){
 #mu-tab{width:24px !important}

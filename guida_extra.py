@@ -445,7 +445,9 @@ def guida_avvisi():                                                             
     """Le istruzioni dentro la tendina degli avvisi: Telegram, email e WhatsApp (in italiano; per le altre lingue resta la versione di prima)."""
     try:
         if (_lingua_guida() if "_lingua_guida" in globals() else "it") == "it" and "_TESTO_TELEGRAM" in globals():
-            t_tg, t_ml, t_wa = st.tabs(["📱 Come attivo Telegram", "✉️ Come attivo l'email", "🟢 Come attivo WhatsApp"])
+            # la funzione VERA di Streamlit, senza la «memoria della scheda» dell'app (che ridisegna la pagina a ogni tocco e richiuderebbe la tendina degli avvisi)
+            _tabs_semplici = getattr(st.tabs, "_originale", None) or st.tabs
+            t_tg, t_ml, t_wa = _tabs_semplici(["📱 Come attivo Telegram", "✉️ Come attivo l'email", "🟢 Come attivo WhatsApp"])
             with t_tg:
                 st.markdown(_TESTO_TELEGRAM)
             with t_ml:
