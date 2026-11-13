@@ -1768,7 +1768,7 @@ def _ca_dati():
     return c
 
 
-_CA_LISTE_CASA = ("beni", "documenti", "manutenzioni", "contatti_casa", "amministratori", "spese_amm", "contatti_extra", "interventi_prof", "raccolta", "raccolta_ecc", "ingombranti")   # le ultime quattro: quinta area «🏢 Amministrazione» (casa_amministrazione.py)
+_CA_LISTE_CASA = ("beni", "documenti", "manutenzioni", "contatti_casa", "amministratori", "spese_amm", "contatti_extra", "interventi_prof", "raccolta", "raccolta_ecc", "ingombranti")   # le ultime sette: scheda «🏢 Amministrazione» (casa_amministrazione.py)
 
 
 def _ca_salva(fn, messaggio):
@@ -3932,7 +3932,7 @@ def schermata_casa():
                 st.info("La rubrica dei riferimenti non è disponibile.")
     with t5:
         if getattr(t5, "open", True):
-            if "ca_amm_tab" in globals():                                  # la quinta area (casa_amministrazione.py); se manca, le altre quattro funzionano uguale
+            if "ca_amm_tab" in globals():                                  # la scheda Amministrazione (casa_amministrazione.py); se manca, le altre quattro funzionano uguale
                 ca_amm_tab(cv)
             else:
                 st.info("L'amministrazione della casa non è disponibile adesso.")

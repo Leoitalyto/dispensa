@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""CASA · 🏢 AMMINISTRAZIONE (quinta area di Casa, accanto a Beni, Documenti, Manutenzioni e Riferimenti).
+"""CASA · 🏢 AMMINISTRAZIONE (la prima scheda di Casa, prima di Beni, Documenti, Manutenzioni e Riferimenti).
 
 Un centro di gestione amministrativa della casa, con badge indipendenti:
 • 🏢 DATI AMMINISTRAZIONE: scheda dell'amministratore (studio, telefoni, email, PEC, codice fiscale/P.IVA, IBAN…) con chiamata, email e PEC a un tocco;
 • 💶 SPESE E SCADENZE: spese condominiali e amministrative a rate; le scadenze si generano da sole dal numero di rate e dalla prima data; pagamenti anche PARZIALI con storico;
   stati «da pagare / in scadenza / pagata / scaduta»; riepilogo (totale anno, pagato, da pagare, scadute); allegati presi dai Documenti di Casa (senza toccare il loro sistema di caricamento);
-• 🛠️ CONTATTI E INTERVENTI e ♻️ RACCOLTA DIFFERENZIATA (e 🛋️ INGOMBRANTI): nelle tappe successive.
+• 🛠️ CONTATTI E INTERVENTI, ♻️ RACCOLTA DIFFERENZIATA e 🛋️ RITIRO INGOMBRANTI: vedi più sotto.
+• 📥 In Spese e scadenze si può IMPORTARE un documento (avviso di pagamento, piano rate, bollettino, ricevuta): viene letto con lo stesso sistema di Documenti e propone la spesa con le sue rate.
 
 COME SI INTEGRA (senza toccare quello che c'è):
 • i dati stanno nel file personale, sotto `casa`, in liste NUOVE (`amministratori`, `spese_amm`…) che portano la stessa etichetta `casa_id` degli altri elementi di Casa: con più abitazioni
@@ -14,6 +15,7 @@ COME SI INTEGRA (senza toccare quello che c'è):
 • i pagamenti, gli stati e le ricevute seguono lo stesso modo di ragionare delle bollette di Casa; gli avvisi usano gli stessi canali già scelti dalla persona (tappa 2)."""
 import calendar
 import html as _amm_h
+import re
 import uuid
 from datetime import date, datetime, timedelta
 
@@ -399,7 +401,7 @@ def _amm_scadenze_vicine(c):
 
 
 def ca_amm_tab(c):
-    """La quinta area di Casa: schermata dei badge e le schermate interne. `c` = i dati della casa scelta."""
+    """L'area Amministrazione di Casa (prima scheda): schermata dei badge e le schermate interne. `c` = i dati della casa scelta."""
     st.markdown(_AMM_CSS, unsafe_allow_html=True)
     vista = st.session_state.get("amm_vista")
     if vista:
@@ -749,6 +751,7 @@ def _amm_schermata_spese(c):
                 unsafe_allow_html=True)
     if st.button("➕ Nuova spesa", key="amm_sp_nuova", width="stretch", type="primary"):
         _amm_dlg_spesa(c, None)
+    _amm_import_pannello(c)
     if not spese:
         st.info("Non hai ancora registrato spese. Tocca **➕ Nuova spesa**: scrivi l'importo e il numero di rate, e le scadenze si creano da sole.")
         return
@@ -795,7 +798,7 @@ def _amm_schermata_spese(c):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# aggancio a Casa: la quinta scheda (si fa in casa.py con una riga, qui non si tocca nient'altro)
+# aggancio a Casa: la scheda «Amministrazione» (si fa in casa.py con una riga, qui non si tocca nient'altro)
 # ---------------------------------------------------------------------------------------------------------------------
 
 
@@ -1514,6 +1517,457 @@ def _amm_schermata_ingombranti(c):
             _amm_dlg_ingombranti(c, m)
         if d2.button("🗑️ Elimina", key=f"amm_ig_el_{m['id']}", width="stretch"):
             _amm_dlg_elimina(c, "ingombranti", m["id"], m["nome"], "")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 📥 IMPORTARE UN DOCUMENTO in «Spese e scadenze»
+# Si usa lo STESSO sistema di Documenti (caricamento con tutti i suoi modi, lettura, archiviazione dell'originale): qui sopra c'è solo la lettura delle RATE e la conferma che crea la spesa.
+# Sempre con la conferma di chi usa l'app: l'app propone, tu controlli.
+# ---------------------------------------------------------------------------------------------------------------------
+_AMM_MESI_NOMI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+_AMM_RE_DATA = re.compile(r"(?<![\d/.\-])(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{4}|\d{2})(?![\d/])|(?<!\d)(\d{1,2})\s+(" + "|".join(_AMM_MESI_NOMI) + r")\s+(\d{4})", re.I)
+_AMM_RE_IMPORTO = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+|\d+),(\d{2})(?![\d])")
+_AMM_RE_RATA = re.compile(r"(?:\b(\d{1,2})\s*[ªaº°^]?\s*rata\b|\brata\s*(?:n\.?|nr\.?|num\.?|numero)?\s*[:.]?\s*(\d{1,2})\b(?:\s*(?:/|di)\s*(\d{1,2}))?)", re.I)
+_AMM_RE_RICEVUTA = re.compile(r"ricevuta di pagamento|quietanza|attestazione di pagamento|pagamento (?:eseguito|effettuato|disposto)|bonifico (?:eseguito|disposto|effettuato)|esito (?:del )?pagamento|\bCRO\b|\bTRN\b|pagato in data|ricevuta del bonifico", re.I)
+
+
+def amm_parse_data(s):
+    """«15/12/2026», «15-12-26», «15.12.2026», «2026-12-15», «15 dicembre 2026» → date (None se non è una data)."""
+    t = str(s or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", t):
+        try:
+            return date.fromisoformat(t)
+        except ValueError:
+            return None
+    m = _AMM_RE_DATA.search(t)
+    return _amm_data_da_match(m) if m else None
+
+
+def _amm_data_da_match(m):
+    try:
+        if m.group(1):
+            a = int(m.group(3))
+            return date(a + 2000 if a < 100 else a, int(m.group(2)), int(m.group(1)))
+        return date(int(m.group(6)), _AMM_MESI_NOMI.index(m.group(5).lower()) + 1, int(m.group(4)))
+    except ValueError:
+        return None
+
+
+def _amm_importo_da_match(m):
+    return round(float(m.group(1).replace(".", "") + "." + m.group(2)), 2)
+
+
+def _amm_scegli_data(finestra, oggi_):
+    """La data di SCADENZA in un pezzo di testo: quella dopo la parola «scad…», altrimenti l'ultima. Solo date plausibili (da due anni fa a quattro anni avanti)."""
+    ds = [(m, _amm_data_da_match(m)) for m in _AMM_RE_DATA.finditer(finestra)]
+    ds = [(m, d) for m, d in ds if d and oggi_.replace(year=oggi_.year - 2) <= d <= oggi_.replace(year=oggi_.year + 4)]
+    if not ds:
+        return None
+    for m, d in ds:
+        if re.search(r"scad\w*[^\d]{0,25}$", finestra[:m.start()], re.I):
+            return d
+    return ds[-1][1]
+
+
+def _amm_scegli_importo(finestra, dopo=0):
+    """L'importo della rata: il primo importo che non segue «totale» o «saldo»."""
+    for m in _AMM_RE_IMPORTO.finditer(finestra, dopo):
+        if not re.search(r"(totale|saldo|residuo)\W{0,12}$", finestra[:m.start()], re.I) and _amm_importo_da_match(m) > 0:
+            return _amm_importo_da_match(m)
+    return None
+
+
+def amm_leggi_avviso(testo, oggi_=None):
+    """Legge il testo di un avviso di pagamento / piano rate / bollettino / ricevuta. NON decide niente: propone.
+    → {tipo: 'avviso'|'ricevuta'|'altro', rate: [(data, importo, n)], totale, n_dichiarato, pagamento: {data, importo}, iban, descrizione, categoria, affidabilita, note[]}"""
+    oggi_ = oggi_ or date.today()
+    righe = [r.strip() for r in str(testo or "").splitlines() if r.strip()]
+    ris = {"tipo": "altro", "rate": [], "totale": None, "n_dichiarato": None, "pagamento": None, "iban": "", "descrizione": "", "categoria": "Spese condominiali ordinarie", "affidabilita": "bassa", "note": []}
+    if not righe:
+        return ris
+    cand = []
+    for i, r in enumerate(righe):
+        mr = _AMM_RE_RATA.search(r)
+        tab = re.match(r"^\s*(\d{1,2})[\s.)\-]+(?:\S+\s+){0,2}?(\d{1,2}\s*[/.\-]\s*\d{1,2}\s*[/.\-]\s*\d{2,4})", r)
+        if not (mr or tab):
+            continue
+        finestra = r
+        k_ = i + 1
+        while mr and not (_AMM_RE_DATA.search(finestra) and _AMM_RE_IMPORTO.search(finestra)) and k_ < len(righe) and k_ <= i + 3 and not _AMM_RE_RATA.search(righe[k_]):
+            finestra += " " + righe[k_]                                                 # il marcatore «2ª rata» e i suoi dati possono stare su più righe (fino a 3)
+            k_ += 1
+        d = _amm_scegli_data(finestra, oggi_)
+        imp = _amm_scegli_importo(finestra, (_AMM_RE_DATA.search(finestra).end() if _AMM_RE_DATA.search(finestra) else 0))
+        if imp is None:
+            imp = _amm_scegli_importo(finestra)
+        if not d or not imp:
+            continue
+        if mr:
+            nr = int(mr.group(1) or mr.group(2))
+            if mr.group(3):
+                ris["n_dichiarato"] = int(mr.group(3))
+        else:
+            nr = int(tab.group(1))
+        if (d, imp) not in [(x[0], x[1]) for x in cand]:
+            cand.append((d, imp, nr))
+    ris["rate"] = sorted(cand, key=lambda x: (x[0], x[2]))
+    for r in righe:                                                                      # il totale scritto nel documento
+        if re.search(r"\btotale\b", r, re.I) and not _AMM_RE_RATA.search(r):
+            ims = list(_AMM_RE_IMPORTO.finditer(r))
+            if ims:
+                ris["totale"] = _amm_importo_da_match(ims[-1])
+                break
+    comp = testo.replace(" ", "").upper() if isinstance(testo, str) else ""
+    mi = re.search(r"IT\d{2}[A-Z]\d{10}[A-Z0-9]{12}", comp)
+    if mi and amm_iban_valido(mi.group(0)):
+        ris["iban"] = mi.group(0)
+    t_low = str(testo).lower()
+    if _AMM_RE_RICEVUTA.search(testo) and len(ris["rate"]) <= 1:
+        ris["tipo"] = "ricevuta"
+        d = None
+        for r in righe:
+            if re.search(r"data|valuta|esecuzione|eseguit|pagat", r, re.I):
+                d = _amm_scegli_data(r, oggi_)
+                if d:
+                    break
+        imp = None
+        for r in righe:
+            if re.search(r"importo|totale|pagat|euro|€", r, re.I):
+                imp = _amm_scegli_importo(r)
+                if imp:
+                    break
+        ris["pagamento"] = {"data": d, "importo": imp}
+        ris["affidabilita"] = "alta" if (d and imp) else "media"
+    elif ris["rate"]:
+        ris["tipo"] = "avviso"
+        somma = round(sum(x[1] for x in ris["rate"]), 2)
+        ris["affidabilita"] = "alta" if (len(ris["rate"]) >= 2 and (ris["totale"] is None or abs(somma - ris["totale"]) < 0.06)) else "media"
+        if ris["totale"] is not None and abs(somma - ris["totale"]) >= 0.06:
+            ris["note"].append(f"La somma delle rate che ho letto ({amm_euro(somma)}) non è uguale al totale scritto nel documento ({amm_euro(ris['totale'])}): controlla le rate.")
+        if ris["n_dichiarato"] and ris["n_dichiarato"] != len(ris["rate"]):
+            ris["note"].append(f"Il documento parla di {ris['n_dichiarato']} rate, io ne ho trovate {len(ris['rate'])}.")
+    else:                                                                                # un bollettino con una sola scadenza e un solo importo
+        d = None
+        for r in righe:
+            if re.search(r"scad", r, re.I):
+                d = _amm_scegli_data(r, oggi_) or d
+        imp = None
+        for r in righe:
+            if re.search(r"importo|da pagare|euro|€|totale", r, re.I):
+                imp = _amm_scegli_importo(r) or imp
+        if d or imp:
+            ris["tipo"] = "avviso"
+            ris["rate"] = [(d, imp, 1)] if (d and imp) else []
+            ris["pagamento"] = {"data": d, "importo": imp} if not (d and imp) else None
+            ris["affidabilita"] = "media" if (d and imp) else "bassa"
+    if "straordinar" in t_low or "lavori" in t_low:
+        ris["categoria"] = "Rata straordinaria o lavori"
+    elif "riscaldament" in t_low:
+        ris["categoria"] = "Riscaldamento"
+    elif "assicuraz" in t_low or "polizza" in t_low:
+        ris["categoria"] = "Assicurazione"
+    elif "ascensore" in t_low:
+        ris["categoria"] = "Ascensore"
+    anno = (ris["rate"][0][0].year if ris["rate"] and ris["rate"][0][0] else oggi_.year)
+    ris["descrizione"] = ("Lavori straordinari " if ris["categoria"] == "Rata straordinaria o lavori" else "Rate condominio ") + str(anno)
+    return ris
+
+
+def amm_crea_spesa_da_rate(descrizione, categoria, rate, amministratore_id="", note="", avvisi_giorni=None, rinnovo_auto=False):
+    """Come amm_crea_spesa, ma con le date e gli importi di ogni rata già decisi (letti da un documento o scritti a mano). rate: [(date, importo)]."""
+    rate = sorted(rate, key=lambda x: x[0])
+    s = amm_crea_spesa(descrizione, categoria, sum(x[1] for x in rate), 1, rate[0][0], 0, amministratore_id, note, avvisi_giorni, rinnovo_auto)
+    s["rate"] = [{"id": amm_id(), "n": k + 1, "scadenza": d.isoformat(), "importo": round(float(imp), 2), "pagamenti": []} for k, (d, imp) in enumerate(rate)]
+    s["importo_totale"] = round(sum(x[1] for x in rate), 2)
+    s["storico"] = [{"quando": datetime.now().strftime("%Y-%m-%d %H:%M"), "testo": f"Spesa creata da un documento: {len(rate)} rata/e"}]
+    return s
+
+
+def amm_trova_rata_per_ricevuta(spese, importo, data_iso=None):
+    """Le rate non pagate che possono essere quelle di una ricevuta: prima quelle con lo stesso importo (la più vicina alla data del pagamento), poi quelle che resterebbero pagate in parte.
+    → [(spesa, rata, esatta)]"""
+    if not importo:
+        return []
+    rif = amm_parse_data(data_iso) if data_iso else date.today()
+    rif = rif or date.today()
+    esatte, parziali = [], []
+    for s in spese:
+        for r in amm_rate_ordinate(s):
+            res = amm_residuo(r)
+            if res <= 0.004:
+                continue
+            try:
+                dist = abs((date.fromisoformat(r["scadenza"]) - rif).days)
+            except (KeyError, ValueError):
+                dist = 9999
+            if abs(res - importo) < 0.011:
+                esatte.append((dist, s, r))
+            elif importo < res:
+                parziali.append((dist, s, r))
+    return [(s, r, True) for _d, s, r in sorted(esatte, key=lambda x: x[0])] + [(s, r, False) for _d, s, r in sorted(parziali, key=lambda x: x[0])][:6]
+
+
+def _amm_import_pannello(c):
+    """Il pulsante «Importa un documento» in cima a Spese e scadenze e, aperto, il caricamento di Documenti (stessi modi: foto, galleria, PDF, più file, link)."""
+    if not st.session_state.get("amm_imp_on"):
+        if st.button("📥 Importa un documento (avviso, rate, bollettino, ricevuta)", key="amm_imp_apri", width="stretch"):
+            st.session_state["amm_imp_on"] = True
+            st.rerun()
+        return
+    st.markdown("##### 📥 Importa un documento")
+    st.caption("Carica l'**avviso di pagamento**, il **piano delle rate**, il **bollettino** o la **ricevuta** (PDF, foto o scansione). Lo leggo e ti propongo la spesa con le sue rate, "
+               "oppure il pagamento da segnare. **Controlli e confermi tu.** Il file originale resta archiviato in 📚 Documenti.")
+    if st.button("✖ Chiudi l'importazione", key="amm_imp_chiudi", width="stretch"):
+        for k in ("amm_imp_on", "amm_imp", "amm_imp_chiave", "ca_bozza_in"):
+            st.session_state.pop(k, None)
+        st.rerun()
+    if "_ca_pannello_caricamento" not in globals() or "ca_riconosci" not in globals():
+        st.error("Il caricamento dei documenti non è disponibile adesso.")
+        return
+    n = st.session_state.get("ca_giro", 0)
+    up = _ca_pannello_caricamento(n)
+    _amm_import_flusso(c, n, up)
+
+
+def _amm_import_flusso(c, n, up):
+    sorgente = None
+    if up is not None:
+        dati_up = up.getvalue()
+        sorgente = {"nome": up.name, "mime": _ca_mime(up.name, up.type, dati_up), "dati": dati_up, "link": ""}
+    elif st.session_state.get("ca_bozza_in"):
+        sorgente = dict(st.session_state["ca_bozza_in"])
+        sorgente.setdefault("mime", _ca_mime(sorgente.get("nome"), "", sorgente.get("dati")))
+    if not sorgente:
+        st.session_state.pop("amm_imp_chiave", None)
+        return
+    if sorgente["mime"].startswith("image/") and len(sorgente["dati"]) > _CA_MAX_BYTE and not sorgente.get("ridotta"):
+        rid = _ca_riduci_foto(sorgente["nome"], sorgente["dati"])
+        if rid:
+            sorgente = dict(sorgente, nome=rid[0], mime="image/jpeg", dati=rid[1], ridotta=True)
+            st.info("📷 La foto era molto grande: l'ho **ridotta** per poterla archiviare. Il testo si legge lo stesso.")
+    if sorgente["mime"] not in _CA_MIME:
+        st.error(f"Questo tipo di file non è ammesso: carica un PDF o una foto (JPG, PNG, WebP). Il file «{sorgente['nome']}» risulta di tipo «{sorgente['mime']}».")
+        return
+    if len(sorgente["dati"]) > _CA_MAX_BYTE:
+        st.error("Il file è troppo grande (massimo 8 MB).")
+        return
+    sha = _ca_sha(sorgente["dati"])
+    stato = st.session_state.get("amm_imp")
+    if not stato or stato.get("sha") != sha:
+        with st.spinner("Leggo il documento…"):
+            testo, info = ca_estrai_testo(sorgente["nome"], sorgente["mime"], sorgente["dati"])
+            ric = ca_riconosci(sorgente["nome"], sorgente["mime"], sorgente["dati"], testo, info)
+        stato = {"sha": sha, "ric": ric, "prop": amm_leggi_avviso(testo or "", _amm_oggi()), "testo_ok": bool(testo)}
+        st.session_state["amm_imp"] = stato
+    chiave = f"{n}:{sha}"
+    if st.session_state.get("amm_imp_chiave") != chiave:
+        st.session_state["amm_imp_chiave"] = chiave                                       # la finestra si apre da sola una volta per ogni file
+        _amm_dlg_import(c, n, sorgente, sha, stato["ric"], stato["prop"], stato["testo_ok"])
+    else:
+        st.info(f"📖 C'è un documento aperto: «{_amm_h.escape(sorgente['nome'])}». Se hai chiuso la finestra, riaprila.")
+        r1, r2 = st.columns(2, gap="small")
+        if r1.button("📖 Riapri il pannello", key=f"amm_imp_riapri_{n}", type="primary", width="stretch"):
+            _amm_dlg_import(c, n, sorgente, sha, stato["ric"], stato["prop"], stato["testo_ok"])
+        if r2.button("✖ Scarta il documento", key=f"amm_imp_scarta_{n}", width="stretch"):
+            for k in ("ca_bozza_in", "amm_imp", "amm_imp_chiave"):
+                st.session_state.pop(k, None)
+            st.session_state["ca_giro"] = n + 1
+            st.rerun()
+
+
+def _amm_archivia_import(c, n, sorgente, sha, ric, esatto, tipo=None, ente="", importo=None, nota=""):
+    """Archivia l'originale con lo STESSO sistema di Documenti (_ca_archivia): se è già archiviato non lo ricopia. → (id del documento, messaggio)."""
+    if esatto:
+        return esatto.get("id"), "Il documento era già archiviato in Documenti: l'ho usato così com'è."
+    nid = uuid.uuid4().hex[:12]
+    _ca_scrivi_file(nid, sorgente["nome"], sorgente["mime"], sorgente["dati"])
+    val = _ca_val_da_ric(ric)
+    if tipo:
+        val["tipo"] = tipo
+        val["argomento"] = "Condominio"
+    if ente:
+        val["ente"] = ente
+    if importo:
+        val["importo"] = f"{float(importo):.2f}"
+    if nota:
+        val["note"] = nota
+    msg = _ca_archivia(dict(sorgente, file_id=nid), sha, ric, {"sha": sha, "bene": ""}, val, n)
+    doc = next((x for x in _ca_dati().get("documenti", []) if (x.get("file") or {}).get("id") == nid), None)
+    return (doc or {}).get("id"), msg
+
+
+def _amm_dlg_import(c, n, sorgente, sha, ric, prop, testo_ok=True):
+    def _finestra():
+        k = "amm_im_" + sha[:8]
+        spese = _amm_lista(c, "spese_amm")
+        docs = _amm_lista(c, "documenti")
+        adm = _amm_lista(c, "amministratori")
+        campi = ric.get("campi", {})
+        st.caption(f"📄 {sorgente.get('nome')}")
+        doppi = ca_trova_doppioni(docs, ric, sha) if "ca_trova_doppioni" in globals() else []
+        esatto = next((d for d, _m, f in doppi if f >= 3 and (d.get("file") or {}).get("sha256") == sha), None)
+        if esatto:
+            st.warning(f"Questo documento è **già archiviato** in Documenti («{_amm_h.escape(esatto.get('titolo') or esatto.get('tipo') or 'documento')}»): non lo copio di nuovo, lo uso così com'è.")
+        elif doppi:
+            st.warning("Somiglia a un documento già archiviato: " + "; ".join(f"«{_amm_h.escape(d.get('titolo') or d.get('tipo') or 'documento')}»" for d, _m, _f in doppi[:2]) + ". Se è lo stesso, scartalo.")
+        def _fmt(ch, val):
+            if ch == "importo" and amm_importo(val) is not None:
+                return amm_euro(amm_importo(val))
+            if ch == "scadenza_doc" and amm_parse_data(val):
+                return amm_parse_data(val).strftime("%d/%m/%Y")
+            return str(val)
+        letti = [f"**{et}:** {_amm_h.escape(_fmt(ch, (campi.get(ch) or {}).get('valore')))}" for et, ch in (("Ente", "ente"), ("Numero", "numero_doc"), ("Importo", "importo"), ("Scadenza", "scadenza_doc")) if (campi.get(ch) or {}).get("valore")]
+        if prop["rate"]:
+            letti.append(f"**Rate trovate:** {len(prop['rate'])}")
+        st.markdown("🔎 **Ho letto:** " + (" · ".join(letti) if letti else "niente di chiaro") + (f" · affidabilità **{prop['affidabilita']}**" if prop["rate"] or prop.get("pagamento") else ""))
+        if not testo_ok:
+            st.warning("Non sono riuscito a leggere il testo del documento (è una foto poco leggibile?). Puoi scrivere tu i dati qui sotto: il file viene archiviato lo stesso.")
+        for nota in prop["note"]:
+            st.warning(nota)
+        pag = prop.get("pagamento") or {}
+        imp_ric = pag.get("importo") or amm_importo((campi.get("importo") or {}).get("valore"))
+        opz = ["nuova"] + (["ricevuta"] if spese else []) + (["allega"] if spese else []) + ["solo"]
+        etichette = {"nuova": "➕ Crea una nuova spesa con le sue rate", "ricevuta": "💶 È la ricevuta di un pagamento: segna pagata una rata", "allega": "📎 Allega il documento a una spesa già inserita",
+                     "solo": "📥 Archivia soltanto, in Documenti"}
+        pre = "ricevuta" if (prop["tipo"] == "ricevuta" and spese) else "nuova" if (prop["rate"] or imp_ric) else "solo"
+        az = st.radio("Cosa vuoi fare?", opz, index=opz.index(pre), format_func=lambda x: etichette[x], key=k + "_az")
+        ente = (campi.get("ente") or {}).get("valore") or (adm[0].get("studio") if adm else "") or ""
+        da_fare = {}
+        if az == "nuova":
+            descr = st.text_input("Descrizione della spesa *", value=prop["descrizione"], key=k + "_d")
+            cat = st.selectbox("Categoria", AMM_CATEGORIE, index=AMM_CATEGORIE.index(prop["categoria"]) if prop["categoria"] in AMM_CATEGORIE else 0, key=k + "_c")
+            manuale = True if not prop["rate"] else st.checkbox("Non è giusto: le rate le scrivo io", key=k + "_man")
+            rate_in = []
+            if not manuale:
+                st.markdown("**Le rate (puoi correggerle):**")
+                for i, (d_, imp, nr) in enumerate(prop["rate"]):
+                    a, b = st.columns([3, 2], gap="small")
+                    rate_in.append((a.text_input(f"Rata {i + 1}: scadenza", value=d_.strftime("%d/%m/%Y"), key=f"{k}_rd{i}"), b.text_input("Importo €", value=f"{imp:.2f}".replace(".", ","), key=f"{k}_ri{i}")))
+            else:
+                tot = st.text_input("Importo totale (€) *", value=(f"{imp_ric:.2f}".replace(".", ",") if imp_ric else ""), key=k + "_t")
+                nr_ = st.number_input("Numero di rate", min_value=1, max_value=60, value=1, step=1, key=k + "_n")
+                d0 = amm_parse_data((campi.get("scadenza_doc") or {}).get("valore")) or (_amm_oggi() + timedelta(days=30))
+                prima = st.date_input("Scadenza della prima rata *", value=d0, key=k + "_p", format="DD/MM/YYYY")
+                per = st.selectbox("Ogni quanto scadono le rate", list(AMM_PERIODI), index=3, key=k + "_per")
+                mesi = AMM_PERIODI[per] if AMM_PERIODI[per] is not None else int(st.number_input("Ogni quanti mesi", min_value=1, max_value=60, value=1, step=1, key=k + "_mesi"))
+            giorni = st.multiselect("Avvisami quanti giorni prima", AMM_GIORNI_AVVISO, default=st.session_state.get("amm_giorni_default", AMM_GIORNI_DEFAULT), key=k + "_g",
+                                    format_func=lambda g_: "il giorno stesso" if g_ == 0 else f"{g_} giorno" if g_ == 1 else f"{g_} giorni")
+            opz_a = [""] + [x["id"] for x in adm]
+            adm_sel = st.selectbox("Amministratore", opz_a, key=k + "_a", format_func=lambda i: "— nessuno —" if not i else _amm_nome_admin(c, i))
+            da_fare = {"descr": descr, "cat": cat, "manuale": manuale, "rate_in": rate_in, "giorni": giorni, "adm": adm_sel}
+            if manuale:
+                da_fare.update({"tot": tot, "n": int(nr_), "prima": prima, "mesi": mesi})
+        elif az == "ricevuta":
+            imp_txt = st.text_input("Importo pagato (€)", value=(f"{imp_ric:.2f}".replace(".", ",") if imp_ric else ""), key=k + "_pi")
+            d_pag = st.date_input("Data del pagamento", value=pag.get("data") or _amm_oggi(), key=k + "_pd", format="DD/MM/YYYY")
+            cand = amm_trova_rata_per_ricevuta(spese, amm_importo(imp_txt), d_pag.isoformat())
+            if not cand:
+                st.info("Non trovo una rata da pagare con questo importo. Controlla l'importo, oppure scegli «Allega» o «Archivia soltanto».")
+            else:
+                if cand[0][2]:
+                    st.success("Ho trovato una rata con lo **stesso importo**: è questa?")
+                chiavi = [f"{s_['id']}|{r_['id']}" for s_, r_, _e in cand]
+                scelta = st.radio("A quale rata la collego?", chiavi, key=k + "_ra",
+                                  format_func=lambda x: next((f"{s_['descrizione']} · rata {r_['n']} · {data_it(r_['scadenza'])} · resta {amm_euro(amm_residuo(r_))}" + (" ✅ stesso importo" if e_ else " (pagamento parziale)")
+                                                              for s_, r_, e_ in cand if f"{s_['id']}|{r_['id']}" == x), x))
+                modo = st.selectbox("Come hai pagato", _CA_MODI_PAGAMENTO if "_CA_MODI_PAGAMENTO" in globals() else ["Bonifico", "Contanti", "Altro"], key=k + "_pm")
+                da_fare = {"imp": imp_txt, "data": d_pag, "scelta": scelta, "modo": modo}
+        elif az == "allega":
+            sp_id = st.selectbox("A quale spesa", [x["id"] for x in spese], key=k + "_sp", format_func=lambda i: next((x["descrizione"] for x in spese if x["id"] == i), i))
+            da_fare = {"spesa": sp_id}
+        c1, c2 = st.columns(2, gap="small")
+        if c1.button("✅ Conferma e archivia", key=k + "_ok", type="primary", width="stretch"):
+            try:
+                errore = _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, da_fare)
+            except Exception as e:                                                         # niente si perde in silenzio
+                errore = f"Non sono riuscito a salvare: {e}"
+            if errore:
+                st.error(errore)
+                return
+            for kk in ("amm_imp_on", "amm_imp", "amm_imp_chiave"):
+                st.session_state.pop(kk, None)
+            st.rerun()
+        if c2.button("✖ Scarta", key=k + "_no", width="stretch"):
+            for kk in ("ca_bozza_in", "amm_imp", "amm_imp_chiave"):
+                st.session_state.pop(kk, None)
+            st.session_state["ca_giro"] = n + 1
+            st.rerun()
+    try:
+        st.dialog("📖 Documento letto: controlla e conferma", width="large")(_finestra)()
+    except TypeError:
+        st.dialog("📖 Documento letto: controlla e conferma")(_finestra)()
+
+
+def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
+    """Controlla TUTTO prima di archiviare (niente documento archiviato a metà), poi archivia e salva. → messaggio d'errore oppure None."""
+    if az == "nuova":
+        if not v["descr"].strip():
+            return "Scrivi una descrizione."
+        if not v["manuale"]:
+            rate = []
+            for i, (dt, im) in enumerate(v["rate_in"]):
+                d_, i_ = amm_parse_data(dt), amm_importo(im)
+                if not d_:
+                    return f"La scadenza della rata {i + 1} non è una data valida (scrivila così: 15/12/2026)."
+                if not i_ or i_ <= 0:
+                    return f"L'importo della rata {i + 1} non è valido."
+                rate.append((d_, i_))
+            if len({x[0] for x in rate}) != len(rate):
+                return "Due rate hanno la stessa data: correggi."
+        else:
+            tot = amm_importo(v["tot"])
+            if not tot or tot <= 0:
+                return "Scrivi l'importo totale (per esempio 1.200,00)."
+            rate = list(zip(amm_genera_scadenze(v["prima"], v["n"], v["mesi"]), amm_ripartisci(tot, v["n"])))
+        totale = round(sum(x[1] for x in rate), 2)
+        did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Lettera o comunicazione", ente, totale)
+        nuova = amm_crea_spesa_da_rate(v["descr"], v["cat"], rate, v["adm"], "", v["giorni"])
+        nuova["allegati"] = [did] if did else []
+        _amm_salva(lambda cc: cc.setdefault("spese_amm", []).append(nuova), "Amministrazione: spesa da documento " + v["descr"].strip()[:30])
+        st.session_state["messaggio"] = f"✅ Spesa «{v['descr'].strip()}» creata con {len(rate)} rata/e. " + msg
+        return None
+    if az == "ricevuta":
+        if not v:
+            return "Scegli la rata a cui collegare la ricevuta."
+        imp = amm_importo(v["imp"])
+        if not imp or imp <= 0:
+            return "Scrivi un importo valido."
+        sp_id, r_id = v["scelta"].split("|")
+        sp = _amm_trova(c, "spese_amm", sp_id)
+        r = next((x for x in (sp or {}).get("rate", []) if x.get("id") == r_id), None)
+        if not r:
+            return "Rata non trovata."
+        if imp > amm_residuo(r) + 0.004:
+            return f"L'importo supera quello che resta da pagare ({amm_euro(amm_residuo(r))})."
+        did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Ricevuta di pagamento", ente, imp)
+        esito = {}
+
+        def _fn(cc):
+            x = _amm_trova(cc, "spese_amm", sp_id)
+            esito["r"] = amm_registra_pagamento(x, r_id, imp, v["data"].isoformat(), v["modo"], "ricevuta allegata", did or "") if x else (False, "Spesa non trovata.")
+            if x and esito["r"][0] and did:
+                x.setdefault("allegati", [])
+                if did not in x["allegati"]:
+                    x["allegati"].append(did)
+        _amm_salva(_fn, "Amministrazione: pagamento da ricevuta")
+        if not esito["r"][0]:
+            return esito["r"][1]
+        st.session_state["messaggio"] = f"✅ Pagamento di {amm_euro(imp)} registrato sulla rata {r['n']} di «{sp['descrizione']}». " + msg
+        return None
+    if az == "allega":
+        did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Lettera o comunicazione" if not esatto else None, ente, None)
+
+        def _fn(cc):
+            x = _amm_trova(cc, "spese_amm", v["spesa"])
+            if x and did and did not in x.setdefault("allegati", []):
+                x["allegati"].append(did)
+                _amm_log(x, "Documento allegato (importato)")
+        _amm_salva(_fn, "Amministrazione: documento allegato")
+        st.session_state["messaggio"] = "✅ Documento allegato alla spesa. " + msg
+        return None
+    did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto)
+    st.session_state["messaggio"] = msg
+    return None
 
 
 # le rate dell'amministrazione entrano anche tra le scadenze di Casa (avvisi in cima, conteggio sul pulsante della Home): ca_scadenze è «avvolta», l'originale non cambia

@@ -12,8 +12,8 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.8"
-GUIDA_DATA = "2026-11-08"
+GUIDA_VERSIONE = "3.9"
+GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
     "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "avvisi_prova.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
@@ -194,7 +194,7 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
 
     # ================= Casa → Amministrazione
     a("casa", "c_amministrazione", "Amministrazione della casa: cos'è",
-      """In **Casa** c'è la quinta scheda, **Amministrazione**. Ha cinque pulsanti colorati:
+      """In **Casa** la prima scheda è **Amministrazione**. Ha cinque pulsanti colorati:
 1. **Dati amministrazione**: la scheda dell'amministratore (studio, telefoni, email, PEC, IBAN…) con **Chiama**, **Scrivi** e **Scrivi alla PEC** a un tocco.
 2. **Spese e scadenze**: spese condominiali e rate, con pagamenti e promemoria.
 3. **Contatti e interventi**: i professionisti (idraulico, elettricista…) e gli interventi che hanno fatto.
@@ -209,12 +209,13 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
 2. Scegli **quanti giorni prima** vuoi essere avvisato (di solito 30, 15, 7, 3 e 1) e, se vuoi, l'amministratore.
 3. Per ogni rata tocca **💶 Pagata**: puoi registrare anche un **pagamento parziale** (resta il residuo). **✏️ Modifica** cambia data e importo **senza perdere i pagamenti già fatti**; **↩️ Annulla pagamento** toglie l'ultimo.
 4. Gli stati: 🔵 **da pagare**, 🟠 **in scadenza** (entro 15 giorni), 🟢 **pagata**, 🔴 **scaduta**. In cima c'è il **riepilogo**: totale dell'anno, già pagato, ancora da pagare e rate scadute, più lo **storico dei pagamenti**.
-5. **📎 Allega** collega avvisi di pagamento e ricevute **già archiviati** in Documenti (per aggiungerne uno nuovo caricalo prima in Documenti).
+5. **📥 Importa un documento**: carichi l'**avviso di pagamento**, il **piano delle rate**, il **bollettino** o la **ricevuta** (foto, galleria, PDF, più file: gli stessi modi di Documenti). Lo **leggo** e ti propongo la spesa con le sue rate (date e importi già scritti, che puoi correggere). Se è la **ricevuta di un bonifico**, ti propongo la rata da segnare pagata. **Controlli e confermi tu**; il file originale resta archiviato in Documenti e si allega alla spesa. Se lo carichi due volte, non si archivia due volte.
+6. **📎 Allega** collega ad una spesa documenti **già archiviati** in Documenti.
 
 **Spese che si ripetono sempre** (assicurazione, quote annuali): spunta «La spesa si ripete sempre»: dopo ogni pagamento l'app aggiunge le scadenze future, senza doppioni.
 
 **Avvisi:** arrivano sui tuoi canali e le rate in scadenza o scadute compaiono anche **in cima a Casa** e fanno **lampeggiare** il pulsante nella Home. Per far **suonare il telefono** anche con tutto chiuso, scarica il **calendario (.ics)**: le scadenze si aggiornano, non si duplicano.""",
-      "spese rate condominio pagamento parziale scadenze stato scaduta pagata riepilogo calendario ics allarme", ("spesa", "rata"))
+      "spese rate condominio pagamento parziale scadenze stato scaduta pagata riepilogo calendario ics allarme importa documento avviso bollettino ricevuta caricare leggere", ("spesa", "rata"))
     a("casa", "c_contatti_interventi", "Contatti e interventi (professionisti)",
       """In **Amministrazione → Contatti e interventi** trovi i professionisti per guasti e lavori. È **la stessa rubrica di Riferimenti**: se cambi un contatto in un posto cambia anche nell'altro.
 - **➕ Nuovo professionista**: scegli la **categoria** (elettricista, idraulico, muratore, tecnico caldaia, antennista…) o creane una nuova; scrivi telefono, cellulare, email, indirizzo, **orari**, **specializzazione** e **costo o tariffario**.
