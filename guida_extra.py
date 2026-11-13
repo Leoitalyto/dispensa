@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "3.9"
+GUIDA_VERSIONE = "4.0"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -229,7 +229,7 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
 2. Tocca un giorno (Lun, Mar…) e scegli **uno o più tipi**: organico, indifferenziato, carta, vetro, plastica, metalli o un tipo tuo. Lo **stesso tipo può stare in più giorni**. Puoi spuntare **«Nessuna raccolta»**.
 3. **Variazioni**: per un festivo o un giorno straordinario aggiungi una data con i rifiuti di quel giorno oppure «nessuna raccolta».
 4. **Programmi**: **➕ Programma** o **📑 Duplica** creano un altro calendario (per esempio «Estate»); **✅ Usa questo programma** decide quale segue gli avvisi.
-5. **Avvisi**: la **sera prima** (di solito alle 20:00), la **mattina stessa** e un **secondo promemoria**, a ore tue e solo per i tipi che scegli. Il messaggio arriva **entro mezz'ora dall'ora scelta**. Per un **allarme del telefono** scarica il calendario (.ics).
+5. **Avvisi**: sono **spenti** finché non tocchi **🔔 Accendi gli avvisi** (in cima alla tabella); per fermarli tocca **🔕 Spegni gli avvisi**. Quando sono accesi puoi scegliere la **sera prima** (di solito alle 20:00), la **mattina stessa** e un **secondo promemoria**, a ore tue e solo per i tipi che vuoi. Il messaggio arriva **entro mezz'ora dall'ora scelta**. Spegnendoli non ricevi nemmeno il promemoria degli ingombranti. Per un **allarme del telefono** scarica il calendario (.ics): con gli avvisi spenti il calendario non ha allarmi.
 
 In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiuti, ditte), **come si prenota**, i giorni di ritiro, il costo e la data del **prossimo ritiro prenotato**: il giorno prima ricevi un promemoria insieme alla raccolta.""",
       "raccolta differenziata calendario rifiuti organico carta plastica vetro ingombranti ritiro promemoria festivo variazione", ("raccolta", "rifiuti"))

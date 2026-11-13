@@ -670,8 +670,8 @@ def raccogli_spese_amm(d, oggi):
 # (--dosi): un promemoria parte nel giro della mezz'ora che contiene l'ora scelta (come per le assunzioni). Solo a chi ha acceso «Avvisami anche di Casa», sui canali che ha scelto.
 # ----------------------------------------------------------------------------------------------------------------------
 GIORNI_IT = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
-ICONE_RIFIUTI = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🔵", "Vetro": "🟢", "Plastica": "🟡", "Metalli": "🔘"}
-AVVISI_RACCOLTA_DEFAULT = {"sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
+ICONE_RIFIUTI = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🟡", "Vetro": "🔵", "Plastica": "🔴", "Metalli": "🔘"}
+AVVISI_RACCOLTA_DEFAULT = {"attivi": False, "sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
 
 
 def piano_rifiuti(programma, eccezioni, giorno):
@@ -703,6 +703,8 @@ def raccogli_rifiuti(d, adesso):
     out = []
     for cid, p in per_casa.items():
         av = {**AVVISI_RACCOLTA_DEFAULT, **(p.get("avvisi") or {})}
+        if not av.get("attivi"):
+            continue                                                                    # avvisi SPENTI (di partenza): niente messaggi sulla raccolta, nemmeno quelli degli ingombranti
         spenti = set(av.get("tipi_spenti") or [])
         ecc = [e for e in eccezioni if (e.get("programma_id") or p["id"]) == p["id"] and (e.get("casa_id") or "") == cid]
         for chiave, ora_k, giorno, intro in (("sera", "ora_sera", oggi + timedelta(days=1), "Domani"), ("mattina", "ora_mattina", oggi, "Oggi"), ("secondo", "ora_secondo", oggi + timedelta(days=1), "⏰ Promemoria: domani")):

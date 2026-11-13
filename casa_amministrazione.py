@@ -1129,7 +1129,7 @@ def amm_icona_rifiuto(t):
 
 
 def amm_avvisi_raccolta_default():
-    return {"sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
+    return {"attivi": False, "sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
 
 
 def amm_programma_nuovo(nome="Programma normale", attivo=True):
@@ -1166,12 +1166,12 @@ def amm_eventi_raccolta(p, eccezioni, oggi_, nome_casa=""):
     """Gli eventi del calendario: uno per ogni giorno della settimana con rifiuti (si ripete ogni settimana), i giorni cambiati da una variazione sono esclusi e diventano eventi a parte."""
     av = p.get("avvisi") or amm_avvisi_raccolta_default()
     spenti = set(av.get("tipi_spenti") or [])
-    orari = []
-    if av.get("sera"):
+    orari = []                                                                           # con gli avvisi SPENTI il calendario ha gli eventi ma nessun allarme
+    if av.get("attivi") and av.get("sera"):
         orari.append((1, av.get("ora_sera", "20:00")))
-    if av.get("mattina"):
+    if av.get("attivi") and av.get("mattina"):
         orari.append((0, av.get("ora_mattina", "07:00")))
-    if av.get("secondo"):
+    if av.get("attivi") and av.get("secondo"):
         orari.append((1, av.get("ora_secondo", "21:30")))
     ev = []
     for g in range(7):
@@ -1280,7 +1280,11 @@ def _amm_dlg_programma(c, p=None):
                     if x:
                         x["nome"] = nome.strip()
                 else:
-                    cc.setdefault("raccolta", []).append(amm_programma_nuovo(nome.strip(), attivo=not any(y.get("attivo") for y in _amm_lista(c, "raccolta"))))
+                    np_ = amm_programma_nuovo(nome.strip(), attivo=not any(y.get("attivo") for y in _amm_lista(c, "raccolta")))
+                    att_ = amm_programma_attivo(_amm_lista(c, "raccolta"))
+                    if att_:
+                        np_["avvisi"] = dict(att_.get("avvisi") or amm_avvisi_raccolta_default())              # stessi avvisi (accesi o spenti) del programma in uso
+                    cc.setdefault("raccolta", []).append(np_)
             _amm_salva(_fn, "Raccolta: programma")
             st.rerun()
         if c2.button("Annulla", key=k + "_no", width="stretch"):
@@ -1340,6 +1344,25 @@ def _amm_schermata_raccolta(c):
         righe.append(f"<b>{et}</b> ({AMM_GIORNI[d_.weekday()]}): " + ("🚫 nessuna raccolta" if nessuna else "".join(_amm_chip_html(t) for t in tipi) if tipi else "—")
                      + (f" <i>· {_amm_h.escape(nota)}</i>" if nota else "") + (" <b>(variazione)</b>" if orig == "variazione" else ""))
     st.markdown("<div class='amm-card' style='background:rgba(232,245,233,.92)'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
+    # il TASTO degli avvisi: spenti di partenza, si accendono solo se servono
+    cfg = {**amm_avvisi_raccolta_default(), **(ap.get("avvisi") or {})}
+    if cfg["attivi"]:
+        quando_ = [t for t, on in ((f"la sera prima alle {cfg['ora_sera']}", cfg["sera"]), (f"la mattina stessa alle {cfg['ora_mattina']}", cfg["mattina"]), (f"un secondo promemoria alle {cfg['ora_secondo']}", cfg["secondo"])) if on]
+        st.markdown("<div class='amm-card' style='background:rgba(200,230,201,.95)'>🔔 <b>Avvisi ACCESI</b>" + (": " + ", ".join(quando_) if quando_ else "") + "</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='amm-card' style='background:rgba(236,239,241,.95)'>🔕 <b>Avvisi SPENTI</b>: non ricevi nessun messaggio sulla raccolta. Accendili solo se ti servono.</div>", unsafe_allow_html=True)
+    if st.button("🔕 Spegni gli avvisi" if cfg["attivi"] else "🔔 Accendi gli avvisi", key="amm_rc_avvisi_tasto", width="stretch", type="secondary" if cfg["attivi"] else "primary"):
+        nuovo_stato = not cfg["attivi"]
+
+        def _fn_av(cc):
+            for x in cc.get("raccolta", []):
+                if isinstance(x, dict) and (x.get("casa_id") or "") == (ap.get("casa_id") or ""):          # vale per tutti i programmi di questa casa
+                    a_ = x.setdefault("avvisi", amm_avvisi_raccolta_default())
+                    a_["attivi"] = nuovo_stato
+                    if nuovo_stato and not (a_.get("sera") or a_.get("mattina") or a_.get("secondo")):
+                        a_["sera"] = True                                                              # acceso senza nessun momento scelto non servirebbe a niente
+        _amm_salva(_fn_av, "Raccolta: avvisi " + ("accesi" if nuovo_stato else "spenti"))
+        st.rerun()
     # la tabella settimanale (GIORNO · TIPO DI RIFIUTO · NOTE, senza orari)
     # lo stile della tabella di riferimento di Leonardo: griglia sottile, intestazione grigio-verde, giorni abbreviati, riga di OGGI verde e in grassetto
     BORDO = "1px solid rgba(60,80,75,.28)"
@@ -1402,6 +1425,7 @@ def _amm_schermata_raccolta(c):
     with st.expander("🔔 Avvisi della raccolta"):
         av = {**amm_avvisi_raccolta_default(), **(p.get("avvisi") or {})}
         k = "amm_av_" + p["id"]
+        st.caption("Questi momenti valgono **solo quando gli avvisi sono accesi** (tasto in cima alla pagina).")
         sera = st.checkbox("🌙 La sera prima", value=av["sera"], key=k + "_s")
         ora_s = st.text_input("Ora (sera prima)", value=av["ora_sera"], key=k + "_os", help="Formato 20:00") if sera else av["ora_sera"]
         mat = st.checkbox("☀️ La mattina stessa", value=av["mattina"], key=k + "_m")
@@ -1420,7 +1444,7 @@ def _amm_schermata_raccolta(c):
             if not (_ora_ok(ora_s) and _ora_ok(ora_m) and _ora_ok(ora_2)):
                 st.error("Scrivi le ore come 20:00 oppure 07:30.")
             else:
-                nuovi = {"sera": sera, "ora_sera": ora_s.strip(), "mattina": mat, "ora_mattina": ora_m.strip(), "secondo": sec, "ora_secondo": ora_2.strip(), "tipi_spenti": [t for t in disp if t not in attivi]}
+                nuovi = {"attivi": bool(av.get("attivi")), "sera": sera, "ora_sera": ora_s.strip(), "mattina": mat, "ora_mattina": ora_m.strip(), "secondo": sec, "ora_secondo": ora_2.strip(), "tipi_spenti": [t for t in disp if t not in attivi]}
 
                 def _fn(cc):
                     x = _amm_trova(cc, "raccolta", p["id"])
