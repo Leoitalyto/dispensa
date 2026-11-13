@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.4"
+GUIDA_VERSIONE = "4.6"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -240,11 +240,35 @@ In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiu
       """Per dare a un'altra persona **tutta l'Amministrazione** (amministratore, spese e rate con i pagamenti, professionisti e interventi, raccolta differenziata, ingombranti):
 1. In **Casa → Amministrazione** tocca **📦 Esporta o importa tutta l'Amministrazione**.
 2. Si apre **Scambia i dati** con «Amministrazione di Casa» già scelta. Scrivi una **password** (consigliata: nel file ci sono IBAN, importi e contatti) e tocca **Prepara il file**.
-3. Tocca **Scarica il file**: è un file **.dispensa**, che puoi mandare per WhatsApp o email. Nel file ci sono anche i documenti che l'Amministrazione cita (avvisi, ricevute, preventivi), se lasci la spunta sugli allegati.
+3. Tocca **Scarica il file**: è un file **.dispensa**. Sotto trovi **📤 Come mandarlo**: ti dico cosa conviene in base al peso (**WhatsApp come Documento** fino a 2 GB, **SwissTransfer** gratis fino a 50 GB, **Google Drive**) con i pulsanti per aprirli e i passaggi uno alla volta. L'app non carica il file da sola: lo carichi tu. Con **🗑️ Scarta il file preparato** lo togli dalla memoria dell'app. Nel file ci sono anche i documenti che l'Amministrazione cita (avvisi, ricevute, preventivi), se lasci la spunta sugli allegati.
 4. L'altra persona apre la sua app, va in **Scambia i dati → Importa da un altro utente**, sceglie il file, scrive la **password** e tocca **Guarda cosa contiene** e poi **Importa quello che ho scelto**.
 
 Quello che importa si **aggiunge** a quello che ha già, senza cancellare niente: se aveva già un amministratore o gli stessi professionisti li vedrà doppi e potrà eliminare quelli che non servono. Con la password sbagliata il file non si apre. **Comunica la password a voce o con un altro messaggio**, non insieme al file.""",
       "esportare importare scambio condividere amministrazione altro utente file password spese rate", ("scambio", "amministrazione"))
+
+    # ================= Salute: visite da un documento e medicinali presi ogni tanto
+    a("farmacia", "f_visita_doc", "Aggiungere una visita da un documento (promemoria di prenotazione)",
+      """Non serve scrivere tutto a mano. Quando prenoti una visita o un esame ti danno il **promemoria di prenotazione** (CUP, ASL, ospedale): basta una foto.
+1. In Salute apri **Visite** e tocca **📸 Aggiungi una visita da un documento**.
+2. Carica la **foto** (con **📷 Scatta foto** o **🖼️ Dalla galleria**) o il **PDF** del promemoria. Per la foto: foglio **dritto**, ben illuminato, tutta la pagina.
+3. Lo leggo e si apre da sola la finestra **Visita o esame GIÀ COMPILATA**: **data e ora** dell'appuntamento, **specialità** e **tipo di prestazione**, **che esame**, **dove** (struttura e indirizzo) e nelle note **numero di prenotazione**, **impegnativa**, **esenzione o ticket**, **cosa portare** e il **numero per disdire**.
+4. **Controlla e correggi** quello che non torna (soprattutto la data, se ti dico di controllarla), poi tocca **Salva**. Il documento resta **allegato alla visita**.
+
+La **persona** la riconosco dal codice fiscale o dal nome: se il promemoria è di un altro profilo, la visita va nel suo e te lo dico. Se nel documento ci sono più appuntamenti salvo il primo e scrivo gli altri nelle note.
+Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compilare la visita a mano. **Un referto già fatto non è una prenotazione**: usa **📎 Carica un referto…**.""",
+      "visita da documento prenotazione promemoria cup impegnativa compilazione automatica foto riconoscimento esame appuntamento", ("visite", "prenotazione"))
+    a("farmacia", "f_scorte_intervalli", "Medicinali presi ogni tanto (una fiala ogni 15 giorni, una al mese…)",
+      """Se un medicinale **non si prende ogni giorno** (per esempio **una fiala ogni 15 giorni** o **una al mese**) si imposta così, per avere la scorta giusta e l'avviso per la ricetta:
+1. In Salute tocca **💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto** (o **⚙️ Cambia**).
+2. **Da quando comincia a prenderlo**: la data della **prima fiala**.
+3. **Quante pastiglie (o fiale) ci sono nella scatola**: per esempio **4**.
+4. **Ogni quanto si prende**: scegli **«A intervalli: una volta ogni N giorni»** (o settimane, o mesi).
+5. Scrivi **Ogni quanti giorni**: **15**; **Quante a ogni volta**: **1**; **Data della prima volta**: il giorno della prima fiala.
+6. Sotto compare l'**anteprima**: «bastano per 4 volte. L'ultima è il …; la scorta basta fino al …». Tocca **Salva**.
+
+**Come ragiona:** conta le fiale **dosi per dosi** e ti avvisa prima del giorno in cui **la prossima fiala non sarebbe più coperta** (quella è la data entro cui serve la nuova scatola e quindi la ricetta). Esempi: **una al mese** → «ogni N mesi» con **1**; **ogni 3 mesi** → «ogni N mesi» con **3**; **una ogni 2 settimane** → «ogni N settimane» con **2**; **2 fiale ogni 10 giorni** → «ogni N giorni» con **10** e **2 a ogni volta**.
+Per i medicinali **di tutti i giorni** lascia **«Ogni giorno»**: leggo la terapia oppure scrivi quante pastiglie al giorno (si può scrivere anche una frazione, «1/15»). Gli **avvisi sul telefono** funzionano allo stesso modo.""",
+      "scorte fiale ogni 15 giorni una al mese ogni tanto intervalli settimane mesi frequenza ricetta rinnovo", ("scorte", "intervalli"))
 
     # ================= Salute: scorte e rinnovo ricette
     a("farmacia", "f_scorte", "Scorte dei medicinali e richiesta delle ricette alla dottoressa",

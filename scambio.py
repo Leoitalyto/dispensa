@@ -15,6 +15,7 @@ import secrets
 import uuid
 import zlib
 from datetime import date, datetime
+from urllib.parse import quote as _sc_quote
 
 import streamlit as st
 
@@ -110,6 +111,69 @@ def sc_conta(dati):
 _SC_NOMI = {"articoli": "prodotti", "profili": "persone", "medicinali": "medicinali", "terapie": "terapie", "visite": "visite", "prescrizioni": "ricette", "vaccinazioni": "vaccinazioni",
             "documenti": "documenti", "archivio_foto": "foto", "case": "case", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "amministratori": "amministratori", "spese_amm": "spese", "interventi_prof": "interventi dei professionisti",
             "raccolta": "programmi di raccolta", "raccolta_ecc": "variazioni", "ingombranti": "servizi ingombranti", "contatti_extra": "schede di professionisti", "interventi_prof": "interventi dei professionisti", "tipi_rifiuto": "tipi di rifiuto", "categorie_prof": "categorie", "contatti_lavoro": "contatti", "lavori": "lavori"}
+
+
+# Limiti verificati il 13/11/2026 (possono cambiare): WhatsApp, inviando come DOCUMENTO, fino a 2 GB; Telegram 2 GB; le caselle email di solito 20-25 MB; SwissTransfer (Infomaniak, Svizzera) 50 GB
+# gratis, senza registrazione; Google Drive: lo spazio gratuito del proprio account.
+def sc_consiglio_invio(n_byte):
+    """Come mandare un file di questo peso: {mb, livello: piccolo|medio|grande|enorme, testo}. L'app NON carica da sola sui servizi online (servirebbero account e chiavi): consiglia e porta alla pagina giusta."""
+    mb = n_byte / 1048576
+    if mb <= 20:
+        liv, t = "piccolo", "È leggero: va bene per **WhatsApp** (come **Documento**), per **Telegram** e anche per **email** (di solito il limite è 20-25 MB)."
+    elif mb <= 2000:
+        liv, t = "medio", "Per l'**email** è troppo pesante. Va bene per **WhatsApp** inviato come **Documento** (fino a 2 GB) o per **Telegram**; altrimenti **SwissTransfer** o **Google Drive** con un link."
+    elif mb <= 50000:
+        liv, t = "grande", "Per WhatsApp e Telegram è troppo grande (limite 2 GB). Usa **SwissTransfer** (fino a 50 GB, gratis, senza registrazione) oppure **Google Drive**."
+    else:
+        liv, t = "enorme", "È molto grande: conviene esportare una sezione alla volta, oppure senza allegati originali."
+    return {"mb": round(mb, 1), "livello": liv, "testo": t}
+
+
+# I servizi online GRATUITI per file grandi. Limiti dei piani gratuiti verificati il 13/11/2026 (confronti pubblicati e siti dei servizi): POSSONO CAMBIARE. Sono servizi esterni: il file lo carichi tu.
+SC_SERVIZI = [
+    ("SwissTransfer", "https://www.swisstransfer.com", 50, "senza registrazione · link fino a 30 giorni · password facoltativa · server in Svizzera"),
+    ("Storage.to", "https://storage.to", 25, "senza registrazione · il link dura 3 giorni (da 1 a 7) · password gratuita"),
+    ("Wormhole", "https://wormhole.app", 10, "cifratura end-to-end · link temporanei · adatto ai file riservati"),
+    ("TransferNow", "https://www.transfernow.net", 5, "senza registrazione obbligatoria · password · disponibile fino a 7 giorni"),
+    ("Filemail", "https://www.filemail.com", 5, "senza account · al massimo 2 invii ogni 24 ore · 7 giorni"),
+    ("Smash", "https://fromsmash.com", None, "senza account · nessun limite dichiarato (oltre 2 GB può andare in coda) · 7 giorni"),
+    ("WeTransfer", "https://wetransfer.com", 3, "serve un account gratuito · al massimo 10 invii o 3 GB ogni 30 giorni"),
+    ("Dropbox", "https://www.dropbox.com", 2, "2 GB di spazio gratuito · link di condivisione · serve un account"),
+    ("Google Drive", "https://drive.google.com", 15, "15 GB gratuiti (con Gmail e Foto) · link con accesso limitato"),
+]
+
+
+def sc_servizi_per_peso(mb):
+    """[(nome, indirizzo, limite in GB o None, note, adatto)] nell'ordine dell'elenco: «adatto» se il limite gratuito basta per questo peso."""
+    return [(n, u, lim, note, lim is None or mb <= lim * 1024) for n, u, lim, note in SC_SERVIZI]
+
+
+def _sc_come_mandare(n_byte):
+    """«Come mandarlo»: il consiglio per il peso del file, WhatsApp e Telegram, l'elenco dei servizi online gratuiti con i loro limiti e i passaggi. Niente di questo carica il file da solo: lo carichi tu."""
+    c = sc_consiglio_invio(n_byte)
+    st.markdown("#### 📤 Come mandarlo all'altra persona")
+    peso = f"{max(1, n_byte // 1024)} KB" if n_byte < 1048576 else f"{c['mb']:g} MB"
+    st.markdown(f"Il file pesa **{peso}**. " + c["testo"])
+    b1, b2 = st.columns(2, gap="small")
+    b1.link_button("💬 Apri WhatsApp", "whatsapp://send?text=" + _sc_quote("Ti mando il file della dispensa: te lo allego adesso come Documento."), width="stretch")
+    b2.link_button("✈️ Telegram", "https://web.telegram.org", width="stretch")
+    st.markdown("**🌐 Servizi online gratuiti per file grandi** (tocca per aprire il sito, poi carichi il file e mandi il link):")
+    for nome, url, lim, note, adatto in sc_servizi_per_peso(c["mb"]):
+        limite = "nessun limite dichiarato" if lim is None else f"fino a {lim} GB"
+        st.markdown(f"{'✅' if adatto else '⚠️'} **{nome}** · {limite} · {note}" + ("" if adatto else " — **troppo piccolo per questo file**"))
+        st.link_button(f"Apri {nome}", url, width="stretch")
+    st.caption("I limiti sono quelli dei piani gratuiti al 13/11/2026 e possono cambiare. Sono servizi esterni: il file lo carichi tu, e resta protetto dalla tua password.")
+    with st.expander("📋 Passo per passo (il file va prima scaricato nel telefono)"):
+        st.markdown(
+            "**Prima di tutto:** tocca **⬇ Scarica il file**: finisce nella cartella **Download** del telefono.\n\n"
+            "**WhatsApp (fino a 2 GB):** apri la chat → **graffetta 📎** → **Documento** → scegli il file `.dispensa` da **Download** → invia. Non inviarlo da *Galleria* o *Foto*.\n\n"
+            "**SwissTransfer, Storage.to, TransferNow, Smash, Filemail (senza account):** apri il sito → **+** o **Aggiungi file** → scegli il file da **Download** → se c'è, scegli **per quanti giorni** resta disponibile "
+            "(e, se vuoi, una password del link) → **Link** → quando ha finito di caricare **copia il link** e mandalo per WhatsApp.\n\n"
+            "**WeTransfer e Dropbox:** servono un account gratuito: accedi, carica il file e copia il link.\n\n"
+            "**Wormhole:** adatto ai file riservati: il file è cifrato fino all'altra persona.\n\n"
+            "**Google Drive:** app **Drive** → **+** → **Carica** → scegli il file → tieni premuto sul file → **Condividi** → **Accesso limitato** e scrivi l'email dell'altra persona. Poi togli l'accesso.\n\n"
+            "**Chi riceve:** scarica il file dal link (o lo salva da WhatsApp), apre la sua app → **Scambia i dati → Importa da un altro utente** → pulsante arancione → sceglie il file → scrive la **password**.")
+        st.caption("🔒 Il file è già protetto dalla tua password: comunicala **a voce o con un altro messaggio**, mai insieme al file o al link. Dopo l'invio puoi cancellare il file dal telefono e dal servizio.")
 
 
 def sc_riassunto(dati):
@@ -359,6 +423,7 @@ def sc_pannello(preselezionata=None):
                 st.warning("Il file è grande (oltre 20 MB): per mandarlo conviene Google Drive, oppure esportare una sezione alla volta o senza allegati.")
             nome_f = f"dispensa_{re.sub(r'[^A-Za-z0-9]+', '_', (st.session_state.get('sess') or {}).get('nome', 'utente'))}_{date.today().isoformat()}.dispensa"
             st.download_button("⬇ Scarica il file da dare all'altro utente", dati, file_name=nome_f, mime="application/octet-stream", key="sc_dl", width="stretch")
+            _sc_come_mandare(len(dati))
             st.caption("Finché non lo scarichi, il file preparato sta solo nella memoria dell'app. Dopo averlo scaricato, la copia è nel telefono (cartella **Download**): per eliminarla usa l'app **File** del telefono.")
             if st.button("🗑️ Scarta il file preparato", key="sc_scarta", width="stretch"):
                 st.session_state.pop("sc_pronto", None)

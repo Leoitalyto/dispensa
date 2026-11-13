@@ -30,8 +30,13 @@ _SCORTA_PAROLE = {"mezza": 0.5, "mezzo": 0.5, "un": 1, "una": 1, "uno": 1, "due"
 
 
 def _scorta_num(v):
+    """Un numero scritto come «2», «0,5», «1/15» (una frazione). None se non è un numero."""
+    t = str(v).strip().replace(",", ".")
     try:
-        return float(str(v).replace(",", "."))
+        if "/" in t:
+            a, b = t.split("/", 1)
+            return float(a) / float(b) if float(b) else None
+        return float(t)
     except (ValueError, TypeError):
         return None
 
@@ -85,39 +90,81 @@ def _scorta_consumo_terapie(rilevanti, d):
     return tot
 
 
+def _scorta_aggiungi_mesi(d, n):
+    import calendar as _cal
+    m = d.month - 1 + n
+    a, m = d.year + m // 12, m % 12 + 1
+    return date(a, m, min(d.day, _cal.monthrange(a, m)[1]))
+
+
+def scorta_freq_valida(freq):
+    """La frequenza «a intervalli» (una dose ogni N giorni, settimane o mesi) se è scritta bene, altrimenti None."""
+    if not isinstance(freq, dict) or freq.get("tipo") not in ("giorni", "settimane", "mesi"):
+        return None
+    ogni, dose = _scorta_num(freq.get("ogni")), _scorta_num(freq.get("dose"))
+    if not ogni or ogni < 1 or not dose or dose <= 0:
+        return None
+    return {"tipo": freq["tipo"], "ogni": int(ogni), "dose": dose, "prima": _scorta_data(freq.get("prima"))}
+
+
+def scorta_descrivi_freq(freq):
+    f = scorta_freq_valida(freq)
+    if not f:
+        return ""
+    unita = {"giorni": ("giorno", "giorni"), "settimane": ("settimana", "settimane"), "mesi": ("mese", "mesi")}[f["tipo"]]
+    return f"{f['dose']:g} " + (f"ogni {unita[0]}" if f["ogni"] == 1 else f"ogni {f['ogni']} {unita[1]}")
+
+
+def _scorta_e_giorno_di_dose(f, prima, d):
+    if d < prima:
+        return False
+    if f["tipo"] == "giorni":
+        return (d - prima).days % f["ogni"] == 0
+    if f["tipo"] == "settimane":
+        return (d - prima).days % (7 * f["ogni"]) == 0
+    m = (d.year - prima.year) * 12 + d.month - prima.month
+    return m % f["ogni"] == 0 and d == _scorta_aggiungi_mesi(prima, m)
+
+
 def scorta_calcola(med, terapie, pid, oggi_):
     """Lo stato della scorta di un medicinale.
-    → {stato: spento | dati_mancanti | senza_terapia | dose_non_capita | nessun_consumo | ok | ok_lungo | in_esaurimento | finito, ultima (ultimo giorno coperto), giorni (da oggi), restano, per_giorno, preavviso, richiesto}"""
+    → {stato: spento | dati_mancanti | senza_terapia | dose_non_capita | nessun_consumo | ok | ok_lungo | in_esaurimento | finito, ultima (ultima dose coperta), fino_al (l'ultimo giorno
+    in cui la scorta basta: il giorno PRIMA della prima dose non coperta), giorni (da oggi a fino_al), restano, per_giorno, preavviso, richiesto}
+    Le assunzioni possono essere ogni giorno (dalla terapia o scritte a mano) oppure A INTERVALLI (una dose ogni N giorni, settimane o mesi, per esempio una fiala ogni 15 giorni)."""
     sc = med.get("scorta") or {}
     if not sc.get("attiva"):
         return {"stato": "spento"}
     avvio, iniz = _scorta_data(sc.get("avvio")), _scorta_num(sc.get("pastiglie"))
     pre = int(_scorta_num(sc.get("preavviso")) or 7)
-    ris = {"stato": "dati_mancanti", "ultima": None, "giorni": None, "restano": None, "per_giorno": None, "preavviso": pre, "richiesto": _scorta_data(sc.get("rinnovo_richiesto"))}
+    ris = {"stato": "dati_mancanti", "ultima": None, "fino_al": None, "giorni": None, "restano": None, "per_giorno": None, "preavviso": pre, "richiesto": _scorta_data(sc.get("rinnovo_richiesto"))}
     if avvio is None or iniz is None or iniz < 0:
         return ris
+    freq = scorta_freq_valida(sc.get("frequenza"))
     manuale = _scorta_num(sc.get("per_giorno"))
     if manuale is not None and manuale <= 0:
         manuale = None
     rilevanti = _scorta_terapie_di(terapie, pid, med.get("id"))
-    if manuale is None:
+    if freq is None and manuale is None:
         if not rilevanti:
             ris["stato"] = "senza_terapia"
             return ris
         if any(scorta_parse_dose(t.get("quantita")) is None for t in rilevanti if t.get("stato") not in ("terminata",)):
             ris["stato"] = "dose_non_capita"
             return ris
+    prima = (freq["prima"] if freq else None) or avvio
 
     def consumo(d):
+        if freq is not None:
+            return freq["dose"] if _scorta_e_giorno_di_dose(freq, prima, d) else 0.0
         return manuale if manuale is not None else _scorta_consumo_terapie(rilevanti, d)
-    cum, ultima, d, finisce, passati = 0.0, None, avvio, False, 0.0
-    for _ in range(1800):
+    cum, ultima, d, finisce, passati, scoperta = 0.0, None, min(avvio, prima), False, 0.0, None
+    for _ in range(2400):
         c = consumo(d)
-        if d < oggi_:
+        if d >= avvio and d < oggi_:
             passati += c
-        if c > 0:
+        if c > 0 and d >= avvio:
             if cum + c > iniz + 1e-9:
-                finisce = True
+                finisce, scoperta = True, d
                 break
             cum += c
             ultima = d
@@ -128,11 +175,14 @@ def scorta_calcola(med, terapie, pid, oggi_):
         ris["stato"] = "nessun_consumo"
         return ris
     if not finisce:
-        ris["stato"], ris["ultima"], ris["giorni"] = "ok_lungo", ultima, (ultima - oggi_).days
+        ris["stato"], ris["ultima"], ris["fino_al"], ris["giorni"] = "ok_lungo", ultima, ultima, (ultima - oggi_).days
         return ris
     if ultima is None:                                                                  # non bastano nemmeno per la prima dose
         ultima = avvio - timedelta(days=1)
-    ris["ultima"], ris["giorni"] = ultima, (ultima - oggi_).days
+    fino_al = scoperta - timedelta(days=1)                                              # la scorta basta fino al giorno prima della prima dose che non si riesce a coprire
+    if freq is None:
+        fino_al = max(fino_al, ultima)
+    ris["ultima"], ris["fino_al"], ris["giorni"] = ultima, fino_al, (fino_al - oggi_).days
     ris["stato"] = "finito" if ris["giorni"] < 0 else ("in_esaurimento" if ris["giorni"] <= pre else "ok")
     return ris
 
@@ -149,6 +199,9 @@ def scorta_nuova_base(med, pastiglie, oggi_, nota=""):
 def scorta_descrivi_dose(med, terapie, pid):
     """Come si prende, a parole: «1 compressa alle 08:00 e alle 20:00»."""
     sc = med.get("scorta") or {}
+    fr = scorta_descrivi_freq(sc.get("frequenza"))
+    if fr:
+        return fr
     man = _scorta_num(sc.get("per_giorno"))
     if man and man > 0:
         return f"{man:g} al giorno"
@@ -227,37 +280,61 @@ def _scorta_dlg_imposta(f, pid, med):
         k = "scorta_im_" + med["id"]
         sc = med.get("scorta") or {}
         st.markdown(f"**{_sc_h.escape(med.get('nome', ''))}** {_sc_h.escape(med.get('dosaggio', ''))}")
-        att = st.checkbox("Tieni il conto delle pastiglie e avvisami quando stanno per finire", value=bool(sc.get("attiva", True)), key=k + "_att")
+        att = st.checkbox("Tieni il conto e avvisami quando stanno per finire", value=bool(sc.get("attiva", True)), key=k + "_att")
         avvio = st.date_input("Da quando comincia a prenderlo (data di avvio)", value=_scorta_data(sc.get("avvio")) or _scorta_data(med.get("acquisto")) or oggi(), key=k + "_av", format="DD/MM/YYYY")
-        past = st.number_input("Quante pastiglie ci sono nella scatola", min_value=0.0, step=1.0, value=float(_scorta_num(sc.get("pastiglie")) or _scorta_num(med.get("quantita")) or 30.0), key=k + "_pa")
+        past = st.number_input("Quante pastiglie (o fiale, bustine…) ci sono nella scatola", min_value=0.0, step=1.0, value=float(_scorta_num(sc.get("pastiglie")) or _scorta_num(med.get("quantita")) or 30.0), key=k + "_pa")
+        fr0 = scorta_freq_valida(sc.get("frequenza"))
+        modi = ["Ogni giorno (o più volte al giorno)", "A intervalli: una volta ogni N giorni", "A intervalli: una volta ogni N settimane", "A intervalli: una volta ogni N mesi"]
+        idx = {None: 0, "giorni": 1, "settimane": 2, "mesi": 3}[fr0["tipo"] if fr0 else None]
+        modo = st.selectbox("Ogni quanto si prende", modi, index=idx, key=k + "_modo")
+        tipo_f = {1: "giorni", 2: "settimane", 3: "mesi"}.get(modi.index(modo))
+        pg, freq = "", None
         terapie = f.get("terapie", [])
-        rilev = _scorta_terapie_di(terapie, pid, med["id"])
-        da_terapia = scorta_descrivi_dose(dict(med, scorta={}), terapie, pid)
-        if rilev and da_terapia:
-            st.success("Dal programma di terapia: " + da_terapia + ". Lo uso così, se sotto non scrivi niente.")
-        elif rilev:
-            st.warning("C'è una terapia ma non capisco la quantità: scrivi qui sotto quante pastiglie si prendono al giorno.")
+        if tipo_f is None:
+            rilev = _scorta_terapie_di(terapie, pid, med["id"])
+            da_terapia = scorta_descrivi_dose(dict(med, scorta={}), terapie, pid)
+            if rilev and da_terapia:
+                st.success("Dal programma di terapia: " + da_terapia + ". Lo uso così, se sotto non scrivi niente.")
+            elif rilev:
+                st.warning("C'è una terapia ma non capisco la quantità: scrivi qui sotto quante pastiglie si prendono al giorno.")
+            else:
+                st.info("Non c'è ancora una terapia per questo medicinale: scrivi qui sotto quante pastiglie si prendono al giorno (oppure crea la terapia nella scheda Terapie). "
+                        "Se si prende solo ogni tanto (una fiala ogni 15 giorni, una al mese…) scegli «A intervalli» qui sopra.")
+            pg = st.text_input("Pastiglie al giorno (lascia vuoto per usare la terapia)", value=("" if sc.get("per_giorno") in (None, "") else f"{_scorta_num(sc.get('per_giorno')):g}".replace(".", ",")), key=k + "_pg",
+                               placeholder="es. 2   oppure   0,5")
         else:
-            st.info("Non c'è ancora una terapia per questo medicinale: scrivi qui sotto quante pastiglie si prendono al giorno (oppure crea la terapia nella scheda Terapie).")
-        pg = st.text_input("Pastiglie al giorno (lascia vuoto per usare la terapia)", value=("" if sc.get("per_giorno") in (None, "") else f"{_scorta_num(sc.get('per_giorno')):g}".replace(".", ",")), key=k + "_pg",
-                           placeholder="es. 2   oppure   0,5")
+            st.info("**Esempio:** 4 fiale, una ogni 15 giorni → scegli «ogni N giorni», scrivi **15**, **1** per dose, e la **data della prima fiala**. Per «una al mese» scegli «ogni N mesi» con **1**.")
+            etichetta = {"giorni": "giorni", "settimane": "settimane", "mesi": "mesi"}[tipo_f]
+            ogni = st.number_input(f"Ogni quanti {etichetta}", min_value=1, max_value=365, step=1, value=int(fr0["ogni"]) if fr0 and fr0["tipo"] == tipo_f else (15 if tipo_f == "giorni" else 1), key=f"{k}_og_{tipo_f}")
+            dose = st.number_input("Quante pastiglie (o fiale) a ogni volta", min_value=0.25, step=0.25, value=float(fr0["dose"]) if fr0 else 1.0, key=k + "_do")
+            prima = st.date_input("Data della prima volta", value=(fr0 or {}).get("prima") or avvio, key=k + "_pr", format="DD/MM/YYYY")
+            freq = {"tipo": tipo_f, "ogni": int(ogni), "dose": float(dose), "prima": prima.isoformat()}
         pre = st.selectbox("Avvisami quando mancano", SCORTA_PREAVVISI, index=SCORTA_PREAVVISI.index(int(_scorta_num(sc.get("preavviso")) or 7)) if int(_scorta_num(sc.get("preavviso")) or 7) in SCORTA_PREAVVISI else 2,
                            key=k + "_pre", format_func=lambda g: f"{g} giorni")
+        if freq and past > 0:                                                              # anteprima: quante volte bastano e fino a quando
+            prova = {"id": med["id"], "scorta": {"attiva": True, "avvio": avvio.isoformat(), "pastiglie": float(past), "frequenza": freq, "preavviso": int(pre)}}
+            r_ = scorta_calcola(prova, [], pid, oggi())
+            if r_.get("fino_al"):
+                n_dosi = int(past // freq["dose"])
+                st.success(f"Con queste impostazioni bastano per **{n_dosi} volte**. L'ultima è il **{r_['ultima'].strftime('%d/%m/%Y')}**; la scorta basta fino al **{r_['fino_al'].strftime('%d/%m/%Y')}**: "
+                           "entro quel giorno serve una nuova scatola.")
         c1, c2 = st.columns(2, gap="small")
         if c1.button("💾 Salva", key=k + "_ok", type="primary", width="stretch"):
-            pgn = _scorta_num(pg) if pg.strip() else None
-            if pg.strip() and (pgn is None or pgn <= 0):
+            pgn = _scorta_num(pg) if str(pg).strip() else None
+            if str(pg).strip() and (pgn is None or pgn <= 0):
                 st.error("Le pastiglie al giorno devono essere un numero maggiore di zero (per esempio 2 oppure 0,5).")
                 return
             if att and past <= 0:
                 st.error("Scrivi quante pastiglie ci sono nella scatola.")
                 return
-            nuovo = {"attiva": bool(att), "avvio": avvio.isoformat(), "pastiglie": float(past), "per_giorno": pgn, "preavviso": int(pre)}
+            nuovo = {"attiva": bool(att), "avvio": avvio.isoformat(), "pastiglie": float(past), "per_giorno": None if freq else pgn, "preavviso": int(pre), "frequenza": freq}
 
             def _fn(m):
                 sc_ = m.setdefault("scorta", {})
                 cambiata = (sc_.get("avvio"), sc_.get("pastiglie")) != (nuovo["avvio"], nuovo["pastiglie"])
                 sc_.update(nuovo)
+                if freq is None:
+                    sc_.pop("frequenza", None)
                 if cambiata:
                     sc_["rinnovo_richiesto"] = ""
                     sc_.setdefault("storico", []).append({"quando": datetime.now().strftime("%Y-%m-%d %H:%M"), "testo": f"Impostata: {nuovo['pastiglie']:g} pastiglie dal {avvio.strftime('%d/%m/%Y')}"})
@@ -312,9 +389,12 @@ def _scorta_scheda(f, pid, med, oggi_):
         ic, et, col = _SCORTA_STATI[stato]
         riga = f"<span class='sco-st' style='background:{col}'>{ic} {et}</span>"
         det = [f"Ne restano circa <b>{(r['restano'] or 0):g}</b>"]
-        if r["ultima"]:
-            det.append(f"bastano fino al <b>{r['ultima'].strftime('%d/%m/%Y')}</b> ({scorta_giorni_it(r['giorni'])})" if stato != "finito" else f"sono finite {scorta_giorni_it(r['giorni'])}")
-        if r["per_giorno"]:
+        fr = scorta_descrivi_freq((med.get("scorta") or {}).get("frequenza"))
+        if r.get("fino_al"):
+            det.append(f"bastano fino al <b>{r['fino_al'].strftime('%d/%m/%Y')}</b> ({scorta_giorni_it(r['giorni'])})" if stato != "finito" else f"sono finite {scorta_giorni_it(r['giorni'])}")
+        if fr and r.get("ultima"):
+            det.append(f"si prende {fr} · l'ultima volta coperta è il {r['ultima'].strftime('%d/%m/%Y')}")
+        elif r["per_giorno"]:
             det.append(f"{r['per_giorno']:g} al giorno")
         if r.get("richiesto"):
             det.append(f"✅ ricetta chiesta il {r['richiesto'].strftime('%d/%m/%Y')}")
@@ -374,7 +454,7 @@ def _scorta_rinnovo(f, p, pid, oggi_, meds, stati):
     for m in tracciati:
         if m["id"] in scelti:
             r = stati[m["id"]]
-            voci.append((m.get("nome", "") + (f" {m['dosaggio']}" if m.get("dosaggio") else "") + (f" ({m['forma']})" if m.get("forma") else ""), scorta_descrivi_dose(m, f.get("terapie", []), pid), r.get("ultima")))
+            voci.append((m.get("nome", "") + (f" {m['dosaggio']}" if m.get("dosaggio") else "") + (f" ({m['forma']})" if m.get("forma") else ""), scorta_descrivi_dose(m, f.get("terapie", []), pid), r.get("fino_al") or r.get("ultima")))
     mio = _scorta_mio_nome(p)
     bozza = scorta_testo_richiesta(p.get("nome", "la persona"), medico, mio, voci, cf if usa_cf else "")
     firma = hashlib.md5((bozza).encode("utf-8")).hexdigest()[:8]

@@ -1880,10 +1880,13 @@ def _sp_card_visita(v, pid, nomi):
 
 
 @st.dialog("Visita o esame")
-def _fa_dialogo_visita(pid, vis_id=None):                                          # noqa: F811
-    """Aggiungere o modificare una visita o un esame: stesse specialità dei documenti + tipo di prestazione."""
+def _fa_dialogo_visita(pid, vis_id=None, prefill=None):                            # noqa: F811
+    """Aggiungere o modificare una visita o un esame: stesse specialità dei documenti + tipo di prestazione.
+    `prefill`: i dati già compilati letti da un documento (salute_prenotazioni.py); `_avvisi` = frasi da mostrare in cima, `_allegato` = il documento originale da allegare, `_dopo` = da fare dopo il salvataggio."""
     f = _fa_dati()
-    v = next((x for x in f.get("visite", []) if x["id"] == vis_id), {}) if vis_id else {}
+    v = next((x for x in f.get("visite", []) if x["id"] == vis_id), {}) if vis_id else (prefill or {})
+    for a_ in (v.get("_avvisi") or []):
+        st.info(a_)
     area_att, tp_sugg = cat_unifica_visita(v.get("categoria"))
     extra = [x for x in (f.get("categorie_extra") or []) if x not in CAT_AREE]
     if area_att and area_att not in CAT_AREE and area_att != "Altro" and area_att not in extra:
@@ -1913,6 +1916,8 @@ def _fa_dialogo_visita(pid, vis_id=None):                                       
         categoria = nuova.strip() or cat
         try:
             riferimenti = _fa_salva_files(nuovi, next((x_.get("allegati") or [] for x_ in _fa_dati().get("visite", []) if x_["id"] == vis_id), [])) if nuovi else []
+            if not vis_id and v.get("_allegato") is not None:                                    # il documento letto resta allegato alla visita
+                riferimenti = riferimenti + _fa_salva_files([v["_allegato"]], riferimenti)
         except ValueError as e:
             st.error(str(e))
             return
@@ -1941,6 +1946,8 @@ def _fa_dialogo_visita(pid, vis_id=None):                                       
             st.error(f"Non sono riuscito a salvare: {e}")
             return
         st.session_state["fa_msg"] = "✅ Visita salvata."
+        if not vis_id and callable(v.get("_dopo")):
+            v["_dopo"]()
         st.rerun()
 
 
