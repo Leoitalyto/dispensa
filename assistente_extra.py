@@ -18,7 +18,7 @@ import streamlit as st
 # 1) contesto
 # ---------------------------------------------------------------------------------------------------------------------
 _AE_CTX = {
-    "casa": "c_cosa", "casa:documenti": "c_manuali", "casa:manutenzioni": "c_manutenzioni", "casa:riferimenti": "c_riferimenti",
+    "casa": "c_cosa", "casa:amministrazione": "c_amministrazione", "casa:documenti": "c_manuali", "casa:manutenzioni": "c_manutenzioni", "casa:riferimenti": "c_riferimenti",
     "lavoro": "l_cosa", "lavoro:buste": "l_carica", "lavoro:anni": "l_anni", "lavoro:cu": "l_cu", "lavoro:inps": "l_inps", "lavoro:contatti": "l_rubrica",
     "auto": "au_garage", "auto:scheda": "au_aggiungi", "auto:scadenze": "au_scadenze", "auto:manutenzione": "au_manut", "auto:rifornimenti": "au_manut",
     "auto:ricambi": "au_manut", "auto:emergenza": "au_emerg", "auto:patente": "au_patente", "auto:viaggi": "au_viaggi", "auto:diagnostica": "au_diag",
@@ -55,7 +55,7 @@ def ae_contesto(contesto):
 
 try:
     _CTX_GUIDA.update(_AE_CTX)
-    _TAB_CTX["casa"] = ["casa", "documenti", "manutenzioni", "riferimenti"]          # l'ordine delle schede in basso nella pagina Casa: Beni, Documenti, Manutenzioni, Riferimenti
+    _TAB_CTX["casa"] = ["amministrazione", "casa", "documenti", "manutenzioni", "riferimenti"]          # l'ordine delle schede in basso nella pagina Casa: Amministrazione, Beni, Documenti, Manutenzioni, Riferimenti
 except NameError:
     pass
 

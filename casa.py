@@ -3914,7 +3914,7 @@ def schermata_casa():
     cv = ca_vista_casa(c, sel_c)
     if len(ca_case(c)) > 1:
         st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
-    t1, t2, t3, t4, t5 = st.tabs(["🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti", "🏢 Amministrazione"])
+    t5, t1, t2, t3, t4 = st.tabs(["🏢 Amministrazione", "🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])      # Amministrazione è la prima scheda
     with t1:
         if getattr(t1, "open", True):                                  # si disegna solo la scheda aperta (più veloce)
             _ca_tab_beni(cv)
@@ -3950,7 +3950,7 @@ if "_NOMI_SEZIONI" in globals():                                    # la guida d
     _GUIDE.setdefault("casa", [
         ("🏡 Cos'è la sezione Casa",
          """La sezione **Casa** raccoglie **i beni della tua casa** (caldaia, climatizzatori, elettrodomestici, TV, allarmi, impianti), **tutti i documenti di casa** (manuali, garanzie, bollette di luce, gas e acqua, fatture, polizze…) e **le manutenzioni**.
-Ha cinque schede: **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni**, **📇 Riferimenti** e **🏢 Amministrazione** (spese condominiali, contatti, raccolta differenziata). Se hai più case (**➕ Aggiungi un'altra casa**), in alto scegli quale guardare.
+Ha cinque schede: **🏢 Amministrazione** (spese condominiali, contatti, raccolta differenziata), **🏠 Beni**, **📚 Documenti**, **🔧 Manutenzioni** e **📇 Riferimenti**. Se hai più case (**➕ Aggiungi un'altra casa**), in alto scegli quale guardare.
 Si apre dall'icona della casa in Home, oppure con le frecce ← → in alto.""",
          "casa abitazione beni inventario caldaia lavatrice manuali manutenzioni sezione"),
         ("📚 Archiviare un documento (manuale, bolletta, fattura…)",

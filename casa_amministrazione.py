@@ -1118,7 +1118,7 @@ def _amm_schermata_contatti(c):
 AMM_GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 AMM_GIORNI_ICS = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 AMM_TIPI_RIFIUTO = ["Organico", "Indifferenziato", "Carta", "Vetro", "Plastica", "Metalli"]
-AMM_ICONE_RIFIUTO = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🔵", "Vetro": "🟢", "Plastica": "🟡", "Metalli": "🔘"}
+AMM_ICONE_RIFIUTO = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🟡", "Vetro": "🔵", "Plastica": "🔴", "Metalli": "🔘"}
 
 
 def amm_icona_rifiuto(t):
@@ -1292,7 +1292,12 @@ def _amm_schermata_raccolta(c):
     if not programmi:
         st.info("Costruisci il calendario della tua zona: ogni giorno della settimana puoi scegliere **uno o più tipi di rifiuto**. Poi l'app ti ricorda la sera prima.")
         if st.button("➕ Crea il calendario", key="amm_rc_crea", type="primary", width="stretch"):
-            _amm_salva(lambda cc: cc.setdefault("raccolta", []).append(amm_programma_nuovo()), "Raccolta: calendario creato")
+            def _crea(cc):
+                sel = st.session_state.get("ca_casa_sel") or ""
+                if any(isinstance(x, dict) and (x.get("casa_id") or "") == sel for x in cc.get("raccolta", [])):
+                    return                                                          # c'è già: un secondo tocco (o un doppio tocco) non ne crea un altro
+                cc.setdefault("raccolta", []).append(amm_programma_nuovo())
+            _amm_salva(_crea, "Raccolta: calendario creato")
             st.rerun()
         return
     eccez = _amm_lista(c, "raccolta_ecc")
@@ -1300,13 +1305,29 @@ def _amm_schermata_raccolta(c):
     att = amm_programma_attivo(programmi)
     if len(programmi) > 1:
         sel_id = st.pills("Programma", ids, default=st.session_state.get("amm_rc_sel") if st.session_state.get("amm_rc_sel") in ids else att["id"], key="amm_rc_pill",
-                          format_func=lambda i: ("✅ " if next(p for p in programmi if p["id"] == i).get("attivo") else "") + next(p for p in programmi if p["id"] == i).get("nome", ""))
+                          format_func=lambda i: ("✅ " if i == att["id"] else "") + next(p for p in programmi if p["id"] == i).get("nome", ""))
         sel_id = sel_id or att["id"]
         st.session_state["amm_rc_sel"] = sel_id
     else:
         sel_id = att["id"]
     p = next(x for x in programmi if x["id"] == sel_id)
-    st.caption(("✅ **Programma in uso** (quello degli avvisi)" if p.get("attivo") else "Questo programma **non è in uso**: gli avvisi seguono quello con ✅.") + f" · {p.get('nome', '')}")
+    st.caption(("✅ **Programma in uso** (quello degli avvisi)" if p["id"] == att["id"] else "Questo programma **non è in uso**: gli avvisi seguono quello con ✅.") + f" · {p.get('nome', '')}")
+    doppi = [x for x in programmi if x["id"] != p["id"] and x.get("nome") == p.get("nome") and x.get("giorni") == p.get("giorni")]
+    if doppi:
+        st.warning(f"Hai **due programmi uguali** chiamati «{p.get('nome', '')}»: uno è di troppo. Tocca il pulsante per togliere il doppione.")
+        if st.button("🧹 Elimina il programma doppio", key="amm_pr_doppio", width="stretch", type="primary"):
+            tolti = {x["id"] for x in doppi}
+
+            def _fn(cc):
+                cc["raccolta"] = [x for x in cc.get("raccolta", []) if not (isinstance(x, dict) and x.get("id") in tolti)]
+                resto = [x for x in cc["raccolta"] if isinstance(x, dict) and (x.get("casa_id") or "") == (p.get("casa_id") or "")]
+                if resto and not any(x.get("attivo") for x in resto):
+                    resto[0]["attivo"] = True
+                for e in cc.get("raccolta_ecc", []):
+                    if isinstance(e, dict) and e.get("programma_id") in tolti:
+                        e["programma_id"] = p["id"]
+            _amm_salva(_fn, "Raccolta: tolto il programma doppio")
+            st.rerun()
     # oggi e domani
     ap = amm_programma_attivo(programmi)
     ecc_ap = [e for e in eccez if (e.get("programma_id") or ap["id"]) == ap["id"]]
@@ -1352,7 +1373,7 @@ def _amm_schermata_raccolta(c):
         st.rerun()
     if b3.button("✏️ Nome", key="amm_pr_nome", width="stretch"):
         _amm_dlg_programma(c, p)
-    if not p.get("attivo") and st.button("✅ Usa questo programma per gli avvisi", key="amm_pr_usa", width="stretch", type="primary"):
+    if p["id"] != att["id"] and st.button("✅ Usa questo programma per gli avvisi", key="amm_pr_usa", width="stretch", type="primary"):
         def _fn(cc):
             for x in cc.get("raccolta", []):
                 if isinstance(x, dict) and (x.get("casa_id") or "") == (p.get("casa_id") or ""):
