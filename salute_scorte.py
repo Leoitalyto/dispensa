@@ -74,7 +74,7 @@ def _scorta_consumo_terapie(rilevanti, d):
     """Pastiglie previste dalle terapie in un giorno (stesse regole di Terapie: giorni, inizio, fine, sospesa)."""
     tot = 0.0
     for t in rilevanti:
-        if d.weekday() not in (t.get("giorni") or []):
+        if not (terapia_e_giorno(t, d) if "terapia_e_giorno" in globals() else d.weekday() in (t.get("giorni") or [])):
             continue
         ini, fin = _scorta_data(t.get("inizio")), _scorta_data(t.get("fine"))
         if (ini and d < ini) or (fin and d > fin):
@@ -211,7 +211,8 @@ def scorta_descrivi_dose(med, terapie, pid):
             continue
         orari = [o for o in (t.get("orari") or [])]
         if orari:
-            parti.append(f"{(t.get('quantita') or '').strip() or '1 dose'} alle " + " e alle ".join(orari))
+            quando_ = (" " + ter_giorni_testo(t)) if "ter_intervallo" in globals() and ter_intervallo(t) else ""        # terapia a intervalli: «1 flaconcino ogni 15 giorni alle 08:00»
+            parti.append(f"{(t.get('quantita') or '').strip() or '1 dose'}{quando_} alle " + " e alle ".join(orari))
     return "; ".join(parti)
 
 

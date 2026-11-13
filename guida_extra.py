@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.7"
+GUIDA_VERSIONE = "4.8"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -265,6 +265,18 @@ Nuovi profili si aggiungono in **👥 Gestisci profili**.""",
 La **persona** la riconosco dal codice fiscale o dal nome: se il promemoria è di un altro profilo, la visita va nel suo e te lo dico. Se nel documento ci sono più appuntamenti salvo il primo e scrivo gli altri nelle note.
 Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compilare la visita a mano. **Un referto già fatto non è una prenotazione**: usa **📎 Carica un referto…**.""",
       "visita da documento prenotazione promemoria cup impegnativa compilazione automatica foto riconoscimento esame appuntamento", ("visite", "prenotazione"))
+    a("farmacia", "f_terapia_intervalli", "Una terapia da prendere ogni tanto (per esempio 4 flaconcini, uno ogni 15 giorni)",
+      """Per un medicinale **che non si prende ogni giorno** si crea la terapia **a intervalli**: ti avvisa **all'ora giusta** nei giorni giusti e **la scorta si calcola da sola**.
+**Esempio: 4 flaconcini da 2,5 ml, uno ogni 15 giorni, il primo il 19 dicembre alle 8 di mattina.**
+1. **Salute → 💊 Medicinali**: aggiungi il medicinale (nome, **2,5 ml**, forma **fiale**), se non c'è già.
+2. **Salute → 📅 Terapie → ➕ Nuovo programma di terapia**.
+3. **Quando si prende**: scegli **🔁 A intervalli**. Scrivi **Ogni: giorni** e **Quanti: 15**.
+4. **Data della prima volta**: **19/12/2026** (il giorno del primo flaconcino). Sotto vedi le prime volte: 19/12, 03/01, 18/01, 02/02, 17/02.
+5. **Quantità per ogni assunzione**: «**1 flaconcino da 2,5 ml**». **A che ora**: **08:00**. Tocca **Salva**.
+6. **Salute → 💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto**: **data di avvio 19/12/2026**, **pastiglie nella scatola: 4**. Sopra leggi «Dal programma di terapia: 1 flaconcino da 2,5 ml ogni 15 giorni»: **non scrivere altro**, tocca **Salva**. Ti dice fino a quando bastano (qui fino al **16/02/2027**) e quando chiedere la ricetta.
+**Altri esempi:** una al mese → **mesi** e **1**; ogni 3 mesi → **mesi** e **3**; una ogni 2 settimane → **settimane** e **2**.
+Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **Ho preso**, e sul telefono arriva il promemoria all'ora scelta (e l'avviso se non registri la dose). Nei giorni in cui **non** va presa non succede niente.""",
+      "terapia intervalli ogni 15 giorni flaconcino fiala una al mese ogni tanto promemoria ora assunzione terapie", ("terapie", "intervalli"))
     a("farmacia", "f_scorte_intervalli", "Medicinali presi ogni tanto (una fiala ogni 15 giorni, una al mese…)",
       """Se un medicinale **non si prende ogni giorno** (per esempio **una fiala ogni 15 giorni** o **una al mese**) si imposta così, per avere la scorta giusta e l'avviso per la ricetta:
 1. In Salute tocca **💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto** (o **⚙️ Cambia**).
@@ -275,6 +287,7 @@ Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compi
 6. Sotto compare l'**anteprima**: «bastano per 4 volte. L'ultima è il …; la scorta basta fino al …». Tocca **Salva**.
 
 **Come ragiona:** conta le fiale **dosi per dosi** e ti avvisa prima del giorno in cui **la prossima fiala non sarebbe più coperta** (quella è la data entro cui serve la nuova scatola e quindi la ricetta). Esempi: **una al mese** → «ogni N mesi» con **1**; **ogni 3 mesi** → «ogni N mesi» con **3**; **una ogni 2 settimane** → «ogni N settimane» con **2**; **2 fiale ogni 10 giorni** → «ogni N giorni» con **10** e **2 a ogni volta**.
+**Se hai già creato la terapia «A intervalli»** (Salute → Terapie) **non serve ripetere**: le Scorte la leggono da sole; qui sotto scegli «A intervalli» solo se **non** hai una terapia per quel medicinale.
 Per i medicinali **di tutti i giorni** lascia **«Ogni giorno»**: leggo la terapia oppure scrivi quante pastiglie al giorno (si può scrivere anche una frazione, «1/15»). Gli **avvisi sul telefono** funzionano allo stesso modo.""",
       "scorte fiale ogni 15 giorni una al mese ogni tanto intervalli settimane mesi frequenza ricetta rinnovo", ("scorte", "intervalli"))
 
