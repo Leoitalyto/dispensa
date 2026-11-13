@@ -138,10 +138,15 @@ class ScambioErrore(Exception):
     pass
 
 
+def sc_e_file_scambio(nome, dati):
+    """Un file di scambio si riconosce dal NOME (finisce con .dispensa) oppure dal CONTENUTO (comincia con «DSP1»): se il telefono o un programma lo rinomina (.bin, .txt, «(1)»…) si apre lo stesso."""
+    return str(nome or "").lower().endswith(".dispensa") or bytes(dati or b"")[:4] == _SC_MAGIA
+
+
 def sc_apri(dati, password=""):
     """Dai byte del file al dizionario. Solleva ScambioErrore con un messaggio chiaro."""
     if not dati or not dati.startswith(_SC_MAGIA) or len(dati) < 6:
-        raise ScambioErrore("Questo non sembra un file di scambio della dispensa (deve finire con .dispensa).")
+        raise ScambioErrore("Questo non sembra un file di scambio della dispensa (è un file .dispensa creato da «Scambia i dati»).")
     modo, corpo = dati[4:5], dati[5:]
     try:
         if modo == b"P":
@@ -367,7 +372,7 @@ def sc_pannello(preselezionata=None):
                     f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + err_t if err_t else ('✅ File ricevuto.' if (ack_t.endswith(':fine')) else 'Tocca il pulsante arancione e scegli il file.')}</div>"
                     f"<span data-ca-ack='{ack_t}' style='display:none'></span><pre data-ca-log='1' style='display:none'></pre>", unsafe_allow_html=True)
     b = st.session_state.get("ca_bozza_in")
-    if b and str(b.get("nome", "")).lower().endswith(".dispensa"):             # il file arrivato dal pulsante arancione: si prende e non resta tra i documenti
+    if b and sc_e_file_scambio(b.get("nome"), b.get("dati")):                   # il file arrivato dal pulsante arancione: si prende e non resta tra i documenti
         st.session_state["sc_file"] = {"nome": b["nome"], "dati": b["dati"]}
         st.session_state.pop("ca_bozza_in", None)
         st.session_state.pop("sc_pacchetto", None)
@@ -375,7 +380,7 @@ def sc_pannello(preselezionata=None):
         st.warning(f"Il file «{b.get('nome', '')}» non è un file di scambio (.dispensa): lo ignoro.")
         st.session_state.pop("ca_bozza_in", None)
     alt = st.file_uploader("…oppure scegli il file da qui", key="sc_up", help="Se il pulsante arancione non funziona.")
-    if alt is not None and alt.name.lower().endswith(".dispensa") and (st.session_state.get("sc_file") or {}).get("nome") != alt.name:
+    if alt is not None and sc_e_file_scambio(alt.name, alt.getvalue()[:8]) and (st.session_state.get("sc_file") or {}).get("nome") != alt.name:
         st.session_state["sc_file"] = {"nome": alt.name, "dati": alt.getvalue()}
         st.session_state.pop("sc_pacchetto", None)
     f = st.session_state.get("sc_file")
