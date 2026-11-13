@@ -5,7 +5,7 @@ PRIMA: dei manuali l'app leggeva solo le prime pagine (per riconoscere marca e m
 • PDF con testo: si cerca in TUTTE le pagine all'istante, senza servizi esterni e senza costi.
 • Manuale scansionato o fotografato (pagine che sono immagini): la lettura OCR (Tesseract, gratuito, già nell'app) si fa a BLOCCHI di 10 pagine con il pulsante «📖 Leggi le prossime pagine»
   (ogni blocco richiede circa un minuto); quello che è già letto resta in memoria finché l'app non viene riavviata, quindi la volta dopo la ricerca è subito pronta.
-• La ricerca ignora maiuscole e accenti; con più parole cerca le pagine che le contengono TUTTE (quelle con più occorrenze per prime). Al massimo 10 pagine, con la frase evidenziata.
+• La ricerca ignora maiuscole e accenti; con più parole cerca le pagine che le contengono TUTTE (quelle con più occorrenze per prime). Al massimo 10 pagine, con la frase e le parole cercate evidenziate in giallo.
 • «👁️ Vedi la pagina N» mostra la pagina del manuale per intero.
 Nessun dato lascia l'app e non si scrive niente nell'archivio: il testo letto vive solo in memoria. Compare in ogni documento di tipo manuale (Casa → Manuali, e dentro ai Beni)."""
 import re as _cm_re
@@ -68,7 +68,8 @@ def cm_norma_conserva(t):
 
 
 def cm_evidenzia(frase, domanda):
-    """Le parole cercate in grassetto (la frase non contiene mai codice: si scrive con markdown semplice)."""
+    """La frase in HTML sicuro: ogni carattere è «escapato» e le parole cercate stanno dentro <mark> (sfondo giallo). Non si usa il grassetto: nell'app tutto il testo delle schede è già in grassetto."""
+    import html as _cm_html
     base = cm_norma_conserva(frase)
     spans = []
     for p in cm_parole(domanda):
@@ -83,10 +84,10 @@ def cm_evidenzia(frase, domanda):
             unite.append((s, e))
     out, pos = [], 0
     for s, e in unite:
-        out.append(frase[pos:s].replace("*", "").replace("_", " "))
-        out.append("**" + frase[s:e].replace("*", "").replace("_", " ") + "**")
+        out.append(_cm_html.escape(frase[pos:s]))
+        out.append("<mark style='background:#ffe066;color:#000;padding:0 2px;border-radius:3px;font-weight:700'>" + _cm_html.escape(frase[s:e]) + "</mark>")
         pos = e
-    out.append(frase[pos:].replace("*", "").replace("_", " "))
+    out.append(_cm_html.escape(frase[pos:]))
     return "".join(out)
 
 
@@ -247,7 +248,7 @@ def cm_pannello(d, k):
         for n, punti, frase in ris:
             with st.container(border=True):
                 st.markdown(f"**Pagina {n}** · {punti} volt{'a' if punti == 1 else 'e'}")
-                st.markdown(cm_evidenzia(frase, domanda))
+                st.markdown("<div style='font-weight:400;font-size:.95rem;line-height:1.5'>" + cm_evidenzia(frase, domanda) + "</div>", unsafe_allow_html=True)
                 if st.button(f"👁️ Vedi la pagina {n}", key=f"cm_v_{k}_{n}", width="stretch"):
                     st.session_state[chiave_pag] = n
         if st.session_state.get(chiave_pag):

@@ -282,7 +282,7 @@ Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **
       """Dentro ogni **manuale** archiviato puoi **cercare una parola** e vedere **in quali pagine** se ne parla: utile per un **codice di errore** o per sapere **come si pulisce il filtro**.
 1. **Casa → Manuali** (oppure dentro il bene): sotto il manuale tocca **🔎 Cerca dentro il manuale**.
 2. Scrivi la parola, per esempio **errore E4** o **pulizia filtro**. Con più parole trovo le pagine che le contengono **tutte**. Maiuscole e accenti non contano.
-3. Vedi **fino a 10 pagine**, quelle con più risultati per prime, con la **frase** e le parole in **grassetto**. Tocca **👁️ Vedi la pagina N** per vederla intera.
+3. Vedi **fino a 10 pagine**, quelle con più risultati per prime, con la **frase** e le parole cercate **evidenziate in giallo**. Tocca **👁️ Vedi la pagina N** per vederla intera.
 **Manuale in PDF con testo:** la ricerca è **subito** su tutte le pagine.
 **Manuale scansionato o fotografato** (le pagine sono immagini): va **letto una volta**. Tocca **📖 Leggi le prossime 10 pagine** (circa **1 minuto ogni blocco**, **non chiudere l'app**); puoi ripeterlo finché hai letto tutto. Quello che è già letto **resta in memoria** finché l'app non viene riavviata, così la volta dopo è subito pronto. Se non trovi la parola ti dico di leggere le altre pagine.
 È tutto **gratuito** e **resta nell'app**: non si manda niente a servizi esterni.""",
