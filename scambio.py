@@ -359,6 +359,11 @@ def sc_pannello(preselezionata=None):
                 st.warning("Il file è grande (oltre 20 MB): per mandarlo conviene Google Drive, oppure esportare una sezione alla volta o senza allegati.")
             nome_f = f"dispensa_{re.sub(r'[^A-Za-z0-9]+', '_', (st.session_state.get('sess') or {}).get('nome', 'utente'))}_{date.today().isoformat()}.dispensa"
             st.download_button("⬇ Scarica il file da dare all'altro utente", dati, file_name=nome_f, mime="application/octet-stream", key="sc_dl", width="stretch")
+            st.caption("Finché non lo scarichi, il file preparato sta solo nella memoria dell'app. Dopo averlo scaricato, la copia è nel telefono (cartella **Download**): per eliminarla usa l'app **File** del telefono.")
+            if st.button("🗑️ Scarta il file preparato", key="sc_scarta", width="stretch"):
+                st.session_state.pop("sc_pronto", None)
+                st.session_state["sc_msg"] = "🗑️ File preparato scartato. Se lo avevi già scaricato, cancellalo anche dalla cartella Download del telefono."
+                st.rerun()
         return
     # ---- importa
     st.caption("Chi ti ha dato il file **.dispensa**: scegli qui il file, scrivi la password se c'è, guarda cosa contiene e **aggiungi** quello che vuoi alle tue cose. Non cancello e non cambio niente di quello che hai già.")
