@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "5.0"
+GUIDA_VERSIONE = "5.1"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -278,6 +278,15 @@ Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compi
 **Altri esempi:** una al mese → **mesi** e **1**; ogni 3 mesi → **mesi** e **3**; una ogni 2 settimane → **settimane** e **2**.
 Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **Ho preso**, e sul telefono arriva il promemoria all'ora scelta (e l'avviso se non registri la dose). Nei giorni in cui **non** va presa non succede niente.""",
       "terapia intervalli ogni 15 giorni flaconcino fiala una al mese ogni tanto promemoria ora assunzione terapie", ("terapie", "intervalli"))
+    a("casa", "c_cerca_manuale", "Cercare una parola dentro un manuale (errore, pulizia del filtro, garanzia…)",
+      """Dentro ogni **manuale** archiviato puoi **cercare una parola** e vedere **in quali pagine** se ne parla: utile per un **codice di errore** o per sapere **come si pulisce il filtro**.
+1. **Casa → Manuali** (oppure dentro il bene): sotto il manuale tocca **🔎 Cerca dentro il manuale**.
+2. Scrivi la parola, per esempio **errore E4** o **pulizia filtro**. Con più parole trovo le pagine che le contengono **tutte**. Maiuscole e accenti non contano.
+3. Vedi **fino a 10 pagine**, quelle con più risultati per prime, con la **frase** e le parole in **grassetto**. Tocca **👁️ Vedi la pagina N** per vederla intera.
+**Manuale in PDF con testo:** la ricerca è **subito** su tutte le pagine.
+**Manuale scansionato o fotografato** (le pagine sono immagini): va **letto una volta**. Tocca **📖 Leggi le prossime 10 pagine** (circa **1 minuto ogni blocco**, **non chiudere l'app**); puoi ripeterlo finché hai letto tutto. Quello che è già letto **resta in memoria** finché l'app non viene riavviata, così la volta dopo è subito pronto. Se non trovi la parola ti dico di leggere le altre pagine.
+È tutto **gratuito** e **resta nell'app**: non si manda niente a servizi esterni.""",
+      "cerca manuale pagine parola errore ricerca testo scansione ocr pdf istruzioni filtro garanzia", ("manuale", "cerca"))
     a("farmacia", "f_calendario_allarmi", "Allarmi sul Calendario del telefono per terapie e visite",
       """Gli allarmi del **Calendario** del telefono **suonano anche con l'app, Chrome e internet chiusi**, e sono **gratuiti**. Si usano in più dei promemoria dell'app, non al posto.
 1. **Salute → 📅 Terapie** (oppure **🩺 Visite**), in fondo: apri **📅 Allarmi sul Calendario del telefono**.
