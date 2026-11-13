@@ -180,6 +180,29 @@ def cm_e_manuale(d):
         return d.get("tipo") in tipi
 
 
+def cm_spiegazione(k, n, testo):
+    """«✨ Spiegami in parole semplici» sotto una pagina trovata: usa la spiegazione che l'app ha GIÀ (assistente_extra.py: `mr_spiega`, servizio gratuito e facoltativo, con i suoi limiti
+    e i suoi messaggi). Se quel modulo o la chiave non ci sono, il pulsante non compare (o spiega come avere la chiave gratuita). Invia SOLO il testo di questa pagina, mai l'intero manuale."""
+    if not ("mr_ia_attiva" in globals() and "mr_spiega" in globals() and mr_ia_attiva()):
+        return
+    mem_sp = st.session_state.setdefault("cm_spiega", {})
+    chiave = f"{k}:{n}"
+    if st.button("✨ Spiegami in parole semplici", key=f"cm_ia_{k}_{n}", width="stretch"):
+        if "ad_attivo" in globals() and not ad_attivo():
+            st.info("Per le spiegazioni serve una **chiave gratuita** (di OpenRouter o di Google Gemini): è facoltativa. La guida per averla è nel pulsante «📚 Cerca nei miei manuali e documenti» → «✨ Spiegami…».")
+        else:
+            with st.spinner("Preparo la spiegazione…"):
+                sp, err = mr_spiega(testo)
+            if err:
+                msg = globals().get("_MR_IA_MSG", {}).get(err, "Non sono riuscito a preparare la spiegazione. Riprova fra poco.")
+                st.warning(msg)
+            else:
+                mem_sp[chiave] = sp
+    if mem_sp.get(chiave):
+        st.info("✨ **In parole semplici:**\n\n" + mem_sp[chiave])
+        st.caption("Spiegazione automatica: **può sbagliare**. Controlla sempre il manuale. Mandato al servizio gratuito solo il testo di questa pagina.")
+
+
 def cm_pannello(d, k):
     """Il riquadro «🔎 Cerca dentro il manuale» di un documento."""
     f = d.get("file") or {}
@@ -251,6 +274,7 @@ def cm_pannello(d, k):
                 st.markdown("<div style='font-weight:400;font-size:.95rem;line-height:1.5'>" + cm_evidenzia(frase, domanda) + "</div>", unsafe_allow_html=True)
                 if st.button(f"👁️ Vedi la pagina {n}", key=f"cm_v_{k}_{n}", width="stretch"):
                     st.session_state[chiave_pag] = n
+                cm_spiegazione(k, n, mem["testo"].get(n, ""))
         if st.session_state.get(chiave_pag):
             try:
                 _cm_mostra_pagina(dati, mime, st.session_state[chiave_pag])

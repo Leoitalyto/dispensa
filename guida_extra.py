@@ -285,7 +285,8 @@ Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **
 3. Vedi **fino a 10 pagine**, quelle con più risultati per prime, con la **frase** e le parole cercate **evidenziate in giallo**. Tocca **👁️ Vedi la pagina N** per vederla intera.
 **Manuale in PDF con testo:** la ricerca è **subito** su tutte le pagine.
 **Manuale scansionato o fotografato** (le pagine sono immagini): va **letto una volta**. Tocca **📖 Leggi le prossime 10 pagine** (circa **1 minuto ogni blocco**, **non chiudere l'app**); puoi ripeterlo finché hai letto tutto. Quello che è già letto **resta in memoria** finché l'app non viene riavviata, così la volta dopo è subito pronto. Se non trovi la parola ti dico di leggere le altre pagine.
-È tutto **gratuito** e **resta nell'app**: non si manda niente a servizi esterni.""",
+Sotto ogni pagina trovata c'è anche **✨ Spiegami in parole semplici** (facoltativo: serve la chiave gratuita di OpenRouter o Gemini; si manda al servizio **solo il testo di quella pagina**). La spiegazione **può sbagliare**: vale sempre il manuale.
+La ricerca è **gratuita** e **resta nell'app**: senza la spiegazione non si manda niente a servizi esterni.""",
       "cerca manuale pagine parola errore ricerca testo scansione ocr pdf istruzioni filtro garanzia", ("manuale", "cerca"))
     a("farmacia", "f_calendario_allarmi", "Allarmi sul Calendario del telefono per terapie e visite",
       """Gli allarmi del **Calendario** del telefono **suonano anche con l'app, Chrome e internet chiusi**, e sono **gratuiti**. Si usano in più dei promemoria dell'app, non al posto.
