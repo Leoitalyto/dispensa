@@ -115,6 +115,12 @@ def pn_scadenze():
             for p in (f.get("profili") or []):
                 for g, e in sp_esenzioni_scadenti(p, oggi_, 60):
                     out.setdefault("salute", []).append(f"🪪 {se_titolo(e)}" + (f" ({p.get('nome', '')})" if len(f.get("profili") or []) > 1 else "") + ": " + ("scaduta da %d giorni" % -g if g < 0 else "oggi" if g == 0 else f"scade tra {g} giorni"))
+        if "scorta_in_esaurimento" in globals():                                   # medicinali che stanno per finire (e ricetta non ancora chiesta)
+            try:
+                for nome_p, nome_m, g, _stt in scorta_in_esaurimento(f, oggi_):
+                    out.setdefault("salute", []).append(f"💊 {nome_m}" + (f" ({nome_p})" if len(f.get("profili") or []) > 1 else "") + ": " + ("finito" if g < 0 else "finisce oggi" if g == 0 else f"finisce tra {g} giorni"))
+            except Exception:
+                pass
         if "sp_controlli_scadenti" in globals():
             for p in (f.get("profili") or []):
                 for g, c in sp_controlli_scadenti(p, oggi_, 30):

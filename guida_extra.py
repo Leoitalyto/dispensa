@@ -12,11 +12,11 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.1"
+GUIDA_VERSIONE = "4.2"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
-    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "avvisi_prova.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
+    "farmacia": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "avvisi_prova.py", "salute_tutto.py", "salute_rilettura.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_catalogo.py", "famiglia.py", "invio.py", "cestino.py"]},
     "documenti": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["farmacia.py", "cestino.py"]},
     "archivio": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["archivio.py", "immagini_sicure.py", "cestino.py"]},
     "casa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["casa.py", "casa_amministrazione.py", "assistente_extra.py", "cestino.py"]},
@@ -234,6 +234,18 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
 
 In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiuti, ditte), **come si prenota**, i giorni di ritiro, il costo e la data del **prossimo ritiro prenotato**: il giorno prima ricevi un promemoria insieme alla raccolta.""",
       "raccolta differenziata calendario rifiuti organico carta plastica vetro ingombranti ritiro promemoria festivo variazione", ("raccolta", "rifiuti"))
+
+    # ================= Salute: scorte e rinnovo ricette
+    a("farmacia", "f_scorte", "Scorte dei medicinali e richiesta delle ricette alla dottoressa",
+      """Per sapere **quando finiscono le pastiglie** di una persona (per esempio tua madre):
+1. In Salute tocca **💊 Scorte e rinnovo ricette**.
+2. Sul medicinale tocca **➕ Tieni il conto** e scrivi **da quando comincia a prenderlo** (data di avvio), **quante pastiglie ci sono nella scatola** e, se serve, quante se ne prendono al giorno. Se hai creato la terapia (scheda Terapie) le leggo da lì: «1 compressa» per gli orari scelti.
+3. L'app calcola **fino a quando bastano** e ti avvisa **qualche giorno prima** (di partenza 7; puoi scegliere 3, 5, 7, 10 o 14), sul telefono (Telegram, email, WhatsApp, SMS) e dentro l'app, dove il pulsante Salute lampeggia.
+4. Quando un medicinale sta per finire compare la **bozza della email** per la dottoressa, già scritta, con la lista dei medicinali, come si prendono e fino a quando bastano. **La leggi, la correggi e la mandi tu** con **✉️ Apri la mail** (o su WhatsApp). Non parte niente da solo.
+5. Dopo aver chiesto la ricetta tocca **✅ Ho chiesto le ricette**: non ti avviso più finché non registri la nuova scatola con **🛒 Ho comprato**.
+
+È una **stima**: si presume che le dosi previste vengano prese. Se la scorta non torna, correggila con **🔢 Ne ho contate**. L'app non decide ricette né terapie: prepara solo la bozza.""",
+      "scorte medicinali pastiglie finiscono esaurimento ricetta dottoressa medico email rinnovo terapia avvio scatola", ("scorta", "medicinale"))
 
     # ================= avvisi: la prova
     a("farmacia", "f_avvisi_prova", "Provare se gli avvisi funzionano (messaggio di prova)",

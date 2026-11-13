@@ -962,6 +962,176 @@ def avvisi_controlli(oggi, bloccati, registra):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# 💊 SCORTE DEI MEDICINALI (Salute → Scorte e rinnovo ricette): avviso prima che le pastiglie finiscano. Il CALCOLO è la stessa copia di salute_scorte.py (l'app e questo programma
+# devono dare gli stessi giorni: c'è una prova che li confronta). Avvisa quando mancano i giorni scelti per quel medicinale (7 se non scelti), 3, 1 e il giorno stesso; se è finito, ogni
+# giorno per 3 giorni. Se si è segnato «Ho chiesto le ricette» non avvisa più, finché non si registra una nuova scatola.
+# ----------------------------------------------------------------------------------------------------------------------
+_SCORTA_PAROLE = {"mezza": 0.5, "mezzo": 0.5, "un": 1, "una": 1, "uno": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5, "sei": 6}
+
+
+def _scorta_num(v):
+    try:
+        return float(str(v).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
+def _scorta_data(iso):
+    try:
+        return date.fromisoformat(str(iso)[:10]) if iso else None
+    except ValueError:
+        return None
+
+
+def scorta_parse_dose(testo):
+    """«1 compressa», «2 compresse», «1/2», «½ compressa», «mezza compressa», «1,5», «una cpr», «due» → quante pastiglie per assunzione (None se non si capisce)."""
+    t = str(testo or "").lower().strip()
+    if not t:
+        return None
+    t = t.replace("½", " 0.5 ").replace("¼", " 0.25 ").replace("¾", " 0.75 ")
+    m = re.search(r"(\d+)\s*/\s*(\d+)", t)
+    if m and int(m.group(2)) > 0:
+        return round(int(m.group(1)) / int(m.group(2)), 4)
+    m = re.search(r"\d+(?:[.,]\d+)?", t)
+    if m:
+        return _scorta_num(m.group(0))
+    for parola, valore in _SCORTA_PAROLE.items():
+        if re.search(r"\b" + parola + r"\b", t):
+            return float(valore)
+    return None
+
+
+def _scorta_terapie_di(terapie, pid, med_id):
+    return [t for t in terapie if isinstance(t, dict) and t.get("profilo", "p0") == pid and t.get("med") == med_id]
+
+
+def _scorta_consumo_terapie(rilevanti, d):
+    """Pastiglie previste dalle terapie in un giorno (stesse regole di Terapie: giorni, inizio, fine, sospesa)."""
+    tot = 0.0
+    for t in rilevanti:
+        if d.weekday() not in (t.get("giorni") or []):
+            continue
+        ini, fin = _scorta_data(t.get("inizio")), _scorta_data(t.get("fine"))
+        if (ini and d < ini) or (fin and d > fin):
+            continue
+        if t.get("stato") in ("sospesa", "terminata"):
+            dal = _scorta_data(t.get("stato_dal"))
+            if dal is None or d >= dal:
+                continue
+        q = scorta_parse_dose(t.get("quantita"))
+        if q is None:
+            continue
+        tot += q * len(t.get("orari") or [])
+    return tot
+
+
+def scorta_calcola(med, terapie, pid, oggi_):
+    """Lo stato della scorta di un medicinale.
+    → {stato: spento | dati_mancanti | senza_terapia | dose_non_capita | nessun_consumo | ok | ok_lungo | in_esaurimento | finito, ultima (ultimo giorno coperto), giorni (da oggi), restano, per_giorno, preavviso, richiesto}"""
+    sc = med.get("scorta") or {}
+    if not sc.get("attiva"):
+        return {"stato": "spento"}
+    avvio, iniz = _scorta_data(sc.get("avvio")), _scorta_num(sc.get("pastiglie"))
+    pre = int(_scorta_num(sc.get("preavviso")) or 7)
+    ris = {"stato": "dati_mancanti", "ultima": None, "giorni": None, "restano": None, "per_giorno": None, "preavviso": pre, "richiesto": _scorta_data(sc.get("rinnovo_richiesto"))}
+    if avvio is None or iniz is None or iniz < 0:
+        return ris
+    manuale = _scorta_num(sc.get("per_giorno"))
+    if manuale is not None and manuale <= 0:
+        manuale = None
+    rilevanti = _scorta_terapie_di(terapie, pid, med.get("id"))
+    if manuale is None:
+        if not rilevanti:
+            ris["stato"] = "senza_terapia"
+            return ris
+        if any(scorta_parse_dose(t.get("quantita")) is None for t in rilevanti if t.get("stato") not in ("terminata",)):
+            ris["stato"] = "dose_non_capita"
+            return ris
+
+    def consumo(d):
+        return manuale if manuale is not None else _scorta_consumo_terapie(rilevanti, d)
+    cum, ultima, d, finisce, passati = 0.0, None, avvio, False, 0.0
+    for _ in range(1800):
+        c = consumo(d)
+        if d < oggi_:
+            passati += c
+        if c > 0:
+            if cum + c > iniz + 1e-9:
+                finisce = True
+                break
+            cum += c
+            ultima = d
+        d += timedelta(days=1)
+    ris["restano"] = max(0.0, round(iniz - passati, 2))
+    ris["per_giorno"] = round(sum(consumo(oggi_ + timedelta(days=k)) for k in range(7)) / 7, 2)
+    if ultima is None and not finisce:
+        ris["stato"] = "nessun_consumo"
+        return ris
+    if not finisce:
+        ris["stato"], ris["ultima"], ris["giorni"] = "ok_lungo", ultima, (ultima - oggi_).days
+        return ris
+    if ultima is None:                                                                  # non bastano nemmeno per la prima dose
+        ultima = avvio - timedelta(days=1)
+    ris["ultima"], ris["giorni"] = ultima, (ultima - oggi_).days
+    ris["stato"] = "finito" if ris["giorni"] < 0 else ("in_esaurimento" if ris["giorni"] <= pre else "ok")
+    return ris
+
+
+
+
+def raccogli_scorte(d, oggi):
+    """[(medicinale con dosaggio, persona o '', giorni, ultimo giorno coperto, restano, stato)] per i medicinali da avvisare oggi."""
+    f = d.get("farmacia") or {}
+    profili = {x.get("id"): x.get("nome", "") for x in (f.get("profili") or []) if isinstance(x, dict)}
+    out = []
+    for m in f.get("medicinali", []):
+        if not isinstance(m, dict):
+            continue
+        pid = m.get("profilo", "p0")
+        try:
+            r = scorta_calcola(m, f.get("terapie", []), pid, oggi)
+        except Exception:
+            continue
+        if r["stato"] not in ("in_esaurimento", "finito") or r.get("richiesto"):
+            continue
+        g = r["giorni"]
+        if g in {r["preavviso"], 3, 1, 0} or -3 <= g < 0:
+            nome = (m.get("nome") or "Medicinale") + (f" {m['dosaggio']}" if m.get("dosaggio") else "")
+            out.append((nome, profili.get(pid, "") if len(profili) > 1 else "", g, r["ultima"], r["restano"], r["stato"]))
+    return sorted(out, key=lambda x: x[2])
+
+
+def testo_scorte(oggi, voci):
+    righe = [f"💊 Scorte – promemoria del {oggi.strftime('%d/%m/%Y')}", ""]
+    for nome, pers, g, ultima, restano, stato in voci:
+        quando = "è finito" if g < 0 else "finisce oggi" if g == 0 else "finisce domani" if g == 1 else f"finisce tra {g} giorni"
+        righe.append(f"• {nome}" + (f" ({pers})" if pers else "") + f": {quando}" + (f" (le pastiglie bastano fino al {ultima.strftime('%d/%m/%Y')})" if ultima and g >= 0 else "") + (f" – ne restano circa {restano:g}" if g >= 0 and restano is not None else "") + ".")
+    righe += ["", "Per chiedere la ricetta: apri l'app → Salute → 💊 Scorte e rinnovo ricette. Lì trovi la bozza dell'email per la dottoressa: la ricontrolli e la mandi tu."]
+    return "\n".join(righe)
+
+
+def avvisi_scorte(oggi, bloccati, registra):
+    """Le scorte che stanno per finire, a chiunque tenga il conto di qualche medicinale, sui canali che ha scelto."""
+    for uid, d in utenti_attivi(bloccati):
+        voci = raccogli_scorte(d, oggi)
+        if not voci:
+            continue
+        testo = testo_scorte(oggi, voci)
+        for canale in canali_di(d):
+            if canale == "telegram" and str(d.get("telegram_chat_id") or "").strip():
+                esito = invia_telegram(str(d["telegram_chat_id"]).strip(), testo)
+            elif canale == "email" and (d.get("avviso_email") or "").strip():
+                esito = invia_email(d["avviso_email"].strip(), "Scorte dei medicinali - La nostra dispensa", testo)
+            elif canale == "sms" and (d.get("avviso_sms") or "").strip():
+                esito = invia_sms(d["avviso_sms"].strip(), f"Scorte: {len(voci)} medicinal{'e' if len(voci) == 1 else 'i'} in esaurimento. Apri l'app.")
+            elif canale == "whatsapp" and (d.get("avviso_whatsapp") or "").strip():
+                esito = invia_whatsapp(d["avviso_whatsapp"], d.get("avviso_whatsapp_chiave"), testo)
+            else:
+                continue
+            registra(f"{uid}-scorte", canale, esito)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # «📨 Mandami un messaggio di prova»: la persona tocca il pulsante nell'app (che scrive d["avviso_prova"] = {id, quando} nei suoi dati). Qui, a ogni controllo automatico
 # (ogni mezz'ora di giorno e ogni mattina), si manda il messaggio di prova su OGNI canale che ha scelto e si scrive l'ESITO in prove_avvisi/<persona>.json: l'app lo legge e
 # mostra ✅ o ❌ per canale, con cosa fare. Serve il permesso di scrittura del workflow (permissions: contents: write + GITHUB_TOKEN, come per la posta): se manca, il messaggio
@@ -1152,6 +1322,10 @@ def main():
         avvisi_dispensa_famiglia(oggi, bloccati, registra)
         avvisi_casa(oggi, bloccati, registra)
         avvisi_controlli(oggi, bloccati, registra)
+        try:
+            avvisi_scorte(oggi, bloccati, registra)
+        except Exception as e:                                            # una scorta con dati strani non ferma gli altri avvisi
+            print(f"Scorte: errore ({type(e).__name__}: {e})")
     # il capo famiglia (account «admin»): riepilogo del mattino e dosi non registrate
     d_capo = leggi("dispense/admin.json")
     if "admin" not in bloccati:
