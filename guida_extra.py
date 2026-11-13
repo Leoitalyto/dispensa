@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.8"
+GUIDA_VERSIONE = "4.9"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -271,9 +271,10 @@ Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compi
 1. **Salute → 💊 Medicinali**: aggiungi il medicinale (nome, **2,5 ml**, forma **fiale**), se non c'è già.
 2. **Salute → 📅 Terapie → ➕ Nuovo programma di terapia**.
 3. **Quando si prende**: scegli **🔁 A intervalli**. Scrivi **Ogni: giorni** e **Quanti: 15**.
-4. **Data della prima volta**: **19/12/2026** (il giorno del primo flaconcino). Sotto vedi le prime volte: 19/12, 03/01, 18/01, 02/02, 17/02.
-5. **Quantità per ogni assunzione**: «**1 flaconcino da 2,5 ml**». **A che ora**: **08:00**. Tocca **Salva**.
-6. **Salute → 💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto**: **data di avvio 19/12/2026**, **pastiglie nella scatola: 4**. Sopra leggi «Dal programma di terapia: 1 flaconcino da 2,5 ml ogni 15 giorni»: **non scrivere altro**, tocca **Salva**. Ti dice fino a quando bastano (qui fino al **16/02/2027**) e quando chiedere la ricetta.
+4. **Data della prima volta**: **19/12/2026** (il giorno del primo flaconcino).
+5. **Quante volte in tutto**: **4** (i 4 flaconcini). Sotto vedi **esattamente 4 date**: 19/12, 03/01, 18/01, 02/02. **Dopo l'ultima la terapia finisce da sola** e non ti arrivano più promemoria. Se la terapia invece continua nel tempo lascia **0**: allora vedi solo un'anteprima delle prime 5 date.
+6. **Quantità per ogni assunzione**: «**1 flaconcino da 2,5 ml**». **A che ora**: **08:00**. Tocca **Salva**.
+7. **Salute → 💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto**: **data di avvio 19/12/2026**, **pastiglie nella scatola: 4**. Sopra leggi «Dal programma di terapia: 1 flaconcino da 2,5 ml ogni 15 giorni»: **non scrivere altro**, tocca **Salva**. Ti dice fino a quando bastano: per un ciclo di 4 volte bastano **per tutto il ciclo** (qui fino al **02/02/2027**); se la terapia continua, fino al giorno prima della prima fiala non coperta (**16/02/2027**), e quando chiedere la ricetta.
 **Altri esempi:** una al mese → **mesi** e **1**; ogni 3 mesi → **mesi** e **3**; una ogni 2 settimane → **settimane** e **2**.
 Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **Ho preso**, e sul telefono arriva il promemoria all'ora scelta (e l'avviso se non registri la dose). Nei giorni in cui **non** va presa non succede niente.""",
       "terapia intervalli ogni 15 giorni flaconcino fiala una al mese ogni tanto promemoria ora assunzione terapie", ("terapie", "intervalli"))

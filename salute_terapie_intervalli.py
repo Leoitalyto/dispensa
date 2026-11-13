@@ -79,6 +79,14 @@ def ter_prossime(t, da, n=5):
     return out
 
 
+def ter_data_ultima(intervallo, prima, volte):
+    """La data dell'ultima di `volte` assunzioni (un ciclo di N flaconcini, N compresse…): None se non si può calcolare."""
+    if not volte or int(volte) < 1:
+        return None
+    p = ter_prossime({"intervallo": intervallo, "inizio": prima.isoformat()}, prima, int(volte))
+    return p[-1] if len(p) == int(volte) else None
+
+
 @st.dialog("Programma di terapia")
 def _fa_dialogo_terapia(pid, ter_id=None):                                                  # noqa: F811
     """La finestra di prima, con in più «Quando si prende»: giorni della settimana oppure a intervalli (ogni N giorni, settimane o mesi)."""
@@ -99,6 +107,7 @@ def _fa_dialogo_terapia(pid, ter_id=None):                                      
     modo = st.radio("Quando si prende", modi, index=1 if iv0 else 0, key=k + "_modo")
     a_intervalli = modo == modi[1]
     tipo_i = ogni_i = prima_i = None
+    volte_i, fine_calc = 0, None
     if a_intervalli:
         tipi = ["giorni", "settimane", "mesi"]
         c1, c2 = st.columns(2, gap="small")
@@ -106,10 +115,20 @@ def _fa_dialogo_terapia(pid, ter_id=None):                                      
         ogni_i = c2.number_input("Quanti", min_value=1, max_value=365, step=1, value=int(iv0["ogni"]) if iv0 else 15, key=k + "_ogni")
         prima_i = st.date_input("Data della prima volta", value=_fa_data(ter.get("inizio")) or oggi(), format="DD/MM/YYYY", min_value=date(2000, 1, 1), max_value=date(2100, 12, 31), key=k + "_prima")
         st.info("**Esempio:** 4 flaconcini da prendere uno ogni 15 giorni → **Ogni: giorni**, **Quanti: 15**, **Data della prima volta**: il giorno del primo flaconcino, "
-                "**Quantità**: «1 flaconcino da 2,5 ml». Per «uno al mese» scegli **mesi** e **1**.")
-        prossime = ter_prossime({"intervallo": {"tipo": tipo_i, "ogni": int(ogni_i)}, "inizio": prima_i.isoformat()}, prima_i, 5)
-        if prossime:
-            st.success("Le prime volte: " + " · ".join(d.strftime("%d/%m/%Y") for d in prossime))
+                "**Quante volte in tutto**: 4, **Quantità**: «1 flaconcino da 2,5 ml». Per «uno al mese» scegli **mesi** e **1**.")
+        volte_i = int(st.number_input("Quante volte in tutto (0 = continua senza fine)", min_value=0, max_value=200, step=1, value=int(ter.get("volte") or 0), key=k + "_volte",
+                                      help="Se è un ciclo di 4 flaconcini scrivi 4: la terapia finisce da sola dopo l'ultimo e non ti arrivano più promemoria. Se continua nel tempo lascia 0."))
+        iv_ = {"tipo": tipo_i, "ogni": int(ogni_i)}
+        if volte_i > 0:
+            prossime = ter_prossime({"intervallo": iv_, "inizio": prima_i.isoformat()}, prima_i, volte_i)
+            fine_calc = prossime[-1] if prossime else None
+            if prossime:
+                st.success(f"Le {volte_i} volte: " + " · ".join(d.strftime("%d/%m/%Y") for d in prossime) + ". **Dopo l'ultima la terapia finisce da sola.**")
+        else:
+            prossime = ter_prossime({"intervallo": iv_, "inizio": prima_i.isoformat()}, prima_i, 5)
+            if prossime:
+                st.success("Le prime volte: " + " · ".join(d.strftime("%d/%m/%Y") for d in prossime))
+                st.caption("Queste sono **solo le prime 5**: senza «Quante volte in tutto» o una data di fine, la terapia continua e i promemoria non si fermano.")
     with st.form("fa_form_ter"):
         med = st.selectbox("Medicinale", ids, format_func=lambda i: etich[i], index=_fa_idx(ids, ter.get("med")))
         quantita = st.text_input("Quantità per ogni assunzione, come scritto nella prescrizione", value=ter.get("quantita", ""), placeholder="es. 1 compressa" if not a_intervalli else "es. 1 flaconcino da 2,5 ml")
@@ -118,7 +137,11 @@ def _fa_dialogo_terapia(pid, ter_id=None):                                      
             giorni = st.multiselect("Giorni della settimana", list(range(7)), default=ter.get("giorni", list(range(7))) if not iv0 else list(range(7)), format_func=lambda i: GIORNI_SETT[i])
         orari = st.multiselect("Orari (puoi sceglierne più di uno)" if not a_intervalli else "A che ora (il promemoria arriva a quest'ora)", ORARI_TER, default=[o for o in ter.get("orari", []) if o in ORARI_TER])
         if a_intervalli:
-            fine = st.date_input("Fine (facoltativa)", value=_fa_data(ter.get("fine")), format="DD/MM/YYYY", min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
+            if volte_i > 0:
+                fine = fine_calc
+                st.caption("Fine: " + (fine_calc.strftime("%d/%m/%Y") if fine_calc else "—") + " (calcolata dalle volte)")
+            else:
+                fine = st.date_input("Fine (facoltativa)", value=_fa_data(ter.get("fine")), format="DD/MM/YYYY", min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
             inizio = prima_i
         else:
             c1, c2 = st.columns(2)
@@ -135,7 +158,7 @@ def _fa_dialogo_terapia(pid, ter_id=None):                                      
             st.error("La data di fine non può essere prima di quella di inizio." if not a_intervalli else "La data di fine non può essere prima della data della prima volta.")
             return
         rec = {"profilo": pid, "med": med, "nome_med": etich[med], "quantita": quantita.strip(), "giorni": sorted(giorni) if not a_intervalli else [], "orari": sorted(orari), "inizio": inizio.isoformat(),
-               "fine": fine.isoformat() if fine else None, "note": note.strip(), "stato": stato, "intervallo": {"tipo": tipo_i, "ogni": int(ogni_i)} if a_intervalli else None}
+               "fine": fine.isoformat() if fine else None, "note": note.strip(), "stato": stato, "intervallo": {"tipo": tipo_i, "ogni": int(ogni_i)} if a_intervalli else None, "volte": volte_i if (a_intervalli and volte_i > 0) else None}
         if stato != ter.get("stato", "attiva"):                                             # sospesa o terminata da oggi: lo storico resta
             rec["stato_dal"] = oggi().isoformat()
             if stato == "terminata" and (not fine or fine > oggi()):
