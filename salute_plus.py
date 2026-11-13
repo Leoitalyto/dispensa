@@ -52,6 +52,8 @@ _SP_CSS = """<style>
 .st-key-sp_a_param button{background:linear-gradient(135deg,#26c6da,#00838f) !important}
 .st-key-sp_a_controlli button{background:linear-gradient(135deg,#ec407a,#ad1457) !important}
 .st-key-sp_a_esenzioni button{background:linear-gradient(135deg,#8d6e63,#4e342e) !important}
+.st-key-sp_a_scorte button{background:linear-gradient(135deg,#66bb6a,#1b5e20) !important}
+.st-key-sp_a_tutto button{background:linear-gradient(135deg,#78909c,#37474f) !important}
 .st-key-sp_azioni > div:nth-child(odd):last-child,.st-key-sp_azioni [data-testid='stVerticalBlock'] > div:nth-child(odd):last-child{grid-column:1 / -1}
 .sp-card{background:rgba(255,255,255,.88);border-radius:16px;padding:10px 14px;margin:8px 0;color:#1b2b2b}
 .sp-alert{background:#ffebee;border:2px solid #c62828;border-radius:16px;padding:10px 14px;margin:8px 0;color:#7f0000;font-weight:700}
