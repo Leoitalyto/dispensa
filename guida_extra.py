@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.2"
+GUIDA_VERSIONE = "4.3"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -209,7 +209,7 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
 2. Scegli **quanti giorni prima** vuoi essere avvisato (di solito 30, 15, 7, 3 e 1) e, se vuoi, l'amministratore.
 3. Per ogni rata tocca **💶 Pagata**: puoi registrare anche un **pagamento parziale** (resta il residuo). **✏️ Modifica** cambia data e importo **senza perdere i pagamenti già fatti**; **↩️ Annulla pagamento** toglie l'ultimo.
 4. Gli stati: 🔵 **da pagare**, 🟠 **in scadenza** (entro 15 giorni), 🟢 **pagata**, 🔴 **scaduta**. In cima c'è il **riepilogo**: totale dell'anno, già pagato, ancora da pagare e rate scadute, più lo **storico dei pagamenti**.
-5. **📥 Importa un documento**: carichi l'**avviso di pagamento**, il **piano delle rate**, il **bollettino** o la **ricevuta** (foto, galleria, PDF, più file: gli stessi modi di Documenti). Lo **leggo** e ti propongo la spesa con le sue rate (date e importi già scritti, che puoi correggere). Se è la **ricevuta di un bonifico**, ti propongo la rata da segnare pagata. **Controlli e confermi tu**; il file originale resta archiviato in Documenti e si allega alla spesa. Se lo carichi due volte, non si archivia due volte.
+5. **📥 Importa un documento**: carichi l'**avviso di pagamento**, il **piano delle rate**, il **bollettino** o la **ricevuta** (foto, galleria, PDF, più file: gli stessi modi di Documenti). Lo **leggo** e ti propongo la spesa con le sue rate (date e importi già scritti, che puoi correggere). Se è la **ricevuta di un bonifico**, ti propongo la rata da segnare pagata. **Controlli e confermi tu**; il file originale resta archiviato in Documenti e si allega alla spesa. Se nell'avviso trovo anche i **dati dell'amministratore** (IBAN, email, PEC, telefono, studio…), ti propongo di salvarli in **Dati amministrazione**: se c'è già, aggiungo solo i campi che mancano. Se lo carichi due volte, non si archivia due volte.
 6. **📎 Allega** collega ad una spesa documenti **già archiviati** in Documenti.
 
 **Spese che si ripetono sempre** (assicurazione, quote annuali): spunta «La spesa si ripete sempre»: dopo ogni pagamento l'app aggiunge le scadenze future, senza doppioni.
@@ -226,10 +226,10 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
     a("casa", "c_raccolta", "Raccolta differenziata e ritiro ingombranti",
       """In **Amministrazione → Raccolta differenziata** costruisci il calendario della tua zona.
 1. Tocca **➕ Crea il calendario**: compare la tabella con i **sette giorni** (Giorno, Tipo di rifiuto, Note; niente orari; il giorno di oggi è evidenziato in verde).
-2. Tocca un giorno (Lun, Mar…) e scegli **uno o più tipi**: organico, indifferenziato, carta, vetro, plastica, metalli o un tipo tuo. Lo **stesso tipo può stare in più giorni**. Puoi spuntare **«Nessuna raccolta»**.
+2. Scegli il giorno (Lun, Mar…) e tocca **✏️ Modifica**: scegli **uno o più tipi**: organico, indifferenziato, carta, vetro, plastica, metalli o un tipo tuo. Lo **stesso tipo può stare in più giorni**. Puoi spuntare **«Nessuna raccolta»**.
 3. **Variazioni**: per un festivo o un giorno straordinario aggiungi una data con i rifiuti di quel giorno oppure «nessuna raccolta».
 4. **Colori**: in **🎨 Colori dei rifiuti** scegli il colore di ogni tipo (anche di quelli che crei tu) tra 10 colori; **↩️ Colori di partenza** rimette quelli iniziali (organico marrone, indifferenziato verde, carta gialla, vetro blu, plastica rossa, metalli grigi). I colori valgono per tutta la casa e compaiono anche nei messaggi.
-5. **Programmi**: **➕ Programma** o **📑 Duplica** creano un altro calendario (per esempio «Estate»); **✅ Usa questo programma** decide quale segue gli avvisi.
+5. **Programmi**: nella tendina **⚙️ Programmi**, **➕ Programma** o **📑 Duplica** creano un altro calendario (per esempio «Estate»); **✅ Usa questo programma** decide quale segue gli avvisi.
 6. **Avvisi**: sono **spenti** finché non tocchi **🔔 Accendi gli avvisi** (in cima alla tabella); per fermarli tocca **🔕 Spegni gli avvisi**. Quando sono accesi puoi scegliere la **sera prima** (di solito alle 20:00), la **mattina stessa** e un **secondo promemoria**, a ore tue e solo per i tipi che vuoi. Il messaggio arriva **entro mezz'ora dall'ora scelta**. Spegnendoli non ricevi nemmeno il promemoria degli ingombranti. Per un **allarme del telefono** scarica il calendario (.ics): con gli avvisi spenti il calendario non ha allarmi.
 
 In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiuti, ditte), **come si prenota**, i giorni di ritiro, il costo e la data del **prossimo ritiro prenotato**: il giorno prima ricevi un promemoria insieme alla raccolta.""",

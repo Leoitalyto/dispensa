@@ -1395,22 +1395,18 @@ def _amm_schermata_raccolta(c):
                 f"<colgroup><col style='width:22%'><col style='width:48%'><col style='width:30%'></colgroup>"
                 f"<thead><tr><th style='{TH}'>Giorno</th><th style='{TH}'>Tipo di rifiuto</th><th style='{TH};border-right:none'>Note</th></tr></thead><tbody>"
                 + tr + "</tbody></table></div>", unsafe_allow_html=True)
-    st.caption("Tocca un giorno per scegliere cosa si ritira (anche più tipi, anche lo stesso tipo in giorni diversi).")
-    for riga in (range(0, 4), range(4, 7)):
-        cols = st.columns(len(riga), gap="small")
-        for col, g in zip(cols, riga):
-            if col.button(f"✏️ {AMM_GIORNI[g][:3]}", key=f"amm_gg_b_{p['id']}_{g}", width="stretch"):
-                _amm_dlg_giorno(c, p, g)
-    b1, b2, b3 = st.columns(3, gap="small")
-    if b1.button("➕ Programma", key="amm_pr_nuovo", width="stretch"):
-        _amm_dlg_programma(c, None)
-    if b2.button("📑 Duplica", key="amm_pr_dup", width="stretch"):
-        copia = amm_programma_duplica(p)
-        _amm_salva(lambda cc: cc.setdefault("raccolta", []).append(copia), "Raccolta: programma duplicato")
-        st.session_state["amm_rc_sel"] = copia["id"]
-        st.rerun()
-    if b3.button("✏️ Nome", key="amm_pr_nome", width="stretch"):
-        _amm_dlg_programma(c, p)
+    # UN SOLO menu per modificare un giorno (prima erano 7 tasti uno sotto l'altro): scegli il giorno e tocca «Modifica»
+    brevi = [g_[:3] for g_ in AMM_GIORNI]
+    st.markdown("**✏️ Cosa si ritira, giorno per giorno**")
+    if st.session_state.get("amm_gg_sel") not in brevi and "amm_gg_sel" in st.session_state and st.session_state["amm_gg_sel"] is not None:
+        st.session_state.pop("amm_gg_sel", None)
+    scelto = st.pills("Scegli il giorno da modificare", brevi, default=brevi[oggi_.weekday()], key="amm_gg_sel", label_visibility="collapsed")
+    if scelto in brevi:
+        g_sel = brevi.index(scelto)
+        if st.button(f"✏️ Modifica {AMM_GIORNI[g_sel]}", key=f"amm_gg_modifica_{p['id']}", width="stretch", type="primary"):
+            _amm_dlg_giorno(c, p, g_sel)
+    else:
+        st.caption("Tocca un giorno qui sopra per scegliere cosa si ritira (anche più tipi, anche lo stesso tipo in giorni diversi).")
     if p["id"] != att["id"] and st.button("✅ Usa questo programma per gli avvisi", key="amm_pr_usa", width="stretch", type="primary"):
         def _fn(cc):
             for x in cc.get("raccolta", []):
@@ -1418,8 +1414,20 @@ def _amm_schermata_raccolta(c):
                     x["attivo"] = x.get("id") == p["id"]
         _amm_salva(_fn, "Raccolta: programma in uso")
         st.rerun()
-    if len(programmi) > 1 and st.button("🗑️ Elimina questo programma", key="amm_pr_el", width="stretch"):
-        _amm_dlg_elimina(c, "raccolta", p["id"], p.get("nome", "programma"), "Le variazioni restano.")
+    with st.expander("⚙️ Programmi: crea un altro calendario, duplica, cambia nome, elimina"):
+        b1, b2, b3 = st.columns(3, gap="small")
+        if b1.button("➕ Programma", key="amm_pr_nuovo", width="stretch"):
+            _amm_dlg_programma(c, None)
+        if b2.button("📑 Duplica", key="amm_pr_dup", width="stretch"):
+            copia = amm_programma_duplica(p)
+            _amm_salva(lambda cc: cc.setdefault("raccolta", []).append(copia), "Raccolta: programma duplicato")
+            st.session_state["amm_rc_sel"] = copia["id"]
+            st.rerun()
+        if b3.button("✏️ Nome", key="amm_pr_nome", width="stretch"):
+            _amm_dlg_programma(c, p)
+        if len(programmi) > 1 and st.button("🗑️ Elimina questo programma", key="amm_pr_el", width="stretch"):
+            _amm_dlg_elimina(c, "raccolta", p["id"], p.get("nome", "programma"), "Le variazioni restano.")
+
     # i colori dei rifiuti
     with st.expander("🎨 Colori dei rifiuti: scegli il colore di ogni tipo"):
         st.caption("Ogni tipo di rifiuto ha il suo colore: scegli quello che usa la tua zona (per esempio il sacco o il bidone). Vale per tutta la casa e anche per i messaggi.")
@@ -1640,12 +1648,50 @@ def _amm_scegli_importo(finestra, dopo=0):
     return None
 
 
+_AMM_RE_EMAIL = re.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+")
+_AMM_RE_PEC = re.compile(r"@(?:[\w\-]+\.)*(?:pec|legalmail|postecert|cert|arubapec)\b", re.I)
+
+
+def amm_leggi_amministratore(testo):
+    """I dati dell'AMMINISTRATORE che si leggono in un avviso: IBAN (solo se il codice di controllo torna), email, PEC, telefono o cellulare, studio, nome, condominio, codice fiscale o P.IVA.
+    Solo i campi trovati. Sono una PROPOSTA: chi usa l'app controlla prima di salvarli."""
+    t = str(testo or "")
+    out = {}
+    mi = re.search(r"IT\d{2}[A-Z]\d{10}[A-Z0-9]{12}", t.replace(" ", "").upper())
+    if mi and amm_iban_valido(mi.group(0)):
+        out["iban"] = mi.group(0)
+    for riga in t.splitlines():
+        for m in _AMM_RE_EMAIL.finditer(riga):
+            e = m.group(0).lower().strip(".")
+            prima = riga[max(0, m.start() - 16):m.start()]                              # l'etichetta subito prima: «PEC: …» oppure «Email: …»
+            if re.search(r"pec", prima, re.I) or (_AMM_RE_PEC.search(e) and not re.search(r"e-?mail|posta", prima, re.I)):
+                out.setdefault("pec", e)
+            else:
+                out.setdefault("email", e)
+    for m in re.finditer(r"(?:tel(?:efono)?|cell(?:ulare)?)\.?\s*[:\-]?\s*(\+?\d[\d\s/.\-]{6,14}\d)", t, re.I):
+        num = re.sub(r"\s+", " ", m.group(1)).strip()
+        out.setdefault("cellulare" if re.match(r"(?:39)?3\d{8,9}$", re.sub(r"\D", "", num)) else "telefono", num)
+    m = re.search(r"\b([Ss]tudio\s+[A-ZÀ-Ý][\w'’&.\- ]{2,40}?)(?=\s+[-–—|]|\s*$|\s*[,;\n])", t, re.M)
+    if m:
+        out["studio"] = m.group(1).strip()
+    m = re.search(r"amministratore(?:\s+di\s+condominio)?\s*[:\-]\s*([A-Za-zÀ-ÿ'’. ]{4,40}?)(?=\s+[-–—|]|\s*$|\s*[,;\n])", t, re.I | re.M)
+    if m:
+        out["nome"] = m.group(1).strip()
+    m = re.search(r"\b([Cc]ondominio\s+[A-ZÀ-Ý][\w'’ ]{2,30}?)(?=\s+[-–—|]|\s*$|\s*[,;\n])", t, re.M)
+    if m:
+        out["condominio"] = m.group(1).strip()
+    m = re.search(r"(?:p\.?\s*iva|partita\s+iva|c\.?\s*f\.?|cod(?:ice)?\.?\s*fisc(?:ale)?)\s*[:\-]?\s*(\d{11}|[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])\b", t, re.I)
+    if m:
+        out["cf_piva"] = m.group(1).upper()
+    return out
+
+
 def amm_leggi_avviso(testo, oggi_=None):
     """Legge il testo di un avviso di pagamento / piano rate / bollettino / ricevuta. NON decide niente: propone.
     → {tipo: 'avviso'|'ricevuta'|'altro', rate: [(data, importo, n)], totale, n_dichiarato, pagamento: {data, importo}, iban, descrizione, categoria, affidabilita, note[]}"""
     oggi_ = oggi_ or date.today()
     righe = [r.strip() for r in str(testo or "").splitlines() if r.strip()]
-    ris = {"tipo": "altro", "rate": [], "totale": None, "n_dichiarato": None, "pagamento": None, "iban": "", "descrizione": "", "categoria": "Spese condominiali ordinarie", "affidabilita": "bassa", "note": []}
+    ris = {"tipo": "altro", "rate": [], "totale": None, "n_dichiarato": None, "pagamento": None, "iban": "", "descrizione": "", "categoria": "Spese condominiali ordinarie", "affidabilita": "bassa", "note": [], "amministratore": {}}
     if not righe:
         return ris
     cand = []
@@ -1731,6 +1777,7 @@ def amm_leggi_avviso(testo, oggi_=None):
         ris["categoria"] = "Assicurazione"
     elif "ascensore" in t_low:
         ris["categoria"] = "Ascensore"
+    ris["amministratore"] = amm_leggi_amministratore(testo)
     anno = (ris["rate"][0][0].year if ris["rate"] and ris["rate"][0][0] else oggi_.year)
     ris["descrizione"] = ("Lavori straordinari " if ris["categoria"] == "Rata straordinaria o lavori" else "Rate condominio ") + str(anno)
     return ris
@@ -1887,6 +1934,14 @@ def _amm_dlg_import(c, n, sorgente, sha, ric, prop, testo_ok=True):
             st.warning("Non sono riuscito a leggere il testo del documento (è una foto poco leggibile?). Puoi scrivere tu i dati qui sotto: il file viene archiviato lo stesso.")
         for nota in prop["note"]:
             st.warning(nota)
+        ad_letti = prop.get("amministratore") or {}
+        ad_att = adm[0] if adm else None
+        ad_nuovi = {k_: v_ for k_, v_ in ad_letti.items() if v_ and (not ad_att or not str(ad_att.get(k_) or "").strip())}
+        salva_ad = False
+        if ad_nuovi:
+            nomi_c = dict(_AMM_CAMPI_ADMIN)
+            st.markdown("👤 **Ho letto anche questi dati dell'amministratore:** " + " · ".join(f"{nomi_c.get(k_, k_)}: {_amm_h.escape(str(v_))}" for k_, v_ in ad_nuovi.items()))
+            salva_ad = st.checkbox("Salvali nei **Dati amministrazione**" + (" (aggiungo solo quelli che mancano, senza cambiare gli altri)" if ad_att else ""), value=True, key=k + "_ad")
         pag = prop.get("pagamento") or {}
         imp_ric = pag.get("importo") or amm_importo((campi.get("importo") or {}).get("valore"))
         opz = ["nuova"] + (["ricevuta"] if spese else []) + (["allega"] if spese else []) + ["solo"]
@@ -1941,7 +1996,7 @@ def _amm_dlg_import(c, n, sorgente, sha, ric, prop, testo_ok=True):
         c1, c2 = st.columns(2, gap="small")
         if c1.button("✅ Conferma e archivia", key=k + "_ok", type="primary", width="stretch"):
             try:
-                errore = _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, da_fare)
+                errore = _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, da_fare, ad_nuovi if salva_ad else None)
             except Exception as e:                                                         # niente si perde in silenzio
                 errore = f"Non sono riuscito a salvare: {e}"
             if errore:
@@ -1961,7 +2016,27 @@ def _amm_dlg_import(c, n, sorgente, sha, ric, prop, testo_ok=True):
         st.dialog("📖 Documento letto: controlla e conferma")(_finestra)()
 
 
-def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
+def _amm_salva_admin_letto(c, ad_nuovi):
+    """Salva nei «Dati amministrazione» quello che si è letto nell'avviso: se l'amministratore c'è già si aggiungono SOLO i campi che mancano (niente si sovrascrive), altrimenti se ne crea uno. → id."""
+    if not ad_nuovi:
+        return ""
+    esistente = (_amm_lista(c, "amministratori") or [None])[0]
+    nid = esistente["id"] if esistente else amm_id()
+
+    def _fn(cc):
+        lista = cc.setdefault("amministratori", [])
+        x = next((y for y in lista if isinstance(y, dict) and y.get("id") == nid), None)
+        if x is None:
+            lista.append({"id": nid, **ad_nuovi})
+        else:
+            for k_, v_ in ad_nuovi.items():
+                if not str(x.get(k_) or "").strip():
+                    x[k_] = v_
+    _amm_salva(_fn, "Amministrazione: dati letti dall'avviso")
+    return nid
+
+
+def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v, ad_nuovi=None):
     """Controlla TUTTO prima di archiviare (niente documento archiviato a metà), poi archivia e salva. → messaggio d'errore oppure None."""
     if az == "nuova":
         if not v["descr"].strip():
@@ -1983,8 +2058,9 @@ def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
                 return "Scrivi l'importo totale (per esempio 1.200,00)."
             rate = list(zip(amm_genera_scadenze(v["prima"], v["n"], v["mesi"]), amm_ripartisci(tot, v["n"])))
         totale = round(sum(x[1] for x in rate), 2)
+        ad_id = _amm_salva_admin_letto(c, ad_nuovi)
         did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Lettera o comunicazione", ente, totale)
-        nuova = amm_crea_spesa_da_rate(v["descr"], v["cat"], rate, v["adm"], "", v["giorni"])
+        nuova = amm_crea_spesa_da_rate(v["descr"], v["cat"], rate, v["adm"] or ad_id, "", v["giorni"])
         nuova["allegati"] = [did] if did else []
         _amm_salva(lambda cc: cc.setdefault("spese_amm", []).append(nuova), "Amministrazione: spesa da documento " + v["descr"].strip()[:30])
         st.session_state["messaggio"] = f"✅ Spesa «{v['descr'].strip()}» creata con {len(rate)} rata/e. " + msg
@@ -2002,6 +2078,7 @@ def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
             return "Rata non trovata."
         if imp > amm_residuo(r) + 0.004:
             return f"L'importo supera quello che resta da pagare ({amm_euro(amm_residuo(r))})."
+        _amm_salva_admin_letto(c, ad_nuovi)
         did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Ricevuta di pagamento", ente, imp)
         esito = {}
 
@@ -2018,6 +2095,7 @@ def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
         st.session_state["messaggio"] = f"✅ Pagamento di {amm_euro(imp)} registrato sulla rata {r['n']} di «{sp['descrizione']}». " + msg
         return None
     if az == "allega":
+        _amm_salva_admin_letto(c, ad_nuovi)
         did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto, "Lettera o comunicazione" if not esatto else None, ente, None)
 
         def _fn(cc):
@@ -2028,6 +2106,7 @@ def _amm_import_esegui(c, n, sorgente, sha, ric, esatto, az, ente, imp_ric, v):
         _amm_salva(_fn, "Amministrazione: documento allegato")
         st.session_state["messaggio"] = "✅ Documento allegato alla spesa. " + msg
         return None
+    _amm_salva_admin_letto(c, ad_nuovi)
     did, msg = _amm_archivia_import(c, n, sorgente, sha, ric, esatto)
     st.session_state["messaggio"] = msg
     return None
