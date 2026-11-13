@@ -670,7 +670,16 @@ def raccogli_spese_amm(d, oggi):
 # (--dosi): un promemoria parte nel giro della mezz'ora che contiene l'ora scelta (come per le assunzioni). Solo a chi ha acceso «Avvisami anche di Casa», sui canali che ha scelto.
 # ----------------------------------------------------------------------------------------------------------------------
 GIORNI_IT = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
-ICONE_RIFIUTI = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🟡", "Vetro": "🔵", "Plastica": "🔴", "Metalli": "🔘"}
+COLORI_EMOJI = {"verde": "🟢", "blu": "🔵", "giallo": "🟡", "rosso": "🔴", "arancione": "🟠", "viola": "🟣", "marrone": "🟤", "grigio": "🔘", "bianco": "⚪", "nero": "⚫"}
+COLORI_RIFIUTI_DEFAULT = {"Organico": "marrone", "Indifferenziato": "verde", "Carta": "giallo", "Vetro": "blu", "Plastica": "rosso", "Metalli": "grigio"}
+
+
+def icona_rifiuto(tipo, colori=None):
+    """Il pallino colorato di un tipo di rifiuto: quello scelto nell'app, altrimenti quello di partenza, altrimenti viola."""
+    nome = (colori or {}).get(tipo)
+    if nome not in COLORI_EMOJI:
+        nome = COLORI_RIFIUTI_DEFAULT.get(tipo, "viola")
+    return COLORI_EMOJI[nome]
 AVVISI_RACCOLTA_DEFAULT = {"attivi": False, "sera": True, "ora_sera": "20:00", "mattina": False, "ora_mattina": "07:00", "secondo": False, "ora_secondo": "21:30", "tipi_spenti": []}
 
 
@@ -721,7 +730,7 @@ def raccogli_rifiuti(d, adesso):
             tipi = [t for t in tipi if t not in spenti]
             righe = []
             if tipi:
-                righe += [f"• {ICONE_RIFIUTI.get(t, '🟣')} {t}" for t in tipi]
+                righe += [f"• {icona_rifiuto(t, p.get('colori'))} {t}" for t in tipi]
                 if nota:
                     righe.append(f"({nota})")
             for mi in ingombranti:

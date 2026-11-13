@@ -1121,11 +1121,22 @@ def _amm_schermata_contatti(c):
 AMM_GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 AMM_GIORNI_ICS = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 AMM_TIPI_RIFIUTO = ["Organico", "Indifferenziato", "Carta", "Vetro", "Plastica", "Metalli"]
-AMM_ICONE_RIFIUTO = {"Organico": "🟤", "Indifferenziato": "⚪", "Carta": "🟡", "Vetro": "🔵", "Plastica": "🔴", "Metalli": "🔘"}
+# I COLORI dei rifiuti: una tavolozza di 10 colori e, per ogni tipo, quello scelto da chi usa l'app (salvato nel programma, uguale per tutta la casa). Di partenza:
+AMM_TAVOLOZZA = [("verde", "🟢"), ("blu", "🔵"), ("giallo", "🟡"), ("rosso", "🔴"), ("arancione", "🟠"), ("viola", "🟣"), ("marrone", "🟤"), ("grigio", "🔘"), ("bianco", "⚪"), ("nero", "⚫")]
+AMM_COLORI_DEFAULT = {"Organico": "marrone", "Indifferenziato": "verde", "Carta": "giallo", "Vetro": "blu", "Plastica": "rosso", "Metalli": "grigio"}
+_AMM_COLORI_ATTIVI = {}                                                                 # i colori del programma che si sta guardando (li imposta la schermata)
 
 
-def amm_icona_rifiuto(t):
-    return AMM_ICONE_RIFIUTO.get(t, "🟣")
+def amm_colore_di(t, colori=None):
+    """Il NOME del colore di un tipo di rifiuto: quello scelto, altrimenti quello di partenza, altrimenti viola (per i tipi creati da te)."""
+    colori = _AMM_COLORI_ATTIVI if colori is None else colori
+    nomi = {n for n, _e in AMM_TAVOLOZZA}
+    sc = (colori or {}).get(t)
+    return sc if sc in nomi else AMM_COLORI_DEFAULT.get(t, "viola")
+
+
+def amm_icona_rifiuto(t, colori=None):
+    return dict(AMM_TAVOLOZZA)[amm_colore_di(t, colori)]
 
 
 def amm_avvisi_raccolta_default():
@@ -1344,6 +1355,7 @@ def _amm_schermata_raccolta(c):
         righe.append(f"<b>{et}</b> ({AMM_GIORNI[d_.weekday()]}): " + ("🚫 nessuna raccolta" if nessuna else "".join(_amm_chip_html(t) for t in tipi) if tipi else "—")
                      + (f" <i>· {_amm_h.escape(nota)}</i>" if nota else "") + (" <b>(variazione)</b>" if orig == "variazione" else ""))
     st.markdown("<div class='amm-card' style='background:rgba(232,245,233,.92)'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
+    globals()["_AMM_COLORI_ATTIVI"] = dict(ap.get("colori") or {})
     # il TASTO degli avvisi: spenti di partenza, si accendono solo se servono
     cfg = {**amm_avvisi_raccolta_default(), **(ap.get("avvisi") or {})}
     if cfg["attivi"]:
@@ -1408,6 +1420,33 @@ def _amm_schermata_raccolta(c):
         st.rerun()
     if len(programmi) > 1 and st.button("🗑️ Elimina questo programma", key="amm_pr_el", width="stretch"):
         _amm_dlg_elimina(c, "raccolta", p["id"], p.get("nome", "programma"), "Le variazioni restano.")
+    # i colori dei rifiuti
+    with st.expander("🎨 Colori dei rifiuti: scegli il colore di ogni tipo"):
+        st.caption("Ogni tipo di rifiuto ha il suo colore: scegli quello che usa la tua zona (per esempio il sacco o il bidone). Vale per tutta la casa e anche per i messaggi.")
+        tavolozza = [n for n, _e in AMM_TAVOLOZZA]
+        scelti = {}
+        for i_, t_ in enumerate(_amm_tipi_disponibili(c)):
+            scelti[t_] = st.selectbox(t_, tavolozza, index=tavolozza.index(amm_colore_di(t_, ap.get("colori") or {})), key=f"amm_col_{i_}", format_func=lambda n_: f"{dict(AMM_TAVOLOZZA)[n_]} {n_}")
+        doppi_ = sorted({n for n in scelti.values() if list(scelti.values()).count(n) > 1})
+        if doppi_:
+            st.caption("⚠️ Hai scelto lo stesso colore per più tipi (" + ", ".join(f"{dict(AMM_TAVOLOZZA)[n]} {n}" for n in doppi_) + "): va bene, ma nella tabella si distinguono meno.")
+        k1, k2 = st.columns(2, gap="small")
+        if k1.button("💾 Salva i colori", key="amm_col_salva", type="primary", width="stretch"):
+            def _fn_col(cc):
+                for x in cc.get("raccolta", []):
+                    if isinstance(x, dict) and (x.get("casa_id") or "") == (ap.get("casa_id") or ""):
+                        x["colori"] = dict(scelti)                                              # uguali per tutti i programmi della casa
+            _amm_salva(_fn_col, "Raccolta: colori dei rifiuti")
+            st.session_state["messaggio"] = "✅ Colori salvati."
+            st.rerun()
+        if k2.button("↩️ Colori di partenza", key="amm_col_reset", width="stretch"):
+            def _fn_rip(cc):
+                for x in cc.get("raccolta", []):
+                    if isinstance(x, dict) and (x.get("casa_id") or "") == (ap.get("casa_id") or ""):
+                        x.pop("colori", None)
+            _amm_salva(_fn_rip, "Raccolta: colori di partenza")
+            st.session_state["messaggio"] = "✅ Colori di partenza rimessi."
+            st.rerun()
     # variazioni
     with st.expander(f"📅 Variazioni: festivi e giorni straordinari ({len([e for e in eccez if e.get('data', '') >= oggi_.isoformat()])})"):
         if st.button("➕ Aggiungi una variazione", key="amm_ec_nuova", width="stretch"):
