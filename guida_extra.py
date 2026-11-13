@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.9"
+GUIDA_VERSIONE = "5.0"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -278,6 +278,15 @@ Se non riesco a leggerlo (foto storta o sfocata) lo dico: puoi riprovare o compi
 **Altri esempi:** una al mese → **mesi** e **1**; ogni 3 mesi → **mesi** e **3**; una ogni 2 settimane → **settimane** e **2**.
 Nei giorni di assunzione compare nel programma del giorno con l'ora, si segna **Ho preso**, e sul telefono arriva il promemoria all'ora scelta (e l'avviso se non registri la dose). Nei giorni in cui **non** va presa non succede niente.""",
       "terapia intervalli ogni 15 giorni flaconcino fiala una al mese ogni tanto promemoria ora assunzione terapie", ("terapie", "intervalli"))
+    a("farmacia", "f_calendario_allarmi", "Allarmi sul Calendario del telefono per terapie e visite",
+      """Gli allarmi del **Calendario** del telefono **suonano anche con l'app, Chrome e internet chiusi**, e sono **gratuiti**. Si usano in più dei promemoria dell'app, non al posto.
+1. **Salute → 📅 Terapie** (oppure **🩺 Visite**), in fondo: apri **📅 Allarmi sul Calendario del telefono**.
+2. Tocca **📅 Scarica gli allarmi…** (si scarica un file **.ics**).
+3. Aprilo dalle **notifiche di Chrome** (o da **File → Download**): il telefono chiede **in quale calendario** metterlo. Scegli quello tuo e conferma.
+**Terapie:** ogni terapia attiva diventa un evento **ripetuto all'ora scelta**, con allarme. Vale anche per quelle **a intervalli** (ogni 15 giorni, ogni 2 settimane, ogni mese): se hai scritto una **fine** o **quante volte in tutto**, il calendario **si ferma da solo**. Le terapie sospese o già finite non entrano.
+**Visite:** ogni visita futura ha **due allarmi**: **la sera prima alle 20:00** e **2 ore prima** (se non c'è l'ora: **la mattina alle 8:00**). Anche il **prossimo controllo** scritto nella visita entra nel calendario.
+Se **scarichi di nuovo** lo stesso file gli eventi si **aggiornano**, non si duplicano. Ma se **sospendi o elimini** una terapia, o cambi la data di una visita già importata, **cancella a mano** il vecchio evento dal Calendario: il file non può farlo.""",
+      "calendario allarme ics terapie visite sveglia promemoria telefono google calendar notifica", ("calendario", "allarmi"))
     a("farmacia", "f_scorte_intervalli", "Medicinali presi ogni tanto (una fiala ogni 15 giorni, una al mese…)",
       """Se un medicinale **non si prende ogni giorno** (per esempio **una fiala ogni 15 giorni** o **una al mese**) si imposta così, per avere la scorta giusta e l'avviso per la ricetta:
 1. In Salute tocca **💊 Scorte e rinnovo ricette** → sul medicinale **➕ Tieni il conto** (o **⚙️ Cambia**).
