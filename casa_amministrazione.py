@@ -400,6 +400,16 @@ def _amm_scadenze_vicine(c):
                and amm_giorni_a(r.get("scadenza"), oggi_) <= 7)
 
 
+def _amm_pulsante_scambio():
+    """Esporta o importa TUTTA l'Amministrazione (file .dispensa con password, come le altre sezioni): porta a Utilità → Scambia i dati con la sezione già scelta."""
+    if st.button("📦 Esporta o importa tutta l'Amministrazione (da dare a un altro utente)", key="sc_btn_amministrazione", width="stretch"):
+        st.session_state["sc_pre"] = "amministrazione"
+        st.session_state["sc_apri"] = True
+        if "nav_vai" in globals():
+            nav_vai("utilita")
+        st.rerun()
+
+
 def ca_amm_tab(c):
     """L'area Amministrazione di Casa (prima scheda): schermata dei badge e le schermate interne. `c` = i dati della casa scelta."""
     st.markdown(_AMM_CSS, unsafe_allow_html=True)
@@ -435,6 +445,7 @@ def ca_amm_tab(c):
         r = amm_riepilogo(spese, _amm_oggi().year, _amm_oggi())
         st.markdown(f"**Quest'anno:** {amm_euro(r['totale'])} · pagato {amm_euro(r['pagato'])} · ancora da pagare **{amm_euro(r['da_pagare'])}**"
                     + (f" · 🔴 **{len(r['scadute'])} rate scadute**" if r["scadute"] else ""))
+    _amm_pulsante_scambio()
 
 
 # ---------- 🏢 DATI AMMINISTRAZIONE ----------

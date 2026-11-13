@@ -22,7 +22,8 @@ _SC_MAGIA = b"DSP1"
 SC_SEZIONI = {
     "dispensa": ("🥫 Dispensa", "i tuoi prodotti e le scadenze"),
     "salute": ("🩺 Salute, 📁 I miei documenti, 🗂️ Archivio", "le persone, medicinali, terapie, visite, ricette, vaccini, i documenti personali e i loro file"),
-    "casa": ("🏡 Casa", "beni, documenti, manutenzioni, riferimenti e amministrazione della casa"),
+    "casa": ("🏡 Casa", "beni, documenti, manutenzioni e riferimenti della casa"),
+    "amministrazione": ("🏢 Amministrazione di Casa", "amministratore, spese e rate con i pagamenti, professionisti e interventi, raccolta differenziata, ingombranti (con i documenti che citano)"),
     "lavoro": ("💼 Lavoro", "buste paga, Certificazioni Uniche, documenti INPS, sindacato/CAF e link INPS"),
 }
 
@@ -45,11 +46,28 @@ def sc_estrai(d, sezione):
     tipi = _sc_lavoro_tipi()
     if sezione == "casa":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") not in tipi]
-        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", []), "case": c.get("case", []),
-                              # Amministrazione di Casa (casa_amministrazione.py): scheda dell'amministratore, spese con rate e pagamenti, professionisti e interventi, raccolta differenziata, ingombranti
-                              "amministratori": c.get("amministratori", []), "spese_amm": c.get("spese_amm", []), "contatti_extra": c.get("contatti_extra", []), "interventi_prof": c.get("interventi_prof", []),
-                              "raccolta": c.get("raccolta", []), "raccolta_ecc": c.get("raccolta_ecc", []), "ingombranti": c.get("ingombranti", []), "tipi_rifiuto": c.get("tipi_rifiuto", []),
-                              "categorie_prof": c.get("categorie_prof", [])})
+        return copy.deepcopy({"beni": c.get("beni", []), "manutenzioni": c.get("manutenzioni", []), "documenti": docs, "contatti_casa": c.get("contatti_casa", []), "case": c.get("case", [])})
+    if sezione == "amministrazione":
+        # l'AMMINISTRAZIONE di Casa (casa_amministrazione.py), tutta insieme: scheda dell'amministratore, spese con rate e pagamenti, professionisti (la rubrica di Riferimenti, con i campi in più)
+        # e interventi, raccolta differenziata con variazioni e tipi, ingombranti. Dei Documenti e dei Beni si portano SOLO quelli citati (allegati, ricevute, preventivi, interventi).
+        docs_tutti = {x.get("id"): x for x in c.get("documenti", []) if x.get("tipo") not in tipi}
+        parte = {k: c.get(k, []) for k in ("amministratori", "spese_amm", "contatti_casa", "contatti_extra", "interventi_prof", "raccolta", "raccolta_ecc", "ingombranti")}
+        parte["tipi_rifiuto"], parte["categorie_prof"] = c.get("tipi_rifiuto", []), c.get("categorie_prof", [])
+        ids_doc = set()
+        for sp in parte["spese_amm"]:
+            ids_doc |= {i for i in (sp.get("allegati") or []) if i}
+            for r in sp.get("rate", []):
+                ids_doc |= {p.get("ricevuta_id") for p in r.get("pagamenti", []) if p.get("ricevuta_id")}
+        for e in parte["contatti_extra"]:
+            ids_doc |= {i for i in (e.get("preventivi") or []) if i}
+        for iv in parte["interventi_prof"]:
+            ids_doc |= {i for i in (iv.get("allegati") or []) if i}
+        parte["documenti"] = [docs_tutti[i] for i in ids_doc if i in docs_tutti]
+        ids_beni = {iv.get("bene_id") for iv in parte["interventi_prof"] if iv.get("bene_id")}
+        parte["beni"] = [b for b in c.get("beni", []) if b.get("id") in ids_beni]
+        ids_case = {x.get("casa_id") for lista in parte.values() for x in lista if isinstance(x, dict) and x.get("casa_id")}
+        parte["case"] = [x for x in c.get("case", []) if x.get("id") in ids_case]
+        return copy.deepcopy(parte)
     if sezione == "lavoro":
         docs = [x for x in c.get("documenti", []) if x.get("tipo") in tipi]
         out = {"documenti": docs, "contatti_lavoro": c.get("contatti_lavoro", []), "lavori": c.get("lavori", [])}
@@ -91,7 +109,7 @@ def sc_conta(dati):
 
 _SC_NOMI = {"articoli": "prodotti", "profili": "persone", "medicinali": "medicinali", "terapie": "terapie", "visite": "visite", "prescrizioni": "ricette", "vaccinazioni": "vaccinazioni",
             "documenti": "documenti", "archivio_foto": "foto", "case": "case", "beni": "beni", "manutenzioni": "interventi", "contatti_casa": "riferimenti", "amministratori": "amministratori", "spese_amm": "spese", "interventi_prof": "interventi dei professionisti",
-            "raccolta": "programmi di raccolta", "raccolta_ecc": "variazioni", "ingombranti": "servizi ingombranti", "contatti_lavoro": "contatti", "lavori": "lavori"}
+            "raccolta": "programmi di raccolta", "raccolta_ecc": "variazioni", "ingombranti": "servizi ingombranti", "contatti_extra": "schede di professionisti", "interventi_prof": "interventi dei professionisti", "tipi_rifiuto": "tipi di rifiuto", "categorie_prof": "categorie", "contatti_lavoro": "contatti", "lavori": "lavori"}
 
 
 def sc_riassunto(dati):
@@ -149,6 +167,9 @@ def sc_apri(dati, password=""):
 def sc_prepara(d, sezioni, con_file, leggi_file):
     """Costruisce il pacchetto. leggi_file(id) → {nome, mime, b64} oppure None."""
     dati = {s: sc_estrai(d, s) for s in sezioni}
+    if "casa" in dati and "amministrazione" in dati:                                   # documenti, beni, rubrica e case ci sono già nella parte «Casa»: non si ripetono
+        for k_ in ("documenti", "beni", "contatti_casa", "case"):
+            dati["amministrazione"].pop(k_, None)
     file_ = {}
     mancanti = 0
     if con_file:
@@ -272,6 +293,8 @@ def _sc_scrivi_file(nid, nome, mime, b64):
 def _sc_dialogo_importa(pacchetto, sezioni, con_file_n):
     def _finestra():
         st.warning(f"Aggiungo alle tue cose: **{', '.join(SC_SEZIONI[s][0] for s in sezioni)}**. Non cancello e non cambio niente di quello che hai già.")
+        if "amministrazione" in sezioni:
+            st.info("Se nella tua Amministrazione c'è già un amministratore, o gli stessi professionisti, li vedrai **doppi**: potrai eliminare quelli che non ti servono. Spese e raccolta si aggiungono alle tue.")
         s1, s2 = st.columns(2, gap="small")
         if s1.button("✅ Sì, importa", key="sc_imp_si", type="primary", width="stretch"):
             esito = {}
@@ -304,9 +327,13 @@ def sc_pannello(preselezionata=None):
     d = _sc_dati()
     if scelta.startswith("📤"):
         st.caption("Scegli **cosa mettere nel file**. Lo dai a un altro utente (per WhatsApp, email…) e lui lo carica nella sua app: le tue cose si **aggiungono** alle sue, senza cancellare niente.")
-        sez = st.multiselect("Cosa esporto", list(SC_SEZIONI), default=[pre] if pre in SC_SEZIONI else [], key="sc_sez", format_func=lambda s: SC_SEZIONI[s][0])
+        if pre in SC_SEZIONI:                                                          # la sezione scelta dal pulsante in fondo alla pagina: si imposta UNA volta nello stato del campo
+            st.session_state["sc_sez"] = [pre]                                         # (con «default=» si perdeva al primo ridisegno, per esempio appena si scriveva la password)
+        sez = st.multiselect("Cosa esporto", list(SC_SEZIONI), key="sc_sez", format_func=lambda s: SC_SEZIONI[s][0])
         for s in sez:
             st.caption(f"• {SC_SEZIONI[s][0]}: {sc_riassunto(sc_estrai(d, s))}")
+        if "amministrazione" in sez:
+            st.caption("🔒 L'Amministrazione contiene **IBAN, importi, contatti e documenti**: metti una **password** e dagli il file solo alla persona giusta.")
         con_file = st.checkbox("Includi anche gli allegati originali (PDF, foto)", value=True, key="sc_con_file", help="Senza allegati il file è molto più leggero, ma l'altro utente vedrà solo i dati.")
         pw = st.text_input("Password per proteggere il file (consigliato)", type="password", key="sc_pw_e", help="Nel file ci sono dati personali e sanitari. Con la password solo chi la conosce lo può aprire. Comunicala a voce, non nello stesso messaggio.")
         if not sez:
@@ -399,8 +426,23 @@ if "schermata_utilita" in globals() and "_sc_utilita_prima" not in globals():
         _sc_utilita_prima()
         try:
             st.markdown("<div id='sc-scambio'></div>", unsafe_allow_html=True)
+            # Lo scambio ha più passi (scegli cosa, password, prepara, scarica; oppure scegli il file, password, guarda, importa): se si usa il riquadro NON deve richiudersi a ogni tocco.
+            # Si capisce che lo stai usando se qualcosa dei suoi campi è cambiato dall'ultimo ridisegno.
+            escluse = {"sc_aperto", "sc_sig", "sc_pronto", "sc_pacchetto", "sc_file", "sc_msg", "sc_err", "sc_pre", "sc_apri"}
+            firma = tuple(sorted((str(k), repr(v)[:120]) for k, v in st.session_state.items() if str(k).startswith("sc_") and str(k) not in escluse and not str(k).startswith("sc_btn_")))
+            if st.session_state.get("sc_sig") is not None and st.session_state["sc_sig"] != firma:
+                st.session_state["sc_aperto"] = True
+            st.session_state["sc_sig"] = firma
             if st.session_state.pop("sc_apri", False):                       # arrivi dal pulsante di una sezione: il riquadro è già aperto
+                st.session_state["sc_aperto"] = True
                 st.subheader("📦 Scambia i dati con un altro utente")
+                sc_pannello()
+            elif st.session_state.get("sc_aperto"):                           # l'hai già usato: resta aperto
+                st.subheader("📦 Scambia i dati con un altro utente")
+                if st.button("✖ Chiudi lo scambio", key="sc_chiudi"):
+                    for k_ in ("sc_aperto", "sc_sig", "sc_pronto", "sc_pacchetto", "sc_file", "sc_sez"):
+                        st.session_state.pop(k_, None)
+                    st.rerun()
                 sc_pannello()
             else:
                 with st.expander("📦 Scambia i dati con un altro utente (esporta e importa)"):

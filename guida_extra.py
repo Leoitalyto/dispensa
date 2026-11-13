@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.3"
+GUIDA_VERSIONE = "4.4"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -234,6 +234,17 @@ Se hai **più case**, tutto è **separato per ogni casa**: scegli la casa in alt
 
 In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiuti, ditte), **come si prenota**, i giorni di ritiro, il costo e la data del **prossimo ritiro prenotato**: il giorno prima ricevi un promemoria insieme alla raccolta.""",
       "raccolta differenziata calendario rifiuti organico carta plastica vetro ingombranti ritiro promemoria festivo variazione", ("raccolta", "rifiuti"))
+
+    # ================= Casa → Amministrazione: scambio con un altro utente
+    a("casa", "c_scambio_amm", "Mandare l'Amministrazione a un altro utente (file con password)",
+      """Per dare a un'altra persona **tutta l'Amministrazione** (amministratore, spese e rate con i pagamenti, professionisti e interventi, raccolta differenziata, ingombranti):
+1. In **Casa → Amministrazione** tocca **📦 Esporta o importa tutta l'Amministrazione**.
+2. Si apre **Scambia i dati** con «Amministrazione di Casa» già scelta. Scrivi una **password** (consigliata: nel file ci sono IBAN, importi e contatti) e tocca **Prepara il file**.
+3. Tocca **Scarica il file**: è un file **.dispensa**, che puoi mandare per WhatsApp o email. Nel file ci sono anche i documenti che l'Amministrazione cita (avvisi, ricevute, preventivi), se lasci la spunta sugli allegati.
+4. L'altra persona apre la sua app, va in **Scambia i dati → Importa da un altro utente**, sceglie il file, scrive la **password** e tocca **Guarda cosa contiene** e poi **Importa quello che ho scelto**.
+
+Quello che importa si **aggiunge** a quello che ha già, senza cancellare niente: se aveva già un amministratore o gli stessi professionisti li vedrà doppi e potrà eliminare quelli che non servono. Con la password sbagliata il file non si apre. **Comunica la password a voce o con un altro messaggio**, non insieme al file.""",
+      "esportare importare scambio condividere amministrazione altro utente file password spese rate", ("scambio", "amministrazione"))
 
     # ================= Salute: scorte e rinnovo ricette
     a("farmacia", "f_scorte", "Scorte dei medicinali e richiesta delle ricette alla dottoressa",
