@@ -12,7 +12,7 @@ L'UNICA base delle istruzioni è `_GUIDE` / `_ID_GUIDA` / `_META_GUIDA` (info_se
 Le istruzioni sono SOLO in italiano (le traduzioni si aggiornano a lavoro finito, su richiesta).
 Caricato dopo tutti i moduli che aggiungono schede alla guida."""
 
-GUIDA_VERSIONE = "4.6"
+GUIDA_VERSIONE = "4.7"
 GUIDA_DATA = "2026-11-13"
 GUIDA_VERSIONI = {
     "dispensa": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "accessibilita.py", "parte3.py", "parte4.py", "elimina.py", "dispensa_famiglia.py", "statistiche.py", "spesa.py", "cestino.py", "stile.py"]},
@@ -245,6 +245,14 @@ In **Ritiro ingombranti** salvi i servizi da chiamare (Comune, azienda dei rifiu
 
 Quello che importa si **aggiunge** a quello che ha già, senza cancellare niente: se aveva già un amministratore o gli stessi professionisti li vedrà doppi e potrà eliminare quelli che non servono. Con la password sbagliata il file non si apre. **Comunica la password a voce o con un altro messaggio**, non insieme al file.""",
       "esportare importare scambio condividere amministrazione altro utente file password spese rate", ("scambio", "amministrazione"))
+
+    # ================= Salute: il profilo scelto resta scelto
+    a("farmacia", "f_profilo_scelto", "Cambiare persona in Salute (per esempio per seguire le cose della mamma)",
+      """In Salute, sopra le schede, c'è **👤 Profilo**: tocca il nome e scegli la persona (per esempio la mamma). Medicinali, terapie, visite, vaccini, scorte e documenti che vedi sono **quelli di quella persona**.
+**La scelta resta** mentre lavori: puoi aprire **Scorte**, **Documenti sanitari**, **Parametri** o **I miei documenti** e tornare indietro, e anche se il telefono **ricarica la pagina** (per esempio dopo una foto) si riparte dalla stessa persona.
+Per tornare alle tue cose scegli di nuovo il tuo nome. Un'altra persona che entra con il suo accesso dallo stesso telefono parte sempre dal **suo** profilo.
+Nuovi profili si aggiungono in **👥 Gestisci profili**.""",
+      "profilo persona mamma cambiare scegliere salute resta ritorna mio nome", ("profilo", "persona"))
 
     # ================= Salute: visite da un documento e medicinali presi ogni tanto
     a("farmacia", "f_visita_doc", "Aggiungere una visita da un documento (promemoria di prenotazione)",
