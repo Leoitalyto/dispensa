@@ -157,8 +157,15 @@ def vp_leggi_prenotazione(testo):
             core = re.sub(r"[^A-Za-zÀ-ÿ]", "", w)
             if re.search(r"[0-9]", w) or w in {"-", "–"} or core.lower() in {"tà", "ta", "qtà", "qta"}:
                 return False
-            return len(core) >= 2 or core in {"A", "E"}                                      # le lettere sole sono quasi sempre rumore dell'OCR, tranne «A riposo», «E»
-        parole = [w for w in s.split() if _buona(w)]
+            return len(core) >= 2
+        parole = []
+        for w in s.split():
+            core = re.sub(r"[^A-Za-zÀ-ÿ]", "", w)
+            if len(core) == 1:                                                                # una lettera sola è quasi sempre rumore dell'OCR: si tiene solo in «… venoso. A riposo»
+                if core in {"A", "a"} and parole and parole[-1].endswith("."):
+                    parole.append(w)
+            elif _buona(w):
+                parole.append(w)
         r["prestazione"] = vp_frase(" ".join(parole).strip(" .,-")) if parole else ""
     portare = _vp_sezione(t, r"COSA\s+PORTARE[^\n]*", r"\bNOTE\b|INFORMAZIONI\s+PER")
     portare = re.sub(r"\s+", " ", portare.replace("|", " ")).strip()
@@ -204,6 +211,17 @@ def vp_ocr_raddrizzata(dati):
         return ""
 
 
+_VP_VOCABOLARIO = {"degli", "delle", "dei", "del", "della", "dello", "arti", "inferiori", "superiori", "inferiore", "superiore", "venoso", "arterioso", "venosa", "arteriosa", "riposo", "digiuno", "sforzo",
+                   "visita", "controllo", "esame", "ecografia", "ecocolordoppler", "doppler", "ecodoppler", "ecg", "elettrocardiogramma", "addome", "completo", "tiroide", "mammella", "mammografia", "radiografia",
+                   "torace", "cuore", "cardiologica", "specialistica", "prima", "ginecologica", "oculistica", "ortopedica", "dermatologica", "neurologica", "analisi", "sangue", "urine", "tac", "risonanza",
+                   "magnetica", "con", "senza", "mezzo", "contrasto", "bilaterale", "destra", "sinistra", "ginocchio", "spalla", "anca", "colonna", "lombare", "cervicale", "polmonare", "spirometria"}
+
+
+def _vp_punteggio_frase(f):
+    """Quante parole «vere» (note) ci sono in una frase letta: serve a scegliere fra due letture dell'OCR."""
+    return sum(1 for w in re.findall(r"[A-Za-zÀ-ÿ]+", str(f or "").lower()) if w in _VP_VOCABOLARIO)
+
+
 def vp_unisci(principale, altra):
     """Due letture dello stesso documento: si tiene la prima e si completa con la seconda quello che manca. La prestazione si sceglie fra le due con più parole."""
     r = dict(principale)
@@ -211,7 +229,8 @@ def vp_unisci(principale, altra):
         if k in ("riconosciuto",):
             r[k] = principale[k] or v
         elif k == "prestazione":
-            r[k] = principale[k] if len(principale[k].split()) >= len(v.split()) else v
+            sp_, sa_ = _vp_punteggio_frase(principale[k]), _vp_punteggio_frase(v)
+            r[k] = v if (sa_, -len(v.split())) > (sp_, -len(principale[k].split())) else principale[k]
         elif k == "data_ricostruita":
             continue
         elif not r.get(k):
