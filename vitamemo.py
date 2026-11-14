@@ -105,18 +105,52 @@ def vm_home_attiva():
     return bool(ss.get("vm_home"))
 
 
+VM_SCUDO_SEC = 1.2                        # dopo un cambio di schermata, per questo tempo i tocchi vengono ignorati (doppio clic del mouse)
+
+
+def _vm_cambio():
+    """Segna che la schermata sta cambiando: serve a ignorare il secondo clic di un DOPPIO CLIC (al computer capita spesso),
+    che altrimenti finirebbe sul pulsante che compare nello stesso punto della pagina nuova e aprirebbe un'altra sezione."""
+    st.session_state["_vm_cambio_t"] = _time_vm.time()
+
+
+def _vm_troppo_presto():
+    try:
+        return (_time_vm.time() - float(st.session_state.get("_vm_cambio_t") or 0)) < VM_SCUDO_SEC
+    except Exception:
+        return False
+
+
+def vm_scudo():
+    """Nella pagina che compare subito dopo un cambio di schermata mette per un attimo un velo invisibile che ferma i tocchi (poi sparisce da solo)."""
+    try:
+        resto = VM_SCUDO_SEC - (_time_vm.time() - float(st.session_state.get("_vm_cambio_t") or 0))
+    except Exception:
+        resto = 0
+    if resto > 0.05:
+        st.markdown("<style>@keyframes vm-via{to{visibility:hidden;pointer-events:none}}"
+                    ".vm-scudo{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483000;background:transparent;"
+                    f"animation:vm-via .01s linear {resto:.2f}s forwards}}</style><div class='vm-scudo' aria-hidden='true'></div>", unsafe_allow_html=True)
+
+
 def vm_vai_home():
     """Comando dei pulsanti «Home»: torna alla schermata iniziale."""
+    if _vm_troppo_presto():                                           # secondo clic di un doppio clic: non fare niente
+        return
     for k in globals().get("_STATI_DA_CHIUDERE", ()):
         st.session_state.pop(k, None)
     st.session_state["vm_home"] = True
+    _vm_cambio()
 
 
 def vm_apri(sezione):
     """Comando delle dieci zone: apre la sezione (lo stesso comando dei bottoni colorati)."""
+    if _vm_troppo_presto():                                           # secondo clic di un doppio clic (per esempio su «Home»): non fare niente
+        return
     st.session_state["vm_home"] = False
     if "nav_vai" in globals():
         nav_vai(sezione)
+    _vm_cambio()
 
 
 def vm_disponibile(sezione, nascoste=None):
@@ -148,6 +182,38 @@ def vm_avvisi():
 # ---------------------------------------------------------------------------------------------------------------------
 # la schermata iniziale
 # ---------------------------------------------------------------------------------------------------------------------
+# La scena animata sopra l'immagine (non si tocca: i tocchi passano ai pulsanti): la Terra che gira sul suo asse, i due anelli
+# che ruotano lentamente e pulsano, le stelline che si accendono a turno e la cometa che attraversa il cielo spegnendosi.
+VM_SCENA = "<div class='vm-scena' aria-hidden='true'><i style='left:8%;top:1.6%;--g:0.9cqw;animation-duration:8.9s;animation-delay:-7.3s'></i><i style='left:19%;top:3.4%;--g:0.7cqw;animation-duration:8.9s;animation-delay:-11.1s'></i><i style='left:31%;top:1.2%;--g:1.1cqw;animation-duration:6.9s;animation-delay:-6.7s'></i><i style='left:44%;top:4.1%;--g:0.7cqw;animation-duration:11.4s;animation-delay:-1.2s'></i><i style='left:57%;top:2.2%;--g:0.55cqw;animation-duration:6.6s;animation-delay:-7.0s'></i><i style='left:70%;top:1.0%;--g:0.9cqw;animation-duration:10.0s;animation-delay:-5.2s'></i><i style='left:83%;top:3.0%;--g:0.7cqw;animation-duration:10.4s;animation-delay:-8.0s'></i><i style='left:94%;top:1.7%;--g:0.55cqw;animation-duration:10.2s;animation-delay:-10.8s'></i><i style='left:2.4%;top:9%;--g:0.7cqw;animation-duration:5.9s;animation-delay:-2.5s'></i><i style='left:3.2%;top:17%;--g:0.7cqw;animation-duration:10.0s;animation-delay:-10.1s'></i><i style='left:97%;top:23.5%;--g:1.1cqw;animation-duration:8.8s;animation-delay:-11.0s'></i><i style='left:2.6%;top:27%;--g:0.55cqw;animation-duration:7.3s;animation-delay:-3.8s'></i><i style='left:49.8%;top:30%;--g:0.7cqw;animation-duration:10.5s;animation-delay:-5.9s'></i><i style='left:97.3%;top:36%;--g:0.55cqw;animation-duration:8.6s;animation-delay:-7.2s'></i><i style='left:2.5%;top:45%;--g:0.7cqw;animation-duration:10.8s;animation-delay:-4.1s'></i><i style='left:49.9%;top:47.5%;--g:1.1cqw;animation-duration:9.3s;animation-delay:-0.4s'></i><i style='left:97.2%;top:52%;--g:0.7cqw;animation-duration:11.2s;animation-delay:-5.2s'></i><i style='left:2.4%;top:61%;--g:0.55cqw;animation-duration:8.4s;animation-delay:-12.5s'></i><i style='left:50%;top:62.5%;--g:0.55cqw;animation-duration:7.1s;animation-delay:-12.1s'></i><i style='left:97.4%;top:68%;--g:0.9cqw;animation-duration:9.0s;animation-delay:-12.7s'></i><i style='left:2.6%;top:76%;--g:0.7cqw;animation-duration:8.6s;animation-delay:-7.4s'></i><i style='left:50%;top:77%;--g:0.55cqw;animation-duration:11.3s;animation-delay:-3.5s'></i><i style='left:97.3%;top:83%;--g:0.9cqw;animation-duration:7.8s;animation-delay:-0.2s'></i><i style='left:2.5%;top:91%;--g:0.7cqw;animation-duration:11.2s;animation-delay:-1.5s'></i><i style='left:50%;top:90.5%;--g:0.9cqw;animation-duration:10.8s;animation-delay:-0.1s'></i><i style='left:60%;top:5.2%;--g:1.1cqw;animation-duration:11.5s;animation-delay:-2.3s'></i><i style='left:66%;top:21.6%;--g:0.7cqw;animation-duration:6.9s;animation-delay:-6.6s'></i><i style='left:40%;top:21.9%;--g:0.9cqw;animation-duration:8.6s;animation-delay:-5.0s'></i><b class='vm-cometa'></b><div class='vm-globo-w'><svg class='vm-anelli' viewBox='-128 -128 256 256'><g class='vm-o1'><path d='M -122 0 A 122 40 0 0 1 122 0'/></g><g class='vm-o2'><path d='M -116 0 A 116 30 0 0 1 116 0'/></g></svg><div class='vm-globo'><div class='vm-mappa'></div></div><div class='vm-luce'></div><svg class='vm-anelli vm-davanti' viewBox='-128 -128 256 256'><g class='vm-o1'><path d='M -122 0 A 122 40 0 0 0 122 0'/></g><g class='vm-o2'><path d='M -116 0 A 116 30 0 0 0 116 0'/></g></svg></div></div>"
+VM_SCENA_CSS = r"""
+.vm-scena{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+.vm-scena i{position:absolute;width:var(--g,.8cqw);height:var(--g,.8cqw);min-width:2px;min-height:2px;border-radius:50%;background:#fff;box-shadow:0 0 1.4cqw .35cqw rgba(170,215,255,.9);opacity:0;animation:vm-stella 9s ease-in-out infinite}
+@keyframes vm-stella{0%,100%{opacity:0;transform:scale(.4)}6%{opacity:.15}12%{opacity:1;transform:scale(1.15)}20%{opacity:.25;transform:scale(.8)}26%{opacity:.9;transform:scale(1)}36%{opacity:0;transform:scale(.4)}}
+.vm-cometa{position:absolute;left:96%;top:.6%;width:17cqw;height:.55cqw;min-height:2px;border-radius:1cqw;transform-origin:0 50%;opacity:0;
+ background:linear-gradient(90deg,#fff 0,rgba(190,230,255,.95) 6%,rgba(120,190,255,.5) 35%,rgba(120,190,255,0) 100%);filter:drop-shadow(0 0 .9cqw rgba(160,215,255,.95));animation:vm-cometa 16s linear infinite}
+.vm-cometa::before{content:'';position:absolute;left:-.7cqw;top:50%;width:1.7cqw;height:1.7cqw;min-width:5px;min-height:5px;margin-top:-.85cqw;border-radius:50%;background:radial-gradient(circle,#fff 0,#dff2ff 45%,rgba(150,210,255,0) 75%)}
+@keyframes vm-cometa{0%,70%{opacity:0;transform:translate(0,0) rotate(-9deg) scaleX(.3)}72%{opacity:1;transform:translate(-6cqw,.9cqw) rotate(-9deg) scaleX(1)}
+ 86%{opacity:.75;transform:translate(-52cqw,8.2cqw) rotate(-9deg) scaleX(.8)}96%{opacity:.12;transform:translate(-84cqw,13.2cqw) rotate(-9deg) scaleX(.35)}100%{opacity:0;transform:translate(-96cqw,15cqw) rotate(-9deg) scaleX(.1)}}
+.vm-globo-w{position:absolute;left:62.222%;top:3.281%;width:35.556%;aspect-ratio:1}
+.vm-globo{position:absolute;left:12.5%;top:12.5%;width:75%;height:75%;border-radius:50%;overflow:hidden;isolation:isolate;transform:rotate(-17deg) translateZ(0);
+ background:radial-gradient(circle at 36% 30%,#2b6fc4 0%,#103b7c 38%,#06173a 78%,#030b20 100%);-webkit-mask-image:radial-gradient(circle closest-side,#000 98.5%,transparent 100%);mask-image:radial-gradient(circle closest-side,#000 98.5%,transparent 100%)}
+.vm-mappa{position:absolute;top:0;left:0;width:400%;height:100%;background:url('data:image/webp;base64,__TERRA__') 0 0/50% 100% repeat-x;animation:vm-gira 80s linear infinite;will-change:transform}
+@keyframes vm-gira{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+.vm-luce{position:absolute;left:12.5%;top:12.5%;width:75%;height:75%;border-radius:50%;
+ background:radial-gradient(circle closest-side at 31% 25%,rgba(255,255,255,.7) 0,rgba(255,255,255,.2) 30%,rgba(255,255,255,0) 70%),radial-gradient(circle closest-side at 62% 84%,rgba(120,210,255,.45) 0,rgba(120,210,255,0) 60%),
+ radial-gradient(circle closest-side at 50% 50%,rgba(0,0,0,0) 55%,rgba(2,8,30,.55) 86%,rgba(90,180,255,.8) 95%,rgba(215,243,255,1) 99%,rgba(215,243,255,0) 100%);animation:vm-alone 4.2s ease-in-out infinite}
+@keyframes vm-alone{0%,100%{box-shadow:0 0 5cqw .6cqw rgba(70,150,255,.55)}50%{box-shadow:0 0 7.5cqw 1.6cqw rgba(110,190,255,.85)}}
+.vm-anelli{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.vm-anelli path{fill:none;stroke:#dff3ff;stroke-width:1.5;stroke-linecap:round;filter:drop-shadow(0 0 2.5px rgba(140,210,255,.95));animation:vm-anello 3.4s ease-in-out infinite}
+.vm-anelli .vm-o2 path{stroke-width:1.1;animation-delay:-1.7s}
+.vm-anelli:not(.vm-davanti) path{stroke:#9fc8f0;opacity:.55}
+.vm-o1{animation:vm-orbita1 120s linear infinite}.vm-o2{animation:vm-orbita2 160s linear infinite}
+@keyframes vm-orbita1{from{transform:rotate(-27deg)}to{transform:rotate(333deg)}}
+@keyframes vm-orbita2{from{transform:rotate(-14deg)}to{transform:rotate(-374deg)}}
+@keyframes vm-anello{0%,100%{stroke-opacity:.5;stroke-width:1.1}50%{stroke-opacity:1;stroke-width:2.1}}
+@media (prefers-reduced-motion:reduce){.vm-scena i,.vm-cometa,.vm-mappa,.vm-luce,.vm-anelli path,.vm-o1,.vm-o2{animation:none !important}.vm-scena i{opacity:.7}.vm-o1{transform:rotate(-27deg)}.vm-o2{transform:rotate(-14deg)}}
+"""
+
 def _vm_pc(v, tot):
     return f"{v * 100.0 / tot:.3f}%"
 
@@ -164,7 +230,8 @@ def _vm_css_home(avvisi, spente):
          + (f"background:#04060d url('data:image/webp;base64,{img}') center/100% 100% no-repeat;" if img else "background:#04060d;")
          + "box-shadow:0 0 26px rgba(0,120,255,.25)}",
          ".st-key-vm_home [data-testid='stVerticalBlock']{position:static !important;display:block !important;height:0 !important;gap:0 !important}",
-         "[class*='st-key-vmh_']{position:absolute !important;margin:0 !important;padding:0 !important;min-width:0 !important;max-width:none !important}",
+         ".st-key-vm_home [data-testid='stElementContainer']:not([class*='st-key-vmh_']),.st-key-vm_home .stMarkdown,.st-key-vm_home [data-testid='stMarkdownContainer']{position:static !important;margin:0 !important;padding:0 !important;height:0 !important}",
+         "[class*='st-key-vmh_']{z-index:2;position:absolute !important;margin:0 !important;padding:0 !important;min-width:0 !important;max-width:none !important}",
          "[class*='st-key-vmh_'] [data-testid='stButton'],[class*='st-key-vmh_'] .stButton{width:100% !important;height:100% !important;margin:0 !important}",
          "[class*='st-key-vmh_'] button{position:absolute !important;inset:0 !important;width:100% !important;height:100% !important;min-height:0 !important;"
          "margin:0 !important;padding:0 !important;background:transparent !important;border:0 !important;border-radius:9% / 14% !important;box-shadow:none !important;"
@@ -200,6 +267,7 @@ def _vm_css_home(avvisi, spente):
              ".vm-riep .sez{margin-top:8px;font-weight:800;color:#fff}.vm-riep .voce{margin-left:10px;color:#cfd8e6}.vm-riep .altro{margin-left:10px;opacity:.75}"
              ".vm-riep.ok{border-color:rgba(0,230,118,.7);box-shadow:0 0 12px rgba(0,230,118,.3)}.vm-riep.ok .tit{color:#69f0ae;text-shadow:0 0 8px rgba(0,230,118,.5)}"
              ".vm-ciao{max-width:460px;margin:0 auto 6px;color:#cfd8e6;font-size:.95rem;text-align:center}.vm-ciao b{color:#fff}")
+    r.append(VM_SCENA_CSS.replace("__TERRA__", _vm_img("VM_IMG_TERRA")))
     r.append("</style>")
     return "".join(r)
 
@@ -240,9 +308,11 @@ def vm_schermata_home():
     sc = vm_avvisi()
     spente = [z[0] for z in VM_ZONE if not vm_disponibile(z[0], nasc)]
     st.markdown(_vm_css_home({s: len(v) for s, v in sc.items()}, spente), unsafe_allow_html=True)
+    vm_scudo()
     if st.session_state.get("messaggio"):
         st.success(st.session_state.pop("messaggio"))
     with st.container(key="vm_home"):
+        st.markdown(VM_SCENA, unsafe_allow_html=True)
         for sez, nome, *_resto in VM_ZONE:
             n = len(sc.get(sez, []))
             spenta = sez in spente
@@ -275,6 +345,7 @@ _VM_CSS_TORNA = ("<style>.st-key-vm_torna button{width:100% !important;min-heigh
 
 
 def vm_barra_home():
+    vm_scudo()
     st.markdown(_VM_CSS_TORNA, unsafe_allow_html=True)
     with st.container(key="vm_torna"):
         st.button("🌐 " + VM_NOME + " · Home", key="vm_torna_btn", width="stretch", on_click=vm_vai_home, help="Torna alla schermata iniziale con tutte le sezioni")
@@ -296,6 +367,8 @@ if "nav_vai" in globals() and "_vm_vai_prima" not in globals():
     _vm_vai_prima = nav_vai
 
     def nav_vai(sezione):                                            # noqa: F811
+        if _vm_troppo_presto():                                       # secondo clic di un doppio clic finito su un bottone colorato: non cambiare sezione
+            return None
         st.session_state["vm_home"] = False                          # chi apre una sezione (da qualunque pulsante) esce dalla schermata iniziale
         return _vm_vai_prima(sezione)
 
