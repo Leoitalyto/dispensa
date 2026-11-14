@@ -296,7 +296,7 @@ def amm_ics(eventi, nome="Amministrazione casa"):
     """Un file calendario (.ics) con allarmi: il telefono SUONA anche con l'app e tutto il resto chiusi.
     eventi: [{uid, titolo, descrizione, data (date), allarmi: [giorni prima alle 9:00; 0 = il giorno stesso], ripeti_settimanale: 'MO'..'SU' o '', sera_prima: ora (es. 20) oppure None}]
     Gli «uid» sono stabili: importando di nuovo lo stesso file gli eventi si AGGIORNANO, non si duplicano."""
-    righe = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//La nostra dispensa//Amministrazione casa//IT", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", f"X-WR-CALNAME:{_ics_testo(nome)}"]
+    righe = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//VitaMemo//Amministrazione casa//IT", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", f"X-WR-CALNAME:{_ics_testo(nome)}"]
     ora = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     for e in eventi:
         d = e["data"]
@@ -335,7 +335,7 @@ def amm_eventi_rate(spese, oggi_, giorni_default=None):
             if amm_residuo(r) <= 0.004 or (r.get("scadenza") or "") < oggi_.isoformat():
                 continue
             ev.append({"uid": "rata-" + str(r["id"]), "titolo": f"💶 {s.get('descrizione', 'Spesa')} – rata {r.get('n') or k}/{len(rate)}: {amm_euro(amm_residuo(r))}",
-                       "descrizione": f"Amministrazione casa · {s.get('categoria', '')}. Registra il pagamento nell'app La nostra dispensa → Casa → Amministrazione.",
+                       "descrizione": f"Amministrazione casa · {s.get('categoria', '')}. Registra il pagamento nell'app VitaMemo → Casa → Amministrazione.",
                        "data": date.fromisoformat(r["scadenza"]), "allarmi": [int(g) for g in (s.get("avvisi_giorni") or giorni_default or AMM_GIORNI_DEFAULT)]})
     return ev
 

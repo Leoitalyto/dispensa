@@ -234,7 +234,7 @@ def an_report_pdf(a, aid, variante="A", sezioni=None, dal=None, al=None, allegat
     el.append(Paragraph(_pt(" - ".join(z for z in (x.get("specie"), x.get("razza")) if z)), sotto_st))
     el.append(Spacer(1, 6 * mm))
     info = [["Nome dell'animale", x.get("nome", "")], ["Data di generazione del report", an_data_it(oggi_.isoformat())], ["Periodo considerato", periodo],
-            ["Ultimo aggiornamento dei dati", an_data_it(ultimo) if ultimo else "non disponibile"], ["Generato da", nome_utente or "app Dispensa"]]
+            ["Ultimo aggiornamento dei dati", an_data_it(ultimo) if ultimo else "non disponibile"], ["Generato da", nome_utente or "app VitaMemo"]]
     t = Table([[Paragraph(_pt(k), cella_b), Paragraph(_pt(v), cella)] for k, v in info], colWidths=[0.4 * L, 0.6 * L])
     t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#bdbdbd")), ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f3e3b5")), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     el.append(t)

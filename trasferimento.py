@@ -161,7 +161,7 @@ def tr_crea_pacchetto(payload, file_map, mittente_nome, mittente_id, password=No
     ora = ora or datetime.now().replace(microsecond=0)
     dati_b = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     file_meta = [{"id": i, "nome": n, "mime": m, "dimensione": len(b), "sha256": _sha(b)} for i, (n, m, b) in file_map.items()]
-    manifest = {"formato": TR_FORMATO, "versione": TR_VERSIONE, "app": "La nostra dispensa", "creato": ora.isoformat(),
+    manifest = {"formato": TR_FORMATO, "versione": TR_VERSIONE, "app": "VitaMemo", "creato": ora.isoformat(),
                 "mittente": {"nome": mittente_nome, "id": mittente_id}, "sha256_dati": _sha(dati_b), "file": file_meta,
                 "conteggi": tr_conteggi(payload), "persone": [p["nome"] for p in payload["persone"]],
                 "consenso": {"dichiarato": True, "testo": TR_TESTO_CONSENSO, "data": ora.isoformat()}, "cifrato": bool(password)}
@@ -574,9 +574,9 @@ def _tr_esporta():
         st.markdown("**Come mandarlo:** scarica il file e invialo per email o Telegram; per WhatsApp usa la graffetta 📎 e scegli «Documento».")
         if "inv_canali" in globals():
             with st.expander("✉️ Invia da qui (email o Telegram)"):
-                inv_canali("trasf", "File di trasferimento della dispensa", f"Ti mando i miei dati per «La nostra dispensa»: apri l'app, vai in Salute → Trasferisci dati → Importa."
+                inv_canali("trasf", "File di trasferimento della dispensa", f"Ti mando i miei dati per «VitaMemo»: apri l'app, vai in Salute → Trasferisci dati → Importa."
                            + (" Il file è protetto: ti dirò la password a parte." if pronto["cifrato"] else ""),
-                           [(pronto["nome"], "application/octet-stream", pronto["dati"])], oggetto="Dati per La nostra dispensa")
+                           [(pronto["nome"], "application/octet-stream", pronto["dati"])], oggetto="Dati per VitaMemo")
 
 
 def _tr_importa():

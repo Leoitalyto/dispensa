@@ -23,7 +23,7 @@ AI_MAX_ORA_SESSIONE = 30
 AI_TIMEOUT_MS = 35000
 AI_NOTA = "ℹ️ Risposta automatica: non scrivere dati personali o sanitari. Per questioni di salute chiedi al medico o al farmacista."
 
-_AI_REGOLE = """Sei l'assistente digitale di «La nostra dispensa», un'app per organizzare le scorte della dispensa, la salute della famiglia (medicinali, terapie, visite, vaccini), i documenti e altre utilità.
+_AI_REGOLE = """Sei l'assistente digitale di «VitaMemo», un'app per organizzare le scorte della dispensa, la salute della famiglia (medicinali, terapie, visite, vaccini), i documenti e altre utilità.
 Parli con persone di ogni età, spesso poco pratiche di tecnologia: usa un italiano semplice, gentile ed empatico, frasi brevi, un passo alla volta.
 
 REGOLE

@@ -12,7 +12,7 @@ except NameError:
 # =====================================================================================================================
 AG_TR["en"] = {
     "g_benvenuto": ("Welcome! I am your assistant",
-        "Hello! I am the little robot of the app «La nostra dispensa» (Our pantry). I will now give you the complete tour: I explain every part of the app, one at a time, in simple words. "
+        "Hello! I am the little robot of the app «VitaMemo». I will now give you the complete tour: I explain every part of the app, one at a time, in simple words. "
         "If the voice is on I go ahead by myself: tap Pause to stop me, Next or Back to move, Chapters to jump wherever you want. "
         "You can ask me a question at any time, by writing it or with the microphone. With the globe button you change my language.",
         "", "welcome start complete tour robot assistant language pause next chapters"),
@@ -133,7 +133,7 @@ AG_UI["en"] = {
 # =====================================================================================================================
 AG_TR["es"] = {
     "g_benvenuto": ("¡Bienvenido! Soy tu asistente",
-        "¡Hola! Soy el robotito de la app «La nostra dispensa» (Nuestra despensa). Ahora te hago el recorrido completo: te explico todas las partes de la app, una por una, con palabras sencillas. "
+        "¡Hola! Soy el robotito de la app «VitaMemo». Ahora te hago el recorrido completo: te explico todas las partes de la app, una por una, con palabras sencillas. "
         "Si la voz está encendida sigo yo solo: toca Pausa para pararme, Adelante o Atrás para moverte, Capítulos para saltar adonde quieras. "
         "Puedes hacerme una pregunta cuando quieras, escribiéndola o con el micrófono. Con el botón del mundo cambias mi idioma.",
         "", "bienvenido inicio recorrido completo robot asistente idioma pausa adelante capítulos"),
@@ -254,7 +254,7 @@ AG_UI["es"] = {
 # =====================================================================================================================
 AG_TR["fr"] = {
     "g_benvenuto": ("Bienvenue ! Je suis ton assistant",
-        "Bonjour ! Je suis le petit robot de l'appli « La nostra dispensa » (Notre garde-manger). Je te fais maintenant la visite complète : je t'explique toutes les parties de l'appli, une à la fois, avec des mots simples. "
+        "Bonjour ! Je suis le petit robot de l'appli « VitaMemo ». Je te fais maintenant la visite complète : je t'explique toutes les parties de l'appli, une à la fois, avec des mots simples. "
         "Si la voix est allumée, j'avance tout seul : touche Pause pour m'arrêter, Suivant ou Retour pour te déplacer, Chapitres pour sauter où tu veux. "
         "Tu peux me poser une question quand tu veux, en l'écrivant ou avec le micro. Avec le bouton du globe, tu changes ma langue.",
         "", "bienvenue début visite complète robot assistant langue pause suivant chapitres"),
@@ -375,7 +375,7 @@ AG_UI["fr"] = {
 # =====================================================================================================================
 AG_TR["de"] = {
     "g_benvenuto": ("Willkommen! Ich bin dein Assistent",
-        "Hallo! Ich bin der kleine Roboter der App «La nostra dispensa» (Unsere Vorratskammer). Jetzt mache ich mit dir den kompletten Rundgang: Ich erkläre dir alle Teile der App, einen nach dem anderen, mit einfachen Worten. "
+        "Hallo! Ich bin der kleine Roboter der App «VitaMemo». Jetzt mache ich mit dir den kompletten Rundgang: Ich erkläre dir alle Teile der App, einen nach dem anderen, mit einfachen Worten. "
         "Wenn die Stimme an ist, gehe ich von allein weiter: Tippe auf Pause, um mich anzuhalten, auf Weiter oder Zurück, um dich zu bewegen, auf Kapitel, um dorthin zu springen, wo du willst. "
         "Du kannst mir jederzeit eine Frage stellen, schriftlich oder mit dem Mikrofon. Mit der Weltkugel-Taste wechselst du meine Sprache.",
         "", "willkommen start kompletter rundgang roboter assistent sprache pause weiter kapitel"),
@@ -496,7 +496,7 @@ AG_UI["de"] = {
 # =====================================================================================================================
 AG_TR["ro"] = {
     "g_benvenuto": ("Bine ai venit! Sunt asistentul tău",
-        "Salut! Sunt robotul aplicației «La nostra dispensa» (Cămara noastră). Acum îți fac turul complet: îți explic toate părțile aplicației, una câte una, cu cuvinte simple. "
+        "Salut! Sunt robotul aplicației «VitaMemo». Acum îți fac turul complet: îți explic toate părțile aplicației, una câte una, cu cuvinte simple. "
         "Dacă vocea este pornită merg mai departe singur: apasă Pauză ca să mă oprești, Înainte sau Înapoi ca să te miști, Capitole ca să sari unde vrei. "
         "Poți să-mi pui o întrebare oricând, scriind-o sau cu microfonul. Cu butonul cu globul îmi schimbi limba.",
         "", "bine ai venit început tur complet robot asistent limbă pauză înainte capitole"),
@@ -617,7 +617,7 @@ AG_UI["ro"] = {
 # =====================================================================================================================
 AG_TR["ar"] = {
     "g_benvenuto": ("أهلاً بك! أنا مساعدك",
-        "مرحباً! أنا الروبوت الصغير لتطبيق «La nostra dispensa» (مخزننا). سأقوم الآن بالجولة الكاملة معك: أشرح لك كل أجزاء التطبيق، واحداً تلو الآخر، بكلمات بسيطة. "
+        "مرحباً! أنا الروبوت الصغير لتطبيق «VitaMemo». سأقوم الآن بالجولة الكاملة معك: أشرح لك كل أجزاء التطبيق، واحداً تلو الآخر، بكلمات بسيطة. "
         "إذا كان الصوت مفعّلاً أتابع وحدي: اضغط إيقاف مؤقت لإيقافي، التالي أو السابق للتنقل، الفصول للقفز إلى حيث تريد. "
         "يمكنك أن تسألني في أي وقت، كتابةً أو بالميكروفون. بزر الكرة الأرضية تغيّر لغتي.",
         "", "أهلا بداية جولة كاملة روبوت مساعد لغة إيقاف التالي فصول"),
@@ -738,7 +738,7 @@ AG_UI["ar"] = {
 # =====================================================================================================================
 AG_TR["pt"] = {
     "g_benvenuto": ("Bem-vindo! Sou o teu assistente",
-        "Olá! Sou o robô da aplicação «La nostra dispensa» (A nossa despensa). Agora faço-te a visita completa: explico-te todas as partes da aplicação, uma de cada vez, com palavras simples. "
+        "Olá! Sou o robô da aplicação «VitaMemo». Agora faço-te a visita completa: explico-te todas as partes da aplicação, uma de cada vez, com palavras simples. "
         "Se a voz estiver ligada, avanço sozinho: toca em Pausa para me parares, Seguinte ou Anterior para te moveres, Capítulos para saltares para onde quiseres. "
         "Podes fazer-me uma pergunta quando quiseres, escrevendo-a ou com o microfone. Com o botão do globo mudas a minha língua.",
         "", "bem-vindo início visita completa robô assistente língua pausa seguinte capítulos"),
@@ -989,12 +989,25 @@ AG_TR["pt"].update({
         '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'relatório pdf veterinário exportar importar partilhar pacote palavra-passe duplicados juntar atualizar arquivo animal whatsapp'),
 })
 
-# nell'elenco dei pulsanti della Home aggiungo «Animali» dopo «Auto»
-_AG_AUTO = {"en": ("Car («Auto»), ", "Car («Auto»), Animals («Animali»), "), "es": ("Coche («Auto»), ", "Coche («Auto»), Animales («Animali»), "),
-            "fr": ("Voiture (« Auto »), ", "Voiture (« Auto »), Animaux (« Animali »), "), "de": ("Auto, Chat", "Auto, Tiere («Animali»), Chat"),
-            "ro": ("Mașină («Auto»), ", "Mașină («Auto»), Animale («Animali»), "), "ar": ("السيارة («Auto»)، ", "السيارة («Auto»)، الحيوانات («Animali»)، "),
-            "pt": ("Carro («Auto»), ", "Carro («Auto»), Animais («Animali»), ")}
-for _lg, (_a, _b) in _AG_AUTO.items():
-    _x = AG_TR.get(_lg, {}).get("g_home")
-    if _x and _b not in _x[1] and _a in _x[1]:
-        AG_TR[_lg]["g_home"] = (_x[0], _x[1].replace(_a, _b, 1)) + tuple(_x[2:])
+# VITAMEMO: il capitolo sulla schermata iniziale (dieci pulsanti luminosi, numeri al neon, pulsante «VitaMemo · Home»)
+AG_TR["en"]["g_home"] = ('The start screen and the section buttons',
+    'When you enter you see the VitaMemo start screen, with ten glowing buttons, one for each part of the app: Pantry («Dispensa»), Health («Salute»), My documents, Archive, Home («Casa»), Work («Lavoro»), Car («Auto»), Animals («Animali»), Chat and Tools («Utilità»). Tap a button and you enter that part. If a fluorescent yellow number appears on a button and the button pulses with light, there is something to look at there: a close deadline or a new message. Inside every page, at the top, there is the VitaMemo Home button to go back to the start screen, and below it the coloured buttons to move from one section to another. You always find the red button «Clicca per informazioni» (Tap for information) with the guide too.',
+    'The start screen, as soon as you enter. On every page: the 🌐 VitaMemo · Home button at the top.', 'home start screen vitamemo glowing buttons sections number neon fluorescent pulse alerts go back navigate')
+AG_TR["es"]["g_home"] = ('La pantalla inicial y los botones de las secciones',
+    'Cuando entras ves la pantalla inicial de VitaMemo, con diez botones luminosos, uno para cada parte de la app: Despensa («Dispensa»), Salud («Salute»), Mis documentos, Archivo, Casa, Trabajo («Lavoro»), Coche («Auto»), Animales («Animali»), Chat y Utilidades («Utilità»). Tocas un botón y entras en esa parte. Si en un botón aparece un número amarillo fluorescente y el botón late con luz, ahí hay algo que mirar: un vencimiento cercano o un mensaje nuevo. Dentro de cada página, arriba, está el botón VitaMemo Home para volver a la pantalla inicial, y debajo los botones de colores para pasar de una sección a otra. También encuentras siempre el botón rojo «Clicca per informazioni» (Toca para información) con la guía.',
+    'La pantalla inicial, nada más entrar. En cada página: el botón 🌐 VitaMemo · Home, arriba.', 'inicio pantalla inicial vitamemo botones luminosos secciones número neón fluorescente late avisos volver navegar')
+AG_TR["fr"]["g_home"] = ("L'écran d'accueil et les boutons des sections",
+    "Quand tu entres, tu vois l'écran d'accueil de VitaMemo, avec dix boutons lumineux, un pour chaque partie de l'appli : Garde-manger (« Dispensa »), Santé (« Salute »), Mes documents, Archives, Maison (« Casa »), Travail (« Lavoro »), Voiture (« Auto »), Animaux (« Animali »), Chat et Outils (« Utilità »). Tu touches un bouton et tu entres dans cette partie. Si un nombre jaune fluorescent apparaît sur un bouton et que le bouton pulse de lumière, il y a là quelque chose à regarder : une échéance proche ou un nouveau message. Dans chaque page, en haut, il y a le bouton VitaMemo Home pour revenir à l'écran d'accueil, et dessous les boutons colorés pour passer d'une section à l'autre. Tu trouves aussi toujours le bouton rouge « Clicca per informazioni » (Touche pour les informations) avec le guide.",
+    "L'écran d'accueil, dès que tu entres. Dans chaque page : le bouton 🌐 VitaMemo · Home, en haut.", "accueil écran d'accueil vitamemo boutons lumineux sections nombre néon fluorescent pulse alertes revenir naviguer")
+AG_TR["de"]["g_home"] = ('Der Startbildschirm und die Tasten der Bereiche',
+    'Wenn du hereinkommst, siehst du den Startbildschirm von VitaMemo mit zehn leuchtenden Tasten, eine für jeden Teil der App: Vorratskammer («Dispensa»), Gesundheit («Salute»), Meine Dokumente, Archiv, Haus («Casa»), Arbeit («Lavoro»), Auto, Tiere («Animali»), Chat und Werkzeuge («Utilità»). Du tippst auf eine Taste und kommst in diesen Teil. Wenn auf einer Taste eine neongelbe Zahl erscheint und die Taste leuchtend pulsiert, gibt es dort etwas anzusehen: eine nahe Frist oder eine neue Nachricht. In jeder Seite gibt es oben die Taste VitaMemo Home, um zum Startbildschirm zurückzukehren, und darunter die bunten Tasten, um von einem Bereich zum anderen zu wechseln. Du findest auch immer die rote Taste «Clicca per informazioni» (Für Informationen tippen) mit der Anleitung.',
+    'Der Startbildschirm, gleich nach dem Anmelden. Auf jeder Seite: die Taste 🌐 VitaMemo · Home, oben.', 'start startbildschirm vitamemo leuchtende tasten bereiche zahl neon pulsiert hinweise zurück navigieren')
+AG_TR["ro"]["g_home"] = ('Ecranul de pornire și butoanele secțiunilor',
+    'Când intri vezi ecranul de pornire VitaMemo, cu zece butoane luminoase, câte unul pentru fiecare parte a aplicației: Cămară («Dispensa»), Sănătate («Salute»), Documentele mele, Arhivă, Casă («Casa»), Muncă («Lavoro»), Mașină («Auto»), Animale («Animali»), Chat și Utilități («Utilità»). Atingi un buton și intri în acea parte. Dacă pe un buton apare un număr galben fluorescent și butonul pulsează luminos, acolo este ceva de văzut: un termen apropiat sau un mesaj nou. În fiecare pagină, sus, este butonul VitaMemo Home pentru a te întoarce la ecranul de pornire, iar dedesubt butoanele colorate pentru a trece de la o secțiune la alta. Găsești mereu și butonul roșu «Clicca per informazioni» (Atinge pentru informații) cu ghidul.',
+    'Ecranul de pornire, imediat ce intri. În fiecare pagină: butonul 🌐 VitaMemo · Home, sus.', 'acasă ecran de pornire vitamemo butoane luminoase secțiuni număr neon fluorescent pulsează alerte înapoi navigare')
+AG_TR["ar"]["g_home"] = ('الشاشة الرئيسية وأزرار الأقسام',
+    'عند الدخول ترى الشاشة الرئيسية لتطبيق VitaMemo وفيها عشرة أزرار مضيئة، زر لكل جزء من التطبيق: المخزن («Dispensa»)، الصحة («Salute»)، مستنداتي، الأرشيف، المنزل («Casa»)، العمل («Lavoro»)، السيارة («Auto»)، الحيوانات («Animali»)، الدردشة والأدوات («Utilità»). تلمس زرًا فتدخل إلى ذلك الجزء. إذا ظهر على زر رقم أصفر فسفوري وكان الزر ينبض بالضوء فهناك شيء يجب أن تراه: موعد قريب أو رسالة جديدة. داخل كل صفحة، في الأعلى، يوجد زر VitaMemo Home للعودة إلى الشاشة الرئيسية، وتحته الأزرار الملوّنة للانتقال من قسم إلى آخر. وتجد دائمًا أيضًا الزر الأحمر «Clicca per informazioni» (اضغط للمعلومات) ومعه الدليل.',
+    'الشاشة الرئيسية فور الدخول. في كل صفحة: زر 🌐 VitaMemo · Home في الأعلى.', 'الرئيسية الشاشة الرئيسية vitamemo أزرار مضيئة أقسام رقم نيون فسفوري ينبض تنبيهات عودة تنقل')
+AG_TR["pt"]["g_home"] = ('O ecrã inicial e os botões das secções',
+    'Quando entras vês o ecrã inicial do VitaMemo, com dez botões luminosos, um para cada parte da aplicação: Despensa («Dispensa»), Saúde («Salute»), Os meus documentos, Arquivo, Casa, Trabalho («Lavoro»), Carro («Auto»), Animais («Animali»), Chat e Utilidades («Utilità»). Tocas num botão e entras nessa parte. Se num botão aparecer um número amarelo fluorescente e o botão pulsar com luz, há ali algo para ver: um prazo próximo ou uma mensagem nova. Dentro de cada página, em cima, há o botão VitaMemo Home para voltar ao ecrã inicial, e por baixo os botões coloridos para passar de uma secção para outra. Encontras sempre também o botão vermelho «Clicca per informazioni» (Toca para informações) com o guia.',
+    'O ecrã inicial, logo que entras. Em cada página: o botão 🌐 VitaMemo · Home, em cima.', 'início ecrã inicial vitamemo botões luminosos secções número néon fluorescente pulsa avisos voltar navegar')

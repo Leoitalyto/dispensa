@@ -2028,7 +2028,7 @@ table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{border:1px s
 {blocco_san}
 <h2>Terapie attive</h2><table><tr><th>Medicinale</th><th>Quantità</th><th>Giorni</th><th>Orari</th><th>Periodo</th><th>Note</th></tr>{t_ter}</table>
 <h2>Assunzioni</h2><table><tr><th>Data</th><th>Ora prevista</th><th>Medicinale</th><th>Quantità</th><th>Stato</th><th>Registrata il</th></tr>{t_dosi}</table>
-<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente. «Presa» significa che la persona ha toccato
+<p class="nota">Documento creato dall'app «VitaMemo» con i dati inseriti dall'utente. «Presa» significa che la persona ha toccato
 il pulsante nell'app: non è verificato da un medico o da un farmacista.</p></body></html>"""
 
 
@@ -2406,7 +2406,7 @@ th{{background:#eee}}.vuoto{{color:#666;font-size:.85rem;margin:2px 0}}.nota{{fo
 <div class="box"><b>{e(nome_completo)}</b><br>Creato il {data_it(oggi_.isoformat())} · Profili: {len(profili)}</div>
 {''.join(parti)}
 <h2>Impostazioni generali</h2>{gen}
-<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente: non è verificato da un medico o da un
+<p class="nota">Documento creato dall'app «VitaMemo» con i dati inseriti dall'utente: non è verificato da un medico o da un
 farmacista. Le foto e i PDF caricati non sono inclusi: si scaricano uno per uno dalla loro scheda. Contiene dati sanitari: conservalo
 con cura.</p></body></html>"""
 
@@ -3147,7 +3147,7 @@ def _fa_html_sanitaria(f, pid, intestatario):
 {blocco('Altre informazioni', san.get('altro'))}
 <h2>Vaccinazioni</h2>{vacc_blocco}
 <h2>Terapie in corso</h2>{ter_blocco}
-<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dall'utente: non è verificato da un medico.</p>
+<p class="nota">Documento creato dall'app «VitaMemo» con i dati inseriti dall'utente: non è verificato da un medico.</p>
 </body></html>"""
 
 

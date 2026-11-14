@@ -34,7 +34,10 @@ def _an_vai(sezione, scope=None, modo=None, apri=None):
 
 
 def _an_torna_sezioni(dove):
-    """Il bottone grande per tornare al menu delle sezioni (Dispensa, Salute, Auto…), in alto e in fondo alla pagina."""
+    """Il bottone grande per tornare alla schermata iniziale con tutte le sezioni, in alto e in fondo alla pagina."""
+    if "vm_vai_home" in globals():                                   # VitaMemo: la schermata iniziale con tutte le sezioni
+        st.button("⬅️ Torna alle sezioni", key=f"an_torna_{dove}", width="stretch", on_click=vm_vai_home)
+        return
     st.button("⬅️ Torna alle sezioni", key=f"an_torna_{dove}", width="stretch",
               on_click=(nav_vai if "nav_vai" in globals() else None), args=(("dispensa",) if "nav_vai" in globals() else None))
 
@@ -526,6 +529,8 @@ if "pn_scadenze" in globals() and "_an_scad_prima" not in globals():
 # ---------------------------------------------------------------------------------------------------------------------
 if "_NOMI_SEZIONI" in globals() and "_GUIDE" in globals():
     _NOMI_SEZIONI.setdefault("animali", "🐾 Animali")
+    if "UI_IT" in globals():
+        UI_IT.setdefault("sez_animali", "🐾 Animali")              # il titolo della finestra «Informazioni»
     _GUIDE.setdefault("animali", [
         ("🐾 Cos'è la sezione Animali",
          """Qui tieni **la cartella completa di ogni animale di casa**: cani, gatti, conigli, uccelli, pesci, rettili… Si apre dal bottone **🐾 Animali**, accanto ad **Auto** e prima di **Chat**.

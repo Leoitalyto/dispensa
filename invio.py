@@ -83,7 +83,7 @@ def inv_pdf(titolo, sottotitolo, pagine, nota=""):
     buf = io.BytesIO()
     pag = landscape(A4)
     doc = SimpleDocTemplate(buf, pagesize=pag, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=15 * mm,
-                            title=_pdf_txt(titolo), author="La nostra dispensa")
+                            title=_pdf_txt(titolo), author="VitaMemo")
     stili = getSampleStyleSheet()
     verde, rosso, grigio = colors.HexColor("#0f766e"), colors.HexColor("#b71c1c"), colors.HexColor("#666666")
     s_t = ParagraphStyle("t", parent=stili["Title"], fontName="Helvetica-Bold", fontSize=18, textColor=verde, alignment=0)
@@ -126,7 +126,7 @@ def inv_pdf(titolo, sottotitolo, pagine, nota=""):
         c.saveState()
         c.setFont("Helvetica", 7.5)
         c.setFillColor(grigio)
-        c.drawString(doc.leftMargin, 8 * mm, "La nostra dispensa - contiene dati personali")
+        c.drawString(doc.leftMargin, 8 * mm, "VitaMemo - contiene dati personali")
         c.drawRightString(pag[0] - doc.rightMargin, 8 * mm, f"Pagina {d.page}")
         c.restoreState()
     doc.build(storia, onFirstPage=_piede, onLaterPages=_piede)
@@ -176,7 +176,7 @@ def inv_invia_email(destinatari, oggetto, testo, allegati):
         return False, "gli allegati sono troppo grandi per una email: scegline meno"
     msg = EmailMessage()
     msg["From"], msg["To"], msg["Subject"] = utente, ", ".join(destinatari), oggetto
-    msg.set_content(testo + "\n\n—\nInviato dall'app «La nostra dispensa». Contiene dati personali: non inoltrarlo a chi non deve vederlo.")
+    msg.set_content(testo + "\n\n—\nInviato dall'app «VitaMemo». Contiene dati personali: non inoltrarlo a chi non deve vederlo.")
     for nome, mime, dati in allegati:
         tipo, sotto = (mime or "application/octet-stream").split("/", 1)
         msg.add_attachment(dati, maintype=tipo, subtype=sotto, filename=nome)
@@ -544,7 +544,7 @@ def inv_prepara(chiave, persone, d_conto, scelte, formati, titolo_rep, oggi_):
     allegati, avvisi = [], []
     if "PDF" in formati:
         pdf = inv_pdf(titolo_rep, f"Creato il {data_it(data)}", pagine,
-                      "Documento creato dall'app «La nostra dispensa» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista. "
+                      "Documento creato dall'app «VitaMemo» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista. "
                       "Le foto e i PDF caricati non sono inclusi.")
         if pdf:
             allegati.append((f"{base}_{data}.pdf", "application/pdf", pdf))

@@ -152,7 +152,7 @@ def stt_html_elenco(nome, voci):
     e = _stt_html.escape
     oggi_ = datetime.now().strftime("%d/%m/%Y")
     h = [f"<html><head><meta charset='utf-8'><title>Elenco di {e(nome)}</title></head><body style='font-family:sans-serif;font-size:11pt'>",
-         f"<h1 style='font-size:17pt'>Elenco dei documenti e dei dati di {e(nome)}</h1><p>Preparato il {oggi_} dall'app «La nostra dispensa». Contiene dati personali: da dare solo a chi deve vederli.</p>"]
+         f"<h1 style='font-size:17pt'>Elenco dei documenti e dei dati di {e(nome)}</h1><p>Preparato il {oggi_} dall'app «VitaMemo». Contiene dati personali: da dare solo a chi deve vederli.</p>"]
     for k, ico, titolo in _STT_GRUPPI:
         vv = [v for v in voci if v["gruppo"] == k]
         if not vv:

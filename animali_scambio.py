@@ -90,7 +90,7 @@ def an_costruisci_pacchetto(a, ids_animali, includi_file=True, nome_utente=""):
     conteggi = {"animali": len(dati["animali"])}
     conteggi.update({c: len(dati[c]) for c in _AN_CATEGORIE_SOTTO})
     conteggi["file"] = len(files)
-    manifest = {"formato": AN_PACCHETTO_FORMATO, "versione": AN_PACCHETTO_VERSIONE, "creato": datetime.now().isoformat(timespec="seconds"), "app": "Dispensa · Animali",
+    manifest = {"formato": AN_PACCHETTO_FORMATO, "versione": AN_PACCHETTO_VERSIONE, "creato": datetime.now().isoformat(timespec="seconds"), "app": "VitaMemo · Animali",
                 "creato_da": nome_utente, "animali": [{"id": x["id"], "nome": x.get("nome"), "specie": x.get("specie"), "microchip": x.get("microchip")} for x in dati["animali"]],
                 "conteggi": conteggi, "file": files, "dati_sha256": hashlib.sha256(dati_bytes).hexdigest(), "file_non_trovati": mancanti, "con_file": bool(includi_file)}
     buf = io.BytesIO()
@@ -99,7 +99,7 @@ def an_costruisci_pacchetto(a, ids_animali, includi_file=True, nome_utente=""):
         z.writestr("dati.json", dati_bytes)
         for p, b in buf_files.items():
             z.writestr(p, b)
-        z.writestr("LEGGIMI.txt", "Archivio ANIMALI dell'app Dispensa.\nPer usarlo: apri l'app → Animali → «Importa archivio animale» e scegli questo file.\n"
+        z.writestr("LEGGIMI.txt", "Archivio ANIMALI dell'app VitaMemo.\nPer usarlo: apri l'app → Animali → «Importa archivio animale» e scegli questo file.\n"
                                   "Contiene dati e documenti sanitari: condividilo solo con chi deve riceverlo.\n")
     return buf.getvalue(), {"conteggi": conteggi, "mancanti": mancanti, "dimensione": len(buf.getvalue()), "nomi": [x.get("nome") for x in dati["animali"]]}
 
@@ -580,7 +580,7 @@ def _an_esporta_ui(a, x):
         st.download_button("⬇ Scarica il pacchetto", r["dati"], file_name=r["nome"], mime="application/zip", key="an_exp_dl", type="primary", width="stretch")
         if "inv_voce" in globals():
             inv_voce("anexp", "📤 Condividi (WhatsApp, email, Telegram…)", "Archivio Animali: " + ", ".join(str(n) for n in r["riep"]["nomi"] if n)[:80],
-                     "Ti mando l'archivio degli animali dell'app Dispensa: aprila → Animali → «Importa archivio animale» e scegli questo file." + (" Il file è protetto da password." if r["pw"] else ""),
+                     "Ti mando l'archivio degli animali dell'app VitaMemo: aprila → Animali → «Importa archivio animale» e scegli questo file." + (" Il file è protetto da password." if r["pw"] else ""),
                      lambda r_=r: [(r_["nome"], "application/zip", r_["dati"])])
 
 

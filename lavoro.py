@@ -138,7 +138,7 @@ def lv_html_riepilogo(docs, titolo="Buste paga"):
     return (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>{e(titolo)}</title><style>{stile}</style></head><body>"
             f"<h1>{e(titolo)}</h1><h2>Anno per anno</h2><table><tr><th>Anno</th><th>Netto ricevuto</th><th>Lordo</th><th>Trattenute</th><th>Trattenute/lordo</th><th>Buste</th></tr>{righe_anni}</table>{var_txt}"
             f"<h2>Mese per mese</h2><table><tr><th>Mese</th><th>Tipo</th><th>Lordo</th><th>Trattenute</th><th>Netto</th><th>Voci a mano</th></tr>{mesi_righe}</table>"
-            "<p class='nota'>Creato dall'app «La nostra dispensa» con i dati inseriti o letti dalle buste paga: controllali sugli originali. Il netto dell'anno comprende 13ª, 14ª e voci aggiunte a mano.</p></body></html>")
+            "<p class='nota'>Creato dall'app «VitaMemo» con i dati inseriti o letti dalle buste paga: controllali sugli originali. Il netto dell'anno comprende 13ª, 14ª e voci aggiunte a mano.</p></body></html>")
 
 
 def _lv_pdf(html_str):
@@ -531,7 +531,7 @@ def lv_html_rubrica(lista, modo="lavoro"):
                                                                   m.get("email", ""), m.get("indirizzo", ""), (m.get("orari") or "").replace("\n", "; "), m.get("note", ""))) + "</tr>" for m in lista)
     return (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>{e(_RUB[modo]['html'])}</title><style>{stile}</style></head><body><h1>{e(_RUB[modo]['html'])}</h1>"
             f"<table><tr><th>Tipo</th><th>Nome</th><th>Riferimento</th><th>Telefono</th><th>Email</th><th>Indirizzo</th><th>Orari</th><th>Note</th></tr>{righe}</table>"
-            "<p class='nota'>Creato dall'app «La nostra dispensa».</p></body></html>")
+            "<p class='nota'>Creato dall'app «VitaMemo».</p></body></html>")
 
 
 def lv_tab_contatti(c, modo="lavoro"):
@@ -616,7 +616,7 @@ def lv_html_cu(righe):
     return ("<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Certificazioni Uniche</title><style>body{font-family:Arial,sans-serif;font-size:10.5pt}table{border-collapse:collapse;width:100%}"
             "td,th{border:1px solid #999;padding:4px 6px;text-align:right}td:nth-child(3),th:nth-child(3){text-align:left}</style></head><body><h1>Certificazioni Uniche</h1>"
             "<table><tr><th>Anno CU</th><th>Redditi del</th><th>Emessa da</th><th>Reddito</th><th>Ritenute IRPEF</th><th>Add. regionale</th><th>Add. comunale</th></tr>" + tr + "</table>"
-            "<p style='font-size:8.5pt;color:#444'>Creato dall'app «La nostra dispensa»: controlla i dati sugli originali.</p></body></html>")
+            "<p style='font-size:8.5pt;color:#444'>Creato dall'app «VitaMemo»: controlla i dati sugli originali.</p></body></html>")
 
 
 def lv_vista_scelta(chiave):

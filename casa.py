@@ -3755,7 +3755,7 @@ def ca_html_storico(c):
                             f"<td>{e(_ca_data_it(m.get('prossima')) if m.get('prossima') else '')}</td><td>{e(m.get('note') or '')}</td></tr>" for m in g["voci"]) + "</table>")
     return ("<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Storico degli interventi</title><style>body{font-family:Arial,sans-serif;font-size:10.5pt}h2{font-size:12pt;border-bottom:1px solid #888;margin-top:14pt}"
             "table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px 5px;text-align:left}</style></head><body><h1>Storico degli interventi e delle manutenzioni</h1>" + corpo
-            + "<p style='font-size:8.5pt;color:#444'>Creato dall'app «La nostra dispensa».</p></body></html>")
+            + "<p style='font-size:8.5pt;color:#444'>Creato dall'app «VitaMemo».</p></body></html>")
 
 
 def _ca_storico_per_intervento(c, nomi, docs):

@@ -197,8 +197,16 @@ _AGGANCI = {
         ('_viste = {"schede": "Schede", "tabella": "Tabella"}',
          'with f4:\n        icona_farmacia()\n    _viste = {"schede": "Schede", "tabella": "Tabella"}'),
         ("# --- intestazione e avvisi ---",
+         'if "vm_home_attiva" in globals() and vm_home_attiva():\n    vm_schermata_home()\n    st.stop()\n'      # VitaMemo: la schermata iniziale con i dieci pulsanti
          'if st.session_state.get("farmacia_aperta"):\n    schermata_farmacia()\n    st.stop()\n'
          "# --- intestazione e avvisi ---"),
+        # VitaMemo: nome e icona della scheda del browser, e la fascia con il titolo nella pagina di accesso
+        ('st.set_page_config(page_title=t("La nostra dispensa"), page_icon="🥫", layout="wide")',
+         'st.set_page_config(page_title="VitaMemo", page_icon=(vm_icona() if "vm_icona" in globals() else "🌐"), layout="wide")'),
+        ('    st.caption(t("Tieni sotto controllo scorte, scadenze e allergeni: fotografa il codice a barre e l\'app compila i dati del prodotto."))',
+         '    st.caption("Dispensa, salute, documenti, casa, lavoro, auto e animali: tutto in ordine, in una sola app." if lingua() == "it" else t("Tieni sotto controllo scorte, scadenze e allergeni: fotografa il codice a barre e l\'app compila i dati del prodotto."))'),
+        ("if not sess:\n    st.markdown(HERO, unsafe_allow_html=True)\n",
+         'if not sess:\n    st.markdown(vm_hero_login() if "vm_hero_login" in globals() else HERO, unsafe_allow_html=True)\n'),
         # pulsante «Schermo intero» sotto la tabella dei prodotti (tabella_intera.py)
         ('            if len(_spunte) > 1:\n                st.caption(t("Spunta una sola riga da modificare."))\n',
          '            if len(_spunte) > 1:\n                st.caption(t("Spunta una sola riga da modificare."))\n'
@@ -213,6 +221,9 @@ _AGGANCI = {
          'if "fd_selettore" in globals():\n    fd_selettore()\n'),
     ],
     "parte4.py": [
+        # VitaMemo: il messaggio d'invito per una persona nuova porta il nome nuovo dell'app
+        ('nome=nuova["nome"], link=link_pubblico, password=nuova["password"]), language=None)',
+         'nome=nuova["nome"], link=link_pubblico, password=nuova["password"]).replace("l\'app Dispensa", "l\'app VitaMemo"), language=None)'),
         ('            with st.container(border=True):\n                attivo = u.get("attivo", True)\n                ultimo = u.get("ultimo_accesso")\n',
          '            _att_u, _ult_u = u.get("attivo", True), u.get("ultimo_accesso")\n'
          '            _etich_u = f"{\'✅\' if _att_u else \'⛔\'} {u[\'nome\']} · ultimo accesso: " + (nu_ultimo_accesso(_ult_u) if "nu_ultimo_accesso" in globals() else (_ult_u.replace("T", " ") if _ult_u else "mai"))\n'
@@ -353,7 +364,7 @@ def _carica_sicuro(_p):
         _MODULI_FALLITI.append((os.path.basename(_p), type(_e_cs).__name__ + ": " + str(_e_cs)[:160]))
 
 
-for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_prenotazioni.py", "salute_profilo.py", "salute_terapie_intervalli.py", "salute_calendario.py", "casa_cerca_manuale.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "avvisi_prova.py", "casa_amministrazione.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "animali.py", "animali_doc.py", "animali_report.py", "animali_scambio.py", "animali_logo.py", "animali_pagine.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "chat_famiglia.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py",
+for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_prenotazioni.py", "salute_profilo.py", "salute_terapie_intervalli.py", "salute_calendario.py", "casa_cerca_manuale.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "avvisi_prova.py", "casa_amministrazione.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "animali.py", "animali_doc.py", "animali_report.py", "animali_scambio.py", "animali_logo.py", "animali_pagine.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "chat_famiglia.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py", "vitamemo_img.py", "vitamemo.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py"):
     _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
@@ -372,7 +383,7 @@ if _MODULI_FALLITI and (_st_pos.session_state.get("sess") or {}).get("admin"):
         pass
 try:                                                      # la sezione in cui sei si scrive nell'indirizzo (senza ridisegnare): serve a ritrovarla se la pagina riparte
     if "sess" in _st_pos.session_state:
-        _sez_ora = "dispensa" if not _st_pos.session_state.get("farmacia_aperta") else (_st_pos.session_state.get("sezione_home") or "salute")
+        _sez_ora = "home" if _st_pos.session_state.get("vm_home") else "dispensa" if not _st_pos.session_state.get("farmacia_aperta") else (_st_pos.session_state.get("sezione_home") or "salute")
         if _st_pos.query_params.get("s") != _sez_ora:
             _st_pos.query_params["s"] = _sez_ora
 except Exception:

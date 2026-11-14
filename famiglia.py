@@ -280,7 +280,7 @@ th,td{{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}
 <h1>Report famiglia · Salute</h1>
 <div class="box"><b>{len(persone)} persone</b>: {e(nomi)}<br>Creato il {data_it(oggi_.isoformat())}</div>
 {''.join(parti)}{extra_html}
-<p class="nota">Documento creato dall'app «La nostra dispensa» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista.
+<p class="nota">Documento creato dall'app «VitaMemo» con i dati inseriti dalle persone: non è verificato da un medico o da un farmacista.
 Le foto e i PDF caricati non sono inclusi. Contiene dati sanitari: conservalo con cura e non condividerlo con chi non deve vederlo.</p></body></html>"""
 
 

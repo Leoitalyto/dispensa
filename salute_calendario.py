@@ -61,7 +61,7 @@ def _cal_allarme(titolo, minuti_dopo_inizio):
 
 
 def _cal_intestazione(nome):
-    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//La nostra dispensa//Salute//IT", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", f"X-WR-CALNAME:{_cal_testo(nome)}"]
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//VitaMemo//Salute//IT", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", f"X-WR-CALNAME:{_cal_testo(nome)}"]
 
 
 def _cal_chiudi(righe):
@@ -96,7 +96,7 @@ def cal_eventi_terapia(t, oggi_, ora_dopo_min=0):
     nome = str(t.get("nome_med") or "Medicinale")
     dose = str(t.get("quantita") or "").strip()
     titolo = f"💊 {nome}" + (f" – {dose}" if dose else "")
-    desc = "Terapia dalla app «La nostra dispensa»." + (f" Note: {t['note']}" if t.get("note") else "")
+    desc = "Terapia dalla app «VitaMemo»." + (f" Note: {t['note']}" if t.get("note") else "")
     ora_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     iv = ter_intervallo(t) if "ter_intervallo" in globals() else None
     righe = []

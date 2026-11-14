@@ -626,7 +626,7 @@ def sp_html_scheda(d, racconto, racconto_ai=None):
             + (("<h2>Referti e documenti archiviati (ultimi)</h2>" + lis([f"{_sp_data_it(x['data'])} – {x['titolo']}" for x in d["docsan"]])) if d.get("docsan") else "")
             + (f"<h2>Altre informazioni</h2><p>{e(d['note'] + ' ' + d['altro']).strip()}</p>" if (d["note"] or d["altro"]) else "")
             + baby
-            + "<p class='nota'>Documento creato dall'app «La nostra dispensa» con le informazioni inserite dall'utente: non è certificato da un medico e non sostituisce la documentazione clinica. "
+            + "<p class='nota'>Documento creato dall'app «VitaMemo» con le informazioni inserite dall'utente: non è certificato da un medico e non sostituisce la documentazione clinica. "
               "Verificare i dati con l'interessato o con i documenti originali.</p></body></html>")
 
 
@@ -1101,7 +1101,7 @@ def sp_modulo_bambino(pid):
     svg = "".join(sp_svg_crescita((p.get("bambino") or {}).get("misure", []), c, u) for c, u in (("peso", "peso (kg)"), ("altezza", "altezza (cm)")))
     html_str = (f"<!doctype html><html lang='it'><head><meta charset='utf-8'><title>Percorso di {_sp_e(p.get('nome'))}</title><style>{_SP_STILE}h3{{font-size:11pt;margin:8pt 0 2pt}}</style></head>"
                 f"<body><h1>Percorso sanitario e di crescita · {_sp_e(p.get('nome'))}</h1><div class='box'>Aggiornato il {_sp_data_it(d['oggi'])}</div>{svg}{corpo}"
-                "<p class='nota'>Creato dall'app «La nostra dispensa» con le informazioni inserite dai genitori: non è certificato da un medico.</p></body></html>")
+                "<p class='nota'>Creato dall'app «VitaMemo» con le informazioni inserite dai genitori: non è certificato da un medico.</p></body></html>")
     nome_file = f"percorso_{re.sub(r'[^A-Za-z0-9]+', '_', p.get('nome', '')) or 'bambino'}_{d['oggi']}"
     st.download_button("📄 Scarica il libretto (da stampare o salvare come PDF)", html_str.encode("utf-8"), file_name=nome_file + ".html", mime="text/html", width="stretch")
     pdf = sp_pdf_da_html(html_str)

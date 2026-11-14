@@ -26,7 +26,7 @@ AG_VERSIONE = "2"
 # ---------------------------------------------------------------------------------------------------------------------
 AG_CAPITOLI = [
     {"id": "g_benvenuto", "s": "app", "t": "Benvenuto! Sono il tuo assistente",
-     "x": "Ciao! Sono il robottino dell'app «La nostra dispensa». Adesso ti faccio il giro completo: ti spiego tutte le parti dell'app, una alla volta, con parole semplici. "
+     "x": "Ciao! Sono il robottino dell'app «VitaMemo». Adesso ti faccio il giro completo: ti spiego tutte le parti dell'app, una alla volta, con parole semplici. "
           "Se la voce è accesa vado avanti da solo: tocca Pausa per fermarmi, Avanti o Indietro per muoverti, Capitoli per saltare dove vuoi. "
           "Puoi farmi una domanda quando vuoi, scrivendola o con il microfono. Con il pulsante con il mondo cambi la mia lingua.",
      "d": "", "k": "benvenuto inizio giro completo robottino assistente lingua pausa avanti capitoli"},
@@ -35,12 +35,12 @@ AG_CAPITOLI = [
           "Nessun altro li vede, a parte le cose che scegli di condividere. All'ingresso puoi scegliere la lingua dell'app. "
           "In alto a sinistra c'è una freccia con due punte: apre il menu laterale, dove trovi le tue allergie, la lingua e altre impostazioni.",
      "d": "Prima schermata: scrivi la password e tocca Entra.", "k": "entrare password lingua menu laterale freccia allergie accesso login"},
-    {"id": "g_home", "s": "app", "t": "La Home e i pulsanti delle sezioni",
-     "x": "In alto, in ogni pagina, c'è una fila di pulsanti colorati: Dispensa, Salute, I miei documenti, Archivio, Casa, Lavoro, Auto, Animali, Chat e Utilità. "
-          "Scorri la fila con il dito per vedere gli ultimi. Tocchi un pulsante ed entri in quella parte dell'app. "
-          "Se su un pulsante compare una campanella con un numero, lì c'è qualcosa da guardare: una scadenza vicina o un messaggio nuovo. "
-          "Sotto ai pulsanti trovi sempre il pulsante rosso «Clicca per informazioni» con la guida.",
-     "d": "La fila di pulsanti colorati in alto, in ogni pagina.", "k": "home pulsanti sezioni barra campanella numero avvisi colori navigare"},
+    {"id": "g_home", "s": "app", "t": "La schermata iniziale e i pulsanti delle sezioni",
+     "x": "Quando entri vedi la schermata iniziale di VitaMemo, con dieci pulsanti luminosi, uno per ogni parte dell'app: Dispensa, Salute, I miei documenti, Archivio, Casa, Lavoro, Auto, Animali, Chat e Utilità. "
+          "Tocchi un pulsante ed entri in quella parte. Se su un pulsante compare un numero giallo fluorescente e il pulsante pulsa di luce, lì c'è qualcosa da guardare: una scadenza vicina o un messaggio nuovo. "
+          "Dentro ogni pagina, in alto, c'è il pulsante VitaMemo Home per tornare alla schermata iniziale, e sotto i pulsanti colorati per passare da una sezione all'altra. "
+          "Trovi sempre anche il pulsante rosso «Clicca per informazioni» con la guida.",
+     "d": "La schermata iniziale, appena entri. In ogni pagina: il pulsante 🌐 VitaMemo · Home, in alto.", "k": "home schermata iniziale vitamemo pulsanti luminosi sezioni numero neon fluorescente pulsa avvisi campanella tornare navigare colori"},
     {"id": "g_dispensa", "s": "dispensa", "t": "La Dispensa: prodotti e scadenze",
      "x": "La Dispensa è l'elenco di quello che hai in casa da mangiare e da bere. Tocca Aggiungi, fai la foto del prodotto o scrivi il codice a barre, "
           "e l'app compila il nome. Poi scrivi quanti pezzi hai e la scadenza. I colori ti dicono quando agire: verde tutto bene, arancione scade entro due mesi, "
