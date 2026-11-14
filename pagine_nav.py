@@ -160,7 +160,7 @@ def pn_riepilogo():
         st.markdown("<div style='background:rgba(255,255,255,.8);border-radius:16px;padding:8px 14px;margin:8px 0;color:#1b5e20;font-weight:800'>✅ Tutto a posto: niente in scadenza.</div>", unsafe_allow_html=True)
         return
     righe = ""
-    for sez in ("dispensa", "salute", "documenti", "casa", "auto"):
+    for sez in ("dispensa", "salute", "documenti", "casa", "auto", "animali"):
         if sez in sc:
             voci = sc[sez]
             righe += f"<div style='margin-top:6px'><b>{nomi.get(sez, sez)}</b> ({len(voci)})</div>" + "".join(f"<div style='margin-left:10px'>{_pn_h(v)}</div>" for v in voci[:3])
