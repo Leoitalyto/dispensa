@@ -23,7 +23,7 @@ import streamlit as st
 CH_FILE = "chat.json"
 CH_MAX_CAR = 1000
 CH_MAX_MSG = 500                      # messaggi conservati per conversazione
-CH_PAGINA = 30                        # messaggi mostrati alla volta
+CH_ALTEZZA = 470                      # altezza (in pixel) della finestra dei messaggi: dentro si scorre su e giù, come su WhatsApp
 CH_AGGIORNA = "10s"                   # ogni quanto si aggiorna la lista mentre la chat è aperta
 
 
@@ -151,14 +151,68 @@ def ch_ora_it(iso, adesso_):
     return t.strftime("%d/%m %H:%M")
 
 
-def ch_bolla(m, mio, nome, adesso_):
-    """Un messaggio in HTML sicuro (ogni carattere è «escapato»): a destra e verde se è mio, a sinistra e bianco se è di un altro."""
+_CH_GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+_CH_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+
+
+def ch_giorno_etichetta(iso, adesso_):
+    """«Oggi», «Ieri» oppure «sabato 8 novembre» (con l'anno se è di un altro anno). Vuoto se la data non si legge."""
+    try:
+        t = datetime.fromisoformat(str(iso))
+    except ValueError:
+        return ""
+    if t.date() == adesso_.date():
+        return "Oggi"
+    if t.date() == (adesso_ - timedelta(days=1)).date():
+        return "Ieri"
+    s = f"{_CH_GIORNI[t.weekday()]} {t.day} {_CH_MESI[t.month - 1]}"
+    return s if t.year == adesso_.year else s + f" {t.year}"
+
+
+def ch_ora_breve(iso):
+    """«14:32» (l'ora, senza il giorno: il giorno lo dice la riga di separazione)."""
+    try:
+        return datetime.fromisoformat(str(iso)).strftime("%H:%M")
+    except ValueError:
+        return ""
+
+
+def ch_bolla(m, mio, nome, adesso_, breve=False):
+    """Un messaggio in HTML sicuro (ogni carattere è «escapato»): a destra e verde se è mio, a sinistra e bianco se è di un altro. `breve`: solo l'ora (c'è già la riga del giorno)."""
     testo = _ch_html.escape(m.get("testo", "")).replace("\n", "<br>")
     chi = "" if mio else f"<div style='font-size:.8rem;font-weight:800;color:#00695c;margin-bottom:2px'>{_ch_html.escape(nome or m.get('nome') or '')}</div>"
-    ora = f"<div style='font-size:.72rem;opacity:.65;text-align:right;margin-top:3px'>{_ch_html.escape(ch_ora_it(m.get('t'), adesso_))}</div>"
+    ora = f"<div style='font-size:.72rem;opacity:.65;text-align:right;margin-top:3px'>{_ch_html.escape(ch_ora_breve(m.get('t')) if breve else ch_ora_it(m.get('t'), adesso_))}</div>"
     fondo, allinea = ("#d7f5e3", "flex-end") if mio else ("#ffffff", "flex-start")
     return (f"<div style='display:flex;justify-content:{allinea};margin:5px 0'><div style='max-width:86%;background:{fondo};color:#1b2b2b;border-radius:16px;padding:8px 12px;"
             f"box-shadow:0 1px 3px rgba(0,0,0,.15);font-weight:400;font-size:1rem;line-height:1.4;word-wrap:break-word;overflow-wrap:anywhere'>{chi}{testo}{ora}</div></div>")
+
+
+def ch_righe(lista, uid, nomi, adesso_):
+    """TUTTI i messaggi di una conversazione come HTML, con la riga del giorno («Oggi», «Ieri», «sabato 8 novembre») ogni volta che il giorno cambia."""
+    out, giorno = [], None
+    for m in lista:
+        g = ch_giorno_etichetta(m.get("t"), adesso_)
+        if g and g != giorno:
+            giorno = g
+            out.append(f"<div style='text-align:center;margin:10px 0 4px'><span style='background:rgba(255,255,255,.85);color:#37474f;font-size:.75rem;font-weight:700;padding:3px 12px;border-radius:999px;box-shadow:0 1px 2px rgba(0,0,0,.12)'>{_ch_html.escape(g)}</span></div>")
+        out.append(ch_bolla(m, m.get("da") == str(uid), nomi.get(m.get("da")), adesso_, breve=True))
+    return "".join(out)
+
+
+def ch_ultimo_messaggio(d, chiave):
+    """L'ora (testo ISO) dell'ultimo messaggio di una conversazione, oppure «» se è vuota."""
+    lista = (d.get("conv") or {}).get(chiave) or []
+    return str(lista[-1].get("t") or "") if lista else ""
+
+
+def ch_ordine_conversazioni(d, uid, vista_uids):
+    """Le conversazioni da mostrare come pulsanti, in ordine: «Tutti», poi QUELLE CHE HANNO MESSAGGI (la più recente per prima, così non si perde mai un pezzo di chat),
+    poi le persone scelte a mano in «Chi tenere in vista» che non hanno ancora messaggi. Ritorna (pulsanti, altre_persone_senza_messaggi)."""
+    con_msg = [k for k in ch_conversazioni_di(d, uid) if k != "tutti" and (d.get("conv") or {}).get(k)]
+    con_msg.sort(key=lambda k: ch_ultimo_messaggio(d, k), reverse=True)
+    scelte = [ch_chiave_privata(uid, u) for u in vista_uids]
+    pulsanti = ["tutti"] + con_msg + [k for k in scelte if k not in con_msg]
+    return pulsanti, con_msg
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -235,7 +289,8 @@ _CH_CSS = """<style>
 .ch-hero{background:linear-gradient(135deg,#00838f 0%,#26c6da 55%,#80deea 100%);color:#fff;padding:16px 20px;border-radius:24px;margin:6px 0 12px;box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:14px}
 .ch-hero .ico{font-size:3rem;line-height:1}.ch-hero h1{margin:0;font-size:1.7rem;line-height:1.15;color:#fff;padding:0}.ch-hero p{margin:2px 0 0;font-size:.95rem;opacity:.95}
 .ch-hero .ico-img{height:122px;width:auto;max-width:36%;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(255,255,255,.45)) drop-shadow(0 4px 6px rgba(0,0,0,.4))}
-.ch-box{background:rgba(255,255,255,.55);border-radius:18px;padding:6px 10px;margin:6px 0}
+.ch-box{padding:2px 4px;margin:0}
+.st-key-ch_scroll{background:rgba(255,255,255,.55);border-radius:18px;padding:4px 8px;margin:6px 0;border:1px solid rgba(0,0,0,.06)}
 </style>"""
 
 
@@ -274,16 +329,41 @@ def _ch_salva_vista():
         st.session_state["ch_avviso"] = f"Non sono riuscito a ricordare la scelta ({type(e).__name__})."
 
 
+def _ch_ultima():
+    """L'ultima conversazione aperta da questa persona (si ricorda nel suo file personale: riaprendo l'app ritrova la stessa)."""
+    if "ch_ultima" not in st.session_state:
+        try:
+            d = carica_dati(crea_archivio(), st.session_state["percorso"]) or {}
+            v = (d.get("impostazioni") or {}).get("chat_ultima")
+        except Exception:
+            v = None
+        st.session_state["ch_ultima"] = str(v) if v else "tutti"
+    return st.session_state["ch_ultima"]
+
+
+def _ch_ricorda_ultima(chiave):
+    """Salva la conversazione aperta, ma solo se è cambiata (un salvataggio solo quando si passa a un'altra)."""
+    if chiave == st.session_state.get("ch_ultima"):
+        return
+    st.session_state["ch_ultima"] = chiave
+    try:
+        salva(lambda d, v=chiave: d.setdefault("impostazioni", {}).__setitem__("chat_ultima", v), "Chat: ultima conversazione")
+    except Exception:
+        pass                                                         # se non si salva, nessun danno: alla prossima apertura parte da «Tutti»
+
+
 def _ch_da_pills():
     v = st.session_state.get("ch_pills")
     if v:
         st.session_state["ch_conv"] = v
+        _ch_ricorda_ultima(v)
 
 
 def _ch_da_menu():
     v = st.session_state.get("ch_menu")
     if v:
         st.session_state["ch_conv"] = v
+        _ch_ricorda_ultima(v)
 
 
 def _ch_salva_messaggio(chiave, testo):
@@ -308,29 +388,36 @@ def _ch_segna(chiave):
 
 @st.fragment(run_every=CH_AGGIORNA)
 def _ch_lista(chiave):
-    """I messaggi della conversazione: si aggiornano da soli ogni 10 secondi mentre la chat è aperta."""
+    """TUTTI i messaggi della conversazione, in una finestra che si scorre su e giù (si apre già sull'ultimo messaggio). Si aggiorna da sola ogni 10 secondi."""
     sess = _ch_sess()
     uid = str(sess.get("uid"))
     d = _ch_dati()
     nomi = _ch_nomi()
     lista = (d.get("conv") or {}).get(chiave, []) if ch_puo(chiave, uid) else []
-    mostra = int(st.session_state.get("ch_mostra_" + chiave, CH_PAGINA))
     adesso_ = _ch_ora()
-    if len(lista) > mostra:
-        if st.button(f"⬆️ Mostra i messaggi più vecchi ({len(lista) - mostra})", key="ch_vecchi_" + chiave, width="stretch"):
-            st.session_state["ch_mostra_" + chiave] = mostra + CH_PAGINA
-            st.rerun(scope="fragment")
-    if not lista:
-        st.markdown("<div class='ch-box' style='text-align:center;color:#37474f;font-weight:600'>Nessun messaggio ancora. Scrivi il primo qui sotto 👇</div>", unsafe_allow_html=True)
-    righe = "".join(ch_bolla(m, m.get("da") == uid, nomi.get(m.get("da")), adesso_) for m in lista[-mostra:])
-    st.markdown("<div class='ch-box'>" + righe + "</div>", unsafe_allow_html=True)
+    try:
+        finestra = st.container(height=CH_ALTEZZA, border=False, key="ch_scroll", autoscroll=True)
+    except TypeError:                                                 # versione di Streamlit più vecchia: nessuno scorrimento automatico in fondo
+        finestra = st.container(height=CH_ALTEZZA, border=False, key="ch_scroll")
+    with finestra:
+        if not lista:
+            st.markdown("<div class='ch-box' style='text-align:center;color:#37474f;font-weight:600'>Nessun messaggio ancora. Scrivi il primo qui sotto 👇</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='ch-box'>" + ch_righe(lista, uid, nomi, adesso_) + "</div>", unsafe_allow_html=True)
+    firma = f"{chiave}|{len(lista)}|{lista[-1].get('id') if lista else 0}"                # cambia quando arriva un messaggio o si apre un'altra conversazione
+    if st.session_state.get("_ch_firma") != firma and "_inietta" in globals():
+        st.session_state["_ch_firma"] = firma                          # per sicurezza, in fondo ci si porta anche con un piccolo comando (oltre allo scorrimento automatico)
+        try:
+            _inietta("(function(){var n=0;function v(){var b=window.document.querySelector('.st-key-ch_scroll');if(b){var e=[b].concat([].slice.call(b.querySelectorAll('*'))).filter(function(x){return x.scrollHeight>x.clientHeight+4&&/(auto|scroll)/.test(window.getComputedStyle(x).overflowY)})[0];if(e)e.scrollTop=e.scrollHeight}if(++n<8)window.setTimeout(v,250)}v()})();")
+        except Exception:
+            pass
     if lista and uid not in ("", "None", "prova"):
         try:
             if ch_non_letti(d, uid).get(chiave):                         # qualcosa di nuovo che sto guardando: si segna letto (un solo salvataggio)
                 _ch_segna(chiave)
         except Exception:
             pass
-    st.caption(f"Aggiornato alle {adesso_.strftime('%H:%M:%S')} · la lista si aggiorna da sola ogni 10 secondi.")
+    st.caption(f"💬 {len(lista)} messaggi: scorri in alto per vedere i più vecchi · aggiornato alle {adesso_.strftime('%H:%M:%S')}, si aggiorna da solo.")
 
 
 def schermata_chat():
@@ -355,14 +442,15 @@ def schermata_chat():
     d = _ch_dati()
     altri = [(u, n) for u, n in nomi.items() if u != uid]
     vista = ch_vista_pulita(_ch_vista(), [u for u, _n in altri])
-    fuori = [u for u, _n in altri if u not in vista]
-    k_pills = ["tutti"] + [ch_chiave_privata(uid, u) for u in vista]
-    k_menu = [ch_chiave_privata(uid, u) for u in fuori]
+    k_pills, _con_msg = ch_ordine_conversazioni(d, uid, vista)                 # «Tutti» + ogni conversazione che ha messaggi + le persone scelte a mano
+    k_menu = [ch_chiave_privata(uid, u) for u, _n in altri if ch_chiave_privata(uid, u) not in k_pills]
     chiavi = k_pills + k_menu
     nl = ch_non_letti(d, uid)
     etich = lambda k: ch_etichetta(k, uid, nomi) + (f" 🔴{nl[k]}" if nl.get(k) else "")
     if len(chiavi) == 1:
         st.caption("Per ora sei l'unica persona nell'app: qui scrivi a «Tutti». Quando altre persone avranno la loro password compariranno anche le conversazioni private.")
+    if "ch_conv" not in st.session_state:                                         # appena aperta la chat: riparte dall'ultima conversazione che stavi guardando
+        st.session_state["ch_conv"] = _ch_ultima()
     if st.session_state.get("ch_conv") not in chiavi:
         st.session_state["ch_conv"] = "tutti"
     attuale = st.session_state["ch_conv"]
@@ -395,7 +483,6 @@ def schermata_chat():
         else:
             try:
                 if _ch_salva_messaggio(chiave, testo):
-                    st.session_state.pop("ch_mostra_" + chiave, None)
                     st.rerun()
                 else:
                     st.error("Non sono riuscito a inviare il messaggio. Riprova.")
@@ -467,7 +554,7 @@ In cima scegli **con chi parlare**: **👨‍👩‍👧 Tutti** (il gruppo di t
          """1. Apri **💬 Chat** e scegli **con chi parlare**.
 2. In fondo scrivi il messaggio (fino a **1000 caratteri**) e tocca **📨 Invia**.
 3. I messaggi **nuovi arrivano da soli**: la lista si aggiorna **ogni 10 secondi** finché la chat è aperta. Se c'è un messaggio che non hai letto, vedi **🔔** sul bottone **💬 Chat** e **🔴 con il numero** sulla persona.
-4. Per vedere i messaggi più vecchi tocca **⬆️ Mostra i messaggi più vecchi**.
+4. **Tutti i messaggi restano sempre lì**: la finestra dei messaggi si **scorre con il dito** verso l'alto per rivedere quelli più vecchi (si apre già sull'ultimo). Le conversazioni che hanno messaggi compaiono **da sole come pulsanti** in alto, la più recente per prima; quando riapri l'app ritrovi **l'ultima conversazione** che stavi guardando.
 **Se ti sei sbagliato:** apri **🗑️ Elimina un messaggio**, scegli il messaggio e tocca **🗑️ Elimina questo messaggio** (puoi togliere **solo i tuoi**; chi gestisce l'app può togliere qualunque messaggio).
 **Solo testo:** niente foto e niente file. **Privacy:** le conversazioni private non le vedono le altre persone nell'app, ma stanno nello stesso archivio privato dell'app: non scriverci cose segretissime.""",
          "chat scrivere messaggio invia eliminare non letti notifica privata testo"),
