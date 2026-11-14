@@ -397,25 +397,33 @@ _AG_JS = r"""
     if (rec.some(function (p) { var esatta = p.charAt(0) === '=', q = norm(esatta ? p.slice(1) : p).trim(); return q && n.indexOf(' ' + q + (esatta ? ' ' : '')) >= 0; })) r.az = 'recupera';
     return r;
   }
+  var SEZ_OGGETTO = {medicinale: ['farmacia'], terapia: ['farmacia'], prescrizione: ['farmacia'], visita: ['farmacia'], vaccino: ['farmacia'], bugiardino: ['farmacia', 'utilita'],
+                     profilo: ['farmacia', 'dispensa', 'utilita', 'app', 'chat'], documento: ['documenti', 'archivio', 'casa', 'auto', 'farmacia'], prodotto: ['dispensa'],
+                     avviso: ['farmacia', 'dispensa', 'casa', 'auto', 'documenti', 'app'], veicolo: ['auto']};   /* di che sezione parla ogni oggetto: una domanda sulle persone non riceve una risposta sull'auto */
   function cerca(domanda, intento) {
     if (!indice) costruisci();
     var q = parole(domanda); if (!q.length) return [];
-    var az = intento && intento.az, og = intento && intento.og, ris = [], esatte = 0;
+    var az = intento && intento.az, og = intento && intento.og, ris = [], esatte = 0, sezOk = og && SEZ_OGGETTO[og];
+    var SEZ_NOMI = {salute: 'farmacia', farmacia: 'farmacia', medicinali: 'farmacia', dispensa: 'dispensa', casa: 'casa', auto: 'auto', macchina: 'auto', lavoro: 'lavoro', chat: 'chat', archivio: 'archivio', documenti: 'documenti', utilita: 'utilita'};
+    var sezDetta = null, nq = ' ' + norm(domanda) + ' '; Object.keys(SEZ_NOMI).forEach(function (k) { if (!sezDetta && nq.indexOf(' ' + k + ' ') >= 0) sezDetta = SEZ_NOMI[k]; });
     indice.forEach(function (e) {
       var pt = 0, tr = 0, bonus = 0, ex = false, forte = false;
       q.forEach(function (x) {
         if (combacia(x, e.t)) { pt += 3; tr++; forte = true; } else if (combacia(x, e.k)) { pt += 2; tr++; forte = true; } else if (combacia(x, e.b)) { pt += 1; tr++; }
       });
       var a = e.g.a, o = e.g.o;
-      if (az && a) bonus += (a === az) ? 6 : -8;
+      if (az && a) bonus += (a === az) ? (og ? 6 : 2) : -8;                                 /* senza un oggetto nella domanda, il verbo da solo vale poco: contano le parole */
       if (og && o) bonus += (o === og) ? 6 : -4;
       if (az && og && a === az && o === og) { bonus += 12; ex = true; }
+      if (sezOk && sezOk.indexOf(e.g.s) < 0) bonus -= 7;
+      if (sezDetta) bonus += (e.g.s === sezDetta) ? 6 : -4;                                   /* «in salute»: prima le schede di Salute */                                   /* parla di un'altra sezione rispetto all'oggetto della domanda */
+      if ((az || og) && !forte && !ex) return;                                              /* ho capito cosa vuole: non basta una parola trovata per caso nel testo */
       if (ex) esatte++;
       if (pt + bonus > 0 && (bonus > 0 || tr >= 2 || q.length <= 2)) ris.push({p: pt + tr + bonus + (e.g.s === D.sezione ? 1 : 0), g: e.g, ex: ex});
     });
     ris.sort(function (a, b) { return b.p - a.p; });
     if (!ris.length) return [];
-    if (esatte) return [ris[0].g];
+    if (esatte) return ris.filter(function (r) { return r.ex; }).slice(0, 3).map(function (r) { return r.g; });   /* azione e oggetto coincidono: solo quelle giuste (anche più d'una) */
     var top = ris[0].p; return ris.filter(function (r) { return r.p * 2 >= top; }).slice(0, 4).map(function (r) { return r.g; });
   }
   function argomento(g, parlare, prefisso) {
@@ -561,6 +569,10 @@ _AG_JS = r"""
     r.onend = function () { if (!detto) { fine(); mostra(T('a_nulla_t'), T('a_nulla_x'), ' ', false); } else { fine(); } };
     try { r.start(); } catch (e) { fine(); }
   }
+  function soloParole(testo, lista) {                                  /* tutte le parole «piene» della domanda stanno nella lista («cosa c'è di nuovo» sì, «creo un nuovo utente» no) */
+    var q = parole(testo), L = String(lista || '').split(' ').map(function (x) { return stem(norm(x).trim()); }).filter(Boolean);
+    return q.length > 0 && q.every(function (p) { return L.some(function (x) { return p.indexOf(x) === 0 || x.indexOf(p) === 0; }); });
+  }
   function haParola(n, lista) { return String(lista || '').split(' ').some(function (x) { x = norm(x).trim(); return x && n.indexOf(x) >= 0; }); }
   /* ---------- intelligenza artificiale (facoltativa, solo quando app e robottino sono in italiano) ---------- */
   var storia = [], inAttesa = null;
@@ -576,8 +588,9 @@ _AG_JS = r"""
     testo = (testo || '').trim();
     if (testo === '__giro__') { elInput.value = ''; tourVai(0); return; }
     var A = D.ai, n0 = ' ' + norm(testo) + ' ';
-    var speciale = !testo || (haParola(n0, T('i_off')) && haParola(n0, T('i_ass'))) || haParola(n0, T('i_silenzio')) || haParola(n0, T('i_novita')) || haParola(n0, T('i_giro')) ||
-      (n0.trim().split(' ').length <= 3 && haParola(n0, T('i_saluto')));
+    var corta0 = n0.trim().split(' ').length <= 5, it0 = rileva(testo), neutra0 = !it0.az && !it0.og;
+    var speciale = !testo || (haParola(n0, T('i_off')) && haParola(n0, T('i_ass'))) || haParola(n0, T('i_silenzio')) || soloParole(testo, T('i_novita')) || n0.indexOf('novit') >= 0 ||
+      (neutra0 && corta0 && haParola(n0, T('i_giro'))) || (n0.trim().split(' ').length <= 3 && haParola(n0, T('i_saluto')));
     var inp = A && A.attivo && /^it/i.test(D.lang || 'it') && lingua === (D.applang || 'it') && !speciale ? doc.querySelector('input[aria-label="asst-llm-q"]') : null;
     if (!inp) { chiediLocale(testo); ricorda(testo, elTitolo.textContent + '. ' + elTesto.textContent); return; }
     var it = rileva(testo); if (it.az) memoria.az = it.az; if (it.og) memoria.og = it.og;
@@ -605,15 +618,17 @@ _AG_JS = r"""
     var n = norm(testo);
     if (haParola(n, T('i_off')) && haParola(n, T('i_ass'))) { mostra(T('a_off_t'), T('a_off_x')); chips([]); return; }
     if (haParola(n, T('i_silenzio'))) { ferma(); return; }
-    if (haParola(n, T('i_novita'))) { novita(); return; }
-    if (haParola(n, T('i_giro'))) { tourVai(0); return; }
+    var corta = n.trim().split(' ').length <= 5, itN = rileva(testo), neutra = !itN.az && !itN.og;                   /* «creo un nuovo utente» chiede un'azione: non è «cosa c'è di nuovo» */
+    if (soloParole(testo, T('i_novita')) || n.indexOf('novit') >= 0) { novita(); return; }
+    if ((neutra && corta && haParola(n, T('i_giro'))) || /giro complet|tour complet|visita complet|rundgang|recorrido complet|turul complet|الجولة/.test(n)) { tourVai(0); return; }
     if (n.trim().split(' ').length <= 3 && haParola(n, T('i_saluto'))) { paginaCorrente(true); return; }
     var italiano = /^it/i.test(D.lang || 'it') && lingua === (D.applang || 'it'), it = italiano ? rileva(testo) : {az: null, og: null};
-    var og = it.og || ((it.az && memoria.og) ? memoria.og : null), az = it.az;
+    var senzaOggetto = parole(testo).every(function (p) { var I = (D.intenti && D.intenti.az) || {}; return Object.keys(I).some(function (k) { return I[k].some(function (x) { x = norm(x.replace(/^=/, '')).trim(); return x && (p.indexOf(x) === 0 || x.indexOf(p) === 0); }); }); });
+    var og = it.og || ((it.az && memoria.og && senzaOggetto) ? memoria.og : null), az = it.az;      /* «e come lo modifico?»: l'argomento è quello di prima; «come aggiungo un veicolo»: no */
     var verbi = {elimina: 'eliminare', aggiungi: 'aggiungere', modifica: 'modificare', vedi: 'vedere', condividi: 'inviare', esporta: 'esportare', recupera: 'recuperare'};
     var nomi = {medicinale: 'un medicinale', terapia: 'una terapia', prescrizione: 'una prescrizione', visita: 'una visita o un esame',
                 vaccino: 'una vaccinazione', documento: 'un documento', profilo: 'una persona', foto: 'una foto', bugiardino: 'il bugiardino'};
-    if (italiano && az && !og && !/(foglio|sbaglio|whatsapp|email|mail|telegram|sms|pdf|excel)/.test(n)) {
+    if (italiano && az && !og && senzaOggetto) {
       mostra('Su cosa?', 'Certo, ti aiuto a ' + (verbi[az] || 'farlo') + '. Dimmi **su cosa**: scegli qui sotto.');
       chipsTesto(['medicinale', 'terapia', 'prescrizione', 'visita', 'vaccino', 'documento'].map(function (o) { return [nomi[o].replace(/^(un|una|il) /, ''), (verbi[az] || '') + ' ' + o]; }));
       memoria.az = az; return;
@@ -781,6 +796,39 @@ try:
 
 **Le domande:** scrivi o dì una domanda (🎤): il robottino risponde con la guida e con i capitoli del giro, nella lingua scelta.""",
                      "giro completo tour robottino assistente lingue portoghese inglese spagnolo francese tedesco romeno arabo voce pausa capitoli spiegazione app", ("vedi", None))
+except Exception:
+    pass
+
+
+# ---- la scheda che mancava: far entrare un'altra persona nell'app (la domanda «come inserisco un'altra persona?» finiva su schede sbagliate)
+try:
+    if "_gx_aggiungi" in globals():
+        _gx_aggiungi("dispensa", "d_utenti", "👥 Far entrare un'altra persona nell'app (nuovo utente con password)",
+                     """Ci sono **due cose diverse**:
+
+**A) Dare a una persona la sua password** (entra nell'app con il suo telefono e vede solo le sue cose). Lo fa **solo l'amministratore**:
+1. **🏠 Dispensa** → in basso la scheda **👥 Utenti**.
+2. Scrivi il **Nome della persona**, scegli la sua **lingua** e tocca **➕ Crea utente e genera password**.
+3. Compare la **password**: copiala e mandala alla persona (per esempio su WhatsApp) insieme al **link dell'app**. Non verrà mostrata più. Al primo accesso la persona potrà scegliere una password sua.
+4. Nella stessa scheda puoi **bloccare** o **riattivare** un utente.
+
+**B) Seguire la salute di un familiare** (mamma, figli…) **senza** dargli una password: in **🩺 Salute** apri **👥 Gestisci profili** e tocca **Aggiungi profilo**. Vedi la scheda «👤 I profili della famiglia».""",
+                     "inserire aggiungere nuova altra persona utente utenti account password invitare far entrare familiare mamma figlio accesso creare utente", ("aggiungi", "profilo"))
+    if "_META_GUIDA" in globals():
+        _META_GUIDA.setdefault("f_profili", ("aggiungi", "profilo"))
+        _META_GUIDA.setdefault("f_profilo_scelto", ("vedi", "profilo"))
+        _META_GUIDA.setdefault("d_famiglia", ("vedi", "profilo"))
+    if "_INTENTI" in globals():
+        for _ag_p in ("utent", "altra persona", "nuova persona", "account", "mamma", "madre", "padre", "=papa", "figli", "marito", "moglie", "nonn", "famil", "parent", "fratell", "sorell"):
+            if _ag_p not in _INTENTI["og"]["profilo"]:
+                _INTENTI["og"]["profilo"].append(_ag_p)
+        for _ag_p in ("crea", "creo", "crear", "far entrare", "invit"):
+            if _ag_p not in _INTENTI["az"]["aggiungi"]:
+                _INTENTI["az"]["aggiungi"].append(_ag_p)
+        _INTENTI["og"].setdefault("veicolo", ["veicol", "macchin", "automobil", "furgon", "camion", "motorin", "=moto", "=auto", "targa", "libretto"])
+    if "_META_GUIDA" in globals():
+        _META_GUIDA.setdefault("au_aggiungi", ("aggiungi", "veicolo"))
+        _META_GUIDA.setdefault("au_cestino", ("recupera", "veicolo"))
 except Exception:
     pass
 
