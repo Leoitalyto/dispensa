@@ -2,7 +2,7 @@
 """GIRO COMPLETO DELL'APP con il robottino: animato, parlante, in 8 lingue, con domande e risposte.
 
 Che cosa aggiunge all'assistente che già esiste (assistente.py + assistente_extra.py), senza rifare niente:
- 1. 🧭 GIRO COMPLETO: 21 capitoli che spiegano TUTTA l'app (Home, Dispensa, Salute, Documenti, Archivio, Casa, Lavoro, Auto, Chat,
+ 1. 🧭 GIRO COMPLETO: 25 capitoli che spiegano TUTTA l'app (Home, Dispensa, Salute, Documenti, Archivio, Casa, Lavoro, Auto, Animali, Chat,
     Utilità, avvisi, Cestino, aiuto). Il robottino parla con la voce del telefono (gratis, nessuna chiave), evidenzia la frase che sta
     dicendo e, se la voce è accesa, passa da solo al capitolo dopo (⏸ Pausa per fermarlo). Pulsanti grandi: Indietro, Pausa, Avanti,
     Fine, 📑 Capitoli (per saltare dove si vuole). Ogni capitolo dice anche DOVE si trova la cosa (📍).
@@ -36,7 +36,7 @@ AG_CAPITOLI = [
           "In alto a sinistra c'è una freccia con due punte: apre il menu laterale, dove trovi le tue allergie, la lingua e altre impostazioni.",
      "d": "Prima schermata: scrivi la password e tocca Entra.", "k": "entrare password lingua menu laterale freccia allergie accesso login"},
     {"id": "g_home", "s": "app", "t": "La Home e i pulsanti delle sezioni",
-     "x": "In alto, in ogni pagina, c'è una fila di pulsanti colorati: Dispensa, Salute, I miei documenti, Archivio, Casa, Lavoro, Auto, Chat e Utilità. "
+     "x": "In alto, in ogni pagina, c'è una fila di pulsanti colorati: Dispensa, Salute, I miei documenti, Archivio, Casa, Lavoro, Auto, Animali, Chat e Utilità. "
           "Scorri la fila con il dito per vedere gli ultimi. Tocchi un pulsante ed entri in quella parte dell'app. "
           "Se su un pulsante compare una campanella con un numero, lì c'è qualcosa da guardare: una scadenza vicina o un messaggio nuovo. "
           "Sotto ai pulsanti trovi sempre il pulsante rosso «Clicca per informazioni» con la guida.",
@@ -103,6 +103,18 @@ AG_CAPITOLI = [
           "Nella Diagnostica trovi i codici di errore e, con un piccolo apparecchio da collegare all'auto, anche i dati del motore. "
           "In Emergenza hai i numeri utili, il soccorso stradale e il modulo per il sinistro, con i passi da seguire con calma se hai un incidente.",
      "d": "🚗 Auto → Diagnostica → «📷 Fotografa una spia»; 🚗 Auto → Emergenza.", "k": "spia cruscotto diagnostica codici errore obd emergenza soccorso stradale incidente sinistro constatazione"},
+    {"id": 'g_animali', "s": "animali", "t": 'Animali: la cartella e le schede di salute',
+     "x": "In Animali tieni la cartella completa di ogni animale di casa: cani, gatti, conigli, uccelli, pesci, rettili. Tocca Aggiungi animale e scrivi il nome: è l'unica cosa obbligatoria. Poi puoi aggiungere specie, razza, microchip, foto e galleria. Ogni animale ha le sue schede: Salute, con vaccini, visite, terapie, esami, interventi, patologie e allergie; Documenti; Peso e cibo; Diario; Spese e contatti; Agenda.",
+     "d": 'Pulsante dorato 🐾 Animali, accanto ad Auto → ➕ Aggiungi animale.', "k": 'animali animale cane gatto coniglio pappagallo pesce rettile veterinario vaccino microchip documenti referto certificato carica leggere foto agenda richiamo'},
+    {"id": 'g_animali_doc', "s": "animali", "t": 'Animali: documenti letti da soli',
+     "x": "La parte più comoda è Carica documenti: fotografa o scegli un referto, un certificato, una prescrizione, una fattura, il libretto o il passaporto, anche in PDF. Io leggo il documento, riconosco di che tipo è, trovo le date, le scadenze, il microchip e gli importi, e capisco a quale animale appartiene. Se non sono sicuro, te lo chiedo. Tu controlli, correggi se serve e confermi. Il file originale resta sempre identico, e i vaccini e i richiami finiscono da soli nell'agenda con un promemoria.",
+     "d": '🐾 Animali → 📎 Carica documenti.', "k": 'animali animale cane gatto coniglio pappagallo pesce rettile veterinario vaccino microchip documenti referto certificato carica leggere foto agenda richiamo'},
+    {"id": 'g_animali2', "s": "animali", "t": 'Animali: il report PDF per il veterinario',
+     "x": "Quando vai dal veterinario tocca Genera report PDF. Scegli il tipo: completo, sintetico, cronologico, vaccinazioni e prevenzione, farmaci e trattamenti, alimentazione e monitoraggio, personalizzato, oppure completo con gli allegati, e il periodo. Il PDF ha copertina, indice, foto e l'elenco di ciò che manca. Le diagnosi e le prescrizioni del veterinario sono tenute separate dalle tue annotazioni. Lo scarichi o lo mandi come tutto il resto.",
+     "d": '🐾 Animali → 📄 Genera report PDF.', "k": 'report pdf veterinario esportare importare condividere pacchetto password duplicati unire aggiornare archivio animale whatsapp'},
+    {"id": 'g_animali_scambio', "s": "animali", "t": 'Animali: esportare, importare e sicurezza',
+     "x": "Con Esporta tutto e condividi crei un solo file con dati, foto e documenti originali di un animale o di tutti, anche con una password. Lo mandi con WhatsApp, email o Telegram. Chi lo riceve tocca Importa archivio animale: controllo che il file sia intero, mostro cosa contiene e chiedo conferma. Non sostituisco mai niente in automatico: se l'animale esiste già, scegli se importarlo come nuovo, aggiornare, unire o annullare. Niente viene cancellato senza il tuo permesso, e se qualcosa si interrompe rimetto tutto a posto.",
+     "d": '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', "k": 'report pdf veterinario esportare importare condividere pacchetto password duplicati unire aggiornare archivio animale whatsapp'},
     {"id": "g_chat", "s": "chat", "t": "La Chat della famiglia",
      "x": "Con la Chat scrivi alle persone della famiglia senza uscire dall'app, gratis. In alto scegli con chi parlare: Tutti, cioè il gruppo di famiglia, oppure una persona sola, in privato. "
           "Scegli chi tenere in vista come pulsante; le altre persone stanno nel menu «Altre persone». "

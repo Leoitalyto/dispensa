@@ -536,12 +536,12 @@ Sotto scegli l'animale e cosa vedere: **Scheda**, **Salute** (vaccini, visite, t
          """1. Apri **🐾 Animali** e tocca **➕ Aggiungi animale**.
 2. Scrivi il **nome** (è l'unica cosa obbligatoria), la specie, la razza, il microchip e il proprietario. Il resto si può aggiungere dopo.
 3. Tocca **✅ Salva**. Poi, dalla scheda, **📷 Foto principale** e **🖼️ Aggiungi foto alla galleria**.""",
-         "aggiungere nuovo animale scheda foto microchip"),
-        ("📂 Documenti: li leggo io",
+         "aggiungere aggiungo inserire inserisco nuovo animale animali scheda foto microchip cane gatto coniglio criceto pappagallo animale domestico mio cucciolo"),
+        ("📂 Documenti, certificati di vaccinazione e referti del cane e del gatto: li leggo io",
          """Tocca **📎 Carica documenti** e scegli la foto o il PDF (referto, certificato, prescrizione, fattura, libretto, passaporto…): puoi **scattare la foto**, prenderla **dalla galleria** o usare il **pulsante arancione**.
 Leggo il documento, riconosco il **tipo**, trovo **date, scadenze, microchip, vaccini e importi**, e ti propongo **a quale animale** appartiene. **Se non sono sicuro te lo chiedo.** Controlli, correggi se serve, e conferma: il file **originale resta identico**.
 Dopo si può **cercare** (anche nelle parole del documento), **correggere la classificazione**, **scaricare l'originale**, **inviare** o **esportare più documenti insieme**.""",
-         "documenti carica referto certificato prescrizione fattura libretto passaporto classificazione leggere"),
+         "documenti documento animale animali cane gatto carica carico caricare referto certificato vaccinazione prescrizione fattura libretto passaporto classificazione leggere"),
         ("📄 Report PDF per il veterinario",
          """Tocca **📄 Genera report PDF**, scegli il tipo (**completo**, **sintetico**, **cronologico**, **vaccinazioni e prevenzione**, **farmaci e trattamenti**, **alimentazione e monitoraggio**, **personalizzato**, **completo con allegati**) e il periodo.
 Il PDF ha **indice**, foto, dati dell'animale, **data di generazione** e di **ultimo aggiornamento** e l'elenco di ciò che **manca**. Le diagnosi e le prescrizioni del **veterinario** sono tenute **separate** dalle mie annotazioni. Si scarica o si invia come tutto il resto.""",
@@ -550,8 +550,36 @@ Il PDF ha **indice**, foto, dati dell'animale, **data di generazione** e di **ul
          """**📦 Esporta tutto e condividi** crea **un solo file** con tutto: dati, foto, documenti originali, spese, agenda. Scegli **un animale** o **tutti**; puoi metterci una **password**. Poi lo scarichi o lo mandi (WhatsApp, email, Telegram…).
 Chi riceve il file apre **📥 Importa archivio animale** nella sua app: controllo che il file sia **intero e non danneggiato**, mostro **cosa contiene** e chiedo conferma. **Non sostituisco mai niente** di ciò che ha già: se c'è un animale uguale (stesso microchip o stesso nome) chiedo se **importarlo come nuovo**, **aggiornare**, **unire** o **annullare**. Se qualcosa si interrompe, rimetto tutto a posto.""",
          "esportare importare condividere pacchetto animale password duplicati"),
+        ("🩺 Salute: vaccini, visite, terapie, esami",
+         """Apri l'animale e tocca la scheda **🩺 Salute**. Ci sono sette parti: **vaccini**, **visite**, **terapie**, **esami**, **interventi**, **patologie** e **allergie**. Per ognuna tocca **➕ Aggiungi** e compila: la **data** e il **nome** bastano.
+Ogni voce ha un badge che dice **chi l'ha scritta**: **👨‍⚕️ Veterinario** (per esempio letta da un referto) oppure **✍️ Proprietario** (le tue annotazioni). Nel report le due cose restano **separate**, così il veterinario vede cosa è stato diagnosticato e cosa hai solo osservato tu.
+Nei **vaccini** puoi scrivere il **richiamo**: la data finisce nell'**Agenda** e, qualche giorno prima, compare un avviso nella **Home**. Con **✏️ Modifica** correggi, con **🗑️** elimini (te lo chiedo sempre prima).""",
+         "salute vaccini richiamo visite terapie esami interventi patologie allergie veterinario proprietario annotazione"),
+        ("⚖️ Peso e cibo, 📔 Diario, 💶 Spese, 📅 Agenda",
+         """**⚖️ Peso e cibo**: scrivi il peso con la data e vedi il **grafico**; annota anche **cibo**, quantità e integratori.
+**📔 Diario**: le osservazioni di ogni giorno (appetito, comportamento, sintomi), utili da leggere al veterinario.
+**💶 Spese e contatti**: cosa hai speso (visite, farmaci, cibo, toelettatura) con il **totale**, e la rubrica di **veterinario, clinica, pensione, allevatore**.
+**📅 Agenda**: appuntamenti e **scadenze** (richiami, controlli, antiparassitari). Quando carichi un documento con una scadenza, il promemoria lo **propongo io**.""",
+         "peso grafico cibo alimentazione diario spese totale contatti rubrica agenda appuntamenti scadenze antiparassitario"),
+        ("🗃️ Cartella completa",
+         """Tocca **🗃️ Visualizza cartella completa** (o la scheda **🗃️ Cartella completa**): vedi **tutto insieme**, in ordine di data, per l'animale scelto o per **tutti**: vaccini, visite, terapie, esami, pesi, diario, spese e **documenti con i loro file originali**.
+Puoi **filtrare** per tipo (**Mostra solo**) e **cercare una parola** (nome, farmaco, data o parole dei documenti). Ogni voce dice se viene dal **veterinario** o da te, e se ha **informazioni mancanti o poco leggibili** (il badge **da completare**).""",
+         "cartella completa tutto insieme cronologia filtra cerca visualizza mancanti"),
+        ("🛡️ Sicurezza: duplicati, conferme, annulla",
+         """L'app **non cancella e non sostituisce mai niente da sola**. Prima di eliminare chiede sempre conferma. Quando importi un animale che **esiste già** (stesso microchip o stesso nome e specie) ti mostra le differenze e **tu scegli**: **importa come nuovo**, **aggiorna**, **unisci** o **annulla**.
+Ogni cosa importata ha scritto **da dove arriva** e **quando** è stata importata. Se l'importazione si interrompe a metà, l'app **rimette tutto a posto**. E dopo un'importazione trovi il pulsante **↩️ Annulla l'ultima importazione**: toglie solo ciò che quell'importazione ha aggiunto.""",
+         "sicurezza duplicati sovrascrivere conferma annulla importazione ripristino unisci aggiorna provenienza"),
+        ("🔔 Avvisi e promemoria",
+         """Richiami dei vaccini, controlli e scadenze scritte in **Agenda** compaiono come avvisi nella **Home** e sul pulsante **🐾 Animali** (la campanella con il numero). Il documento letto con una scadenza propone da solo il promemoria: tu lo confermi o lo togli.""",
+         "avvisi promemoria scadenze campanella richiamo home notifiche"),
+        ("❓ Se qualcosa non va",
+         """**Il documento non è stato letto bene?** Aprilo da **📂 Documenti** → **✏️ Correggi**: cambi tipo, animale, date e testo; l'originale non cambia. Se la foto è storta o scura, rifalla con più luce e **tutta la pagina inquadrata**.
+**Mi ha proposto l'animale sbagliato?** Scegli quello giusto prima di confermare (o dopo, con **Correggi**).
+**Non trovo un documento?** Usa la ricerca nella scheda **📂 Documenti**: cerca anche dentro alle parole del documento.
+**Il file esportato non si apre?** Si apre solo con **📥 Importa archivio animale** nell'app; se hai messo una password, serve la stessa.""",
+         "problemi errore non funziona documento letto male correggi non trovo ricerca password file"),
     ])
     if "_ID_GUIDA" in globals():
-        _ID_GUIDA.setdefault("animali", ["an_cosa", "an_aggiungi", "an_doc", "an_report", "an_scambio"])
+        _ID_GUIDA.setdefault("animali", ["an_cosa", "an_aggiungi", "an_doc", "an_report", "an_scambio", "an_salute", "an_altre", "an_cartella", "an_sicurezza", "an_avvisi", "an_problemi"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("animali", "an_cosa")

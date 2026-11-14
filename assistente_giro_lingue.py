@@ -885,3 +885,116 @@ try:
         UI_TR.setdefault(_ag_lg, {}).update(_ag_d)
 except NameError:
     pass
+
+
+# =====================================================================================================================
+# SEZIONE ANIMALI: i quattro capitoli nuovi del giro + l'elenco dei pulsanti della Home
+# =====================================================================================================================
+AG_TR["en"].update({
+    'g_animali': ('Animals: the folder and the health tabs',
+        'In Animals you keep the complete folder of every pet: dogs, cats, rabbits, birds, fish, reptiles. Tap Add animal and write the name: it is the only required thing. Then you can add species, breed, microchip, photo and gallery. Every animal has its own tabs: Health, with vaccines, visits, therapies, tests, surgeries, conditions and allergies; Documents; Weight and food; Diary; Expenses and contacts; Agenda.',
+        'Golden button 🐾 Animali, next to Auto → ➕ Aggiungi animale', 'animals pets dog cat rabbit parrot fish vet vaccine microchip documents report certificate upload read photo agenda booster'),
+    'g_animali_doc': ('Animals: documents read automatically',
+        'The handiest part is Upload documents: photograph or choose a lab report, a certificate, a prescription, an invoice, the booklet or the passport, even as a PDF. I read the document, recognise its type, find dates, deadlines, microchip and amounts, and work out which animal it belongs to. If I am not sure, I ask you. You check, correct if needed and confirm. The original file always stays identical, and vaccines and boosters go by themselves into the agenda with a reminder.',
+        '🐾 Animali → 📎 Carica documenti.', 'animals pets dog cat rabbit parrot fish vet vaccine microchip documents report certificate upload read photo agenda booster'),
+    'g_animali2': ('Animals: the PDF report for the vet',
+        "When you go to the vet, tap Generate PDF report. Choose the type: complete, short, chronological, vaccinations and prevention, drugs and treatments, food and monitoring, custom, or complete with attachments, and the period. The PDF has a cover, an index, photos and the list of what is missing. The vet's diagnoses and prescriptions are kept apart from your own notes. You download or send it like everything else.",
+        '🐾 Animali → 📄 Genera report PDF', 'report pdf vet export import share package password duplicates merge update animal archive whatsapp'),
+    'g_animali_scambio': ('Animals: export, import and safety',
+        'With Export everything and share you create one single file with the data, photos and original documents of one animal or of all, even with a password. You send it by WhatsApp, email or Telegram. Whoever receives it taps Import animal archive: I check that the file is whole, show what it contains and ask for confirmation. I never replace anything automatically: if the animal already exists, you choose whether to import it as new, update, merge or cancel. Nothing is deleted without your permission, and if something is interrupted I put everything back.',
+        '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'report pdf vet export import share package password duplicates merge update animal archive whatsapp'),
+})
+AG_TR["es"].update({
+    'g_animali': ('Animales: la ficha y las pestañas de salud',
+        'En Animales guardas la carpeta completa de cada animal de casa: perros, gatos, conejos, pájaros, peces, reptiles. Toca Añadir animal y escribe el nombre: es lo único obligatorio. Después puedes añadir especie, raza, microchip, foto y galería. Cada animal tiene sus pestañas: Salud, con vacunas, visitas, terapias, pruebas, operaciones, patologías y alergias; Documentos; Peso y comida; Diario; Gastos y contactos; Agenda.',
+        'Botón dorado 🐾 Animali, junto a Auto → ➕ Aggiungi animale', 'animales mascotas perro gato conejo loro pez veterinario vacuna microchip documentos informe certificado subir leer foto agenda'),
+    'g_animali_doc': ('Animales: documentos leídos solos',
+        'Lo más cómodo es Subir documentos: fotografía o elige un informe, un certificado, una receta, una factura, la cartilla o el pasaporte, también en PDF. Yo leo el documento, reconozco de qué tipo es, encuentro fechas, vencimientos, microchip e importes, y entiendo a qué animal pertenece. Si no estoy seguro, te lo pregunto. Tú compruebas, corriges si hace falta y confirmas. El archivo original queda siempre idéntico, y las vacunas y los recordatorios van solos a la agenda con un aviso.',
+        '🐾 Animali → 📎 Carica documenti.', 'animales mascotas perro gato conejo loro pez veterinario vacuna microchip documentos informe certificado subir leer foto agenda'),
+    'g_animali2': ('Animales: el informe PDF para el veterinario',
+        'Cuando vas al veterinario, toca Generar informe PDF. Elige el tipo: completo, resumido, cronológico, vacunas y prevención, fármacos y tratamientos, alimentación y control, personalizado, o completo con adjuntos, y el periodo. El PDF tiene portada, índice, fotos y la lista de lo que falta. Los diagnósticos y las recetas del veterinario se guardan aparte de tus notas. Lo descargas o lo envías como todo lo demás.',
+        '🐾 Animali → 📄 Genera report PDF', 'informe pdf veterinario exportar importar compartir paquete contraseña duplicados unir actualizar archivo animal whatsapp'),
+    'g_animali_scambio': ('Animales: exportar, importar y seguridad',
+        'Con Exportar todo y compartir creas un solo archivo con datos, fotos y documentos originales de un animal o de todos, incluso con contraseña. Lo envías por WhatsApp, correo o Telegram. Quien lo recibe toca Importar archivo de animal: compruebo que el archivo esté entero, muestro lo que contiene y pido confirmación. Nunca sustituyo nada automáticamente: si el animal ya existe, eliges si importarlo como nuevo, actualizar, unir o cancelar. No se borra nada sin tu permiso, y si algo se interrumpe lo dejo todo como estaba.',
+        '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'informe pdf veterinario exportar importar compartir paquete contraseña duplicados unir actualizar archivo animal whatsapp'),
+})
+AG_TR["fr"].update({
+    'g_animali': ('Animaux : la fiche et les onglets de santé',
+        "Dans Animaux, tu gardes le dossier complet de chaque animal de la maison : chiens, chats, lapins, oiseaux, poissons, reptiles. Touche Ajouter un animal et écris le nom : c'est la seule chose obligatoire. Ensuite tu peux ajouter espèce, race, puce, photo et galerie. Chaque animal a ses onglets : Santé, avec vaccins, visites, traitements, examens, opérations, pathologies et allergies ; Documents ; Poids et nourriture ; Journal ; Dépenses et contacts ; Agenda.",
+        "Bouton doré 🐾 Animali, à côté d'Auto → ➕ Aggiungi animale ", 'animaux animal chien chat lapin perroquet poisson vétérinaire vaccin puce documents compte rendu certificat charger lire photo agenda rappel'),
+    'g_animali_doc': ('Animaux : documents lus tout seuls',
+        "Le plus pratique est Charger des documents : photographie ou choisis un compte rendu, un certificat, une ordonnance, une facture, le carnet ou le passeport, même en PDF. Je lis le document, je reconnais son type, je trouve les dates, les échéances, la puce et les montants, et je comprends à quel animal il appartient. Si je ne suis pas sûr, je te le demande. Tu vérifies, tu corriges si besoin et tu confirmes. Le fichier original reste toujours identique, et les vaccins et rappels vont tout seuls dans l'agenda avec un rappel.",
+        '🐾 Animali → 📎 Carica documenti.', 'animaux animal chien chat lapin perroquet poisson vétérinaire vaccin puce documents compte rendu certificat charger lire photo agenda rappel'),
+    'g_animali2': ('Animaux : le rapport PDF pour le vétérinaire',
+        "Quand tu vas chez le vétérinaire, touche Générer le rapport PDF. Choisis le type : complet, synthétique, chronologique, vaccinations et prévention, médicaments et traitements, alimentation et suivi, personnalisé, ou complet avec pièces jointes, et la période. Le PDF a une couverture, un sommaire, des photos et la liste de ce qui manque. Les diagnostics et les ordonnances du vétérinaire sont séparés de tes notes. Tu le télécharges ou tu l'envoies comme le reste.",
+        '🐾 Animali → 📄 Genera report PDF ', 'rapport pdf vétérinaire exporter importer partager paquet mot de passe doublons fusionner mettre à jour archive animal whatsapp'),
+    'g_animali_scambio': ('Animaux : exporter, importer et sécurité',
+        "Avec Tout exporter et partager, tu crées un seul fichier avec les données, les photos et les documents originaux d'un animal ou de tous, même avec un mot de passe. Tu l'envoies par WhatsApp, e-mail ou Telegram. Celui qui le reçoit touche Importer une archive d'animal : je vérifie que le fichier est entier, je montre ce qu'il contient et je demande confirmation. Je ne remplace jamais rien automatiquement : si l'animal existe déjà, tu choisis de l'importer comme nouveau, de mettre à jour, de fusionner ou d'annuler. Rien n'est supprimé sans ta permission, et si quelque chose s'interrompt je remets tout en ordre.",
+        '🐾 Animali → 📦 Esporta tutto e condividi ; 📥 Importa archivio animale.', 'rapport pdf vétérinaire exporter importer partager paquet mot de passe doublons fusionner mettre à jour archive animal whatsapp'),
+})
+AG_TR["de"].update({
+    'g_animali': ('Tiere: die Akte und die Gesundheits-Reiter',
+        'Unter Tiere hast du die komplette Akte jedes Haustiers: Hunde, Katzen, Kaninchen, Vögel, Fische, Reptilien. Tippe auf Tier hinzufügen und schreibe den Namen: Er ist das Einzige, was nötig ist. Danach kannst du Art, Rasse, Mikrochip, Foto und Galerie ergänzen. Jedes Tier hat seine eigenen Reiter: Gesundheit, mit Impfungen, Besuchen, Therapien, Untersuchungen, Operationen, Erkrankungen und Allergien; Dokumente; Gewicht und Futter; Tagebuch; Ausgaben und Kontakte; Kalender.',
+        'Goldene Taste 🐾 Animali, neben Auto → ➕ Aggiungi animale', 'tiere haustier hund katze kaninchen papagei fisch tierarzt impfung mikrochip dokumente befund zertifikat hochladen lesen foto kalender auffrischung'),
+    'g_animali_doc': ('Tiere: automatisch gelesene Dokumente',
+        'Am bequemsten ist Dokumente hochladen: Fotografiere oder wähle einen Befund, ein Zertifikat, ein Rezept, eine Rechnung, den Impfpass oder den Heimtierausweis, auch als PDF. Ich lese das Dokument, erkenne die Art, finde Daten, Fristen, Mikrochip und Beträge und verstehe, zu welchem Tier es gehört. Wenn ich nicht sicher bin, frage ich dich. Du prüfst, korrigierst bei Bedarf und bestätigst. Die Originaldatei bleibt immer unverändert, und Impfungen und Auffrischungen kommen von selbst mit Erinnerung in den Kalender.',
+        '🐾 Animali → 📎 Carica documenti.', 'tiere haustier hund katze kaninchen papagei fisch tierarzt impfung mikrochip dokumente befund zertifikat hochladen lesen foto kalender auffrischung'),
+    'g_animali2': ('Tiere: der PDF-Bericht für den Tierarzt',
+        'Wenn du zum Tierarzt gehst, tippe auf PDF-Bericht erstellen. Wähle die Art: vollständig, kurz, chronologisch, Impfungen und Vorsorge, Medikamente und Behandlungen, Futter und Kontrolle, individuell oder vollständig mit Anhängen, und den Zeitraum. Das PDF hat Deckblatt, Inhaltsverzeichnis, Fotos und die Liste dessen, was fehlt. Diagnosen und Rezepte des Tierarztes sind von deinen Notizen getrennt. Du lädst es herunter oder sendest es wie alles andere.',
+        '🐾 Animali → 📄 Genera report PDF', 'bericht pdf tierarzt export import teilen paket passwort duplikate zusammenführen aktualisieren tierarchiv whatsapp'),
+    'g_animali_scambio': ('Tiere: Export, Import und Sicherheit',
+        'Mit Alles exportieren und teilen erzeugst du eine einzige Datei mit Daten, Fotos und Originaldokumenten eines Tieres oder aller, auch mit Passwort. Du sendest sie per WhatsApp, E-Mail oder Telegram. Wer sie erhält, tippt auf Tierarchiv importieren: Ich prüfe, ob die Datei vollständig ist, zeige den Inhalt und frage nach Bestätigung. Ich ersetze nie etwas automatisch: Wenn das Tier schon existiert, wählst du, ob du es als neu importierst, aktualisierst, zusammenführst oder abbrichst. Nichts wird ohne deine Erlaubnis gelöscht, und wenn etwas abbricht, stelle ich alles wieder her.',
+        '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'bericht pdf tierarzt export import teilen paket passwort duplikate zusammenführen aktualisieren tierarchiv whatsapp'),
+})
+AG_TR["ro"].update({
+    'g_animali': ('Animale: fișa și filele de sănătate',
+        'În Animale ții dosarul complet al fiecărui animal din casă: câini, pisici, iepuri, păsări, pești, reptile. Atinge Adaugă animal și scrie numele: este singurul lucru obligatoriu. Apoi poți adăuga specia, rasa, microcipul, poza și galeria. Fiecare animal are filele lui: Sănătate, cu vaccinuri, vizite, tratamente, analize, intervenții, boli și alergii; Documente; Greutate și mâncare; Jurnal; Cheltuieli și contacte; Agendă.',
+        'Buton auriu 🐾 Animali, lângă Auto → ➕ Aggiungi animale', 'animale animal câine pisică iepure papagal pește veterinar vaccin microcip documente rezultat certificat încarcă citește poză agendă rapel'),
+    'g_animali_doc': ('Animale: documente citite singure',
+        'Cel mai comod este Încarcă documente: fotografiază sau alege un rezultat, un certificat, o rețetă, o factură, carnetul sau pașaportul, chiar și în PDF. Eu citesc documentul, recunosc de ce tip este, găsesc datele, termenele, microcipul și sumele și înțeleg cărui animal îi aparține. Dacă nu sunt sigur, te întreb. Tu verifici, corectezi dacă e nevoie și confirmi. Fișierul original rămâne mereu identic, iar vaccinurile și rapelurile ajung singure în agendă cu o reamintire.',
+        '🐾 Animali → 📎 Carica documenti.', 'animale animal câine pisică iepure papagal pește veterinar vaccin microcip documente rezultat certificat încarcă citește poză agendă rapel'),
+    'g_animali2': ('Animale: raportul PDF pentru veterinar',
+        'Când mergi la veterinar, atinge Generează raport PDF. Alege tipul: complet, scurt, cronologic, vaccinări și prevenție, medicamente și tratamente, alimentație și monitorizare, personalizat sau complet cu anexe, și perioada. PDF-ul are copertă, cuprins, poze și lista a ceea ce lipsește. Diagnosticele și rețetele veterinarului sunt păstrate separat de notițele tale. Îl descarci sau îl trimiți ca tot restul.',
+        '🐾 Animali → 📄 Genera report PDF', 'raport pdf veterinar exportă importă partajează pachet parolă dubluri unește actualizează arhivă animal whatsapp'),
+    'g_animali_scambio': ('Animale: export, import și siguranță',
+        'Cu Exportă tot și partajează creezi un singur fișier cu datele, pozele și documentele originale ale unui animal sau ale tuturor, chiar și cu parolă. Îl trimiți pe WhatsApp, e-mail sau Telegram. Cine îl primește atinge Importă arhiva animalului: verific dacă fișierul este întreg, arăt ce conține și cer confirmarea. Nu înlocuiesc niciodată nimic automat: dacă animalul există deja, alegi dacă îl imporți ca nou, actualizezi, unești sau anulezi. Nu se șterge nimic fără permisiunea ta, iar dacă ceva se întrerupe pun totul la loc.',
+        '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'raport pdf veterinar exportă importă partajează pachet parolă dubluri unește actualizează arhivă animal whatsapp'),
+})
+AG_TR["ar"].update({
+    'g_animali': ('الحيوانات: الملف وصفحات الصحة',
+        'في الحيوانات تحتفظ بالملف الكامل لكل حيوان في البيت: كلاب وقطط وأرانب وطيور وأسماك وزواحف. المس إضافة حيوان واكتب الاسم: هو الشيء الوحيد المطلوب. بعد ذلك يمكنك إضافة النوع والسلالة والشريحة والصورة والمعرض. لكل حيوان صفحاته: الصحة، فيها التطعيمات والزيارات والعلاجات والفحوص والعمليات والأمراض والحساسية؛ المستندات؛ الوزن والطعام؛ اليوميات؛ المصاريف وجهات الاتصال؛ الأجندة.',
+        'الزر الذهبي 🐾 Animali بجانب Auto ← ➕ Aggiungi animale.', 'حيوانات حيوان كلب قطة أرنب ببغاء سمك بيطري تطعيم شريحة مستندات تقرير شهادة رفع قراءة صورة أجندة'),
+    'g_animali_doc': ('الحيوانات: مستندات تُقرأ تلقائيًا',
+        'أسهل شيء هو رفع المستندات: صوّر أو اختر تقريرًا أو شهادة أو وصفة أو فاتورة أو دفتر التطعيم أو جواز السفر، حتى بصيغة PDF. أنا أقرأ المستند وأعرف نوعه وأجد التواريخ والمواعيد والشريحة والمبالغ وأفهم لأي حيوان يخص. وإذا لم أكن متأكدًا أسألك. أنت تراجع وتصحح عند الحاجة وتؤكد. يبقى الملف الأصلي دائمًا كما هو، وتذهب التطعيمات والجرعات المنشِّطة وحدها إلى الأجندة مع تذكير.',
+        '🐾 Animali ← 📎 Carica documenti.', 'حيوانات حيوان كلب قطة أرنب ببغاء سمك بيطري تطعيم شريحة مستندات تقرير شهادة رفع قراءة صورة أجندة'),
+    'g_animali2': ('الحيوانات: تقرير PDF للطبيب البيطري',
+        'عندما تذهب إلى الطبيب البيطري المس إنشاء تقرير PDF. اختر النوع: كامل، موجز، زمني، تطعيمات ووقاية، أدوية وعلاجات، تغذية ومتابعة، مخصص، أو كامل مع المرفقات، ثم الفترة. يحتوي الملف على غلاف وفهرس وصور وقائمة بما ينقص. تشخيصات ووصفات الطبيب البيطري تُحفظ منفصلة عن ملاحظاتك. تنزّله أو ترسله مثل أي شيء آخر.',
+        '🐾 Animali ← 📄 Genera report PDF.', 'تقرير pdf بيطري تصدير استيراد مشاركة حزمة كلمة مرور تكرار دمج تحديث أرشيف حيوان واتساب'),
+    'g_animali_scambio': ('الحيوانات: التصدير والاستيراد والأمان',
+        'مع تصدير الكل ومشاركته تنشئ ملفًا واحدًا فيه بيانات وصور ومستندات أصلية لحيوان واحد أو لكل الحيوانات، ويمكن بكلمة مرور. ترسله عبر واتساب أو البريد أو تيليجرام. ومن يستلمه يلمس استيراد أرشيف حيوان: أتحقق أن الملف سليم وأعرض محتواه وأطلب التأكيد. لا أستبدل أي شيء تلقائيًا أبدًا: إذا كان الحيوان موجودًا تختار استيراده كجديد أو تحديثه أو دمجه أو الإلغاء. لا يُحذف شيء دون إذنك، وإذا انقطع شيء أعيد كل شيء كما كان.',
+        '🐾 Animali ← 📦 Esporta tutto e condividi؛ 📥 Importa archivio animale.', 'تقرير pdf بيطري تصدير استيراد مشاركة حزمة كلمة مرور تكرار دمج تحديث أرشيف حيوان واتساب'),
+})
+AG_TR["pt"].update({
+    'g_animali': ('Animais: a ficha e os separadores de saúde',
+        'Em Animais manténs a pasta completa de cada animal de casa: cães, gatos, coelhos, aves, peixes, répteis. Toca em Adicionar animal e escreve o nome: é a única coisa obrigatória. Depois podes juntar espécie, raça, microchip, foto e galeria. Cada animal tem os seus separadores: Saúde, com vacinas, consultas, terapêuticas, exames, cirurgias, doenças e alergias; Documentos; Peso e comida; Diário; Despesas e contactos; Agenda.',
+        'Botão dourado 🐾 Animali, ao lado de Auto → ➕ Aggiungi animale', 'animais animal cão gato coelho papagaio peixe veterinário vacina microchip documentos relatório certificado carregar ler foto agenda reforço'),
+    'g_animali_doc': ('Animais: documentos lidos sozinhos',
+        'O mais cómodo é Carregar documentos: fotografa ou escolhe um relatório, um certificado, uma receita, uma fatura, o boletim ou o passaporte, mesmo em PDF. Eu leio o documento, reconheço o tipo, encontro datas, prazos, microchip e valores, e percebo a que animal pertence. Se não tiver a certeza, pergunto-te. Tu verificas, corriges se for preciso e confirmas. O ficheiro original fica sempre igual, e as vacinas e os reforços vão sozinhos para a agenda com um lembrete.',
+        '🐾 Animali → 📎 Carica documenti.', 'animais animal cão gato coelho papagaio peixe veterinário vacina microchip documentos relatório certificado carregar ler foto agenda reforço'),
+    'g_animali2': ('Animais: o relatório PDF para o veterinário',
+        'Quando vais ao veterinário, toca em Gerar relatório PDF. Escolhe o tipo: completo, resumido, cronológico, vacinas e prevenção, fármacos e tratamentos, alimentação e monitorização, personalizado, ou completo com anexos, e o período. O PDF tem capa, índice, fotos e a lista do que falta. Os diagnósticos e as receitas do veterinário ficam separados das tuas notas. Descarregas ou envias como tudo o resto.',
+        '🐾 Animali → 📄 Genera report PDF', 'relatório pdf veterinário exportar importar partilhar pacote palavra-passe duplicados juntar atualizar arquivo animal whatsapp'),
+    'g_animali_scambio': ('Animais: exportar, importar e segurança',
+        'Com Exportar tudo e partilhar crias um único ficheiro com dados, fotos e documentos originais de um animal ou de todos, até com palavra-passe. Envias por WhatsApp, e-mail ou Telegram. Quem o recebe toca em Importar arquivo de animal: verifico se o ficheiro está inteiro, mostro o que contém e peço confirmação. Nunca substituo nada automaticamente: se o animal já existe, escolhes se o importas como novo, atualizas, juntas ou cancelas. Nada é apagado sem a tua permissão, e se algo for interrompido volto a pôr tudo como estava.',
+        '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', 'relatório pdf veterinário exportar importar partilhar pacote palavra-passe duplicados juntar atualizar arquivo animal whatsapp'),
+})
+
+# nell'elenco dei pulsanti della Home aggiungo «Animali» dopo «Auto»
+_AG_AUTO = {"en": ("Car («Auto»), ", "Car («Auto»), Animals («Animali»), "), "es": ("Coche («Auto»), ", "Coche («Auto»), Animales («Animali»), "),
+            "fr": ("Voiture (« Auto »), ", "Voiture (« Auto »), Animaux (« Animali »), "), "de": ("Auto, Chat", "Auto, Tiere («Animali»), Chat"),
+            "ro": ("Mașină («Auto»), ", "Mașină («Auto»), Animale («Animali»), "), "ar": ("السيارة («Auto»)، ", "السيارة («Auto»)، الحيوانات («Animali»)، "),
+            "pt": ("Carro («Auto»), ", "Carro («Auto»), Animais («Animali»), ")}
+for _lg, (_a, _b) in _AG_AUTO.items():
+    _x = AG_TR.get(_lg, {}).get("g_home")
+    if _x and _b not in _x[1] and _a in _x[1]:
+        AG_TR[_lg]["g_home"] = (_x[0], _x[1].replace(_a, _b, 1)) + tuple(_x[2:])
