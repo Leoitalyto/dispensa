@@ -33,6 +33,12 @@ def _an_vai(sezione, scope=None, modo=None, apri=None):
         st.session_state[apri] = True
 
 
+def _an_torna_sezioni(dove):
+    """Il bottone grande per tornare al menu delle sezioni (Dispensa, Salute, Auto…), in alto e in fondo alla pagina."""
+    st.button("⬅️ Torna alle sezioni", key=f"an_torna_{dove}", width="stretch",
+              on_click=(nav_vai if "nav_vai" in globals() else None), args=(("dispensa",) if "nav_vai" in globals() else None))
+
+
 def _an_apri_nuovo():
     st.session_state["an_apri_nuovo"] = True
 
@@ -375,10 +381,13 @@ def schermata_animali():
         st.markdown(_CA_CSS, unsafe_allow_html=True)
     st.markdown(_AN_CSS, unsafe_allow_html=True)
     uri = ih_uri("animali.webp", 360) if "ih_uri" in globals() else ""
+    if not uri and "_AN_LOGO_B64" in globals():
+        uri = "data:image/webp;base64," + _AN_LOGO_B64
     ico = f"<img class='ico-img' alt='Animali' src='{uri}'>" if uri else "<div class='ico'>🐾</div>"
     st.markdown(f"<div class='an-hero'>{ico}<div><h1>I miei animali</h1><p>Schede, salute, documenti letti da soli, report per il veterinario ed esportazione completa</p></div></div>", unsafe_allow_html=True)
     if st.session_state.get("messaggio"):
         st.success(st.session_state.pop("messaggio"))
+    _an_torna_sezioni("su")
     if "pulsante_info" in globals():
         try:
             pulsante_info("animali")
@@ -437,6 +446,8 @@ def schermata_animali():
         an_tab_report(a, x)
     else:
         an_tab_scambio(a, x)
+    st.divider()
+    _an_torna_sezioni("giu")
 
 
 # ---- lo smistamento: «animali» va alla sua pagina (con il controllo dei permessi), il resto come prima
