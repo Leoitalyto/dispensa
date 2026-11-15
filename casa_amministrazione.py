@@ -450,7 +450,7 @@ def ca_amm_tab(c):
 
 # ---------- 🏢 DATI AMMINISTRAZIONE ----------
 _AMM_CAMPI_ADMIN = [("nome", "Nome"), ("cognome", "Cognome"), ("studio", "Nome dello studio di amministrazione"), ("indirizzo_studio", "Indirizzo dello studio"),
-                    ("orari", "🕒 Giorni e orari d'ufficio"), ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("sito", "🌐 Sito web (facoltativo, es. www.nomesito.it)"), ("cf_piva", "Codice fiscale o partita IVA"),
+                    ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("sito", "🌐 Sito web (facoltativo, es. www.nomesito.it)"), ("cf_piva", "Codice fiscale o partita IVA"),
                     ("immobile", "Indirizzo dell'immobile amministrato"), ("condominio", "Nome del condominio"), ("banca", "Riferimenti bancari (banca, intestatario)"), ("iban", "IBAN")]
 
 
@@ -459,12 +459,12 @@ def _amm_dlg_admin(c, a=None):
         k = "amm_adm_" + (a["id"] if a else "nuovo")
         v = {}
         for chiave, et in _AMM_CAMPI_ADMIN:
-            if chiave == "orari":
-                v[chiave] = st.text_area(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}", height=90,
-                                         placeholder="es. lun-ven 9-12; martedì e giovedì anche 15-18; sabato chiuso",
-                                         help="Scrivi i giorni e gli orari in cui l'ufficio è aperto: compaiono nella scheda.")
-            else:
-                v[chiave] = st.text_input(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}")
+            v[chiave] = st.text_input(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}")
+        st.markdown("**🕒 Giorni e orari d'ufficio**")
+        st.caption("Una riga per ogni orario: scegli il giorno, «Dalle» e «Alle» dal menu, e se vuoi una nota. Per un secondo orario nello stesso giorno aggiungi un'altra riga con il «+» in fondo alla tabella; per toglierne una, spunta la riga a sinistra e usa il cestino.")
+        if (a or {}).get("orari") and not (a or {}).get("fasce"):
+            st.caption("📝 Scritto prima: «" + str(a["orari"]) + "» (riscrivilo nella tabella).")
+        tab_fasce = cc_fasce_editor((a or {}).get("fasce"), f"{k}_fasce")
         v["note"] = st.text_area("Note aggiuntive", value=(a or {}).get("note", ""), key=f"{k}_note", height=90)
         if v["iban"].strip() and not amm_iban_valido(v["iban"]):
             st.warning("L'IBAN non sembra giusto (il codice di controllo non torna): controlla di averlo scritto bene. Puoi salvare lo stesso.")
@@ -473,14 +473,19 @@ def _amm_dlg_admin(c, a=None):
             if not (v["nome"].strip() or v["cognome"].strip() or v["studio"].strip()):
                 st.error("Scrivi almeno il nome dell'amministratore o dello studio.")
                 return
+            fasce_nuove, err_f = cc_fasce_da_tabella(tab_fasce)
+            if err_f:
+                st.error("Controlla gli orari: " + " ".join(err_f))
+                return
             if a:
                 def _fn(cc):
                     x = _amm_trova(cc, "amministratori", a["id"])
                     if x:
                         x.update({kk: vv.strip() for kk, vv in v.items()})
+                        x["fasce"] = fasce_nuove
             else:
                 def _fn(cc):
-                    cc.setdefault("amministratori", []).append({"id": amm_id(), **{kk: vv.strip() for kk, vv in v.items()}})
+                    cc.setdefault("amministratori", []).append({"id": amm_id(), **{kk: vv.strip() for kk, vv in v.items()}, "fasce": fasce_nuove})
             _amm_salva(_fn, "Amministrazione: dati dell'amministratore")
             st.rerun()
         if c2.button("Annulla", key=k + "_annulla", width="stretch"):
@@ -509,11 +514,12 @@ def _amm_schermata_dati(c):
         st.info("Non hai ancora inserito l'amministratore. Tocca **➕ Aggiungi** per scrivere i suoi dati: poi potrai chiamarlo o scrivergli con un tocco.")
     for a in adm:
         nome = " ".join(x for x in (a.get("nome"), a.get("cognome")) if x) or a.get("studio") or "Amministratore"
-        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("🕒", (a.get("orari") or "").replace("\n", "; ")), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")), ("🌐", a.get("sito")),
+        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("🕒", (a.get("orari") or "").replace("\n", "; ") if not a.get("fasce") else ""), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")), ("🌐", a.get("sito")),
                  ("🆔", a.get("cf_piva")), ("🏘️ Condominio", a.get("condominio")), ("📌 Immobile", a.get("immobile")), ("🏦", a.get("banca"))]
         corpo = "<br>".join(f"{ic} {_amm_h.escape(v)}" for ic, v in righe if v)
         st.markdown(f"<div class='amm-card'><b style='font-size:1.1rem'>👤 {_amm_h.escape(nome)}</b><div style='margin-top:6px'>{corpo}</div>"
                     + (f"<div style='margin-top:6px'><i>{_amm_h.escape(a['note'])}</i></div>" if a.get("note") else "") + "</div>", unsafe_allow_html=True)
+        cc_fasce_mostra(a.get("fasce"), "l'ufficio")
         if a.get("iban"):
             st.caption("IBAN (tocca l'icona a destra per copiarlo):")
             st.code(a["iban"], language=None)
@@ -537,7 +543,7 @@ def _amm_schermata_dati(c):
         with d3:
             if "_fa_inv_voce" in globals():
                 _fa_inv_voce(f"amm_adm_inv_{a['id']}", "📤 Invia", "Amministratore: " + nome,
-                             [(et, a.get(k)) for k, et in _AMM_CAMPI_ADMIN if a.get(k)] + ([("Note", a.get("note"))] if a.get("note") else []), [])
+                             [(et, a.get(k)) for k, et in _AMM_CAMPI_ADMIN if a.get(k)] + ([("Giorni e orari d'ufficio", cc_fasce_testo(a.get("fasce")))] if a.get("fasce") else []) + ([("Note", a.get("note"))] if a.get("note") else []), [])
     if st.button("➕ Aggiungi un amministratore", key="amm_adm_nuovo", width="stretch", type="primary" if not adm else "secondary"):
         _amm_dlg_admin(c, None)
 
