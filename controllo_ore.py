@@ -166,10 +166,20 @@ def cob_pagina():
         paga_manuale = st.number_input("Paga oraria base (€)", value=13.22260, format="%.5f", key="cob_paga")
         lavorabili_manuale = st.number_input("Ore lavorabili del mese", value=0.0, step=0.5, key="cob_lav")
         soglia = st.number_input("Soglia settimanale (solo tabella informativa)", value=38.0, step=0.5, key="cob_soglia")
-    excel_file = st.file_uploader("1️⃣ Carica il file Excel delle ore", type=["xlsx"], key="cob_xlsx")
-    pdf_file = st.file_uploader("2️⃣ Carica il PDF della busta paga", type=["pdf"], key="cob_pdf")
+    excel_file = st.file_uploader("1️⃣ Carica il file Excel delle ore (.xlsx)", key="cob_xlsx", help="Sul telefono si vedono tutti i file: scegli quello Excel, che finisce con .xlsx.")
+    pdf_file = st.file_uploader("2️⃣ Carica il PDF della busta paga", key="cob_pdf", help="Sul telefono si vedono tutti i file: scegli la busta paga, che finisce con .pdf.")
     if not (excel_file and pdf_file):
         st.caption("Quando hai caricato **tutti e due** i file compare qui sotto il responso.")
+        return
+    n_x, n_p = (excel_file.name or "").lower(), (pdf_file.name or "").lower()
+    if n_x.endswith(".pdf") and n_p.endswith((".xlsx", ".xlsm")):
+        st.error("Hai messo i due file al contrario: il foglio Excel va nella casella 1 e il PDF nella casella 2. Togli i file con la ✖ e riprova.")
+        return
+    if not n_x.endswith((".xlsx", ".xlsm")):
+        st.error(f"Il file della casella 1 («{excel_file.name}») non è un foglio Excel .xlsx. Se è un vecchio .xls, aprilo con Excel o Fogli Google e salvalo come .xlsx.")
+        return
+    if not n_p.endswith(".pdf"):
+        st.error(f"Il file della casella 2 («{pdf_file.name}») non è un PDF. Serve la busta paga in PDF (non una foto).")
         return
     try:
         df, nuovo, lorde_presenti = cob_leggi_excel(excel_file)
