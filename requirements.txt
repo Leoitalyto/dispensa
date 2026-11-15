@@ -9,4 +9,6 @@ reportlab
 zxing-cpp
 cryptography
 pypdf
+pdfplumber
+openpyxl
 pymupdf
