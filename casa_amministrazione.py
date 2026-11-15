@@ -450,7 +450,7 @@ def ca_amm_tab(c):
 
 # ---------- 🏢 DATI AMMINISTRAZIONE ----------
 _AMM_CAMPI_ADMIN = [("nome", "Nome"), ("cognome", "Cognome"), ("studio", "Nome dello studio di amministrazione"), ("indirizzo_studio", "Indirizzo dello studio"),
-                    ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("cf_piva", "Codice fiscale o partita IVA"),
+                    ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("sito", "🌐 Sito web (facoltativo, es. www.nomesito.it)"), ("cf_piva", "Codice fiscale o partita IVA"),
                     ("immobile", "Indirizzo dell'immobile amministrato"), ("condominio", "Nome del condominio"), ("banca", "Riferimenti bancari (banca, intestatario)"), ("iban", "IBAN")]
 
 
@@ -504,7 +504,7 @@ def _amm_schermata_dati(c):
         st.info("Non hai ancora inserito l'amministratore. Tocca **➕ Aggiungi** per scrivere i suoi dati: poi potrai chiamarlo o scrivergli con un tocco.")
     for a in adm:
         nome = " ".join(x for x in (a.get("nome"), a.get("cognome")) if x) or a.get("studio") or "Amministratore"
-        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")),
+        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")), ("🌐", a.get("sito")),
                  ("🆔", a.get("cf_piva")), ("🏘️ Condominio", a.get("condominio")), ("📌 Immobile", a.get("immobile")), ("🏦", a.get("banca"))]
         corpo = "<br>".join(f"{ic} {_amm_h.escape(v)}" for ic, v in righe if v)
         st.markdown(f"<div class='amm-card'><b style='font-size:1.1rem'>👤 {_amm_h.escape(nome)}</b><div style='margin-top:6px'>{corpo}</div>"
@@ -515,16 +515,15 @@ def _amm_schermata_dati(c):
             if not amm_iban_valido(a["iban"]):
                 st.caption("⚠️ Il codice di controllo dell'IBAN non torna: verifica che sia scritto bene.")
         pulsanti = []
-        tel = a.get("cellulare") or a.get("telefono")
-        if tel:
-            pulsanti.append(("📞 Chiama", "tel:" + (_lv_tel(tel) if "_lv_tel" in globals() else "".join(ch for ch in tel if ch.isdigit() or ch == "+"))))
+        if cc_numeri(a.get("telefono"), a.get("cellulare")):
+            pulsanti.append(("📞 Chiama", ("__chiama__", a.get("telefono"), a.get("cellulare"), nome)))
         if a.get("email"):
             pulsanti.append(("✉️ Scrivi", "mailto:" + a["email"]))
         if a.get("pec"):
             pulsanti.append(("📨 Scrivi alla PEC", "mailto:" + a["pec"]))
-        for i in range(0, len(pulsanti), 3):
-            for col, (et, url) in zip(st.columns(len(pulsanti[i:i + 3]), gap="small"), pulsanti[i:i + 3]):
-                col.link_button(et, url, width="stretch")
+        if cc_url(a.get("sito")):
+            pulsanti.append(("🌐 Sito", cc_url(a["sito"])))
+        cc_pulsanti(pulsanti, f"amm_adm_{a['id']}")
         d1, d2, d3 = st.columns(3, gap="small")
         if d1.button("✏️ Modifica", key=f"amm_adm_mod_{a['id']}", width="stretch"):
             _amm_dlg_admin(c, a)
@@ -898,7 +897,7 @@ def _amm_dlg_contatto(c, m=None):
         cell = c2.text_input("Cellulare / WhatsApp", value=(m or {}).get("cellulare", ""), key=k + "_cell")
         email = st.text_input("Email", value=(m or {}).get("email", ""), key=k + "_email")
         ind = st.text_input("Indirizzo", value=(m or {}).get("indirizzo", ""), key=k + "_ind")
-        sito = st.text_input("Sito internet", value=(m or {}).get("sito", ""), key=k + "_sito", placeholder="https://…")
+        sito = cc_campo_sito((m or {}).get("sito", ""), k + "_sito", "🌐 Sito internet (facoltativo)")
         orari = st.text_area("Orari di disponibilità", value=(m or {}).get("orari", ""), key=k + "_orari", height=70, placeholder="es. lun-ven 8-18; urgenze anche di sera")
         costo = st.text_area("Costo indicativo o tariffario", value=ex.get("costo", ""), key=k + "_costo", height=70, placeholder="es. uscita € 40, € 35/ora")
         note = st.text_area("Note", value=(m or {}).get("note", ""), key=k + "_note", height=70)
@@ -1064,26 +1063,24 @@ def _amm_schermata_contatti(c):
         nome = m.get("referente") or m.get("nome") or "Contatto"
         righe = [("🏷️", amm_categoria_di(m) + (f" · {ex['specializzazione']}" if ex.get("specializzazione") else "")), ("🏢", m.get("nome") if m.get("referente") else ""), ("📞", m.get("telefono")), ("📱", m.get("cellulare")),
                  ("✉️", m.get("email")), ("📍", m.get("indirizzo")), ("🕒", (m.get("orari") or "").replace("\n", "; ")), ("💶", (ex.get("costo") or "").replace("\n", "; "))]
-        corpo = "<br>".join(f"{ic} {_amm_h.escape(str(v))}" for ic, v in righe if v)
+        corpo = "<br>".join(f"{ic} {_amm_h.escape(str(v))}" for ic, v in righe if v) + (("<br>" + cc_riga_sito(m.get("sito"))) if cc_url(m.get("sito")) else "")
         spesa_tot = amm_totale_interventi(interventi, m["id"])
         st.markdown(f"<div class='amm-card'><b style='font-size:1.05rem'>{'⭐ ' if ex.get('preferito') else ''}{_amm_h.escape(nome)}</b><div style='margin-top:4px'>{corpo}</div>"
                     + (f"<div style='margin-top:4px'><i>{_amm_h.escape(m['note'])}</i></div>" if m.get("note") else "")
                     + (f"<div style='margin-top:4px;opacity:.8'>🔧 Interventi: {sum(1 for i in interventi if i.get('contatto_id') == m['id'])} · speso {amm_euro(spesa_tot)}</div>" if spesa_tot or any(i.get('contatto_id') == m['id'] for i in interventi) else "")
                     + "</div>", unsafe_allow_html=True)
         pulsanti = []
-        if m.get("telefono") or m.get("cellulare"):
-            pulsanti.append(("📞 Chiama", "tel:" + tel_f(m.get("cellulare") or m.get("telefono"))))
+        if cc_numeri(m.get("telefono"), m.get("cellulare")):
+            pulsanti.append(("📞 Chiama", ("__chiama__", m.get("telefono"), m.get("cellulare"), nome)))
         if "_lv_wa" in globals() and _lv_wa(m.get("cellulare")):
             pulsanti.append(("💬 WhatsApp", "https://wa.me/" + _lv_wa(m["cellulare"])))
         if m.get("email"):
             pulsanti.append(("✉️ Scrivi", "mailto:" + m["email"]))
         if m.get("indirizzo") and "_lv_maps" in globals():
             pulsanti.append(("📍 Mappa", _lv_maps(m["indirizzo"])))
-        if str(m.get("sito", "")).startswith(("http://", "https://")):
-            pulsanti.append(("🌐 Sito", m["sito"]))
-        for i in range(0, len(pulsanti), 3):
-            for col, (et, url) in zip(st.columns(len(pulsanti[i:i + 3]), gap="small"), pulsanti[i:i + 3]):
-                col.link_button(et, url, width="stretch")
+        if cc_url(m.get("sito")):
+            pulsanti.append(("🌐 Sito", cc_url(m["sito"])))
+        cc_pulsanti(pulsanti, f"amm_ct_{m['id']}")
         d1, d2, d3 = st.columns(3, gap="small")
         if d1.button("☆ Togli dai preferiti" if ex.get("preferito") else "⭐ Preferito", key=f"amm_ct_fav_{m['id']}", width="stretch"):
             _amm_preferito(c, m, not ex.get("preferito"))
@@ -1535,7 +1532,7 @@ def _amm_dlg_ingombranti(c, m=None):
         tel = c1.text_input("Telefono / numero verde", value=(m or {}).get("telefono", ""), key=k + "_t")
         cell = c2.text_input("Cellulare / WhatsApp", value=(m or {}).get("cellulare", ""), key=k + "_c")
         email = st.text_input("Email", value=(m or {}).get("email", ""), key=k + "_e")
-        sito = st.text_input("Sito per prenotare", value=(m or {}).get("sito", ""), key=k + "_s", placeholder="https://…")
+        sito = cc_campo_sito((m or {}).get("sito", ""), k + "_s", "🌐 Sito per prenotare (facoltativo)")
         come = st.text_area("Come si prenota", value=(m or {}).get("come", ""), key=k + "_come", height=80, placeholder="es. telefonare con 3 giorni d'anticipo; max 3 pezzi")
         orari = st.text_input("Giorni e orari del ritiro", value=(m or {}).get("orari", ""), key=k + "_o", placeholder="es. giovedì mattina")
         costo = st.text_input("Costo", value=(m or {}).get("costo", ""), key=k + "_costo", placeholder="es. gratuito 2 volte l'anno")
@@ -1577,23 +1574,21 @@ def _amm_schermata_ingombranti(c):
         pr = m.get("prossimo_ritiro")
         g = amm_giorni_a(pr, oggi_) if pr else None
         righe = [("📞", m.get("telefono")), ("📱", m.get("cellulare")), ("✉️", m.get("email")), ("🕒 Ritiro", m.get("orari")), ("💶", m.get("costo"))]
-        corpo = "<br>".join(f"{ic} {_amm_h.escape(v)}" for ic, v in righe if v)
+        corpo = "<br>".join(f"{ic} {_amm_h.escape(v)}" for ic, v in righe if v) + (("<br>" + cc_riga_sito(m.get("sito"))) if cc_url(m.get("sito")) else "")
         st.markdown(f"<div class='amm-card'><b style='font-size:1.05rem'>🛋️ {_amm_h.escape(m['nome'])}</b><div style='margin-top:4px'>{corpo}</div>"
                     + (f"<div style='margin-top:4px'><b>Come si prenota:</b> {_amm_h.escape(m['come'])}</div>" if m.get("come") else "")
                     + (f"<div style='margin-top:6px'>📅 <b>Prossimo ritiro prenotato: {data_it(pr)}</b> ({'oggi' if g == 0 else 'tra ' + str(g) + ' giorni' if g is not None and g > 0 else 'passato'})</div>" if pr else "")
                     + (f"<div style='margin-top:4px'><i>{_amm_h.escape(m['note'])}</i></div>" if m.get("note") else "") + "</div>", unsafe_allow_html=True)
         pulsanti = []
-        if m.get("telefono") or m.get("cellulare"):
-            pulsanti.append(("📞 Chiama", "tel:" + tel_f(m.get("telefono") or m.get("cellulare"))))
+        if cc_numeri(m.get("telefono"), m.get("cellulare")):
+            pulsanti.append(("📞 Chiama", ("__chiama__", m.get("telefono"), m.get("cellulare"), m.get("nome", ""))))
         if "_lv_wa" in globals() and _lv_wa(m.get("cellulare")):
             pulsanti.append(("💬 WhatsApp", "https://wa.me/" + _lv_wa(m["cellulare"])))
         if m.get("email"):
             pulsanti.append(("✉️ Scrivi", "mailto:" + m["email"]))
-        if str(m.get("sito", "")).startswith(("http://", "https://")):
-            pulsanti.append(("🌐 Prenota online", m["sito"]))
-        for i in range(0, len(pulsanti), 3):
-            for col, (et, url) in zip(st.columns(len(pulsanti[i:i + 3]), gap="small"), pulsanti[i:i + 3]):
-                col.link_button(et, url, width="stretch")
+        if cc_url(m.get("sito")):
+            pulsanti.append(("🌐 Prenota online", cc_url(m["sito"])))
+        cc_pulsanti(pulsanti, f"amm_ig_{m['id']}")
         d1, d2 = st.columns(2, gap="small")
         if d1.button("✏️ Modifica", key=f"amm_ig_mod_{m['id']}", width="stretch"):
             _amm_dlg_ingombranti(c, m)

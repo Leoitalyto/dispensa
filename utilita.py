@@ -125,15 +125,18 @@ def _dialogo_bugiardino(idu):
     st.link_button("🎵 Avvia " + u["nome"], u["link"], type="primary")
 
 
-def _ut_blocco(u):
+def _ut_blocco(u, compatto=False):
     k = u["id"]
+    larg_play = "min(120px,31vw)" if compatto else "min(190px,52vw)"
+    larg_targa = "min(150px,41vw)" if compatto else "min(340px,86vw)"
+    corto = "font-size:.68rem" if compatto else "font-size:.8rem"
     play = _ut_uri(u["play"])
     targa = _ut_uri(u["targa"])
     css = "<style>"
     if play:
         css += (f".st-key-ut_play_{k} [data-testid='stLinkButton']{{display:flex;justify-content:center}}"
                 f".st-key-ut_play_{k} a{{background:url('{play}') center/contain no-repeat !important;border:0 !important;"
-                "box-shadow:none !important;color:transparent !important;width:min(190px,52vw) !important;height:auto !important;"
+                "box-shadow:none !important;color:transparent !important;width:" + larg_play + " !important;height:auto !important;"
                 "aspect-ratio:1/1;min-height:0 !important;padding:0 !important;" + ('border-radius:50% !important;' if u.get("play_tondo", True) else "border-radius:0 !important;") +
                 "animation:ut-batte 2s ease-in-out infinite}"
                 f".st-key-ut_play_{k} a:active{{transform:scale(.93);animation:none}}"
@@ -141,18 +144,18 @@ def _ut_blocco(u):
     if targa:
         css += (f".st-key-ut_nome_{k} [data-testid='stButton']{{display:flex;justify-content:center}}"
                 f".st-key-ut_nome_{k} button{{background:url('{targa}') center/contain no-repeat !important;border:0 !important;"
-                "box-shadow:none !important;color:transparent !important;width:min(340px,86vw) !important;height:auto !important;"
+                "box-shadow:none !important;color:transparent !important;width:" + larg_targa + " !important;height:auto !important;"
                 "aspect-ratio:760/233;min-height:0 !important;padding:0 !important;border-radius:0 !important}"
                 f".st-key-ut_nome_{k} button p{{font-size:0 !important}}")
     css += "</style>"
     st.markdown(css, unsafe_allow_html=True)
     with st.container(key=f"ut_play_{k}"):
         st.link_button("▶️ Avvia " + u["nome"], u["link"], help="Tocca per avviare " + u["nome"])
-    st.markdown("<div style='text-align:center;font-size:.8rem;opacity:.75;margin:0 0 6px'>👆 Tocca il pulsante per avviare</div>",
+    st.markdown(f"<div style='text-align:center;{corto};opacity:.75;margin:0 0 6px'>👆 Tocca per avviare</div>",
                 unsafe_allow_html=True)
     with st.container(key=f"ut_nome_{k}"):
         premuto = st.button(u["nome"], key=f"ut_nome_btn_{k}", help="Tocca per leggere di cosa si tratta")
-    st.markdown("<div style='text-align:center;font-size:.8rem;opacity:.75;margin:0 0 18px'>👆 Tocca il nome per leggere il bugiardino</div>",
+    st.markdown(f"<div style='text-align:center;{corto};opacity:.75;margin:0 0 {6 if compatto else 18}px'>👆 {'Tocca il nome' if compatto else 'Tocca il nome: bugiardino'}</div>",
                 unsafe_allow_html=True)
     if premuto:
         _dialogo_bugiardino(k)
@@ -222,8 +225,12 @@ def schermata_utilita():
             _ut_chiama("ct_blocco_utilita")
 
     ut_gruppo("🌐", "Strumenti da usare fuori dall'app", "Si aprono in una nuova scheda del browser: l'app non manda loro i tuoi dati", "#8e24aa")
-    with ut_riquadro("musica", "🎵", "Utilità musicali", "Ascolta musica gratis, senza pubblicità e senza registrarti", "#7b1fa2"):
-        for u in UTILITA:
-            _ut_blocco(u)
     with ut_riquadro("pdf", "📄", "Utilità PDF", "Crea, unisci, comprimi, converti, modifica e firma i PDF con i servizi più usati", "#c62828"):
         _ut_chiama("upd_pannello")
+    with ut_riquadro("musica", "🎵", "Utilità musicali", "Ascolta musica gratis, senza pubblicità e senza registrarti", "#7b1fa2"):   # sempre l'ULTIMO riquadro della pagina
+        st.markdown("<style>.st-key-ut_musica_riga [data-testid='stHorizontalBlock']{flex-wrap:nowrap !important;gap:.5rem !important}"
+                    ".st-key-ut_musica_riga [data-testid='stColumn']{min-width:0 !important;flex:1 1 0 !important;width:auto !important}</style>", unsafe_allow_html=True)
+        with st.container(key="ut_musica_riga"):
+            for col, u in zip(st.columns(len(UTILITA), gap="small"), UTILITA):          # le due icone AFFIANCATE
+                with col:
+                    _ut_blocco(u, compatto=True)

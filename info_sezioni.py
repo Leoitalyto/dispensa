@@ -396,8 +396,8 @@ Ogni riquadro ha in alto il **nome** e una riga che dice **a cosa serve**.""",
 - 🟠 **Scambio con altre persone**: mandi i tuoi dati a un altro utente di VitaMemo, o li ricevi.
 - 🔵 **Aspetto e telefono**: testi più grandi, radio di sottofondo, freccia «torna su», libera spazio sul telefono.
 - 🩺 **Controllo tecnico** (grigio, solo amministratore): verifica che l'app funzioni.
-- 🟣 **Utilità musicali**: Velocity Music e Wimbi per ascoltare musica gratis.
 - 🔴 **Utilità PDF**: i servizi più usati per creare, unire, comprimere, modificare e firmare i PDF.
+- 🟣 **Utilità musicali** (l'ultimo riquadro): Velocity Music e Wimbi, **una accanto all'altra**, per ascoltare musica gratis.
 
 Regola semplice: **i riquadri sotto la striscia blu lavorano sui dati dell'app; quelli sotto la striscia viola portano a servizi esterni** e non ricevono nulla dai tuoi dati.""",
          "riquadri colori scegliere sicurezza scambio aspetto telefono controllo tecnico musica pdf quale"),
@@ -411,7 +411,7 @@ Ogni riquadro si apre con un tocco e si richiude con **✖ Chiudi**.""",
          "sicurezza backup ripristino cestino storico scambio aspetto testi libera spazio controllo tecnico funzionamento app"),
         ("▶️ Come avviare un'app",
          """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Salute e I miei documenti).
-2. Scendi fino al riquadro viola **🎵 Utilità musicali** e tocca il **grande pulsante** con il simbolo ▶️: l'app si apre in una nuova scheda del browser.
+2. Scendi fino all'**ultimo riquadro, il viola 🎵 Utilità musicali**: le due icone (Velocity Music e Wimbi) stanno **affiancate**. Tocca l'icona dell'app che vuoi: si apre in una nuova scheda del browser.
 3. Per tornare qui, chiudi quella scheda o torna indietro.""",
          "avviare aprire avvio play pulsante app link velocity music musica"),
         ("📖 Come leggere il bugiardino",

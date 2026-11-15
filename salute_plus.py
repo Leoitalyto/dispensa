@@ -358,9 +358,11 @@ def _sp_form_medico(pid, m=None):
         nome = st.text_input("Nome e cognome", value=m.get("nome", ""))
         struttura = st.text_input("Studio, ambulatorio o ospedale", value=m.get("struttura", ""))
         c1, c2 = st.columns(2)
-        tel = c1.text_input("Telefono", value=m.get("telefono", ""))
-        email = c2.text_input("Email", value=m.get("email", ""))
+        tel = c1.text_input("Telefono fisso", value=m.get("telefono", ""))
+        cell = c2.text_input("Cellulare", value=m.get("cellulare", ""), help="Se scrivi sia il fisso sia il cellulare, toccando «Chiama» scegli quale chiamare.")
+        email = st.text_input("Email", value=m.get("email", ""))
         ind = st.text_input("Indirizzo", value=m.get("indirizzo", ""))
+        sito = cc_campo_sito(m.get("sito", ""), None, "🌐 Sito web (facoltativo)")
         orari = st.text_area("Orari di ricevimento", value=m.get("orari", ""), height=80, placeholder="es. lun-ven 9-12; mar e gio anche 15-18")
         sost = st.text_input("Sostituto (se c'è)", value=m.get("sostituto", ""))
         note = st.text_input("Note", value=m.get("note", ""))
@@ -370,7 +372,7 @@ def _sp_form_medico(pid, m=None):
             st.error("Scrivi almeno il nome o lo studio.")
             return
         nuovo = {"id": m.get("id") or uuid.uuid4().hex[:8], "ruolo": ruolo, "spec": spec.strip(), "nome": nome.strip(), "struttura": struttura.strip(), "telefono": tel.strip(),
-                 "email": email.strip(), "indirizzo": ind.strip(), "orari": orari.strip(), "sostituto": sost.strip(), "note": note.strip()}
+                 "cellulare": cell.strip(), "sito": sito.strip(), "email": email.strip(), "indirizzo": ind.strip(), "orari": orari.strip(), "sostituto": sost.strip(), "note": note.strip()}
 
         def _fn(p):
             lista = [x for x in p.get("medici", []) if x.get("id") != nuovo["id"]]
@@ -399,15 +401,19 @@ def sp_modulo_medici(pid):
     for m in sorted(lista, key=lambda x: (_SP_RUOLI_MEDICO.index(x["ruolo"]) if x.get("ruolo") in _SP_RUOLI_MEDICO else 99, x.get("nome", ""))):
         icona = "👶🩺" if m.get("ruolo") == "Pediatra" else "👩‍⚕️"
         titolo = f"{icona} {m.get('ruolo', '')}" + (f" · {m['spec']}" if m.get("spec") else "") + f" — {m.get('nome') or m.get('struttura', '')}"
-        righe = "<br>".join(x for x in (_sp_e(m.get("struttura")), "📞 " + _sp_e(m.get("telefono")) if m.get("telefono") else "", "✉️ " + _sp_e(m.get("email")) if m.get("email") else "",
+        righe = "<br>".join(x for x in (_sp_e(m.get("struttura")), "📞 " + _sp_e(m.get("telefono")) if m.get("telefono") else "", "📱 " + _sp_e(m.get("cellulare")) if m.get("cellulare") else "", "✉️ " + _sp_e(m.get("email")) if m.get("email") else "", cc_riga_sito(m.get("sito")),
                                         "📍 " + _sp_e(m.get("indirizzo")) if m.get("indirizzo") else "", "🕒 " + _sp_e(m.get("orari")).replace("\n", "; ") if m.get("orari") else "",
                                         "Sostituto: " + _sp_e(m.get("sostituto")) if m.get("sostituto") else "", _sp_e(m.get("note"))) if x)
         st.markdown(f"<div class='sp-card'><b>{_sp_e(titolo)}</b><br>{righe}</div>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3, gap="small")
-        if m.get("telefono"):
-            c1.link_button("📞 Chiama", "tel:" + _fa_tel(m["telefono"]), width="stretch")
+        _bm = []
+        if cc_numeri(m.get("telefono"), m.get("cellulare")):
+            _bm.append(("📞 Chiama", ("__chiama__", m.get("telefono"), m.get("cellulare"), m.get("nome") or m.get("struttura", ""))))
         if m.get("email"):
-            c2.link_button("✉️ Scrivi", "mailto:" + m["email"], width="stretch")
+            _bm.append(("✉️ Scrivi", "mailto:" + m["email"]))
+        if cc_url(m.get("sito")):
+            _bm.append(("🌐 Sito", cc_url(m["sito"])))
+        cc_pulsanti(_bm, f"sp_med_b_{m['id']}")
+        c3, = st.columns(1)
         if c3.button("✏️ Modifica", key=f"sp_med_e_{m['id']}", width="stretch"):
             st.session_state["sp_med_mod"] = m["id"]
             st.rerun()
@@ -2419,7 +2425,7 @@ In cima c'è **📎 Carica un referto, un esame o una ricetta (lo leggo io)**: t
      """In **Salute → 👥 Gestisci profili** trovi **✏️ Cambia il nome dei profili aggiuntivi**: per ogni persona aggiunta c'è un campo con il suo nome. Scrivi il nuovo nome e tocca **💾**. Non puoi usare un nome già presente. Il tuo profilo non si rinomina da qui.""", "profilo nome cambiare rinominare persona gestisci profili"),
     ("s_medici", "👩‍⚕️ Medici e riferimenti (anche il pediatra)",
      """Tocca **👩‍⚕️ Medici e riferimenti**. In alto trovi il **medico di base** (la sua scheda completa è quella di prima). Sotto puoi aggiungere con **➕ Aggiungi un riferimento**: **pediatra**, specialisti, dentista, fisioterapista…, con studio, telefono, email, indirizzo, orari e sostituto.
-Su ognuno: **📞 Chiama**, **✉️ Scrivi**, **✏️ Modifica**, **🗑️ Elimina**, **📤 Invia**. Per un bambino l'app ti ricorda di aggiungere il pediatra.""",
+Su ognuno: **📞 Chiama** (se scrivi sia il fisso sia il cellulare, scegli quale chiamare), **✉️ Scrivi**, **🌐 Sito** (se lo scrivi), **✏️ Modifica**, **🗑️ Elimina**, **📤 Invia**. Per un bambino l'app ti ricorda di aggiungere il pediatra.""",
      "medici pediatra specialista dentista rubrica telefono orari riferimenti"),
     ("s_bimbo", "👶 Percorso del bambino",
      """Per un bambino, nei **🆘 Dati per l'emergenza** spunta **È un bambino o una bambina**: compare **👶 Percorso del bambino**.

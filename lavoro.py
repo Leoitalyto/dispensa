@@ -502,7 +502,7 @@ def _lv_form_contatto(m=None, modo="lavoro"):
                              help="Se scrivi qui un cellulare, compare il tasto per scrivere su WhatsApp.")
         email = st.text_input("Email", value=m.get("email", ""), placeholder="nome@esempio.it")
         indirizzo = st.text_input("Indirizzo", value=m.get("indirizzo", ""), placeholder="Via, numero, città")
-        sito = st.text_input("Sito web", value=m.get("sito", ""), placeholder="https://…")
+        sito = cc_campo_sito(m.get("sito", ""), None, "🌐 Sito web (facoltativo)")
         orari = st.text_area("Orari di apertura", value=m.get("orari", ""), height=80, placeholder="es. lun-ven 9-12; su appuntamento")
         note = st.text_area("Note", value=m.get("note", ""), height=80, placeholder="es. serve la tessera; pratica 730, ISEE, disoccupazione…")
         ok = st.form_submit_button("💾 Salva", type="primary", width="stretch")
@@ -553,24 +553,21 @@ def lv_tab_contatti(c, modo="lavoro"):
     for m in sorted(visibili, key=lambda x: (list(TIPI).index(x["tipo"]) if x.get("tipo") in TIPI else 99, (x.get("nome") or "").lower())):
         righe = "<br>".join(x for x in (f"<b>{_h.escape(m.get('nome', ''))}</b>" if m.get("nome") else "", f"👤 {_h.escape(m['referente'])}" if m.get("referente") else "",
                                         f"📞 {_h.escape(m['telefono'])}" if m.get("telefono") else "", f"📱 {_h.escape(m['cellulare'])}" if m.get("cellulare") else "",
-                                        f"✉️ {_h.escape(m['email'])}" if m.get("email") else "", f"📍 {_h.escape(m['indirizzo'])}" if m.get("indirizzo") else "",
+                                        f"✉️ {_h.escape(m['email'])}" if m.get("email") else "", f"📍 {_h.escape(m['indirizzo'])}" if m.get("indirizzo") else "", cc_riga_sito(m.get("sito")),
                                         f"🕒 {_h.escape(m['orari']).replace(chr(10), '; ')}" if m.get("orari") else "", f"<i>{_h.escape(m['note'])}</i>" if m.get("note") else "") if x)
         st.markdown(f"<div class='lv-card'>{_lv_badge(m.get('tipo'), m.get('altro', ''), modo)}<div style='margin-top:6px'>{righe}</div></div>", unsafe_allow_html=True)
         pulsanti = []
-        if m.get("telefono") or m.get("cellulare"):
-            pulsanti.append(("📞 Chiama", "tel:" + _lv_tel(m.get("telefono") or m.get("cellulare"))))
+        if cc_numeri(m.get("telefono"), m.get("cellulare")):
+            pulsanti.append(("📞 Chiama", ("__chiama__", m.get("telefono"), m.get("cellulare"), m.get("nome") or m.get("referente") or "")))
         if _lv_wa(m.get("cellulare")):
             pulsanti.append(("💬 WhatsApp", "https://wa.me/" + _lv_wa(m["cellulare"])))
         if m.get("email"):
             pulsanti.append(("✉️ Scrivi", "mailto:" + m["email"]))
         if m.get("indirizzo"):
             pulsanti.append(("📍 Mappa", _lv_maps(m["indirizzo"])))
-        if m.get("sito", "").startswith(("http://", "https://")):
-            pulsanti.append(("🌐 Sito", m["sito"]))
-        for i in range(0, len(pulsanti), 3):
-            cols = st.columns(3, gap="small")
-            for col, (et, url) in zip(cols, pulsanti[i:i + 3]):
-                col.link_button(et, url, width="stretch")
+        if cc_url(m.get("sito")):
+            pulsanti.append(("🌐 Sito", cc_url(m["sito"])))
+        cc_pulsanti(pulsanti, f"{pref}_c_{m['id']}")
         d1, d2, d3 = st.columns(3, gap="small")
         if d1.button("✏️ Modifica", key=f"{pref}_c_e_{m['id']}", width="stretch"):
             st.session_state[f"{pref}_cont_mod"] = m["id"]
@@ -581,7 +578,7 @@ def lv_tab_contatti(c, modo="lavoro"):
             if "_fa_inv_voce" in globals():
                 _fa_inv_voce(f"{pref}_c_inv_{m['id']}", "📤 Invia", f"{m.get('altro') or m.get('tipo', '')}: {m.get('nome', '')}",
                              [("Tipo", m.get("altro") or m.get("tipo")), ("Nome", m.get("nome")), ("Riferimento", m.get("referente")), ("Telefono", m.get("telefono")), ("Cellulare", m.get("cellulare")),
-                              ("Email", m.get("email")), ("Indirizzo", m.get("indirizzo")), ("Orari", m.get("orari")), ("Note", m.get("note"))], [])
+                              ("Email", m.get("email")), ("Indirizzo", m.get("indirizzo")), ("Sito", m.get("sito")), ("Orari", m.get("orari")), ("Note", m.get("note"))], [])
         if st.session_state.get(f"{pref}_cont_mod") == m["id"]:
             _lv_form_contatto(m, modo)
     if lista and not visibili:
@@ -796,7 +793,7 @@ Sotto, **il confronto con gli anni prima**, in euro e in percentuale. Per l'anno
 Puoi **scaricare** il riepilogo (HTML o PDF) e **inviarlo** per email, WhatsApp o Telegram.""", "grafico anno confronto netto lordo trattenute percentuale riepilogo esporta"),
         ("🤝 Sindacato, CAF, Patronato: la rubrica",
          """Scegli **🤝 Sindacato · CAF · Patronato**. Tocca **➕ Aggiungi un contatto**, scegli il **badge** (Sindacato, CAF, Patronato, Consulente del lavoro, Commercialista, Avvocato, INPS, Agenzia delle Entrate, Altro) e scrivi nome, persona di riferimento, telefono, **cellulare**, email, indirizzo, orari e note.
-Su ogni contatto: **📞 Chiama**, **💬 WhatsApp** (compare se hai scritto un cellulare), **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito**, poi **✏️ Modifica**, **🗑️ Elimina** (ti chiedo conferma) e **📤 Invia**.
+Su ogni contatto: **📞 Chiama** (se hai scritto sia il telefono fisso sia il cellulare, toccandolo **scegli quale chiamare**), **💬 WhatsApp** (compare se hai scritto un cellulare), **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito** (compare se hai scritto il sito web nel modulo), poi **✏️ Modifica**, **🗑️ Elimina** (ti chiedo conferma) e **📤 Invia**.
 In alto puoi **filtrare per badge** e **cercare**. In fondo **scarichi** la rubrica o la **invii**.""", "sindacato caf patronato rubrica contatti telefono whatsapp email indirizzo badge consulente commercialista"),
         ("📑 Certificazione Unica (CU)",
          """Scegli **📑 Certificazione Unica**. Carica il PDF o una foto: l'app **la riconosce da sola** come Certificazione Unica e legge l'**anno**, **chi l'ha emessa**, il **reddito**, le **ritenute IRPEF** e le **addizionali**. Controlli e confermi.
@@ -818,7 +815,7 @@ Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISE
     _lv_guida_aggiungi("casa", [
         ("c_interventi", "🔧 Interventi ripetuti: lo storico", """In **🏡 Casa → 🔧 Manutenzioni** registri ogni intervento (anche sulla casa in generale, senza un bene). Dai un **nome** all'intervento (per esempio «Controllo fumi caldaia»): tutte le volte che lo fai finiscono **nello stesso gruppo**.
 Per ogni gruppo vedi **quante volte**, **quando**, **quanto hai speso** (anche anno per anno) e puoi toccare **➕ Registra un'altra volta**. Lo storico si **scarica** e si **invia**.""", "interventi manutenzione caldaia storico ripetuti spesa"),
-        ("c_riferimenti", "📇 Riferimenti della casa", """In **🏡 Casa → 📇 Riferimenti** metti caldaista, idraulico, elettricista, amministratore, assicurazione, fornitori… Ognuno ha il suo **badge colorato** e i tasti **📞 Chiama**, **💬 WhatsApp**, **✉️ Scrivi**, **📍 Mappa**. Si modifica, si toglie (con conferma), si esporta e si invia.""", "riferimenti casa caldaista idraulico elettricista amministratore rubrica whatsapp"),
+        ("c_riferimenti", "📇 Riferimenti della casa", """In **🏡 Casa → 📇 Riferimenti** metti caldaista, idraulico, elettricista, amministratore, assicurazione, fornitori… Ognuno ha il suo **badge colorato** e i tasti **📞 Chiama** (con due numeri scegli fisso o cellulare), **💬 WhatsApp**, **✉️ Scrivi**, **📍 Mappa**, **🌐 Sito** (se lo scrivi nel modulo). Si modifica, si toglie (con conferma), si esporta e si invia.""", "riferimenti casa caldaista idraulico elettricista amministratore rubrica whatsapp"),
     ])
     _lv_guida_aggiungi("dispensa", [
         ("h_lampeggio", "🔔 I bottoni che lampeggiano", """Se in una sezione c'è qualcosa **in scadenza o scaduto** (prodotti, medicinali, ricette, visite, documenti, bollette, garanzie, manutenzioni, controlli), il suo **bottone colorato lampeggia** e mostra il numero, per esempio **🩺 Salute 🔔2**. Sotto i bottoni, il riquadro **«Ci sono N cose da guardare»** dice cosa. Se non c'è niente: **«✅ Tutto a posto»**.""", "lampeggia bottoni scadenza avvisi cose da guardare"),

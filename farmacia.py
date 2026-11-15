@@ -2899,7 +2899,7 @@ def _fa_modulo_dottore(pid):
     mio_nome = " ".join(x for x in (anag.get("nome"), anag.get("cognome")) if x) or profilo.get("nome", "")
     mia_email_pred = d.get("mia_email") or dati_utente.get("avviso_email") or ""
     e = html.escape
-    ha_dati = any(d.get(k) for k in ("nome", "telefono", "email", "indirizzo"))
+    ha_dati = any(d.get(k) for k in ("nome", "telefono", "cellulare", "email", "indirizzo"))
     chiave_mod = "fa_dott_modifica_" + pid
     modifica = st.session_state.get(chiave_mod, not ha_dati)          # senza dati si apre subito in modifica
     tipo_salvato = d.get("tipo")
@@ -2930,8 +2930,12 @@ def _fa_modulo_dottore(pid):
             righe.append(f"📍 {e(d['indirizzo'])}")
         if d.get("telefono"):
             righe.append(f"📞 {e(d['telefono'])}")
+        if d.get("cellulare"):
+            righe.append(f"📱 {e(d['cellulare'])}")
         if d.get("email"):
             righe.append(f"✉️ {e(d['email'])}")
+        if cc_url(d.get("sito")):
+            righe.append(cc_riga_sito(d["sito"]))
         if righe:
             st.markdown("<div style='background:rgba(255,255,255,.78);border-radius:18px;padding:12px 14px;color:#1b2b2b;"
                         "line-height:1.7;font-weight:600'>" + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
@@ -2942,11 +2946,14 @@ def _fa_modulo_dottore(pid):
                 f"{x['da']}–{x['a']}" + (f" ({x['nota']})" if x.get("nota") else "") for x in oggi_f))
         elif fasce_d:
             st.caption(f"Oggi ({giorno_oggi}) non è indicato nessun orario di ricevimento.")
-        b1, b2 = st.columns(2, gap="small")
-        if _fa_tel(d.get("telefono")):
-            b1.link_button("📞 Chiama", "tel:" + _fa_tel(d["telefono"]), width="stretch")
+        _bt = []
+        if cc_numeri(d.get("telefono"), d.get("cellulare")):
+            _bt.append(("📞 Chiama", ("__chiama__", d.get("telefono"), d.get("cellulare"), d.get("nome", ""))))
         if d.get("indirizzo"):
-            b2.link_button("🧭 Indicazioni", "https://www.google.com/maps/search/?api=1&query=" + _up.quote_plus(d["indirizzo"]), width="stretch")
+            _bt.append(("🧭 Indicazioni", "https://www.google.com/maps/search/?api=1&query=" + _up.quote_plus(d["indirizzo"])))
+        if cc_url(d.get("sito")):
+            _bt.append(("🌐 Sito", cc_url(d["sito"])))
+        cc_pulsanti(_bt, "fa_dott_bt_" + pid)
 
         if d.get("email"):
             with st.expander("✉️ Scrivi un messaggio " + ("alla dottoressa" if femmina else "al dottore")):
@@ -2981,11 +2988,12 @@ def _fa_modulo_dottore(pid):
             with st.expander("🔁 Sostituto: " + (sost.get("nome") or "dati salvati")):
                 if sost.get("indirizzo"):
                     st.write("📍 " + sost["indirizzo"])
-                s1, s2 = st.columns(2, gap="small")
-                if _fa_tel(sost.get("telefono")):
-                    s1.link_button("📞 Chiama il sostituto", "tel:" + _fa_tel(sost["telefono"]), width="stretch")
+                _bs = []
+                if cc_numeri(sost.get("telefono"), sost.get("cellulare")):
+                    _bs.append(("📞 Chiama il sostituto", ("__chiama__", sost.get("telefono"), sost.get("cellulare"), sost.get("nome", ""))))
                 if sost.get("email"):
-                    s2.link_button("✉️ Scrivi al sostituto", "mailto:" + sost["email"], width="stretch")
+                    _bs.append(("✉️ Scrivi al sostituto", "mailto:" + sost["email"]))
+                cc_pulsanti(_bs, "fa_dott_sost_" + pid, per_riga=2)
                 if sost.get("note"):
                     st.caption("📝 " + sost["note"])
         if d.get("note"):
@@ -3003,8 +3011,10 @@ def _fa_modulo_dottore(pid):
         tipo = st.radio("Scegli", ["Dottore", "Dottoressa"], horizontal=True, index=1 if femmina else 0)
         nome = st.text_input("Nominativo (nome e cognome)", value=d.get("nome", ""), placeholder="es. Dott. Mario Rossi")
         indirizzo = st.text_input("Indirizzo dello studio", value=d.get("indirizzo", ""))
-        telefono = st.text_input("Numero di telefono", value=d.get("telefono", ""))
+        telefono = st.text_input("Telefono fisso (studio)", value=d.get("telefono", ""))
+        cellulare = st.text_input("Cellulare", value=d.get("cellulare", ""), help="Se scrivi sia il fisso sia il cellulare, toccando «Chiama» scegli quale chiamare.")
         email = st.text_input("Email del medico", value=d.get("email", ""))
+        sito = cc_campo_sito(d.get("sito", ""), "fa_dott_sito_" + pid, "🌐 Sito web del medico (facoltativo)")
         mia_email = st.text_input("La mia email (a cui il medico può rispondere)", value=mia_email_pred)
         st.markdown("**🕘 Orari di ricevimento**")
         st.caption("Una riga per ogni orario: scegli il giorno, «Dalle» e «Alle» dal menu, e se vuoi una nota. "
@@ -3026,6 +3036,7 @@ def _fa_modulo_dottore(pid):
             sv = d.get("sostituto") or {}
             s_nome = st.text_input("Nominativo del sostituto", value=sv.get("nome", ""))
             s_tel = st.text_input("Telefono del sostituto", value=sv.get("telefono", ""))
+            s_cell = st.text_input("Cellulare del sostituto", value=sv.get("cellulare", ""))
             s_email = st.text_input("Email del sostituto", value=sv.get("email", ""))
             s_ind = st.text_input("Indirizzo del sostituto", value=sv.get("indirizzo", ""))
             s_note = st.text_area("Note sul sostituto (giorni, orari…)", value=sv.get("note", ""))
@@ -3057,9 +3068,9 @@ def _fa_modulo_dottore(pid):
             return
         fasce_nuove.sort(key=lambda x: (GIORNI_SETT.index(x["g"]), x["da"]))
         nuovo = {"tipo": tipo, "nome": nome.strip(), "indirizzo": indirizzo.strip(), "telefono": telefono.strip(),
-                 "email": email.strip(), "mia_email": mia_email.strip(),
+                 "cellulare": cellulare.strip(), "sito": sito.strip(), "email": email.strip(), "mia_email": mia_email.strip(),
                  "fasce": fasce_nuove,
-                 "sostituto": {"nome": s_nome.strip(), "telefono": s_tel.strip(), "email": s_email.strip(),
+                 "sostituto": {"nome": s_nome.strip(), "telefono": s_tel.strip(), "cellulare": s_cell.strip(), "email": s_email.strip(),
                                "indirizzo": s_ind.strip(), "note": s_note.strip()},
                  "note": note.strip()}
 

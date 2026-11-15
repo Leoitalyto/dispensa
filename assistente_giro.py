@@ -123,7 +123,7 @@ AG_CAPITOLI = [
     {"id": "g_utilita", "s": "utilita", "t": "Le Utilità",
      "x": "Le Utilità sono divise in riquadri colorati, ognuno con il suo nome. Sotto la striscia blu, gli strumenti per far funzionare l'app: il riquadro verde Sicurezza dei tuoi dati, con backup, ripristino, spazio e Cestino; "
           "l'arancione Scambio con altre persone; l'azzurro Aspetto e telefono, con i testi più grandi e Libera spazio. "
-          "Sotto la striscia viola, gli strumenti fuori dall'app: le Utilità musicali, con Wimbi e Velocity Music, e le Utilità PDF.",
+          "Sotto la striscia viola, gli strumenti fuori dall'app: le Utilità PDF e, in fondo, le Utilità musicali con le icone di Velocity Music e Wimbi affiancate.",
      "d": "Pulsante 🧰 Utilità → scegli il riquadro colorato.", "k": "utilità riquadri colorati cestino backup aspetto testi grandi scambio dati libera spazio wimbi velocity musica pdf app utili"},
     {"id": "g_pdf", "s": "utilita", "t": "Lavorare con i PDF",
      "x": "Nel riquadro rosso Utilità PDF ci sono due elenchi a cascata. Nel primo scegli cosa vuoi fare: unire, dividere, comprimere, convertire, modificare, firmare, mettere la password o trasformare foto in PDF. "
