@@ -150,6 +150,11 @@ _AGGANCI = {
          '            gg = (ter_giorni_testo(t_, "tutti i giorni") if "ter_giorni_testo" in globals() else ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", []) if 0 <= g < len(GIORNI_SETT)) or "tutti i giorni")'),
         ('", ".join(GIORNI_SETT[g] for g in t_.get("giorni", [])), ", ".join(t_.get("orari", [])),',
          '(ter_giorni_testo(t_) if "ter_giorni_testo" in globals() else ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", []))), ", ".join(t_.get("orari", [])),'),
+        # PDF: elenco delle singole assunzioni (date) nella tabella Terapie
+        ('["Medicinale", "Quantità", "Giorni", "Orari", "Periodo", "Stato", "Note"],',
+         '["Medicinale", "Quantità", "Giorni", "Orari", "Periodo", "Assunzioni (date)", "Stato", "Note"],'),
+        ('                                        STATI_TER.get(t_.get("stato", "attiva"), ""), t_.get("note", "")] for t_ in ter]))',
+         '                                        (ter_assunzioni_testo(t_) if "ter_assunzioni_testo" in globals() else ""),\n                                        STATI_TER.get(t_.get("stato", "attiva"), ""), t_.get("note", "")] for t_ in ter]))'),
         ('<h1>🩺 Salute</h1><p>Medicinali, terapie, visite e vaccini della tua famiglia</p>',
          '<h1>" + ("" if "ih_ha_icona" in globals() and ih_ha_icona("salute") else "🩺 ") + "Salute</h1><p>Medicinali, terapie, visite e vaccini della tua famiglia</p>'),
         ('<h1>📁 I miei documenti</h1>',
@@ -375,7 +380,7 @@ def _carica_sicuro(_p):
 
 
 for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_prenotazioni.py", "salute_profilo.py", "salute_terapie_intervalli.py", "salute_calendario.py", "casa_cerca_manuale.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "avvisi_prova.py", "casa_amministrazione.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "animali.py", "animali_doc.py", "animali_report.py", "animali_scambio.py", "animali_logo.py", "animali_pagine.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "chat_famiglia.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py", "vitamemo_img.py", "vitamemo.py", "vitamemo_tema.py",
-              "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py"):
+              "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py", "guida_pt.py"):
     _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica_sicuro(_percorso)

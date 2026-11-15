@@ -97,3 +97,78 @@ html body #asst-pan .asst-tour span{color:var(--vm-testo)}
 """
 if "CSS" in globals() and "VITAMEMO · TEMA SCURO" not in CSS:
     CSS = CSS + "<style>" + VM_TEMA_CSS + "</style>"
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CORRETTORE DI LEGGIBILITÀ: se un testo ha poco contrasto con lo sfondo che ha dietro (per esempio scritte chiare su una
+# scheda chiara, come «Luciano Matera» o «3 unità · 750 g»), lo scrive in NERO (sfondo chiaro) o in BIANCO (sfondo scuro).
+# Vale per ogni schermata e ogni finestra, anche per quelle che verranno. Non tocca immagini, icone, la schermata iniziale e il robottino.
+# ---------------------------------------------------------------------------------------------------------------------
+VM_JS_CONTRASTO = r"""(function(){
+ var w=window, doc=w.document; if(w.__vmContr) return; w.__vmContr=1;
+ function P(s){var m=(s||'').match(/rgba?\(([^)]+)\)/); if(!m) return null; var p=m[1].split(/[ ,\/]+/).map(parseFloat); if(p.length<3||isNaN(p[0])) return null; return [p[0],p[1],p[2],p.length>3&&!isNaN(p[3])?p[3]:1];}
+ function L(c){var f=function(v){v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};return .2126*f(c[0])+.7152*f(c[1])+.0722*f(c[2]);}
+ function C(a,b){var x=L(a),y=L(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+ function mix(t,b){var a=t[3];return [t[0]*a+b[0]*(1-a),t[1]*a+b[1]*(1-a),t[2]*a+b[2]*(1-a),1];}
+ function campioni(el){
+  var layers=[], e=el;
+  while(e&&e.nodeType===1&&e!==doc.documentElement){
+   var cs=getComputedStyle(e), bi=cs.backgroundImage;
+   if(bi&&bi!=='none'){
+    if(/url\(/.test(bi)) return null;
+    var cols=(bi.match(/rgba?\([^)]+\)/g)||[]).map(P).filter(Boolean);
+    if(cols.length){ layers.push({g:cols}); var mn=Math.min.apply(null,cols.map(function(c){return c[3]})); if(mn>=.95) break; }
+   }
+   var c=P(cs.backgroundColor); if(c&&c[3]>0){ layers.push({c:c}); if(c[3]>=.95) break; }
+   e=e.parentElement;
+  }
+  var outs=[[6,10,22,1]];
+  for(var i=layers.length-1;i>=0;i--){ var l=layers[i];
+   if(l.g){ var nx=[]; outs.forEach(function(o){ l.g.forEach(function(g){ nx.push(mix(g,o)); }); }); outs=nx.slice(0,10); }
+   else outs=outs.map(function(o){return mix(l.c,o);});
+  }
+  return outs;
+ }
+ function peggio(col,bgs){var m=99; bgs.forEach(function(b){var r=C(mix(col,b),b); if(r<m) m=r;}); return m;}
+ var SCURO=[11,18,32,1], CHIARO=[242,247,255,1];
+ function passa(){
+  var radici=doc.querySelectorAll('[data-testid=stMain], [data-testid=stDialog], [data-testid=stSidebar]');
+  radici.forEach(function(rad){
+   var wk=doc.createTreeWalker(rad,NodeFilter.SHOW_TEXT), visti=new Set();
+   while(wk.nextNode()){
+    var n=wk.currentNode, t=(n.nodeValue||'').trim(); if(t.length<1) continue;
+    var el=n.parentElement; if(!el||visti.has(el)) continue; visti.add(el);
+    if(el.closest('script,style,noscript,svg,iframe,option,.st-key-vm_home,#asst-pan,#asst-btn,[data-testid=stToolbar],[data-testid=stHeader]')) continue;
+    if(/^[←-⯿\u{1F000}-\u{1FFFF}\s️‍]+$/u.test(t)) continue;
+    var cs=getComputedStyle(el); if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity)<.3) continue;
+    if(/material|icon/i.test(cs.fontFamily||'')) continue;
+    var r=el.getBoundingClientRect(); if(r.width<2||r.height<2) continue;
+    var col=P(cs.color); if(!col||col[3]<.3) continue;
+    var fill=P(cs.webkitTextFillColor); if(fill&&fill[3]<.3) continue; if(fill) col=fill;
+    var bgs=campioni(el); if(!bgs||!bgs.length) continue;
+    var ora=peggio(col,bgs); if(ora>=3.6) continue;
+    var a=peggio(SCURO,bgs), b=peggio(CHIARO,bgs), nuovo=a>=b?SCURO:CHIARO, megl=Math.max(a,b);
+    if(megl<=ora+.5) continue;
+    var v='rgb('+nuovo[0]+','+nuovo[1]+','+nuovo[2]+')';
+    el.style.setProperty('color',v,'important'); el.style.setProperty('-webkit-text-fill-color',v,'important'); el.setAttribute('data-vm-fix','1');
+   }
+  });
+ }
+ var tm=null;
+ function pianifica(){ if(tm) return; tm=w.setTimeout(function(){ tm=null; try{passa();}catch(e){} },350); }
+ try{ new MutationObserver(pianifica).observe(doc.body,{childList:true,subtree:true,characterData:true}); }catch(e){}
+ w.setInterval(function(){ try{passa();}catch(e){} },2500);
+ pianifica();
+})();"""
+
+
+def vm_contrasto():
+    """Mette in pagina il correttore di leggibilità (una sola volta per sessione: poi lavora da solo)."""
+    if st.session_state.get("_vm_contr"):
+        return
+    st.session_state["_vm_contr"] = True
+    try:
+        if "_inietta" in globals():
+            _inietta(VM_JS_CONTRASTO)
+    except Exception:
+        pass

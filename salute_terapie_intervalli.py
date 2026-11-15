@@ -66,6 +66,44 @@ def ter_giorni_testo(t, vuoto=""):
     return f"ogni {unita[0]}" if iv["ogni"] == 1 else f"ogni {iv['ogni']} {unita[1]}"
 
 
+def ter_assunzioni_testo(t, max_date=60):
+    """Il DETTAGLIO delle assunzioni per i PDF (anche per il medico): «4 assunzioni: 15/11/2026 · 30/11/2026 · 15/12/2026 · 30/12/2026 (ore 08:00)».
+    A intervalli: elenca ogni data. Giorni della settimana: se sono poche le elenca, altrimenti scrive quante sono e in quali giorni."""
+    prima, fine = _ti_data(t.get("inizio")), _ti_data(t.get("fine"))
+    if prima is None:
+        return ""
+    ore = ", ".join(t.get("orari") or [])
+    ore_t = f" (ore {ore})" if ore else ""
+    fmt = lambda d: d.strftime("%d/%m/%Y")
+    iv = ter_intervallo(t)
+    try:
+        volte = int(t.get("volte") or 0)
+    except (TypeError, ValueError):
+        volte = 0
+    if iv:
+        date_ = ter_prossime(t, prima, volte if volte else (400 if fine else 12))
+        if not date_:
+            return ""
+        sosp = " · " + str(len(date_) - max_date) + " altre" if len(date_) > max_date else ""
+        elenco = " · ".join(fmt(d) for d in date_[:max_date]) + sosp
+        coda = "" if (fine or volte) else " … poi continua " + ter_giorni_testo(t)
+        pre = "prime " if not (fine or volte) else ""
+        return f"{pre}{len(date_)} assunzion{'e' if len(date_) == 1 else 'i'}: {elenco}{ore_t}{coda}"
+    if not fine:
+        return ""
+    date_, d = [], prima
+    while d <= fine and len(date_) < 800:
+        if terapia_e_giorno(t, d):
+            date_.append(d)
+        d += timedelta(days=1)
+    if not date_:
+        return ""
+    n_ore = max(1, len(t.get("orari") or []))
+    if len(date_) <= 12:
+        return f"{len(date_)} giorni: " + " · ".join(fmt(x) for x in date_) + ore_t
+    return f"{len(date_)} giorni di assunzione dal {fmt(date_[0])} al {fmt(date_[-1])}" + (f", {n_ore} volte al giorno" if n_ore > 1 else "") + ore_t
+
+
 def ter_prossime(t, da, n=5):
     """Le prossime `n` date di assunzione a partire da `da` (comprese), fino alla data di fine se c'è."""
     fine = _ti_data(t.get("fine"))

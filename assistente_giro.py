@@ -306,6 +306,13 @@ _AG_JS = r"""
       '<button class="asst-b grigio" data-az="off" data-ui="a_off"></button></div>';
   var toast = doc.createElement('div'); toast.id = 'asst-toast';
   doc.body.appendChild(btn); doc.body.appendChild(pan); doc.body.appendChild(toast);
+  /* guardiano: se per qualunque motivo il robottino o il pannello escono dalla pagina li rimette al loro posto */
+  try { if (w.__asstGuardia) w.clearInterval(w.__asstGuardia);
+    w.__asstGuardia = w.setInterval(function () {
+      try {
+        [btn, pan, toast].forEach(function (e) { if (e && !doc.body.contains(e)) doc.body.appendChild(e); });
+      } catch (e2) {}
+    }, 1500); } catch (e3) {}
   function $(s) { return pan.querySelector(s); }
   var elTitolo = $('.asst-titolo'), elTesto = $('.asst-testo'), elRobot = $('.asst-robot'), elTour = $('.asst-tour'),
       elSugg = $('.asst-sugg'), elInput = $('.asst-chiedi input'), btnMic = pan.querySelector('[data-az="mic"]'),

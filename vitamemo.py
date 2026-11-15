@@ -292,6 +292,8 @@ def _vm_riepilogo(sc):
 
 def vm_schermata_home():
     """La schermata iniziale di VitaMemo."""
+    if "vm_contrasto" in globals():
+        vm_contrasto()
     for nome_f in ("nu_aggiorna_sessione", "nav_pulisci_interfaccia"):
         if nome_f in globals():
             try:
@@ -346,6 +348,8 @@ _VM_CSS_TORNA = ("<style>.st-key-vm_torna button{width:100% !important;min-heigh
 
 def vm_barra_home():
     vm_scudo()
+    if "vm_contrasto" in globals():
+        vm_contrasto()                                               # scritte sempre leggibili (nere su sfondo chiaro, chiare su sfondo scuro)
     st.markdown(_VM_CSS_TORNA, unsafe_allow_html=True)
     with st.container(key="vm_torna"):
         st.button("🌐 " + VM_NOME + " · Home", key="vm_torna_btn", width="stretch", on_click=vm_vai_home, help="Torna alla schermata iniziale con tutte le sezioni")

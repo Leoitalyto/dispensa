@@ -163,12 +163,13 @@ FAM_H_MEDICINALI = ["Nome", "Tipo", "Marca", "Principio attivo", "Dosaggio", "Fo
 def _fam_righe_terapie(p):
     f = p["f"]
     return [[_fa_nome_med(f, t_.get("med"), t_.get("nome_med", "")), t_.get("quantita", ""),
-             ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", []) if 0 <= g < len(GIORNI_SETT)), ", ".join(t_.get("orari", [])),
+             (ter_giorni_testo(t_) if "ter_giorni_testo" in globals() else ", ".join(GIORNI_SETT[g] for g in t_.get("giorni", []) if 0 <= g < len(GIORNI_SETT))), ", ".join(t_.get("orari", [])),
              f"dal {_fam_d(t_.get('inizio'))}" + (f" al {_fam_d(t_['fine'])}" if t_.get("fine") else ""),
+             (ter_assunzioni_testo(t_) if "ter_assunzioni_testo" in globals() else ""),
              STATI_TER.get(t_.get("stato", "attiva"), ""), t_.get("note", "")] for t_ in _fam_di(f, "terapie", p["pid"])]
 
 
-FAM_H_TERAPIE = ["Medicinale", "Quantità", "Giorni", "Orari", "Periodo", "Stato", "Prescrizione e note"]
+FAM_H_TERAPIE = ["Medicinale", "Quantità", "Giorni", "Orari", "Periodo", "Assunzioni (date)", "Stato", "Prescrizione e note"]
 
 
 def _fam_righe_registro(p):
