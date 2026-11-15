@@ -140,7 +140,7 @@ def _as_dialogo_foto(e, v):
         k = f"arf_{e['id']}"
         att = ar_sp_foto_leggi(e["id"])
         if att:
-            st.image(att, caption="Foto attuale (la vedi solo tu)", width="stretch")
+            st.image(att, caption="Foto attuale (la vedi solo tu)", width="stretch", _lettore=False)
             if st.button("🗑️ Elimina questa foto", key=f"{k}_t", width="stretch"):
                 ar_sp_foto_togli(e["id"])
                 st.session_state["messaggio"] = "Foto tolta."
@@ -176,7 +176,7 @@ def _as_scheda(e, v, n):
     mezzo = " · ".join(x for x in (e.get("tipo_mezzo"), (e.get("marca", "") + " " + e.get("modello", "")).strip().title()) if x)
     with st.expander(f"{ic} {e['nome']} — {etic}" + (" 📷" if foto else "")):
         if foto:
-            st.image(foto, caption="La foto di questa voce (la vedi solo tu)", width="stretch")
+            st.image(foto, caption="La foto di questa voce (la vedi solo tu)", width="stretch", _lettore=False)
         else:
             st.caption("📷 Nessuna foto allegata a questa voce: toccando «Foto» puoi aggiungerla.")
         righe = [f"**Colore:** {e.get('colore', '')} · **Urgenza:** {e.get('urgenza', '')}", f"**Vale per:** {mezzo or 'tutti i mezzi'}"]
@@ -269,7 +269,7 @@ def ar_pagina_admin(v=None):
             with st.expander("🔍 " + titolo + (" 📷" if d_.get("files") else "")):
                 foto = ar_foto_da_diagnosi(d_["files"][0]) if d_.get("files") else None
                 if foto:
-                    st.image(foto, width="stretch")
+                    st.image(foto, width="stretch", _lettore=False)
                 for s_ in d_.get("spie", []):
                     st.markdown(f"**{_BD_ICONA.get(s_.get('colore'), '⚪')} {s_['nome']}** — {s_.get('significato', '')}")
                 st.caption(f"{d_.get('mezzo', '')} · affidabilità {d_.get('confidenza', '')}" + (f" · Stato: {d_['stato']}" if d_.get("stato") else "") + (f" · Intervento: {d_['intervento']}" if d_.get("intervento") else ""))

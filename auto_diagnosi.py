@@ -943,7 +943,7 @@ def ad_pagina(v):
         st.caption("Scatta una foto con **📷 Scatta foto** o scegli **🖼️ Dalla galleria**. " + ("" if ad_attivo() else "Senza l'intelligenza artificiale attiva puoi usare la tua app di IA, una tua chiave gratuita, oppure il catalogo delle spie."))
         _ad_storico(v) if v else None
         return
-    st.image(jpeg, width="stretch", caption="La tua foto")
+    st.image(jpeg, width="stretch", caption="La tua foto", _lettore=False)
     if st.button("🗑️ Elimina questa foto", key="ad_togli", width="stretch"):
         for k in ("ad_foto", "ad_sha", "ad_ris"):
             st.session_state.pop(k, None)

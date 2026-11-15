@@ -257,7 +257,7 @@ def pr_pannello_admin():
             if p.get("ha_foto"):
                 f = pr_foto(p["id"])
                 if f:
-                    st.image(f, caption="La foto inviata", width="stretch")
+                    st.image(f, caption="La foto inviata", width="stretch", _lettore=False)
                 else:
                     st.caption("(la foto non è più disponibile)")
             else:

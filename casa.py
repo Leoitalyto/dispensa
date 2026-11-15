@@ -1978,11 +1978,16 @@ def _ca_anteprima(nome, mime, dati):
             import fitz as _mu
         doc = _mu.open(stream=dati, filetype="pdf")
         n = doc.page_count
+        _imp = hashlib.md5(dati).hexdigest()[:16] if "le_pulsante" in globals() else ""
         for i in range(min(3, n)):
-            st.image(doc[i].get_pixmap(dpi=100, alpha=False).tobytes("png"), caption=f"Pagina {i + 1} di {n}", width="stretch")
+            st.image(doc[i].get_pixmap(dpi=100, alpha=False).tobytes("png"), caption=f"Pagina {i + 1} di {n}", width="stretch", _lettore=False)
+            if _imp:                                               # il lettore dello scritto lavora sulla pagina NITIDA (non su questa anteprima leggera)
+                le_pulsante(f"{_imp}p{i + 1}", (lambda i=i: le_pagina_pdf(dati, i)), etichetta="🔍 Leggi lo scritto" + (f" di pagina {i + 1}" if n > 1 else ""))
         if n > 3:
             st.caption(f"Ti mostro le prime 3 pagine su {n}: per il resto usa «Apri / scarica».")
         doc.close()
+        if n > 3 and "le_pulsanti_pdf" in globals():
+            le_pulsanti_pdf(dati, 3)
     except Exception:
         st.info("Qui l'anteprima non è disponibile: usa «⬇ Apri / scarica» per vedere il documento.")
 

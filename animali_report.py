@@ -587,6 +587,6 @@ def an_tab_report(a, x):
             except Exception:
                 import fitz as _mu
             pg = _mu.open(stream=r["pdf"], filetype="pdf")
-            st.image(pg[0].get_pixmap(dpi=70).tobytes("png"), caption=f"Anteprima della copertina ({pg.page_count} pagine)", width="stretch")
+            st.image(pg[0].get_pixmap(dpi=70).tobytes("png"), caption=f"Anteprima della copertina ({pg.page_count} pagine)", width="stretch", _lettore=False)
         except Exception:
             pass
