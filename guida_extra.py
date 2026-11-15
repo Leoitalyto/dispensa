@@ -195,7 +195,7 @@ Con **🔊 Voce: attiva** (o **🔇 Voce: spenta**) accendi o spegni la voce; co
     # ================= Casa → Amministrazione
     a("casa", "c_amministrazione", "Amministrazione della casa: cos'è",
       """In **Casa** la prima scheda è **Amministrazione**. Ha cinque pulsanti colorati:
-1. **Dati amministrazione**: la scheda dell'amministratore (studio, telefoni, email, PEC, IBAN…) con **Chiama**, **Scrivi** e **Scrivi alla PEC** a un tocco.
+1. **Dati amministrazione**: la scheda dell'amministratore (studio, **giorni e orari d'ufficio**, telefoni, email, PEC, **sito web**, IBAN…) con **Chiama** (se hai scritto fisso e cellulare scegli quale), **Scrivi**, **Scrivi alla PEC** e **Sito** a un tocco.
 2. **Spese e scadenze**: spese condominiali e rate, con pagamenti e promemoria.
 3. **Contatti e interventi**: i professionisti (idraulico, elettricista…) e gli interventi che hanno fatto.
 4. **Raccolta differenziata**: il calendario settimanale dei rifiuti, con i promemoria.

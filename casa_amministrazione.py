@@ -450,7 +450,7 @@ def ca_amm_tab(c):
 
 # ---------- 🏢 DATI AMMINISTRAZIONE ----------
 _AMM_CAMPI_ADMIN = [("nome", "Nome"), ("cognome", "Cognome"), ("studio", "Nome dello studio di amministrazione"), ("indirizzo_studio", "Indirizzo dello studio"),
-                    ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("sito", "🌐 Sito web (facoltativo, es. www.nomesito.it)"), ("cf_piva", "Codice fiscale o partita IVA"),
+                    ("orari", "🕒 Giorni e orari d'ufficio"), ("telefono", "Telefono fisso"), ("cellulare", "Cellulare"), ("email", "Email"), ("pec", "PEC"), ("sito", "🌐 Sito web (facoltativo, es. www.nomesito.it)"), ("cf_piva", "Codice fiscale o partita IVA"),
                     ("immobile", "Indirizzo dell'immobile amministrato"), ("condominio", "Nome del condominio"), ("banca", "Riferimenti bancari (banca, intestatario)"), ("iban", "IBAN")]
 
 
@@ -459,7 +459,12 @@ def _amm_dlg_admin(c, a=None):
         k = "amm_adm_" + (a["id"] if a else "nuovo")
         v = {}
         for chiave, et in _AMM_CAMPI_ADMIN:
-            v[chiave] = st.text_input(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}")
+            if chiave == "orari":
+                v[chiave] = st.text_area(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}", height=90,
+                                         placeholder="es. lun-ven 9-12; martedì e giovedì anche 15-18; sabato chiuso",
+                                         help="Scrivi i giorni e gli orari in cui l'ufficio è aperto: compaiono nella scheda.")
+            else:
+                v[chiave] = st.text_input(et, value=(a or {}).get(chiave, ""), key=f"{k}_{chiave}")
         v["note"] = st.text_area("Note aggiuntive", value=(a or {}).get("note", ""), key=f"{k}_note", height=90)
         if v["iban"].strip() and not amm_iban_valido(v["iban"]):
             st.warning("L'IBAN non sembra giusto (il codice di controllo non torna): controlla di averlo scritto bene. Puoi salvare lo stesso.")
@@ -504,7 +509,7 @@ def _amm_schermata_dati(c):
         st.info("Non hai ancora inserito l'amministratore. Tocca **➕ Aggiungi** per scrivere i suoi dati: poi potrai chiamarlo o scrivergli con un tocco.")
     for a in adm:
         nome = " ".join(x for x in (a.get("nome"), a.get("cognome")) if x) or a.get("studio") or "Amministratore"
-        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")), ("🌐", a.get("sito")),
+        righe = [("🏢", a.get("studio")), ("📍", a.get("indirizzo_studio")), ("🕒", (a.get("orari") or "").replace("\n", "; ")), ("📞", a.get("telefono")), ("📱", a.get("cellulare")), ("✉️", a.get("email")), ("📨 PEC", a.get("pec")), ("🌐", a.get("sito")),
                  ("🆔", a.get("cf_piva")), ("🏘️ Condominio", a.get("condominio")), ("📌 Immobile", a.get("immobile")), ("🏦", a.get("banca"))]
         corpo = "<br>".join(f"{ic} {_amm_h.escape(v)}" for ic, v in righe if v)
         st.markdown(f"<div class='amm-card'><b style='font-size:1.1rem'>👤 {_amm_h.escape(nome)}</b><div style='margin-top:6px'>{corpo}</div>"
