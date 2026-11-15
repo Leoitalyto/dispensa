@@ -3374,7 +3374,7 @@ def icona_farmacia():
     if uri:
         css += _css_icona("fa_icona", uri, "1/1", "fa-battito", 2.2)
     if uri_d:
-        css += _css_icona("doc_icona", uri_d, "360/345", "doc-allarme" if urg else "doc-battito", 1.2 if urg else 2.2)
+        css += _css_icona("doc_icona", uri_d, "364/418", "doc-allarme" if urg else "doc-battito", 1.2 if urg else 2.2)
     uri_u = _fa_file_uri("utilita.webp") if "schermata_utilita" in globals() else ""
     if uri_u:
         css += ("@keyframes ut-battito{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}"

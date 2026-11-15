@@ -403,6 +403,11 @@ def _inv_nomi_unici(allegati):
     return risultato
 
 
+_INV_CSS_PULSA = ("<style>@keyframes invg-pulsa{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(38,198,218,.75)}50%{transform:scale(1.025);box-shadow:0 0 0 10px rgba(38,198,218,0)}}"
+                  "div[class*='st-key-invg_'] button[kind='primary'],div[class*='st-key-invg_'] a[kind='primary'],div[class*='st-key-invg_'] [data-testid='stBaseButton-primary'],"
+                  "div[class*='st-key-invg_'] [data-testid='stBaseLinkButton-primary']{animation:invg-pulsa 1.5s ease-in-out infinite !important}"
+                  ".invg-fai{font-weight:800;font-size:.9rem;margin:6px 0 2px;opacity:.95}"
+                  "@media (prefers-reduced-motion:reduce){div[class*='st-key-invg_'] button,div[class*='st-key-invg_'] a{animation:none !important}}</style>")
 _INV_NUM = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣"]
 
 
@@ -572,6 +577,72 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fis
     # ---- con cosa e a chi
     st.warning("🔒 Stai per inviare **dati personali**: controlla bene a chi li mandi.")
     ha_file = bool(pronti)
+
+    def _azione(canale):
+        """Il campo «a chi» e il pulsante per inviare: stanno DENTRO il riquadro della voce scelta (non in fondo alla pagina)."""
+        st.markdown("<div class='invg-fai'>👇 " + ("Scrivi a chi e invia" if canale in ("email", "wa", "sms") else "Tocca per inviare") + "</div>", unsafe_allow_html=True)
+        if canale == "app":
+            st.caption("Si apre la finestra **Condividi**: scegli l'app (WhatsApp, Gmail, Telegram, Drive…) e poi la persona. " + ("I file sono già allegati." if ha_file else ""))
+            inv_registra_condivisione(chiave, titolo, testo, pronti)
+            with st.container(key=f"invio_share_{chiave}"):
+                st.button("📤 Invia adesso: scegli WhatsApp, Gmail…", key=f"invio_btn_share_{chiave}", type="primary", width="stretch")
+            st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
+            if ha_file:
+                st.caption("Se non si apre: torna al passo «Cosa vuoi fare?», scegli **Scaricarlo** e poi allegalo a mano nell'app con la graffetta 📎.")
+        elif canale == "email":
+            if not inv_email_pronta():
+                st.info("L'app non ha ancora una casella per spedire da sola (servono EMAIL_USER ed EMAIL_PASSWORD nei Secrets di Streamlit: la guida «Invio» spiega come). "
+                        "Intanto si apre **la tua posta** con il testo già scritto" + ("; i file allegali dopo averli scaricati." if ha_file else "."))
+                a = st.text_input("Indirizzo email di chi lo riceve (facoltativo)", key=f"inv_a_{chiave}")
+                st.link_button("✉️ Apri la mia posta", inv_link_mailto(a.strip(), oggetto, testo), width="stretch", type="primary")
+            else:
+                a = st.text_input("Indirizzo email di chi lo riceve (più indirizzi: separali con la virgola)", value=d_conto.get("avviso_email", ""), key=f"inv_a_{chiave}")
+                msg = st.text_area("Messaggio", value="Ti mando in allegato i documenti. " if ha_file else "Ecco il riepilogo.", key=f"inv_m_{chiave}", height=80)
+                scelti = [x for i, x in enumerate(pronti) if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{i}")]
+                if sum(len(x[2]) for x in scelti) > _MAX_ALLEGATI:
+                    st.warning("I file scelti sono troppo pesanti per una sola email: togline qualcuno, oppure scaricali e mandali con un servizio per file grandi.")
+                if st.button("✉️ Invia l'email", type="primary", key=f"inv_si_{chiave}", width="stretch"):
+                    ok, ko = inv_indirizzi(a)
+                    if not ok:
+                        st.error("Scrivi un indirizzo email valido.")
+                    elif ko:
+                        st.error("Indirizzo non valido: " + ", ".join(ko))
+                    elif len(ok) > 5:
+                        st.error("Al massimo 5 indirizzi per volta.")
+                    elif st.session_state.get("inv_n_email", 0) >= 20:
+                        st.error("Hai già mandato molte email in questa sessione: riapri l'app per continuare.")
+                    else:
+                        with st.spinner("Invio in corso…"):
+                            esito, motivo = inv_invia_email(ok, oggetto, (msg.strip() + "\n\n" + testo)[:20000], scelti)
+                        if esito:
+                            st.session_state["inv_n_email"] = st.session_state.get("inv_n_email", 0) + 1
+                            st.success("✅ Email inviata a " + ", ".join(ok))
+                        else:
+                            st.error("Non sono riuscito a inviarla: " + motivo)
+        elif canale == "wa":
+            num_wa = st.text_input("Numero di chi lo riceve (facoltativo: con prefisso, senza +, es. 39333…)", key=f"inv_wa_{chiave}")
+            st.link_button("💬 Apri WhatsApp con il testo", inv_link_whatsapp(num_wa, testo), width="stretch", type="primary")
+            st.caption("Senza numero, WhatsApp ti fa scegliere la persona." + (" Va solo il testo: per mandare anche il file scegli «WhatsApp, Telegram, Gmail…» nel riquadro verde." if ha_file else ""))
+        elif canale == "tg":
+            chat = str(d_conto.get("telegram_chat_id") or "").strip()
+            if not inv_segreto("TELEGRAM_TOKEN"):
+                st.info("Per mandare i file nella tua chat Telegram serve TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): la guida «Invio» spiega come. "
+                        "Intanto scegli «WhatsApp, Telegram, Gmail o un'altra app» e poi Telegram.")
+            elif not chat:
+                st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» in Salute, poi torna qui.")
+            else:
+                st.caption("Testo e file arrivano nella **tua** chat con il bot dell'app: da lì li inoltri a chi vuoi.")
+                if st.button("✈️ Mandami tutto su Telegram", type="primary", key=f"inv_tg_{chiave}", width="stretch"):
+                    with st.spinner("Invio in corso…"):
+                        esito, motivo = inv_invia_telegram(chat, testo, pronti)
+                    st.success("✅ Inviato: guarda Telegram.") if esito else st.error("Non sono riuscito a inviarlo: " + motivo)
+        elif canale == "sms":
+            num2 = st.text_input("Numero di chi lo riceve (facoltativo)", key=f"inv_sms_{chiave}")
+            st.link_button("📱 Apri i messaggi con il testo", inv_link_sms(num2, testo), width="stretch", type="primary")
+            st.caption("Gli SMS sono brevi: va solo l'inizio del testo.")
+        else:
+            st.caption("Tocca l'icona in alto a destra del riquadro per copiare, poi incolla dove vuoi.")
+            st.code(testo, language=None, wrap_lines=True)
     st.markdown(f"**{num()} Con cosa lo mandi?**")
     passo += 1
     k_f, k_t = f"inv_canf_{chiave}", f"inv_cant_{chiave}"
@@ -589,7 +660,7 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fis
             st.session_state[k_f], st.session_state[k_t] = next(iter(file_g)), None
         st.markdown("<style>div[class*='st-key-invg_file_']{border:2px solid #2ecc71 !important;border-radius:16px !important;background:rgba(46,204,113,.09) !important;padding:10px 12px !important}"
                     "div[class*='st-key-invg_testo_']{border:2px solid #f5a623 !important;border-radius:16px !important;background:rgba(245,166,35,.08) !important;padding:10px 12px !important}"
-                    ".invg-t{font-weight:800;font-size:.95rem;margin:0 0 2px}.invg-t.f{color:#57e39a}.invg-t.t{color:#ffc061}</style>", unsafe_allow_html=True)
+                    ".invg-t{font-weight:800;font-size:.95rem;margin:0 0 2px}.invg-t.f{color:#57e39a}.invg-t.t{color:#ffc061}</style>" + _INV_CSS_PULSA, unsafe_allow_html=True)
 
         def _scelto(questo, altro):
             if st.session_state.get(questo) is not None:
@@ -597,86 +668,25 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fis
         with st.container(key=f"invg_file_{chiave}"):
             st.markdown(f"<div class='invg-t f'>📎 CON {nome_f.upper()} · consigliato</div>", unsafe_allow_html=True)
             st.radio("Con il file", list(file_g), format_func=lambda k: file_g[k], index=None, key=k_f, label_visibility="collapsed", on_change=_scelto, args=(k_f, k_t))
+            if st.session_state.get(k_f) in file_g:
+                _azione(st.session_state[k_f])
         with st.container(key=f"invg_testo_{chiave}"):
             st.markdown("<div class='invg-t t'>✍️ SOLO IL TESTO · senza " + nome_f + "</div>", unsafe_allow_html=True)
             st.radio("Solo il testo", list(testo_g), format_func=lambda k: testo_g[k], index=None, key=k_t, label_visibility="collapsed", on_change=_scelto, args=(k_t, k_f))
-        canale = st.session_state.get(k_f) or st.session_state.get(k_t)
-        if canale == "email" and "email" in testo_g:
-            canale = "email"
+            if st.session_state.get(k_t) in testo_g:
+                _azione(st.session_state[k_t])
+        if not (st.session_state.get(k_f) or st.session_state.get(k_t)):
+            st.caption("Scegli una voce in uno dei due riquadri.")
     else:                                                         # non ci sono file: è tutto testo, un riquadro solo
         tutti = {"app": ("📤 WhatsApp, Telegram, Gmail o un'altra app" if disp == "telefono" else "📤 Un'altra app del computer"), "email": "✉️ Email", "wa": "💬 WhatsApp (a un numero)",
                  "tg": "✈️ Telegram, nella mia chat", "sms": testo_g["sms"], "copia": testo_g["copia"]}
         if disp != "telefono":
             tutti = {k: tutti[k] for k in ("email", "wa", "tg", "sms", "copia", "app")}
-        canale = st.radio("Con cosa lo mandi?", list(tutti), format_func=lambda k: tutti[k], key=f"inv_can_{chiave}", label_visibility="collapsed")
-    if not canale:
-        st.caption("Scegli una voce qui sopra.")
-        return
-    st.markdown(f"**{num()} A chi**" if canale in ("email", "wa", "sms") else f"**{num()} Invia**")
-
-    if canale == "app":
-        st.caption("Si apre la finestra **Condividi**: scegli l'app (WhatsApp, Gmail, Telegram, Drive…) e poi la persona. " + ("I file sono già allegati." if ha_file else ""))
-        inv_registra_condivisione(chiave, titolo, testo, pronti)
-        with st.container(key=f"invio_share_{chiave}"):
-            st.button("📤 Apri «Condividi»", key=f"invio_btn_share_{chiave}", type="primary", width="stretch")
-        st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
-        if ha_file:
-            st.caption("Se non si apre: torna al passo «Cosa vuoi fare?», scegli **Scaricarlo** e poi allegalo a mano nell'app con la graffetta 📎.")
-    elif canale == "email":
-        if not inv_email_pronta():
-            st.info("L'app non ha ancora una casella per spedire da sola (servono EMAIL_USER ed EMAIL_PASSWORD nei Secrets di Streamlit: la guida «Invio» spiega come). "
-                    "Intanto si apre **la tua posta** con il testo già scritto" + ("; i file allegali dopo averli scaricati." if ha_file else "."))
-            a = st.text_input("Indirizzo email di chi lo riceve (facoltativo)", key=f"inv_a_{chiave}")
-            st.link_button("✉️ Apri la mia posta", inv_link_mailto(a.strip(), oggetto, testo), width="stretch", type="primary")
-        else:
-            a = st.text_input("Indirizzo email di chi lo riceve (più indirizzi: separali con la virgola)", value=d_conto.get("avviso_email", ""), key=f"inv_a_{chiave}")
-            msg = st.text_area("Messaggio", value="Ti mando in allegato i documenti. " if ha_file else "Ecco il riepilogo.", key=f"inv_m_{chiave}", height=80)
-            scelti = [x for i, x in enumerate(pronti) if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{i}")]
-            if sum(len(x[2]) for x in scelti) > _MAX_ALLEGATI:
-                st.warning("I file scelti sono troppo pesanti per una sola email: togline qualcuno, oppure scaricali e mandali con un servizio per file grandi.")
-            if st.button("✉️ Invia l'email", type="primary", key=f"inv_si_{chiave}", width="stretch"):
-                ok, ko = inv_indirizzi(a)
-                if not ok:
-                    st.error("Scrivi un indirizzo email valido.")
-                elif ko:
-                    st.error("Indirizzo non valido: " + ", ".join(ko))
-                elif len(ok) > 5:
-                    st.error("Al massimo 5 indirizzi per volta.")
-                elif st.session_state.get("inv_n_email", 0) >= 20:
-                    st.error("Hai già mandato molte email in questa sessione: riapri l'app per continuare.")
-                else:
-                    with st.spinner("Invio in corso…"):
-                        esito, motivo = inv_invia_email(ok, oggetto, (msg.strip() + "\n\n" + testo)[:20000], scelti)
-                    if esito:
-                        st.session_state["inv_n_email"] = st.session_state.get("inv_n_email", 0) + 1
-                        st.success("✅ Email inviata a " + ", ".join(ok))
-                    else:
-                        st.error("Non sono riuscito a inviarla: " + motivo)
-    elif canale == "wa":
-        num_wa = st.text_input("Numero di chi lo riceve (facoltativo: con prefisso, senza +, es. 39333…)", key=f"inv_wa_{chiave}")
-        st.link_button("💬 Apri WhatsApp con il testo", inv_link_whatsapp(num_wa, testo), width="stretch", type="primary")
-        st.caption("Senza numero, WhatsApp ti fa scegliere la persona." + (" Va solo il testo: per mandare anche il file scegli «WhatsApp, Telegram, Gmail…» nel riquadro verde." if ha_file else ""))
-    elif canale == "tg":
-        chat = str(d_conto.get("telegram_chat_id") or "").strip()
-        if not inv_segreto("TELEGRAM_TOKEN"):
-            st.info("Per mandare i file nella tua chat Telegram serve TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): la guida «Invio» spiega come. "
-                    "Intanto scegli «WhatsApp, Telegram, Gmail o un'altra app» e poi Telegram.")
-        elif not chat:
-            st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» in Salute, poi torna qui.")
-        else:
-            st.caption("Testo e file arrivano nella **tua** chat con il bot dell'app: da lì li inoltri a chi vuoi.")
-            if st.button("✈️ Mandami tutto su Telegram", type="primary", key=f"inv_tg_{chiave}", width="stretch"):
-                with st.spinner("Invio in corso…"):
-                    esito, motivo = inv_invia_telegram(chat, testo, pronti)
-                st.success("✅ Inviato: guarda Telegram.") if esito else st.error("Non sono riuscito a inviarlo: " + motivo)
-    elif canale == "sms":
-        num2 = st.text_input("Numero di chi lo riceve (facoltativo)", key=f"inv_sms_{chiave}")
-        st.link_button("📱 Apri i messaggi con il testo", inv_link_sms(num2, testo), width="stretch", type="primary")
-        st.caption("Gli SMS sono brevi: va solo l'inizio del testo.")
-    else:
-        st.caption("Tocca l'icona in alto a destra del riquadro per copiare, poi incolla dove vuoi.")
-        st.code(testo, language=None, wrap_lines=True)
-
+        st.markdown("<style>div[class*='st-key-invg_solo_']{border:2px solid #4aa3ff !important;border-radius:16px !important;background:rgba(74,163,255,.08) !important;padding:10px 12px !important}</style>"
+                    + _INV_CSS_PULSA, unsafe_allow_html=True)
+        with st.container(key=f"invg_solo_{chiave}"):
+            canale = st.radio("Con cosa lo mandi?", list(tutti), format_func=lambda k: tutti[k], key=f"inv_can_{chiave}", label_visibility="collapsed")
+            _azione(canale)
 
 def inv_voce(chiave, etichetta, titolo, testo, carica_allegati):
     """Il tasto «Invia» di una singola voce (documento, medicinale, prescrizione, visita): apre i canali con i suoi file allegati."""
