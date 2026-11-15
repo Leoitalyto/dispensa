@@ -10,11 +10,16 @@ from datetime import datetime
 import streamlit as st
 
 OST_MESI = ["GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"]
-# riga del foglio mensile → chiave, con il pezzo di testo che DEVE trovarsi nell'etichetta (controllo di sicurezza sul formato)
-OST_RIGHE = {50: ("lavorabili", "lavorabili usate"), 51: ("lorde", "lorde"), 52: ("assenza", "assenza"), 53: ("straord", "straordinario"),
-             54: ("ore_ord", "20%"), 55: ("ore_fest", "festivo"), 56: ("ore_nott", "notturno"), 57: ("ore_nottfest", "notturno festivo"),
-             58: ("paga", "paga oraria"), 59: ("imp_ord", "20%"), 60: ("imp_fest", "festivo"), 61: ("imp_nott", "notturno"), 62: ("imp_nottfest", "notturno festivo"),
-             63: ("tot_str", "totale"), 64: ("base", "base"), 65: ("lordo", "lorda prevista"), 67: ("netto", "netto")}
+# voce → inizio dell'etichetta (colonna A del foglio mensile) da cercare nel blocco «STRAORDINARIO E PREVISIONE STIPENDIO»; il valore e' nella colonna F.
+# Si cerca per etichetta (non per numero di riga): cosi' vale per il modulo con le righe piu' in basso e anche per la vecchia versione.
+OST_ETICHETTE = [("lavorabili", ("ore lavorabili usate",)), ("lorde", ("ore lavorate lorde",)), ("assenza", ("ore di assenza",)), ("straord", ("ore di straordinario",)),
+                 ("ore_ord", ("straordinario al 20%",)), ("ore_fest", ("straordinario festivo diurno",)), ("ore_nott", ("lavoro notturno (feriale)",)),
+                 ("ore_nottfest", ("lavoro notturno festivo",)), ("paga", ("paga oraria base",)), ("imp_ord", ("importo straordinario 20%",)),
+                 ("imp_fest", ("importo straordinario festivo",)), ("imp_nott", ("importo lavoro notturno 33%",)), ("imp_nottfest", ("importo lavoro notturno festivo",)),
+                 ("tot_str", ("totale straordinario",)), ("base", ("retribuzione mensile fissa", "retribuzione base")), ("lordo", ("retribuzione lorda prevista",)),
+                 ("netto", ("stipendio netto previsto",))]
+OST_ETICHETTE_NUOVE = [("detrazione", ("detrazione ore",)), ("p104", ("permessi legge 104 pagati",)), ("vestiario", ("indennità lavoro vestito", "indennita lavoro vestito")),
+                       ("pasti", ("buoni pasto",))]                       # solo nel modulo nuovo (assenti nel vecchio)
 
 
 OST_ASSENZE = ["Perm. legge 104", "Ferie", "Mutua", "Infortunio", "Visita medica", "Perm. retribuiti", "Perm. non retrib."]
@@ -45,16 +50,25 @@ def ost_leggi(dati):
     for m in OST_MESI:
         ws = wb[m]
         riga = {"nome": m}
-        sp = 0                                  # il blocco puo' stare piu' in basso (es. modulo con le «ore protette»): lo cerco dal titolo
-        for rr in range(40, 90):
+        inizio = None
+        for rr in range(40, 100):
             if str(ws.cell(rr, 1).value or "").upper().startswith("STRAORDINARIO E PREVISIONE"):
-                sp = rr - 48
+                inizio = rr
                 break
-        for r0, (k, pezzo) in OST_RIGHE.items():
-            r = r0 + sp
-            et = str(ws.cell(r, 1).value or "").lower()
-            if pezzo not in et:
-                return None, f"Il foglio {m} non ha il blocco «previsione stipendio» (riga {r}). Carica il modulo ORE_LAVORO aggiornato con le nuove formule."
+        if inizio is None:
+            return None, f"Il foglio {m} non ha il blocco «previsione stipendio». Carica il modulo ORE_LAVORO aggiornato con le nuove formule."
+        etichette = {}
+        for rr in range(inizio + 1, inizio + 36):
+            et = str(ws.cell(rr, 1).value or "").strip().lower()
+            if et and et not in etichette:
+                etichette[et] = rr
+        for k, inizi in OST_ETICHETTE + OST_ETICHETTE_NUOVE:
+            r = next((rr for et, rr in etichette.items() if any(et.startswith(i) for i in inizi)), None)
+            if r is None:
+                if (k, inizi) in OST_ETICHETTE:
+                    return None, f"Il foglio {m} non ha la riga «{inizi[0]}» della previsione. Carica il modulo ORE_LAVORO aggiornato con le nuove formule."
+                riga[k] = None
+                continue
             riga[k] = _ost_n(ws.cell(r, 6).value)
         conti = {}
         for r in range(7, 38):
@@ -210,8 +224,12 @@ def ost_pagina(c):
              ("Ore lavorate lorde (senza pausa)", f"{m['lorde']:.2f}" if m.get("lorde") is not None else "—"),
              ("Ore di assenza", f"{m['assenza']:.2f}" if m.get("assenza") is not None else "—"),
              ("Ore di straordinario", f"{m['straord']:.2f}" if m.get("straord") is not None else "—"),
-             ("Retribuzione base", _ost_eur(m.get("base"))),
-             *([("   di cui permessi Legge 104 (retribuiti)", f"{h104:.2f} h · {_ost_eur(round(h104 * (m.get('paga') or 0), 2))}")] if h104 else []),
+             ("Retribuzione mensile fissa" if m.get("detrazione") is not None else "Retribuzione base", _ost_eur(m.get("base"))),
+             *([("Detrazione ore (permessi 104 e non retribuiti)", _ost_eur(m.get("detrazione"))),
+                ("Permessi Legge 104 pagati" + (f" ({h104:.2f} h)" if h104 else ""), _ost_eur(m.get("p104"))),
+                ("Indennità lavoro vestito", _ost_eur(m.get("vestiario"))),
+                ("Buoni pasto", _ost_eur(m.get("pasti")))] if m.get("detrazione") is not None else
+               ([("   di cui permessi Legge 104 (retribuiti)", f"{h104:.2f} h · {_ost_eur(round(h104 * (m.get('paga') or 0), 2))}")] if h104 else [])),
              ("Straordinario 20%", f"{m.get('ore_ord') or 0:.2f} h · {_ost_eur(m.get('imp_ord'))}"),
              ("Straordinario festivo 65%", f"{m.get('ore_fest') or 0:.2f} h · {_ost_eur(m.get('imp_fest'))}"),
              ("Lavoro notturno 33%", f"{m.get('ore_nott') or 0:.2f} h · {_ost_eur(m.get('imp_nott'))}"),
@@ -222,7 +240,7 @@ def ost_pagina(c):
         og = ris["par"].get("ore_assenza") or {}
         righe_ass = [(("🩺 " if t == "Perm. legge 104" else "🏖️ " if t == "Ferie" else "📌 ") + t,
                       f"{n} giorn{'o' if n == 1 else 'i'}" + (f" · {n * og.get(t, 0):.2f} ore" if og.get(t) else " · ore dagli orari")) for t, n in gg.items()]
-        st.markdown("**Assenze e permessi scritti nel mese** (pagati come ore normali: sono dentro la retribuzione base)")
+        st.markdown("**Assenze e permessi scritti nel mese** (i permessi 104 sono pagati con la loro paga, le altre assenze dentro la paga fissa)")
         st.markdown("<table style='width:100%;border-collapse:collapse;font-size:.92rem;color:#1b2b2b;background:rgba(255,255,255,.82);border-radius:12px;overflow:hidden'>"
                     + "".join(f"<tr style='border-bottom:1px solid #0001'><td style='padding:6px 9px'>{_ost_html.escape(a)}</td><td style='text-align:right;padding:6px 9px;font-weight:700'>{_ost_html.escape(b)}</td></tr>" for a, b in righe_ass)
                     + "</table>", unsafe_allow_html=True)

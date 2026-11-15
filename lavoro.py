@@ -234,7 +234,19 @@ def _lv_a_mano(modo, etichetta):
 
 
 _LV_CSS_SEZ = """<style>
-.st-key-lv_sezione button{border-radius:999px !important;font-weight:800 !important;min-height:2.6rem}
+.st-key-lv_hub[data-testid='stVerticalBlock'],.st-key-lv_hub [data-testid='stVerticalBlock']{display:grid !important;grid-template-columns:1fr 1fr;gap:9px !important;margin:6px 0 12px}
+.st-key-lv_hub button{width:100% !important;min-height:78px !important;border-radius:20px !important;color:#fff !important;font-weight:900 !important;border:2px solid rgba(255,255,255,.55) !important;
+ box-shadow:0 4px 0 rgba(0,0,0,.25) !important;padding:8px !important}
+.st-key-lv_hub button p{color:#fff !important;font-weight:900 !important;font-size:1.02rem !important;line-height:1.2 !important;text-shadow:0 1px 3px rgba(0,0,0,.55);margin:0}
+.st-key-lv_b_0 button{background:linear-gradient(135deg,#1b5e20,#66bb6a) !important}
+.st-key-lv_b_1 button{background:linear-gradient(135deg,#0d47a1,#42a5f5) !important}
+.st-key-lv_b_2 button{background:linear-gradient(135deg,#e65100,#ffb74d) !important}
+.st-key-lv_b_3 button{background:linear-gradient(135deg,#4a148c,#ab47bc) !important}
+.st-key-lv_b_4 button{background:linear-gradient(135deg,#006064,#26c6da) !important}
+.st-key-lv_b_5 button{background:linear-gradient(135deg,#880e4f,#ec407a) !important}
+.st-key-lv_b_6 button{background:linear-gradient(135deg,#f57f17,#ffd54f) !important}
+.st-key-lv_b_7 button{background:linear-gradient(135deg,#37474f,#90a4ae) !important}
+.st-key-lv_b_6 button p{color:#3e2723 !important;text-shadow:none}
 </style>"""
 
 
@@ -774,11 +786,21 @@ def schermata_lavoro():
         return
     voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato"]
     st.markdown(_LV_CSS_SEZ, unsafe_allow_html=True)
-    if hasattr(st, "pills"):
-        scelta = st.pills("Che cosa vuoi vedere?", voci, default=voci[0], key="lv_sezione", label_visibility="collapsed")
-    else:
-        scelta = st.radio("Che cosa vuoi vedere?", voci, horizontal=True, key="lv_sezione", label_visibility="collapsed")
-    scelta = scelta or voci[0]
+    scelta = st.session_state.get("lv_sezione")
+    if scelta not in voci:
+        scelta = None
+        st.session_state["lv_sezione"] = None
+    if scelta is None:                                      # la schermata dei pulsanti grandi colorati, come in Amministrazione
+        st.subheader("💼 Che cosa vuoi vedere?")
+        with st.container(key="lv_hub"):
+            for i, et in enumerate(voci):
+                if st.button(et, key=f"lv_b_{i}", width="stretch"):
+                    st.session_state["lv_sezione"] = et
+                    st.rerun()
+        return
+    if st.button("← Torna a Lavoro", key="lv_indietro", width="stretch"):
+        st.session_state["lv_sezione"] = None
+        st.rerun()
     if scelta == voci[0]:
         lv_tab_buste(c)
     elif scelta == voci[1]:
