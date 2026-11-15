@@ -400,6 +400,7 @@ for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interatt
     _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica_sicuro(_percorso)
+_carica_sicuro(os.path.join(_cartella, "guida_completa.py"))   # guida e frasi nuove nelle 7 lingue: DOPO lingue*.py, che riscrivono i dizionari
 try:
     for _nome in ("parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
         _carica_sicuro(os.path.join(_cartella, _nome))
