@@ -131,6 +131,16 @@ if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
 _AGGANCI = {
+    "parte3.py": [
+        # la lingua scelta a mano nella pagina di accesso resta anche dopo l'ingresso (prima veniva sostituita da quella salvata) e si salva nel profilo
+        ('    if (salvata or iniziale) in LINGUE:\n        st.session_state["lang"] = salvata or iniziale\n',
+         '    if st.session_state.get("_vmi_scelta") and st.session_state.get("lang") in LINGUE:\n'
+         '        if accesso["uid"] != "prova" and (salvata or iniziale) != st.session_state["lang"]:\n'
+         '            try:\n                salva(lambda d: d.__setitem__("lingua", st.session_state["lang"]), "Lingua")\n            except Exception:\n                pass\n'
+         '    elif (salvata or iniziale) in LINGUE:\n        st.session_state["lang"] = salvata or iniziale\n'),
+        ('    if scelta != attuale:\n        st.session_state["lang"] = scelta\n',
+         '    if scelta != attuale:\n        st.session_state["lang"] = scelta\n        st.session_state["_vmi_scelta"] = True\n'),
+    ],
     "vitamemo.py": [
         # schermata iniziale nella lingua (vitamemo_lingua.py): nome letto dallo schermo e riga «Ciao, nome…»
         ('etichetta = nome + (f": {n} " + ("avviso" if n == 1 else "avvisi") if n else "") + (" (non disponibile)" if spenta else "")',
