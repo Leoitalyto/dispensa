@@ -710,6 +710,46 @@ def lv_tab_inps(c):
                     _ca_riga_documento(d, {}, "lvinps", docs)
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# 🏢 PORTALE E POSTA DELL'AZIENDA: i collegamenti ai siti dell'azienda (webmail, buste paga, CU…), si aprono con un tocco
+# ---------------------------------------------------------------------------------------------------------------------
+def lv_tab_portale(c):
+    st.markdown("#### 🏢 Portale e posta dell'azienda")
+    st.caption("Qui tieni i **collegamenti** ai siti della tua azienda (la posta, il portale delle buste paga e delle Certificazioni Uniche…). "
+               "Con un tocco si aprono in una nuova scheda: lì entri con il tuo nome utente e la tua password.")
+    st.warning("🔒 In quest'app **non scrivere mai la password**: serve solo l'indirizzo del sito. Per non riscriverla ogni volta, nella pagina di accesso spunta «Ricordami» "
+               "e lascia che Chrome la salvi.")
+    voci = [v for v in (c.get("portali_lavoro") or []) if isinstance(v, dict) and cc_url(v.get("link"))]
+    if not voci:
+        st.info("Ancora nessun collegamento. Aggiungine uno qui sotto.")
+    for i, v in enumerate(voci):
+        a, b = st.columns([5, 1], vertical_alignment="center")
+        a.link_button("🔗 " + (v.get("nome") or "Sito dell'azienda"), cc_url(v["link"]), type="primary", width="stretch", key=f"lv_por_a{i}")
+        if b.button("🗑️", key=f"lv_por_d{i}", help="Togli questo collegamento"):
+            _ca_salva(lambda cc, k=i: cc.__setitem__("portali_lavoro", [x for j, x in enumerate([y for y in (cc.get("portali_lavoro") or []) if isinstance(y, dict) and cc_url(y.get("link"))]) if j != k]), "Lavoro: tolto un portale")
+            st.session_state["messaggio"] = "✅ Collegamento tolto."
+            st.rerun()
+        if v.get("nota"):
+            st.caption("📝 " + v["nota"])
+    with st.expander("➕ Aggiungi un collegamento", expanded=not voci):
+        st.caption("Apri il sito nel browser, tocca la barra dell'indirizzo, **copia** il link e **incollalo** qui sotto.")
+        nome = st.text_input("Nome (come lo vuoi vedere)", placeholder="es. Posta dell'azienda, Buste paga e CU", key="lv_por_n")
+        link = st.text_input("Indirizzo del sito", placeholder="es. https://webmail.merak.coop", key="lv_por_l")
+        nota = st.text_input("Nota (facoltativa, senza password)", placeholder="es. nome utente: il mio indirizzo email", key="lv_por_t")
+        if st.button("💾 Salva il collegamento", key="lv_por_s", width="stretch", type="primary"):
+            u = cc_url(link)
+            if not u:
+                st.error("Scrivi l'indirizzo del sito (per esempio webmail.merak.coop).")
+            else:
+                reg = {"nome": nome.strip() or "Sito dell'azienda", "link": u, "nota": nota.strip()}
+                _ca_salva(lambda cc, r=reg: cc.setdefault("portali_lavoro", []).append(r), "Lavoro: nuovo portale")
+                st.session_state["messaggio"] = "✅ Collegamento salvato."
+                st.rerun()
+    st.markdown("#### 📎 Buste paga e Certificazioni Uniche scaricate")
+    st.info("Dal portale **scarica il PDF**, poi caricalo in **💶 Buste paga** o in **📑 Certificazione Unica**: l'app legge i dati e li mette in ordine. "
+            "Una mail importante puoi salvarla in PDF e caricarla come documento.")
+
+
 def schermata_lavoro():
     """La pagina «Lavoro»."""
     if "nav_barra" in globals():
@@ -732,7 +772,7 @@ def schermata_lavoro():
     except Exception as ex:
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
-    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🤝 Sindacato · CAF · Patronato"]
+    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🤝 Sindacato · CAF · Patronato"]
     st.markdown(_LV_CSS_SEZ, unsafe_allow_html=True)
     if hasattr(st, "pills"):
         scelta = st.pills("Che cosa vuoi vedere?", voci, default=voci[0], key="lv_sezione", label_visibility="collapsed")
@@ -747,6 +787,8 @@ def schermata_lavoro():
         lv_tab_cu(c)
     elif scelta == voci[3]:
         lv_tab_inps(c)
+    elif scelta == voci[4]:
+        lv_tab_portale(c)
     else:
         lv_tab_contatti(c)
 
@@ -802,11 +844,15 @@ Le vedi **a schede** (una per anno) o **in tabella**, con il **grafico** e il co
          """Scegli **🏛️ INPS**. Il tasto **🔗 Apri la mia pagina INPS** ti porta alla tua pagina: la prima volta apri **✏️ Scrivi o cambia il link**, incolla l'indirizzo della tua pagina e salva. **Non si scrivono mai password o PIN.**
 Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISEE, domande…): li carichi, li **vedi**, li **scarichi**, li **invii** o li **elimini**. Si vedono a elenco per tipo o **in tabella**.""", "inps pagina link documenti estratto conto contributivo isee pensione spid"),
     ])
-    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps"])
+    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps", "l_portale"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("lavoro", "l_cosa")
     _lv_guida_aggiungi("lavoro", [
         ("l_lavori", "💼 Più lavori (principale e secondari)", """Nelle **💶 Buste paga** e in **📊 Anno per anno** apri **➕ Aggiungi un altro lavoro** (secondo lavoro, collaborazione…): dai un nome e, se vuoi, il datore. Da quel momento in alto compaiono le **pillole**: **Tutti i lavori**, **Lavoro principale** e gli altri. Ogni busta ha il suo lavoro («Di quale lavoro è»). Nei grafici vedi un lavoro alla volta oppure **tutti insieme**, con il netto di ognuno anno per anno.""", "lavori secondo lavoro secondario collaborazione piu lavori"),
+    ])
+    _lv_guida_aggiungi("lavoro", [
+        ("l_portale", "🏢 Portale e posta dell'azienda", """Scegli **🏢 Portale e posta**. Qui tieni i **collegamenti** ai siti della tua azienda (la posta, il portale delle buste paga e delle Certificazioni Uniche…): apri **➕ Aggiungi un collegamento**, scrivi un nome e incolla l'indirizzo del sito. Poi basta un tocco su **🔗** e il sito si apre in una nuova scheda, dove entri con il tuo nome utente e la tua password. **In quest'app non si scrive mai la password.**
+Dal portale scarichi la busta paga o la CU in PDF e la carichi in **💶 Buste paga** o **📑 Certificazione Unica**.""", "portale posta azienda webmail email busta paga collegamento sito"),
     ])
     _lv_guida_aggiungi("dispensa", [
         ("h_radio", "🎧 La radio di sottofondo", """Sul bordo sinistro dello schermo c'è la **linguetta 🎧**. Toccala: si apre il pannello. Scegli una stazione **lounge e chill** già pronta, oppure **cerca tra migliaia di radio** (per nome o per genere: Lounge, Jazz, Classica…). Hai **▶ ⏸ ⏹**, il **volume**, le **★ preferite**, l'**equalizzatore** (bassi, medi, alti) e lo **spettro**. La musica **resta accesa in tutte le sezioni**. Il primo ascolto parte solo dopo un tuo tocco. Alcune radio non permettono equalizzatore e spettro: il pannello lo dice. Si nasconde da **Utilità → Aspetto dell'app**.""", "radio musica sottofondo lounge equalizzatore volume spettro"),
