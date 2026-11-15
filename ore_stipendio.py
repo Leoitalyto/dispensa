@@ -17,6 +17,9 @@ OST_RIGHE = {50: ("lavorabili", "lavorabili usate"), 51: ("lorde", "lorde"), 52:
              63: ("tot_str", "totale"), 64: ("base", "base"), 65: ("lordo", "lorda prevista"), 67: ("netto", "netto")}
 
 
+OST_ASSENZE = ["Perm. legge 104", "Ferie", "Mutua", "Infortunio", "Visita medica", "Perm. retribuiti", "Perm. non retrib."]
+
+
 def _ost_n(v):
     try:
         return float(v)
@@ -47,6 +50,14 @@ def ost_leggi(dati):
             if pezzo not in et:
                 return None, f"Il foglio {m} non ha il blocco «previsione stipendio» (riga {r}). Carica il modulo ORE_LAVORO aggiornato con le nuove formule."
             riga[k] = _ost_n(ws.cell(r, 6).value)
+        conti = {}
+        for r in range(7, 38):
+            if ws.cell(r, 1).value in (None, ""):
+                continue
+            visti = {str(ws.cell(r, col).value).strip() for col in (4, 7) if ws.cell(r, col).value}
+            for et in visti & set(OST_ASSENZE):
+                conti[et] = conti.get(et, 0) + 1
+        riga["assenze_giorni"] = conti
         riga["ore_lavorate"] = _ost_n(ws["A41"].value)
         riga["giorni"] = _ost_n(ws["A42"].value)
         if riga["lordo"] is not None:
@@ -54,6 +65,14 @@ def ost_leggi(dati):
         mesi.append(riga)
     p = wb["Parametri"]
     par = {"paga": _ost_n(p["B14"].value), "trattenute": _ost_n(p["B16"].value), "ore_sett": _ost_n(p["B4"].value)}
+    ore_g = {}
+    for r in range(4, 11):
+        nome_a = str(p.cell(r, 5).value or "").strip()
+        if nome_a:
+            ore_g[nome_a] = _ost_n(p.cell(r, 6).value) or 0.0
+    par["ore_assenza"] = ore_g
+    for riga in mesi:                       # ore delle assenze a giornata intera, secondo la tabella dei Parametri
+        riga["assenze_ore_attese"] = sum(g * ore_g.get(t, 0.0) for t, g in riga["assenze_giorni"].items())
     try:
         anno = int(wb["GENNAIO"]["O1"].value)
     except (TypeError, ValueError):
@@ -155,7 +174,7 @@ def ost_pagina(c):
     mesi = ris["mesi"]
     oggi_ = datetime.now()
     idx_def = max(0, min(11, oggi_.month - 1))
-    attivi = [i for i, m in enumerate(mesi) if (m.get("ore_lavorate") or 0) > 0 or (m.get("assenza") or 0) > 0]
+    attivi = [i for i, m in enumerate(mesi) if (m.get("ore_lavorate") or 0) > 0 or (m.get("assenza") or 0) > 0 or m.get("assenze_giorni")]
     if attivi and (idx_def not in attivi or (ris["anno"] and ris["anno"] != oggi_.year)):
         idx_def = attivi[-1]                                                     # il mese corrente è ancora vuoto: si parte dall'ultimo mese compilato
     scelta = st.selectbox("Mese", [m["nome"].capitalize() for m in mesi], index=idx_def, key="ost_mese")
@@ -178,7 +197,7 @@ def ost_pagina(c):
         st.caption("Per vedere anche il **netto** serve una stima delle trattenute: carica le tue buste paga in **💶 Buste paga**, oppure scrivi la percentuale nel foglio «Parametri» del modulo (cella «Trattenute stimate»).")
     elif origine:
         st.caption(f"Netto calcolato {origine}. È una stima: la busta reale può differire.")
-    if (m.get("ore_lavorate") or 0) == 0 and (m.get("assenza") or 0) == 0:
+    if (m.get("ore_lavorate") or 0) == 0 and (m.get("assenza") or 0) == 0 and not (m.get("assenze_giorni") or {}):
         st.info("In questo mese non è ancora stato scritto nessun orario: la previsione comprende solo la retribuzione base. Compila il modulo e ricaricalo.")
     righe = [("Ore lavorabili del mese", f"{m['lavorabili']:.2f}" if m.get("lavorabili") is not None else "—"),
              ("Ore lavorate lorde (senza pausa)", f"{m['lorde']:.2f}" if m.get("lorde") is not None else "—"),
@@ -190,6 +209,18 @@ def ost_pagina(c):
              ("Lavoro notturno 33%", f"{m.get('ore_nott') or 0:.2f} h · {_ost_eur(m.get('imp_nott'))}"),
              ("Lavoro notturno festivo 75%", f"{m.get('ore_nottfest') or 0:.2f} h · {_ost_eur(m.get('imp_nottfest'))}"),
              ("Totale straordinario e notturno", _ost_eur(m.get("tot_str")))]
+    gg = m.get("assenze_giorni") or {}
+    if gg:
+        og = ris["par"].get("ore_assenza") or {}
+        righe_ass = [(("🩺 " if t == "Perm. legge 104" else "🏖️ " if t == "Ferie" else "📌 ") + t,
+                      f"{n} giorn{'o' if n == 1 else 'i'}" + (f" · {n * og.get(t, 0):.2f} ore" if og.get(t) else " · ore dagli orari")) for t, n in gg.items()]
+        st.markdown("**Assenze e permessi scritti nel mese** (pagati come ore normali: sono dentro la retribuzione base)")
+        st.markdown("<table style='width:100%;border-collapse:collapse;font-size:.92rem;color:#1b2b2b;background:rgba(255,255,255,.82);border-radius:12px;overflow:hidden'>"
+                    + "".join(f"<tr style='border-bottom:1px solid #0001'><td style='padding:6px 9px'>{_ost_html.escape(a)}</td><td style='text-align:right;padding:6px 9px;font-weight:700'>{_ost_html.escape(b)}</td></tr>" for a, b in righe_ass)
+                    + "</table>", unsafe_allow_html=True)
+        if (m.get("assenza") or 0) + 0.01 < (m.get("assenze_ore_attese") or 0):
+            st.warning("⚠️ Nel modulo ci sono permessi o assenze, ma i calcoli non li comprendono: il file è stato modificato senza ricalcolare. "
+                       "Aprilo con **Excel** o **Fogli Google**, aspetta che i numeri si aggiornino, **salvalo** e caricalo di nuovo.")
     st.markdown("<table style='width:100%;border-collapse:collapse;font-size:.92rem;color:#1b2b2b;background:rgba(255,255,255,.82);border-radius:12px;overflow:hidden'>"
                 + "".join(f"<tr style='border-bottom:1px solid #0001'><td style='padding:6px 9px'>{_ost_html.escape(a)}</td><td style='text-align:right;padding:6px 9px;font-weight:700'>{_ost_html.escape(b)}</td></tr>" for a, b in righe)
                 + "</table>", unsafe_allow_html=True)
