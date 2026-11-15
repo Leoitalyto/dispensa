@@ -860,7 +860,7 @@ Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISE
 Dal portale scarichi la busta paga o la CU in PDF e la carichi in **💶 Buste paga** o **📑 Certificazione Unica**.""", "portale posta azienda webmail email busta paga collegamento sito"),
     ])
     _lv_guida_aggiungi("lavoro", [
-        ("l_controllo", "🧮 Controllo della busta paga", """Scegli **🧮 Controllo ore**. Carica il **foglio Excel delle ore** (quello con il calcolo del tuo contratto già dentro) e il **PDF della busta paga**: appena ci sono tutti e due compare il responso.
+        ("l_controllo", "🧮 Controllo della busta paga", """Scegli **🧮 Controllo ore**. Tocca il pulsante **📊 Scegli il foglio Excel delle ore** (quello con il calcolo del tuo contratto già dentro) e poi **📄 Scegli il PDF della busta paga**: il telefono mostra tutti i file. Appena ci sono tutti e due compare il responso.
 L'app confronta le **4 righe** di straordinario e lavoro notturno (straordinario 20%, festivo 65%, notturno 33%, notturno festivo 75%): ore della busta contro ore del foglio, tariffa e importo. In **euro** ti dice quanto va **a tuo vantaggio**, quanto **a tuo svantaggio** e il **saldo**, e spiega la causa di ogni differenza. Puoi **scaricare il responso**.
 I due file **non vengono salvati**. Se il PDF non viene letto bene, apri **⚙️ Solo se il PDF non viene letto** e scrivi paga oraria e ore lavorabili. È una stima: per chiedere una correzione confrontati con l'ufficio paghe o con il sindacato.""", "controllo busta paga excel ore straordinario notturno vantaggio svantaggio confronto"),
     ])

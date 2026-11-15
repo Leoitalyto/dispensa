@@ -3,6 +3,8 @@
 e dice, riga per riga (straordinario 20%, festivo 65%, notturno 33%, notturno festivo 75%), quanto la busta paga in più o in meno, in euro.
 È il programma «Controllo busta paga» (repository controllo-busta-paga) portato dentro l'app. I file NON vengono salvati: si leggono e basta.
 Serve pdfplumber e openpyxl (requirements.txt). Prefisso: cob_ / COB_."""
+import io
+import html as _cc_html
 import re
 import pandas as pd
 import streamlit as st
@@ -156,6 +158,75 @@ def cob_testo_pdf(pdf_file):
             return "\n".join(p.get_text() for p in doc)
 
 
+class _CobFile(io.BytesIO):
+    """Un file arrivato dal telefono: ha il nome e si legge come un file normale."""
+    def __init__(self, nome, dati):
+        super().__init__(dati)
+        self.name = nome
+
+
+def cob_carica_file():
+    """I due caricamenti (Excel e PDF). Sul telefono si usano i pulsanti arancioni (lo stesso sistema sicuro di Casa e Documenti, che porta il file
+    anche quando il selettore normale non lo fa); il selettore normale resta come riserva. Ritorna (file Excel, file PDF), ognuno None se manca."""
+    if "_CA_CSS_FOTO" in globals():
+        st.markdown(_CA_CSS_FOTO, unsafe_allow_html=True)
+    riserva = None
+    if "_ca_avvia_trasferimento" in globals():
+        with st.container(key="nascosti_cadoccob"):
+            riserva = st.file_uploader("canale2", key="fotopdf_cadoccob")
+        _ca_avvia_trasferimento()
+        ack_t, err_t = _ca_trasf_ricevi()
+        if riserva is not None:
+            ack_t = _cc_html.escape(f"upl:{riserva.name}:{riserva.size}", quote=True)
+        with st.container(key="ca_ricezione"):
+            st.text_input("ca-pdf-trasf", key="ca_trasf_in", label_visibility="collapsed")
+    arrivi = []
+    nuovo = st.session_state.pop("ca_bozza_in", None)                                  # il file portato dal pulsante arancione
+    if nuovo and nuovo.get("dati"):
+        arrivi.append((nuovo.get("nome") or "file", nuovo["dati"]))
+    if riserva is not None and st.session_state.get("cob_riserva_vista") != f"{riserva.name}{riserva.size}":
+        st.session_state["cob_riserva_vista"] = f"{riserva.name}{riserva.size}"
+        arrivi.append((riserva.name, riserva.getvalue()))
+    messaggio = ""
+    for nome, dati in arrivi:
+        n = nome.lower()
+        if n.endswith((".xlsx", ".xlsm")):
+            st.session_state["cob_x"] = (nome, dati)
+        elif n.endswith(".pdf") or dati[:4] == b"%PDF":
+            st.session_state["cob_p"] = (nome, dati)
+        else:
+            messaggio = f"Il file «{nome}» non è né un foglio Excel (.xlsx) né un PDF: non l'ho usato."
+    if "_ca_avvia_trasferimento" in globals():
+        st.markdown("<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='1' style='background:linear-gradient(135deg,#2e7d32,#00897b)'>📊 Scegli il foglio Excel delle ore</div>"
+                    "<div style='height:8px'></div>"
+                    "<div class='ca-pdf-btn' role='button' tabindex='0' data-ca-pdf='1'>📄 Scegli il PDF della busta paga</div>"
+                    f"<div class='ca-pdf-stato' data-ca-stato='1'>{'⚠️ ' + _cc_html.escape(err_t) if err_t else 'Tocca un pulsante e scegli il file: lo vedi tutto, anche se ha un nome strano.'}</div>"
+                    f"<span data-ca-ack='{ack_t}' style='display:none'></span>"
+                    "<pre data-ca-log='1' style='display:none'></pre>", unsafe_allow_html=True)
+    if messaggio:
+        st.warning(messaggio)
+    for chiave, et in (("cob_x", "📊 Foglio Excel"), ("cob_p", "📄 Busta paga PDF")):
+        c1, c2 = st.columns([5, 1], vertical_alignment="center")
+        if st.session_state.get(chiave):
+            nome, dati = st.session_state[chiave]
+            c1.success(f"{et}: **{nome}** ({max(1, len(dati) // 1024)} KB)")
+            if c2.button("✖", key=f"{chiave}_togli", help="Togli questo file"):
+                st.session_state.pop(chiave, None)
+                st.rerun()
+        else:
+            c1.info(f"{et}: ancora nessun file.")
+    with st.expander("Se i pulsanti non funzionano: caricamento normale"):
+        fx = st.file_uploader("Foglio Excel delle ore (.xlsx)", key="cob_xlsx")
+        fp = st.file_uploader("PDF della busta paga", key="cob_pdf")
+        for f, ch in ((fx, "cob_x"), (fp, "cob_p")):
+            if f is not None and st.session_state.get(ch + "_vista") != f"{f.name}{f.size}":
+                st.session_state[ch + "_vista"] = f"{f.name}{f.size}"
+                st.session_state[ch] = (f.name, f.getvalue())
+                st.rerun()
+    x, pd_ = st.session_state.get("cob_x"), st.session_state.get("cob_p")
+    return (_CobFile(*x) if x else None), (_CobFile(*pd_) if pd_ else None)
+
+
 def cob_pagina():
     """La voce «🧮 Controllo ore» del Lavoro."""
     st.markdown("#### 🧮 Controllo della busta paga")
@@ -166,8 +237,7 @@ def cob_pagina():
         paga_manuale = st.number_input("Paga oraria base (€)", value=13.22260, format="%.5f", key="cob_paga")
         lavorabili_manuale = st.number_input("Ore lavorabili del mese", value=0.0, step=0.5, key="cob_lav")
         soglia = st.number_input("Soglia settimanale (solo tabella informativa)", value=38.0, step=0.5, key="cob_soglia")
-    excel_file = st.file_uploader("1️⃣ Carica il file Excel delle ore (.xlsx)", key="cob_xlsx", help="Sul telefono si vedono tutti i file: scegli quello Excel, che finisce con .xlsx.")
-    pdf_file = st.file_uploader("2️⃣ Carica il PDF della busta paga", key="cob_pdf", help="Sul telefono si vedono tutti i file: scegli la busta paga, che finisce con .pdf.")
+    excel_file, pdf_file = cob_carica_file()
     if not (excel_file and pdf_file):
         st.caption("Quando hai caricato **tutti e due** i file compare qui sotto il responso.")
         return
