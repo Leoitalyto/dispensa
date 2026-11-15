@@ -50,7 +50,7 @@ def ih_css(sezione):
     uri = ih_uri(nome)
     if not uri:
         return ""
-    lato, lato_p = (110, 92) if sezione == "documenti" else (92, 76)          # l'icona dei documenti è alta e stretta: un po' più grande, così pesa come le altre
+    lato, lato_p = (150, 128) if sezione == "documenti" else (92, 76)          # l'icona dei documenti è alta e stretta: un po' più grande, così pesa come le altre
     return (f"<style>.{classe}{{display:grid !important;grid-template-columns:auto 1fr !important;column-gap:16px !important;align-items:center !important}}"
             f".{classe}::before{{content:'';grid-row:1 / span 2;width:{lato}px;height:{lato}px;background:url({uri}) center/contain no-repeat;filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))}}"
             f".{classe}>h1{{grid-column:2;grid-row:1;align-self:end}}.{classe}>p{{grid-column:2;grid-row:2;align-self:start}}"
