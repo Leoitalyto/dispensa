@@ -45,7 +45,13 @@ def ost_leggi(dati):
     for m in OST_MESI:
         ws = wb[m]
         riga = {"nome": m}
-        for r, (k, pezzo) in OST_RIGHE.items():
+        sp = 0                                  # il blocco puo' stare piu' in basso (es. modulo con le «ore protette»): lo cerco dal titolo
+        for rr in range(40, 90):
+            if str(ws.cell(rr, 1).value or "").upper().startswith("STRAORDINARIO E PREVISIONE"):
+                sp = rr - 48
+                break
+        for r0, (k, pezzo) in OST_RIGHE.items():
+            r = r0 + sp
             et = str(ws.cell(r, 1).value or "").lower()
             if pezzo not in et:
                 return None, f"Il foglio {m} non ha il blocco «previsione stipendio» (riga {r}). Carica il modulo ORE_LAVORO aggiornato con le nuove formule."
