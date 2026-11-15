@@ -572,19 +572,46 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fis
     # ---- con cosa e a chi
     st.warning("🔒 Stai per inviare **dati personali**: controlla bene a chi li mandi.")
     ha_file = bool(pronti)
-    canali = {}
-    if disp == "telefono":
-        canali["app"] = "📤 WhatsApp, Telegram, Gmail o un'altra app" + (" · con i file" if ha_file else "")
-    canali["email"] = "✉️ Email" + (" · con i file" if ha_file and inv_email_pronta() else "")
-    canali["wa"] = "💬 WhatsApp · solo il testo"
-    canali["tg"] = "✈️ Telegram, nella mia chat" + (" · con i file" if ha_file else "")
-    canali["sms"] = "📱 SMS · solo l'inizio del testo"
-    if disp != "telefono":
-        canali["app"] = "📤 Un'altra app del computer (se il programma lo permette)"
-    canali["copia"] = "📋 Copiare il testo"
     st.markdown(f"**{num()} Con cosa lo mandi?**")
-    canale = st.radio("Con cosa lo mandi?", list(canali), format_func=lambda k: canali[k], key=f"inv_can_{chiave}", label_visibility="collapsed")
     passo += 1
+    k_f, k_t = f"inv_canf_{chiave}", f"inv_cant_{chiave}"
+    testo_g = {"wa": "💬 WhatsApp", "sms": "📱 SMS (solo l'inizio del testo)", "copia": "📋 Copiare il testo"}
+    if ha_file:                                                   # due riquadri: CON IL FILE (verde, consigliato) e SOLO IL TESTO (arancione). Se ne sceglie uno solo fra tutti e due.
+        nome_f = "il file" if len(pronti) == 1 else "i file"
+        file_g = {"app": ("💬 WhatsApp, Telegram, Gmail o un'altra app" if disp == "telefono" else "📤 Un'altra app del computer (se il programma lo permette)"),
+                  "email": "✉️ Email", "tg": "✈️ Telegram, nella mia chat"}
+        if disp != "telefono":
+            file_g = {"email": file_g["email"], "tg": file_g["tg"], "app": file_g["app"]}
+        if not inv_email_pronta():                                # senza la casella dell'app l'email porta solo il testo
+            testo_g = {"wa": testo_g["wa"], "email": "✉️ Email (si apre la tua posta)", "sms": testo_g["sms"], "copia": testo_g["copia"]}
+            file_g.pop("email")
+        if st.session_state.get(k_f) not in file_g and st.session_state.get(k_t) not in testo_g:
+            st.session_state[k_f], st.session_state[k_t] = next(iter(file_g)), None
+        st.markdown("<style>div[class*='st-key-invg_file_']{border:2px solid #2ecc71 !important;border-radius:16px !important;background:rgba(46,204,113,.09) !important;padding:10px 12px !important}"
+                    "div[class*='st-key-invg_testo_']{border:2px solid #f5a623 !important;border-radius:16px !important;background:rgba(245,166,35,.08) !important;padding:10px 12px !important}"
+                    ".invg-t{font-weight:800;font-size:.95rem;margin:0 0 2px}.invg-t.f{color:#57e39a}.invg-t.t{color:#ffc061}</style>", unsafe_allow_html=True)
+
+        def _scelto(questo, altro):
+            if st.session_state.get(questo) is not None:
+                st.session_state[altro] = None
+        with st.container(key=f"invg_file_{chiave}"):
+            st.markdown(f"<div class='invg-t f'>📎 CON {nome_f.upper()} · consigliato</div>", unsafe_allow_html=True)
+            st.radio("Con il file", list(file_g), format_func=lambda k: file_g[k], index=None, key=k_f, label_visibility="collapsed", on_change=_scelto, args=(k_f, k_t))
+        with st.container(key=f"invg_testo_{chiave}"):
+            st.markdown("<div class='invg-t t'>✍️ SOLO IL TESTO · senza " + nome_f + "</div>", unsafe_allow_html=True)
+            st.radio("Solo il testo", list(testo_g), format_func=lambda k: testo_g[k], index=None, key=k_t, label_visibility="collapsed", on_change=_scelto, args=(k_t, k_f))
+        canale = st.session_state.get(k_f) or st.session_state.get(k_t)
+        if canale == "email" and "email" in testo_g:
+            canale = "email"
+    else:                                                         # non ci sono file: è tutto testo, un riquadro solo
+        tutti = {"app": ("📤 WhatsApp, Telegram, Gmail o un'altra app" if disp == "telefono" else "📤 Un'altra app del computer"), "email": "✉️ Email", "wa": "💬 WhatsApp (a un numero)",
+                 "tg": "✈️ Telegram, nella mia chat", "sms": testo_g["sms"], "copia": testo_g["copia"]}
+        if disp != "telefono":
+            tutti = {k: tutti[k] for k in ("email", "wa", "tg", "sms", "copia", "app")}
+        canale = st.radio("Con cosa lo mandi?", list(tutti), format_func=lambda k: tutti[k], key=f"inv_can_{chiave}", label_visibility="collapsed")
+    if not canale:
+        st.caption("Scegli una voce qui sopra.")
+        return
     st.markdown(f"**{num()} A chi**" if canale in ("email", "wa", "sms") else f"**{num()} Invia**")
 
     if canale == "app":
@@ -628,12 +655,12 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fis
     elif canale == "wa":
         num_wa = st.text_input("Numero di chi lo riceve (facoltativo: con prefisso, senza +, es. 39333…)", key=f"inv_wa_{chiave}")
         st.link_button("💬 Apri WhatsApp con il testo", inv_link_whatsapp(num_wa, testo), width="stretch", type="primary")
-        st.caption("Senza numero, WhatsApp ti fa scegliere la persona. " + ("Va solo il testo: per mandare anche i file scegli la prima voce («…o un'altra app»)." if ha_file else ""))
+        st.caption("Senza numero, WhatsApp ti fa scegliere la persona." + (" Va solo il testo: per mandare anche il file scegli «WhatsApp, Telegram, Gmail…» nel riquadro verde." if ha_file else ""))
     elif canale == "tg":
         chat = str(d_conto.get("telegram_chat_id") or "").strip()
         if not inv_segreto("TELEGRAM_TOKEN"):
             st.info("Per mandare i file nella tua chat Telegram serve TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): la guida «Invio» spiega come. "
-                    "Intanto scegli la prima voce («…o un'altra app») e poi Telegram.")
+                    "Intanto scegli «WhatsApp, Telegram, Gmail o un'altra app» e poi Telegram.")
         elif not chat:
             st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» in Salute, poi torna qui.")
         else:
