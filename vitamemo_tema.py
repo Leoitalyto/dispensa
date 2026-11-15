@@ -138,7 +138,7 @@ VM_JS_CONTRASTO = r"""(function(){
    while(wk.nextNode()){
     var n=wk.currentNode, t=(n.nodeValue||'').trim(); if(t.length<1) continue;
     var el=n.parentElement; if(!el||visti.has(el)) continue; visti.add(el);
-    if(el.closest('script,style,noscript,svg,iframe,option,.st-key-vm_home,#asst-pan,#asst-btn,[data-testid=stToolbar],[data-testid=stHeader]')) continue;
+    if(el.closest('script,style,noscript,svg,iframe,option,.st-key-vm_home,#asst-pan,#asst-btn,[data-testid=stToolbar],[data-testid=stHeader],.st-key-nav_pagine')) continue;
     if(/^[←-⯿\u{1F000}-\u{1FFFF}\s️‍]+$/u.test(t)) continue;
     var cs=getComputedStyle(el); if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity)<.3) continue;
     if(/material|icon/i.test(cs.fontFamily||'')) continue;
@@ -146,7 +146,7 @@ VM_JS_CONTRASTO = r"""(function(){
     var col=P(cs.color); if(!col||col[3]<.3) continue;
     var fill=P(cs.webkitTextFillColor); if(fill&&fill[3]<.3) continue; if(fill) col=fill;
     var bgs=campioni(el); if(!bgs||!bgs.length) continue;
-    var ora=peggio(col,bgs); if(ora>=3.6) continue;
+    var ora=peggio(col,bgs), lim=3.6, ts=cs.textShadow; if(ts&&ts!=='none'&&col[0]>225&&col[1]>225&&col[2]>225) lim=2.0; if(ora>=lim) continue;
     var a=peggio(SCURO,bgs), b=peggio(CHIARO,bgs), nuovo=a>=b?SCURO:CHIARO, megl=Math.max(a,b);
     if(megl<=ora+.5) continue;
     var v='rgb('+nuovo[0]+','+nuovo[1]+','+nuovo[2]+')';
