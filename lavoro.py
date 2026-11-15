@@ -772,7 +772,7 @@ def schermata_lavoro():
     except Exception as ex:
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
-    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "🤝 Sindacato · CAF · Patronato"]
+    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato"]
     st.markdown(_LV_CSS_SEZ, unsafe_allow_html=True)
     if hasattr(st, "pills"):
         scelta = st.pills("Che cosa vuoi vedere?", voci, default=voci[0], key="lv_sezione", label_visibility="collapsed")
@@ -794,6 +794,11 @@ def schermata_lavoro():
             cob_pagina()
         else:
             st.warning("Il controllo delle ore non è disponibile.")
+    elif scelta == voci[6]:
+        if "ost_pagina" in globals():
+            ost_pagina(c)
+        else:
+            st.warning("La previsione dello stipendio non è disponibile.")
     else:
         lv_tab_contatti(c)
 
@@ -849,7 +854,7 @@ Le vedi **a schede** (una per anno) o **in tabella**, con il **grafico** e il co
          """Scegli **🏛️ INPS**. Il tasto **🔗 Apri la mia pagina INPS** ti porta alla tua pagina: la prima volta apri **✏️ Scrivi o cambia il link**, incolla l'indirizzo della tua pagina e salva. **Non si scrivono mai password o PIN.**
 Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISEE, domande…): li carichi, li **vedi**, li **scarichi**, li **invii** o li **elimini**. Si vedono a elenco per tipo o **in tabella**.""", "inps pagina link documenti estratto conto contributivo isee pensione spid"),
     ])
-    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps", "l_portale", "l_controllo"])
+    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps", "l_portale", "l_controllo", "l_stipendio"])
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("lavoro", "l_cosa")
     _lv_guida_aggiungi("lavoro", [
@@ -863,6 +868,11 @@ Dal portale scarichi la busta paga o la CU in PDF e la carichi in **💶 Buste p
         ("l_controllo", "🧮 Controllo della busta paga", """Scegli **🧮 Controllo ore**. Tocca il pulsante **📊 Scegli il foglio Excel delle ore** (quello con il calcolo del tuo contratto già dentro) e poi **📄 Scegli il PDF della busta paga**: il telefono mostra tutti i file. Appena ci sono tutti e due compare il responso.
 L'app confronta le **4 righe** di straordinario e lavoro notturno (straordinario 20%, festivo 65%, notturno 33%, notturno festivo 75%): ore della busta contro ore del foglio, tariffa e importo. In **euro** ti dice quanto va **a tuo vantaggio**, quanto **a tuo svantaggio** e il **saldo**, e spiega la causa di ogni differenza. Puoi **scaricare il responso**.
 I due file **non vengono salvati**. Se il PDF non viene letto bene, apri **⚙️ Solo se il PDF non viene letto** e scrivi paga oraria e ore lavorabili. È una stima: per chiedere una correzione confrontati con l'ufficio paghe o con il sindacato.""", "controllo busta paga excel ore straordinario notturno vantaggio svantaggio confronto"),
+    ])
+    _lv_guida_aggiungi("lavoro", [
+        ("l_stipendio", "💰 Stipendio previsto", """Scegli **💰 Stipendio previsto**. Tocca **📊 Scegli il modulo ore** e scegli il tuo file **ORE_LAVORO…xlsx** (quello con i 12 mesi): l'app lo **tiene** e ti mostra **sempre** la previsione dello stipendio, calcolata dagli orari scritti e dai **parametri del contratto** (foglio «Parametri» del modulo: paga oraria, ore settimanali, soglia dello straordinario, maggiorazioni).
+Scegli il **mese**: vedi il **lordo previsto**, il **netto previsto** (stima fatta con le trattenute delle tue ultime buste paga, oppure con la percentuale scritta nel modulo), le **ore** e gli importi di straordinario e lavoro notturno. Sotto c'è la tabella di **tutto l'anno** con il grafico.
+Quando compili altri giorni, **scarica il modulo** («📥 Scarica il modulo salvato»), compilalo e **ricaricalo** con lo stesso pulsante: la previsione si aggiorna. Il calcolo è fatto dal foglio Excel (il modulo deve essere stato salvato almeno una volta con Excel o Fogli Google).""", "stipendio previsto modulo ore lordo netto previsione contratto"),
     ])
     _lv_guida_aggiungi("dispensa", [
         ("h_radio", "🎧 La radio di sottofondo", """Sul bordo sinistro dello schermo c'è la **linguetta 🎧**. Toccala: si apre il pannello. Scegli una stazione **lounge e chill** già pronta, oppure **cerca tra migliaia di radio** (per nome o per genere: Lounge, Jazz, Classica…). Hai **▶ ⏸ ⏹**, il **volume**, le **★ preferite**, l'**equalizzatore** (bassi, medi, alti) e lo **spettro**. La musica **resta accesa in tutte le sezioni**. Il primo ascolto parte solo dopo un tuo tocco. Alcune radio non permettono equalizzatore e spettro: il pannello lo dice. Si nasconde da **Utilità → Aspetto dell'app**.""", "radio musica sottofondo lounge equalizzatore volume spettro"),

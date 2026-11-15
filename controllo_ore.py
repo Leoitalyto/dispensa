@@ -34,8 +34,41 @@ def cob_tariffa(paga, voce):
     return paga * (1 + voce["pct"]) if voce["piena"] else paga * voce["pct"]
 
 
-def cob_leggi_excel(file):
-    """Legge il foglio 'Ore' (intestazioni alla riga 5, 31 righe di giorni)."""
+COB_MESI = ["GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"]
+
+
+def cob_mesi_del_modulo(file):
+    """Se il file è il modulo ORE_LAVORO (un foglio per mese) ritorna l'elenco dei mesi, altrimenti []."""
+    try:
+        nomi = pd.ExcelFile(file).sheet_names
+        if hasattr(file, "seek"):
+            file.seek(0)
+        return [m for m in COB_MESI if m in nomi] if "Ore" not in nomi and "Parametri" in nomi else []
+    except Exception:
+        return []
+
+
+def cob_leggi_modulo_mese(file, mese):
+    """Dal modulo ORE_LAVORO (12 mesi): i giorni del mese scelto, con gli stessi nomi di colonna del foglio «Ore»."""
+    raw = pd.read_excel(file, sheet_name=mese, header=None, skiprows=6, nrows=31, usecols="A,K,L,M,R,AH,AP")
+    raw.columns = ["Data", "Ore lavorate", "N1", "N2", "Fest", "Ore assenza", "Ore lorde (senza pausa)"]
+    if raw["Ore lavorate"].isna().all() and raw["Ore lorde (senza pausa)"].isna().all():
+        raise ValueError("nel modulo non ci sono risultati calcolati: aprilo con Excel o Fogli Google, salvalo e caricalo di nuovo.")
+    df = raw.copy()
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True, format="mixed")
+    df = df.dropna(subset=["Data"]).copy()
+    for c_ in ("Ore lavorate", "N1", "N2", "Ore assenza", "Ore lorde (senza pausa)"):
+        df[c_] = pd.to_numeric(df[c_], errors="coerce").fillna(0.0)
+    df["Ore lorde"] = df["Ore lorde (senza pausa)"]
+    df["Notturne"] = df["N1"] + df["N2"]
+    df["Giorno festivo"] = pd.to_numeric(df["Fest"], errors="coerce").fillna(0) == 1
+    return df, True, True
+
+
+def cob_leggi_excel(file, mese=None):
+    """Legge il foglio 'Ore' (intestazioni alla riga 5, 31 righe di giorni) oppure, per il modulo ORE_LAVORO, il mese scelto."""
+    if mese:
+        return cob_leggi_modulo_mese(file, mese)
     xls = pd.ExcelFile(file)
     if "Ore" in xls.sheet_names:
         df = pd.read_excel(xls, sheet_name="Ore", header=4, nrows=31)
@@ -251,8 +284,15 @@ def cob_pagina():
     if not n_p.endswith(".pdf"):
         st.error(f"Il file della casella 2 («{pdf_file.name}») non è un PDF. Serve la busta paga in PDF (non una foto).")
         return
+    mesi_modulo = cob_mesi_del_modulo(excel_file)
+    mese_sc = None
+    if mesi_modulo:
+        oggi_ = __import__("datetime").date.today()
+        pred = (oggi_.month - 2) % 12                                              # la busta di solito è del mese scorso
+        mese_sc = st.selectbox("📅 Di quale mese è la busta paga?", [m.capitalize() for m in mesi_modulo], index=pred, key="cob_mese").upper()
+        st.caption("Hai caricato il modulo **ORE_LAVORO** con tutti i mesi: confronto il mese scelto con la busta.")
     try:
-        df, nuovo, lorde_presenti = cob_leggi_excel(excel_file)
+        df, nuovo, lorde_presenti = cob_leggi_excel(excel_file, mese_sc)
     except Exception as e:
         st.error(f"Non riesco a leggere il file Excel: {e}")
         return
