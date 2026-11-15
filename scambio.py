@@ -531,7 +531,7 @@ if "schermata_farmacia" in globals() and "_sc_farmacia_prima" not in globals():
     def schermata_farmacia():                                        # noqa: F811
         r = _sc_farmacia_prima()
         sez = st.session_state.get("sezione_home") or "salute"
-        if sez in ("salute", "documenti", "archivio", "casa", "lavoro"):
+        if sez in ("archivio", "casa", "lavoro"):                       # in Salute e Documenti il pulsante sta dentro «📤 Esporta» (tutto raggruppato lì)
             try:
                 st.divider()
                 sc_pulsante(sez)

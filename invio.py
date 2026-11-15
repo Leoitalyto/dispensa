@@ -403,34 +403,210 @@ def _inv_nomi_unici(allegati):
     return risultato
 
 
-def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
-    """I modi di inviare. allegati = [(nome, mime, byte)]; testo = il riepilogo scritto."""
+_INV_NUM = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣"]
+
+
+def inv_dispositivo():
+    """«telefono» oppure «computer»: lo si capisce da solo dal programma con cui stai usando l'app."""
+    try:
+        ua = str(st.context.headers.get("User-Agent", ""))
+    except Exception:
+        ua = ""
+    return "telefono" if re.search(r"Mobi|Android|iPhone|iPad|iPod", ua, re.I) else "computer"
+
+
+def _inv_base_nome(titolo):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(titolo or "")).encode("ascii", "ignore").decode()
+    return (re.sub(r"[^A-Za-z0-9]+", "_", t).strip("_") or "VitaMemo")[:50]
+
+
+def inv_pdf_unico(titolo, testo, allegati):
+    """Un solo PDF: una pagina col riepilogo scritto, poi tutte le foto (una per pagina) e le pagine dei PDF. None se non si riesce o se c'è un file che non si può mettere in un PDF."""
+    try:
+        try:
+            import pymupdf as mu
+        except Exception:
+            import fitz as mu
+        doc = mu.open()
+        if (testo or "").strip():
+            righe = []
+            for riga in ((titolo or "") + "\n\n" + testo).split("\n"):
+                while len(riga) > 92:
+                    taglio = riga.rfind(" ", 0, 92)
+                    taglio = taglio if taglio > 40 else 92
+                    righe.append(riga[:taglio])
+                    riga = riga[taglio:].lstrip()
+                righe.append(riga)
+            for i in range(0, len(righe), 58):
+                pg = doc.new_page(width=595, height=842)
+                try:
+                    pg.insert_text((40, 56), "\n".join(_pdf_txt(r) for r in righe[i:i + 58]), fontsize=10, fontname="helv", lineheight=1.3)
+                except TypeError:
+                    pg.insert_text((40, 56), "\n".join(_pdf_txt(r) for r in righe[i:i + 58]), fontsize=10, fontname="helv")
+        for nome, mime, dati in allegati:
+            est = nome.lower().rsplit(".", 1)[-1]
+            if mime == "application/pdf" or est == "pdf":
+                src = mu.open(stream=dati, filetype="pdf")
+                doc.insert_pdf(src)
+                src.close()
+            elif str(mime).startswith("image/") or est in ("jpg", "jpeg", "png", "webp", "gif", "bmp"):
+                from PIL import Image, ImageOps
+                im = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+                im.thumbnail((2000, 2000))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=88)
+                lw, lh = (595, 842) if im.height >= im.width else (842, 595)
+                pg = doc.new_page(width=lw, height=lh)
+                s_ = min((lw - 40) / im.width, (lh - 40) / im.height)
+                w_, h_ = im.width * s_, im.height * s_
+                pg.insert_image(mu.Rect((lw - w_) / 2, (lh - h_) / 2, (lw + w_) / 2, (lh + h_) / 2), stream=buf.getvalue())
+            else:
+                doc.close()
+                return None
+        if doc.page_count == 0:
+            doc.close()
+            return None
+        out = doc.tobytes(deflate=True, garbage=3)
+        doc.close()
+        return out
+    except Exception:
+        return None
+
+
+def inv_zip(testo, allegati):
+    """Un solo file ZIP con tutti i file e, se c'è, il riepilogo scritto."""
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        if (testo or "").strip():
+            z.writestr("Riepilogo.txt", testo)
+        for nome, _mime, dati in allegati:
+            z.writestr(nome, dati)
+    return buf.getvalue()
+
+
+def _inv_si_puo_pdf(allegati):
+    return all(m == "application/pdf" or str(m).startswith("image/") or n.lower().rsplit(".", 1)[-1] in ("pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp") for n, m, _d in allegati)
+
+
+def _inv_in_forma(chiave, forma, titolo, testo, allegati):
+    """I file nella forma scelta (PDF unico, ZIP, oppure così come sono). Il lavoro si fa una volta sola e si tiene da parte."""
+    import hashlib
+    if forma == "come":
+        return allegati, None
+    firma = hashlib.md5((forma + "|" + titolo + "|" + str(len(testo or "")) + "|" + "|".join(f"{n}:{len(d)}" for n, _m, d in allegati)).encode("utf-8")).hexdigest()
+    mem = st.session_state.get(f"inv_forma_mem_{chiave}")
+    if mem and mem[0] == firma:
+        return mem[1], mem[2]
+    base = _inv_base_nome(titolo) + "_" + oggi().isoformat()
+    avviso, pronti = None, allegati
+    if forma == "pdf":
+        pdf = inv_pdf_unico(titolo, testo, allegati)
+        if pdf:
+            pronti = [(base + ".pdf", "application/pdf", pdf)]
+        else:
+            avviso = "Non sono riuscito a unire tutto in un solo PDF: ti lascio i file così come sono."
+    elif forma == "zip":
+        pronti = [(base + ".zip", "application/zip", inv_zip(testo, allegati))]
+    st.session_state[f"inv_forma_mem_{chiave}"] = (firma, pronti, avviso)
+    return pronti, avviso
+
+
+def inv_canali(chiave, titolo, testo, allegati, oggetto=None, passo=1, forma_fissa=False, prima="invia"):
+    """Il percorso unico per scaricare o inviare, a passi numerati: in che forma (PDF, ZIP, così come sono) → cosa fare (scaricare qui / inviare) → con cosa e a chi.
+    allegati = [(nome, mime, byte)]; testo = il riepilogo scritto. passo = da che numero partire (se prima ci sono già altri passi); forma_fissa = la forma è già stata scelta prima."""
     oggetto = oggetto or titolo
     allegati, doppi = _inv_senza_doppioni(list(allegati))
     allegati = _inv_nomi_unici(_inv_converti_immagini(allegati))
     chiave = re.sub(r"\W+", "_", str(chiave))                     # le chiavi dei pulsanti finiscono nei nomi di classe della pagina
     d_conto = _inv_dati_conto()
-    st.warning("🔒 Stai per inviare **dati personali e sanitari**: controlla bene a chi li mandi.")
+    disp = inv_dispositivo()
+    num = lambda: _INV_NUM[min(passo - 1, len(_INV_NUM) - 1)]
     if doppi:
-        st.info(f"ℹ️ C'erano {doppi} file identici (la stessa foto salvata più volte): li mando una volta sola.")
-    t_tel, t_mail, t_wa, t_tg, t_sms, t_copia = st.tabs(["📤 Telefono", "✉️ Email", "💬 WhatsApp", "✈️ Telegram", "📱 SMS", "📋 Copia"])
-    with t_tel:
-        st.caption("Si apre la finestra **Condividi** del telefono: scegli WhatsApp, Gmail, Telegram, Drive, Signal, Messenger… "
-                   "il file va allegato.")
-        inv_registra_condivisione(chiave, titolo, testo, allegati)
+        st.info(f"ℹ️ C'erano {doppi} file identici (la stessa foto salvata più volte): li tengo una volta sola.")
+
+    # ---- in che forma
+    if not allegati:                                               # solo testo: per scaricarlo diventa un PDF (e resta il testo da copiare)
+        pdf_testo = inv_pdf_unico(titolo, testo, []) if (testo or "").strip() else None
+        da_scaricare = ([(_inv_base_nome(titolo) + ".pdf", "application/pdf", pdf_testo)] if pdf_testo else []) + \
+                       ([(_inv_base_nome(titolo) + ".txt", "text/plain", (testo or "").encode("utf-8"))] if (testo or "").strip() else [])
+        pronti = []
+    else:
+        forme = ["come"]
+        if not forma_fissa:
+            if _inv_si_puo_pdf(allegati) and not (len(allegati) == 1 and allegati[0][1] == "application/pdf"):
+                forme.append("pdf")
+            if len(allegati) > 1:
+                forme.append("zip")
+        forma = "come"
+        if len(forme) > 1:
+            n_f = len(allegati)
+            nomi_forme = {"come": f"📎 Così come {'è' if n_f == 1 else 'sono'} ({n_f} file)" if n_f > 1 else "📎 Così com'è (la foto)",
+                          "pdf": "📄 In un solo PDF (comodo da leggere e stampare)", "zip": "🗜️ In un solo ZIP (un pacchetto con tutti i file)"}
+            st.markdown(f"**{num()} In che forma lo vuoi?**")
+            forma = st.radio("In che forma lo vuoi?", forme, format_func=lambda k: nomi_forme[k], index=(forme.index("pdf") if "pdf" in forme and n_f > 1 else 0),
+                             key=f"inv_forma_{chiave}", label_visibility="collapsed")
+            passo += 1
+        pronti, avviso = _inv_in_forma(chiave, forma, titolo, testo, allegati)
+        if avviso:
+            st.warning(avviso)
+        da_scaricare = pronti
+
+    # ---- cosa fare
+    st.markdown(f"**{num()} Cosa vuoi fare?**")
+    azioni = {"scarica": f"⬇️ Scaricarlo su questo {disp}", "invia": "📤 Inviarlo a qualcuno"}
+    azione = st.radio("Cosa vuoi fare?", list(azioni), format_func=lambda k: azioni[k], index=(1 if prima == "invia" else 0), key=f"inv_az_{chiave}", label_visibility="collapsed")   # dal tasto «Invia» è già scelto «inviare»
+    passo += 1
+
+    if azione == "scarica":
+        if not da_scaricare:
+            st.caption("Non c'è niente da scaricare.")
+        for i, (nome, mime, dati) in enumerate(da_scaricare):
+            st.download_button(f"⬇️ Scarica {nome} ({max(1, len(dati) // 1024)} KB)", dati, file_name=nome, mime=mime, key=f"inv_dl_{chiave}_{i}", width="stretch",
+                               type="primary" if i == 0 else "secondary")
+        if da_scaricare:
+            st.caption(f"Dopo il tocco lo trovi nella cartella **Download** del {disp}" + (" (o nelle notifiche in alto)." if disp == "telefono" else "."))
+        return
+
+    # ---- con cosa e a chi
+    st.warning("🔒 Stai per inviare **dati personali**: controlla bene a chi li mandi.")
+    ha_file = bool(pronti)
+    canali = {}
+    if disp == "telefono":
+        canali["app"] = "📤 WhatsApp, Telegram, Gmail o un'altra app" + (" · con i file" if ha_file else "")
+    canali["email"] = "✉️ Email" + (" · con i file" if ha_file and inv_email_pronta() else "")
+    canali["wa"] = "💬 WhatsApp · solo il testo"
+    canali["tg"] = "✈️ Telegram, nella mia chat" + (" · con i file" if ha_file else "")
+    canali["sms"] = "📱 SMS · solo l'inizio del testo"
+    if disp != "telefono":
+        canali["app"] = "📤 Un'altra app del computer (se il programma lo permette)"
+    canali["copia"] = "📋 Copiare il testo"
+    st.markdown(f"**{num()} Con cosa lo mandi?**")
+    canale = st.radio("Con cosa lo mandi?", list(canali), format_func=lambda k: canali[k], key=f"inv_can_{chiave}", label_visibility="collapsed")
+    passo += 1
+    st.markdown(f"**{num()} A chi**" if canale in ("email", "wa", "sms") else f"**{num()} Invia**")
+
+    if canale == "app":
+        st.caption("Si apre la finestra **Condividi**: scegli l'app (WhatsApp, Gmail, Telegram, Drive…) e poi la persona. " + ("I file sono già allegati." if ha_file else ""))
+        inv_registra_condivisione(chiave, titolo, testo, pronti)
         with st.container(key=f"invio_share_{chiave}"):
-            st.button("📤 Condividi con un'altra app", key=f"invio_btn_share_{chiave}", type="primary", width="stretch")
+            st.button("📤 Apri «Condividi»", key=f"invio_btn_share_{chiave}", type="primary", width="stretch")
         st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
-    with t_mail:
+        if ha_file:
+            st.caption("Se non si apre: torna al passo «Cosa vuoi fare?», scegli **Scaricarlo** e poi allegalo a mano nell'app con la graffetta 📎.")
+    elif canale == "email":
         if not inv_email_pronta():
-            st.info("Per mandare l'email **direttamente dall'app** servono i dati della casella nei Secrets di Streamlit "
-                    "(EMAIL_USER ed EMAIL_PASSWORD, gli stessi degli avvisi): la guida «Invio» spiega come. "
-                    "Intanto usa la scheda «Telefono» e scegli Gmail, oppure apri la tua posta col riepilogo:")
-            st.link_button("✉️ Apri la mia posta con il riepilogo", inv_link_mailto("", oggetto, testo), width="stretch")
+            st.info("L'app non ha ancora una casella per spedire da sola (servono EMAIL_USER ed EMAIL_PASSWORD nei Secrets di Streamlit: la guida «Invio» spiega come). "
+                    "Intanto si apre **la tua posta** con il testo già scritto" + ("; i file allegali dopo averli scaricati." if ha_file else "."))
+            a = st.text_input("Indirizzo email di chi lo riceve (facoltativo)", key=f"inv_a_{chiave}")
+            st.link_button("✉️ Apri la mia posta", inv_link_mailto(a.strip(), oggetto, testo), width="stretch", type="primary")
         else:
-            a = st.text_input("A chi (uno o più indirizzi, separati da virgola)", value=d_conto.get("avviso_email", ""), key=f"inv_a_{chiave}")
-            msg = st.text_area("Messaggio", value="Ti mando in allegato i documenti. " if allegati else "Ecco il riepilogo.", key=f"inv_m_{chiave}", height=80)
-            scelti = [x for i, x in enumerate(allegati) if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{i}")]
+            a = st.text_input("Indirizzo email di chi lo riceve (più indirizzi: separali con la virgola)", value=d_conto.get("avviso_email", ""), key=f"inv_a_{chiave}")
+            msg = st.text_area("Messaggio", value="Ti mando in allegato i documenti. " if ha_file else "Ecco il riepilogo.", key=f"inv_m_{chiave}", height=80)
+            scelti = [x for i, x in enumerate(pronti) if st.checkbox(f"📎 {x[0]} ({len(x[2]) // 1024} KB)", value=True, key=f"inv_c_{chiave}_{i}")]
+            if sum(len(x[2]) for x in scelti) > _MAX_ALLEGATI:
+                st.warning("I file scelti sono troppo pesanti per una sola email: togline qualcuno, oppure scaricali e mandali con un servizio per file grandi.")
             if st.button("✉️ Invia l'email", type="primary", key=f"inv_si_{chiave}", width="stretch"):
                 ok, ko = inv_indirizzi(a)
                 if not ok:
@@ -449,43 +625,30 @@ def inv_canali(chiave, titolo, testo, allegati, oggetto=None):
                         st.success("✅ Email inviata a " + ", ".join(ok))
                     else:
                         st.error("Non sono riuscito a inviarla: " + motivo)
-    with t_wa:
-        if allegati:
-            st.markdown("**1️⃣ Tocca il pulsante verde qui sotto**")
-            with st.container(key=f"invio_share_{chiave}__wa"):
-                st.button("💬 Manda su WhatsApp con le foto", key=f"invio_btn_share_wa_{chiave}", type="primary", width="stretch")
-            st.markdown("<div class='inv-diag' style='font-size:.82rem;margin:2px 0 6px'></div>", unsafe_allow_html=True)
-            st.markdown("**2️⃣ Si apre «Condividi»:** tocca **WhatsApp**, scegli la persona e invia. Le foto sono già allegate.")
-            st.caption("Se non si apre, scarica le foto con i pulsanti in fondo e allegale in WhatsApp con la graffetta 📎.")
-            st.divider()
-            st.caption("**Solo il testo** (senza foto):")
-        num = st.text_input("Numero (facoltativo, con prefisso senza +, es. 39333…)", key=f"inv_wa_{chiave}")
-        st.link_button("💬 Apri WhatsApp con il riepilogo scritto", inv_link_whatsapp(num, testo), width="stretch")
-        if not allegati:
-            st.caption("Questo invio è solo testo: non ci sono foto o file da allegare.")
-    with t_tg:
+    elif canale == "wa":
+        num_wa = st.text_input("Numero di chi lo riceve (facoltativo: con prefisso, senza +, es. 39333…)", key=f"inv_wa_{chiave}")
+        st.link_button("💬 Apri WhatsApp con il testo", inv_link_whatsapp(num_wa, testo), width="stretch", type="primary")
+        st.caption("Senza numero, WhatsApp ti fa scegliere la persona. " + ("Va solo il testo: per mandare anche i file scegli la prima voce («…o un'altra app»)." if ha_file else ""))
+    elif canale == "tg":
         chat = str(d_conto.get("telegram_chat_id") or "").strip()
         if not inv_segreto("TELEGRAM_TOKEN"):
-            st.info("Per mandare i file nella tua chat Telegram servono TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): "
-                    "la guida «Invio» spiega come. Intanto usa la scheda «Telefono» e scegli Telegram.")
+            st.info("Per mandare i file nella tua chat Telegram serve TELEGRAM_TOKEN nei Secrets di Streamlit (lo stesso del bot): la guida «Invio» spiega come. "
+                    "Intanto scegli la prima voce («…o un'altra app») e poi Telegram.")
         elif not chat:
             st.info("Manca il tuo Chat ID: inseriscilo in «Scegli come ricevere gli avvisi» in Salute, poi torna qui.")
         else:
-            st.caption("Riepilogo e file arrivano nella tua chat con **@dispensa_leo_bot**, da lì li inoltri a chi vuoi.")
+            st.caption("Testo e file arrivano nella **tua** chat con il bot dell'app: da lì li inoltri a chi vuoi.")
             if st.button("✈️ Mandami tutto su Telegram", type="primary", key=f"inv_tg_{chiave}", width="stretch"):
                 with st.spinner("Invio in corso…"):
-                    esito, motivo = inv_invia_telegram(chat, testo, allegati)
+                    esito, motivo = inv_invia_telegram(chat, testo, pronti)
                 st.success("✅ Inviato: guarda Telegram.") if esito else st.error("Non sono riuscito a inviarlo: " + motivo)
-    with t_sms:
-        num2 = st.text_input("Numero (facoltativo)", key=f"inv_sms_{chiave}")
-        st.link_button("📱 Apri i messaggi con il riepilogo breve", inv_link_sms(num2, testo), width="stretch")
-        st.caption("Gli SMS sono brevi: va solo l'inizio del riepilogo.")
-    with t_copia:
+    elif canale == "sms":
+        num2 = st.text_input("Numero di chi lo riceve (facoltativo)", key=f"inv_sms_{chiave}")
+        st.link_button("📱 Apri i messaggi con il testo", inv_link_sms(num2, testo), width="stretch", type="primary")
+        st.caption("Gli SMS sono brevi: va solo l'inizio del testo.")
+    else:
         st.caption("Tocca l'icona in alto a destra del riquadro per copiare, poi incolla dove vuoi.")
-        st.code(testo, language=None)
-    st.markdown("**⬇ Oppure scarica i file**")
-    for i, (nome, mime, dati) in enumerate(allegati):
-        st.download_button(f"⬇ {nome}", dati, file_name=nome, mime=mime, key=f"inv_dl_{chiave}_{i}", width="stretch")
+        st.code(testo, language=None, wrap_lines=True)
 
 
 def inv_voce(chiave, etichetta, titolo, testo, carica_allegati):
@@ -564,30 +727,57 @@ def _inv_apri(chiave_exp):
     st.session_state[chiave_exp] = True
 
 
-def inv_hub(chiave, persone, d_conto, titolo_rep, preselezione=None, solo_extra=False, chiave_exp=None):
-    """«Esporta e invia»: si sceglie cosa e in che formato, si preme Prepara, poi si invia con il canale preferito."""
+def inv_hub(chiave, persone, d_conto, titolo_rep, preselezione=None, solo_extra=False, chiave_exp=None, passo=1):
+    """«Esporta»: a passi numerati. Cosa → in che formato (PDF o ZIP) → Prepara → poi scaricare o inviare (inv_canali)."""
     oggi_ = oggi()
     scelte_possibili = FAM_TITOLI + [FAM_SCHEDA] + INV_EXTRA
     predefinite = preselezione or [x for x in scelte_possibili if x not in ("Assunzioni registrate",)]
     cb = dict(on_change=_inv_apri, args=(chiave_exp,)) if chiave_exp else {}
-    scelte = st.multiselect("Cosa vuoi inviare o esportare", scelte_possibili, default=predefinite, key=f"inv_sc_{chiave}", **cb)
-    formati = st.multiselect("Formato dei file", ["PDF", "Excel", "Da stampare (HTML)"], default=["PDF"], key=f"inv_fm_{chiave}", **cb)
-    cbb = dict(on_click=_inv_apri, args=(chiave_exp,)) if chiave_exp else {}
-    if st.button("📦 Prepara i file", type="primary", key=f"inv_prep_{chiave}", width="stretch", disabled=not (scelte and formati), **cbb):
+    st.markdown(f"**{_INV_NUM[passo - 1]} Cosa vuoi esportare?**")
+    scelte = st.multiselect("Cosa vuoi esportare?", scelte_possibili, default=predefinite, key=f"inv_sc_{chiave}", label_visibility="collapsed", **cb)
+    st.caption("Togli con la ✕ le voci che non ti servono.")
+    st.markdown(f"**{_INV_NUM[passo]} In che formato?**")
+    nomi_f = {"pdf": "📄 PDF · da leggere, stampare o mandare", "zip": "🗜️ ZIP · un pacchetto con PDF + Excel + pagina da stampare"}
+    formato = st.radio("In che formato?", list(nomi_f), format_func=lambda k: nomi_f[k], key=f"inv_fmt_{chiave}", label_visibility="collapsed", **cb)
+    formati = ["PDF"] if formato == "pdf" else ["PDF", "Excel", "Da stampare (HTML)"]
+    if chiave_exp:
+        st.session_state[chiave_exp] = True                      # lo stai usando: resta aperto
+    if st.button("✅ Prepara", type="primary", key=f"inv_prep_{chiave}", width="stretch", disabled=not scelte):      # senza on_click: altrimenti la pagina si ridisegna prima di preparare
         with st.spinner("Preparo i file…"):
             inv_prepara(chiave, persone, d_conto, scelte, formati, titolo_rep, oggi_)
+        st.rerun()                                               # ridisegno subito: il riquadro resta aperto con i passi successivi
     pronti = st.session_state.get(f"inv_pronti_{chiave}")
     if not pronti:
-        st.caption("Scegli cosa includere e tocca **Prepara i file**: poi compaiono i modi di inviarli.")
+        st.caption("Tocca **Prepara**: subito dopo scegli se scaricarlo qui o inviarlo a qualcuno.")
         return
     attuale = (tuple(scelte), tuple(formati), tuple(p["chiave"] for p in persone))
     if pronti["firma"][0] != attuale[0] or pronti["firma"][2] != attuale[2] or not set(formati) <= set(pronti["firma"][1]):
-        st.info("Hai cambiato le scelte: tocca di nuovo **Prepara i file**.")
+        st.info("Hai cambiato le scelte: tocca di nuovo **Prepara**.")
         return
     for a in pronti["avvisi"]:
         st.warning(a)
-    st.success("✅ File pronti: " + ", ".join(f"{n} ({len(d) // 1024} KB)" for n, _, d in pronti["allegati"]))
-    inv_canali(chiave, titolo_rep, pronti["testo"], pronti["allegati"], oggetto=titolo_rep)
+    allegati = list(pronti["allegati"])
+    if formato == "pdf":
+        allegati = [x for x in allegati if x[0].lower().endswith(".pdf")] or allegati
+    else:
+        allegati = [(_inv_base_nome(titolo_rep) + "_" + oggi_.isoformat() + ".zip", "application/zip", inv_zip(pronti["testo"], allegati))]
+    st.success("✅ Pronto: " + ", ".join(f"{n} ({max(1, len(d) // 1024)} KB)" for n, _, d in allegati))
+    inv_canali(chiave, titolo_rep, pronti["testo"], allegati, oggetto=titolo_rep, passo=passo + 2, forma_fissa=True, prima="scarica")
+
+
+def _inv_altro_scambio(sezione):
+    """In fondo al pannello: le altre due strade (passare i dati a un altro utente dell'app, copia completa). Stanno qui, e non più sparse nella pagina."""
+    if "sc_pulsante" not in globals() and "trasferimento_pulsante" not in globals():
+        return
+    with st.expander("🔁 Passare i dati a un'altra persona che usa l'app, o fare una copia di tutto"):
+        st.caption("Qui sopra esporti dati **da leggere** (PDF, ZIP). Qui invece prepari un file che **un'altra persona con VitaMemo può importare** nella sua app, oppure una copia completa.")
+        try:
+            if "sc_pulsante" in globals():
+                sc_pulsante(sezione)
+            if "trasferimento_pulsante" in globals() and sezione == "salute":
+                trasferimento_pulsante("salute")
+        except Exception:
+            pass
 
 
 def inv_hub_miei(chiave="miei", preselezione=None, aperto=False):
@@ -596,21 +786,24 @@ def inv_hub_miei(chiave="miei", preselezione=None, aperto=False):
     f = d.get("farmacia") or {}
     profili = _fa_profili(f)
     chiave_exp = f"inv_exp_{chiave}"
-    with st.expander("📤 Esporta e invia: PDF, email, WhatsApp, Telegram…", expanded=aperto or bool(st.session_state.get(chiave_exp))):
+    with st.expander("📤 Esporta: scarica o invia i dati (PDF, ZIP, email, WhatsApp…)", expanded=aperto or bool(st.session_state.get(chiave_exp))):
         nomi = {p["id"]: p["nome"] for p in profili}
         opzioni = ["Tutti i profili"] + [p["id"] for p in profili] if len(profili) > 1 else [profili[0]["id"]]
-        scelta = st.selectbox("Di chi", opzioni, format_func=lambda x: x if x == "Tutti i profili" else nomi[x], key=f"inv_chi_{chiave}",
-                              on_change=_inv_apri, args=(chiave_exp,))
+        st.markdown("**1️⃣ Di chi?**")
+        predef = st.session_state.get("fa_profilo")
+        scelta = st.selectbox("Di chi?", opzioni, format_func=lambda x: "👨‍👩‍👧 Tutti i profili" if x == "Tutti i profili" else "👤 " + nomi[x], key=f"inv_chi_{chiave}",
+                              index=(opzioni.index(predef) if predef in opzioni else 0), label_visibility="collapsed", on_change=_inv_apri, args=(chiave_exp,))
         sel = profili if scelta == "Tutti i profili" else [p for p in profili if p["id"] == scelta]
         persone = [{"chiave": "io:" + p["id"], "nome": p["nome"], "origine": "", "d": d, "f": f, "pid": p["id"], "p": p} for p in sel]
         inv_hub(f"{chiave}_{scelta}", persone, d, "Salute – " + (st.session_state["sess"]["nome"] if scelta == "Tutti i profili" else nomi[scelta]), preselezione,
-                chiave_exp=chiave_exp)
+                chiave_exp=chiave_exp, passo=2)
+        _inv_altro_scambio({"farm": "salute", "doc": "documenti"}.get(chiave, "salute"))
 
 
 def inv_hub_famiglia(persone, scelta_nome, chiave="fam"):
     """Lo stesso pannello nel Controllo famiglia: tutta la famiglia o una persona."""
     d_capo = _inv_dati_conto()
     chiave_exp = f"inv_exp_{chiave}"
-    with st.expander("📤 Invia tutto: PDF, email, WhatsApp, Telegram…", expanded=bool(st.session_state.get(chiave_exp))):
+    with st.expander("📤 Esporta: scarica o invia i dati (PDF, ZIP, email, WhatsApp…)", expanded=bool(st.session_state.get(chiave_exp))):
         inv_hub(chiave + "_" + re.sub(r"\W+", "", scelta_nome), persone, d_capo, "Salute famiglia" if len(persone) > 1 else "Salute – " + persone[0]["nome"],
                 chiave_exp=chiave_exp)

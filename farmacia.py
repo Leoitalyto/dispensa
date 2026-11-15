@@ -432,8 +432,6 @@ def schermata_farmacia():
         fam_pulsante_capo()
     if "archivio_pulsante" in globals():
         archivio_pulsante("salute")
-    if "trasferimento_pulsante" in globals():
-        trasferimento_pulsante("salute")
     if "fam_avviso_membro" in globals():
         fam_avviso_membro()
     if st.session_state.get("fa_msg"):
@@ -1500,7 +1498,7 @@ def _fa_tab_vaccini(f, pid, nomi, oggi_):
 
 
 def _fa_esporta(f, pid, nomi):
-    with st.expander("📦 Esporta i dati di questo profilo"):
+    if True:                                                     # (prima era un riquadro a parte: ora le esportazioni stanno tutte in «📤 Esporta», in alto)
         chiavi = ("medicinali", "terapie", "prescrizioni", "visite", "vaccinazioni")
         dati = {"profilo": nomi[pid],
                 "dottore": next((p.get("dottore") for p in f.get("profili", []) if p["id"] == pid), None),
@@ -1516,21 +1514,14 @@ def _fa_esporta(f, pid, nomi):
                 dati.update({"tutto_il_resto": stt_dati_completi(f, pid)})
             except Exception:
                 pass
-        st.caption("Qui puoi scaricare o inviare tutto di questa persona: medicinali, terapie, prescrizioni, visite, vaccinazioni, documenti. "
-                   "Le foto e i PDF si inviano uno per uno dalla scheda di ogni voce (tasto «Invia»).")
         if "stt_pagina" in globals():
-            st.info("📋 **Per vedere tutto quello che abbiamo** (referti, esami, documenti sanitari…) e scegliere cosa scaricare, stampare o inviare, apri **«📋 Tutti i dati e documenti»**.")
-            if st.button("📋 Apri «Tutti i dati e documenti»", key="fa_apri_tutto_" + pid, width="stretch"):
+            if st.button(f"📋 Tutti i dati e documenti di {nomi[pid]} (vedi, scegli, scarica o invia)", key="fa_apri_tutto_" + pid, width="stretch"):
                 st.session_state["sp_modulo"] = {"vista": "tutto", "pid": pid}
                 st.rerun()
-        if "inv_hub" in globals():
-            st.markdown("**📤 Invia o esporta (PDF, Excel, email, WhatsApp, Telegram…)**")
-            p_ = next((p for p in f.get("profili", []) if p["id"] == pid), {"id": pid, "nome": nomi[pid]})
-            inv_hub(f"profilo_{pid}", [{"chiave": "io:" + pid, "nome": nomi[pid], "origine": "", "d": _inv_dati_conto(), "f": f, "pid": pid, "p": p_}],
-                    _inv_dati_conto(), "Salute – " + nomi[pid])
-            st.divider()
-        st.download_button("⬇ Scarica i dati (JSON, per tecnici)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
-                           file_name=f"salute_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
+        st.caption("Per scaricare o inviare i dati (PDF o ZIP) usa **«📤 Esporta»** in alto in questa pagina. Una singola foto o un singolo documento si invia dalla sua scheda, con il tasto «Invia».")
+        with st.expander("🛠️ Per tecnici: i dati grezzi"):
+            st.download_button("⬇ Scarica i dati (JSON, per tecnici)", _json.dumps(dati, ensure_ascii=False, indent=2).encode("utf-8"),
+                               file_name=f"salute_{nomi[pid].replace(' ', '_')}.json", mime="application/json")
 
 
 # =====================================================================
