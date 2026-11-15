@@ -199,11 +199,13 @@ def ost_pagina(c):
         st.caption(f"Netto calcolato {origine}. È una stima: la busta reale può differire.")
     if (m.get("ore_lavorate") or 0) == 0 and (m.get("assenza") or 0) == 0 and not (m.get("assenze_giorni") or {}):
         st.info("In questo mese non è ancora stato scritto nessun orario: la previsione comprende solo la retribuzione base. Compila il modulo e ricaricalo.")
+    h104 = (m.get("assenze_giorni") or {}).get("Perm. legge 104", 0) * ((ris["par"].get("ore_assenza") or {}).get("Perm. legge 104") or 0)
     righe = [("Ore lavorabili del mese", f"{m['lavorabili']:.2f}" if m.get("lavorabili") is not None else "—"),
              ("Ore lavorate lorde (senza pausa)", f"{m['lorde']:.2f}" if m.get("lorde") is not None else "—"),
              ("Ore di assenza", f"{m['assenza']:.2f}" if m.get("assenza") is not None else "—"),
              ("Ore di straordinario", f"{m['straord']:.2f}" if m.get("straord") is not None else "—"),
              ("Retribuzione base", _ost_eur(m.get("base"))),
+             *([("   di cui permessi Legge 104 (retribuiti)", f"{h104:.2f} h · {_ost_eur(round(h104 * (m.get('paga') or 0), 2))}")] if h104 else []),
              ("Straordinario 20%", f"{m.get('ore_ord') or 0:.2f} h · {_ost_eur(m.get('imp_ord'))}"),
              ("Straordinario festivo 65%", f"{m.get('ore_fest') or 0:.2f} h · {_ost_eur(m.get('imp_fest'))}"),
              ("Lavoro notturno 33%", f"{m.get('ore_nott') or 0:.2f} h · {_ost_eur(m.get('imp_nott'))}"),
