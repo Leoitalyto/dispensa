@@ -119,14 +119,52 @@ if not getattr(_st_tab.date_input, "_calendario_ampio", False):
         pass
 
 # Le «linguette» (riquadri che si aprono e si chiudono) restano SEMPRE chiuse all'apertura della pagina: si aprono solo se le tocchi tu.
+# MA se tocchi un pulsante DENTRO una linguetta (Modifica, Invia, Vedi, Cambia categoria, Salva…) la pagina si ridisegna e prima la linguetta si richiudeva:
+# dovevi riaprirla per vedere cosa era successo. Ora la linguetta in cui hai toccato un pulsante RESTA APERTA (e se tocchi un pulsante fuori, le altre si chiudono).
 import streamlit as _st_chiuse
 if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
+    from streamlit.delta_generator import DeltaGenerator as _DG_vive
+    from streamlit.delta_generator_singletons import context_dg_stack as _pila_vive
     _expander_originale = _st_chiuse.expander
 
+    def _vive_elenco():
+        try:
+            return list(_st_chiuse.session_state.get("_linguette_vive") or [])
+        except Exception:
+            return []
+
     def _expander_sempre_chiusa(label, expanded=False, _aperta=False, **kw):
-        return _expander_originale(label, expanded=bool(_aperta), **kw)          # «_aperta=True» solo se chi la disegna lo chiede (es. dopo che hai toccato un pulsante dentro la tendina)
+        dg = _expander_originale(label, expanded=bool(_aperta) or (str(label) in _vive_elenco()), **kw)          # «_aperta=True» anche a richiesta di chi la disegna
+        try:
+            dg._vm_linguetta = str(label)
+        except Exception:
+            pass
+        return dg
     _expander_sempre_chiusa._sempre_chiusa = True
     _st_chiuse.expander = _expander_sempre_chiusa
+
+    def _vive_segna(esito):
+        if esito:
+            try:
+                _st_chiuse.session_state["_linguette_vive"] = [d._vm_linguetta for d in _pila_vive.get() if getattr(d, "_vm_linguetta", None)]
+            except Exception:
+                pass
+        return esito
+
+    def _vive_avvolgi(originale):
+        def _nuovo(*a, **kw):
+            return _vive_segna(originale(*a, **kw))
+        _nuovo.__wrapped__ = originale
+        return _nuovo
+    for _nome_v in ("button", "form_submit_button", "download_button"):
+        try:
+            _orig_v = getattr(_DG_vive, _nome_v)
+            _avv_v = _vive_avvolgi(_orig_v)
+            setattr(_DG_vive, _nome_v, _avv_v)
+            if hasattr(_st_chiuse, _nome_v):
+                setattr(_st_chiuse, _nome_v, getattr(_st_chiuse._main, _nome_v))
+        except Exception:
+            pass
 
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
@@ -396,7 +434,7 @@ def _carica_sicuro(_p):
 
 
 for _nome in ("parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_prenotazioni.py", "salute_profilo.py", "salute_terapie_intervalli.py", "salute_calendario.py", "casa_cerca_manuale.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "avvisi_prova.py", "casa_amministrazione.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "animali.py", "animali_doc.py", "animali_report.py", "animali_scambio.py", "animali_logo.py", "animali_pagine.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "chat_famiglia.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py", "vitamemo_img.py", "vitamemo.py", "vitamemo_tema.py", "vitamemo_img_lingue.py", "vitamemo_lingua.py", "donazioni_img.py", "donazioni.py",
-              "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py", "guida_pt.py"):
+              "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py", "guida_pt.py", "riga_azioni.py", "casa_profili.py"):
     _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica_sicuro(_percorso)

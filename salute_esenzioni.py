@@ -346,26 +346,24 @@ def _se_riga(e, pid, f, p, vedi):
     st.markdown(f"<div class='sp-card' style='border-left:6px solid {col}'><b>{SE_ICONE.get(e.get('tipo'), '📄')} {_sp_e(se_titolo(e))}</b><br><small>{_sp_e(dati)}</small><br><b style='color:{col}'>{_sp_e(_se_testo_stato(e))}</b>"
                 + (f"<br><small>📝 {_sp_e(e.get('note'))}</small>" if e.get("note") else "") + "</div>", unsafe_allow_html=True)
     ref = e.get("file") or {}
-    c1, c2 = st.columns(2, gap="small")
-    if ref.get("id"):
-        aperto = ref["id"] in vedi
-        if c1.button("🙈 Chiudi" if aperto else "👁️ Vedi / scarica", key=f"se_v_{e['id']}", width="stretch"):
-            vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
-            st.rerun()
-    else:
-        c1.caption("Nessun file allegato")
-    if c2.button("✏️ Modifica", key=f"se_c_{e['id']}", width="stretch"):
+    aperto = bool(ref.get("id")) and ref["id"] in vedi
+    ev = ra_riga(f"se_{e['id']}", [("v", "🙈" if aperto else "👁️", "Chiudi" if aperto else "Vedi", "Vedi o scarica il file", not ref.get("id")),
+                                     ("m", "✏️", "Modifica", "Correggi i dati"),
+                                     ("i", "📤", "Invia", "Invia (WhatsApp, email…)", False, _inv_alterna, (f"inv_aperto_se_{e['id']}",)),
+                                     ("e", "🗑️", "Elimina", "Elimina")])
+    if ev["v"]:
+        vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
+        st.rerun()
+    if ev["m"]:
         st.session_state["se_cor"] = None if st.session_state.get("se_cor") == e["id"] else e["id"]
         st.rerun()
-    if ref.get("id") and ref["id"] in vedi:
+    if ev["e"]:
+        _se_dialogo_togli(pid, e["id"], se_titolo(e))
+    if aperto:
         _sp_mostra(ref)
-    d1, d2 = st.columns(2, gap="small")
-    with d1:
-        _fa_inv_voce(f"se_{e['id']}", "📤 Invia", f"{se_titolo(e)} – {p.get('nome', '')}", [("Tipo", e.get("tipo")), ("Codice", e.get("codice")), ("Percentuale", (e.get("percentuale") + "%") if e.get("percentuale") else ""),
+    ra_pannello_invio(f"se_{e['id']}", f"{se_titolo(e)} – {p.get('nome', '')}", [("Tipo", e.get("tipo")), ("Codice", e.get("codice")), ("Percentuale", (e.get("percentuale") + "%") if e.get("percentuale") else ""),
                      ("Ente", e.get("ente")), ("Verbale", e.get("protocollo")), ("Valida fino al", "permanente" if e.get("permanente") else _sp_data_it(e.get("valida_fino"))), ("Revisione", _sp_data_it(e.get("revisione"))),
                      ("Note", e.get("note"))], [ref] if ref.get("id") else [])
-    if d2.button("🗑️ Elimina", key=f"se_d_{e['id']}", width="stretch"):
-        _se_dialogo_togli(pid, e["id"], se_titolo(e))
     if st.session_state.get("se_cor") == e["id"]:
         ok, val = _se_form("se_cor_" + e["id"], f, pid, v=e, con_profilo=False)
         if ok:

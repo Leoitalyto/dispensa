@@ -1698,27 +1698,28 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
     st.markdown(f"<div class='sp-card'><b>{_sp_e(d.get('titolo'))}</b>" + (f"<br><small>{_sp_e(badge)}</small>" if badge else "") + f"<br><small>{_sp_e(righe)}</small>" + extra
                 + (f"<br><small>{_sp_e(d.get('note'))}</small>" if d.get("note") else "") + "</div>", unsafe_allow_html=True)
     ref = d.get("file") or {}
-    c1, c2 = st.columns(2, gap="small")
-    if ref.get("id"):
-        aperto = ref["id"] in vedi
-        if c1.button("🙈 Chiudi" if aperto else "👁️ Vedi / scarica", key=f"sp_dsv_{d['id']}", width="stretch"):
-            vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
-            st.rerun()
-    if c2.button("✏️ Modifica", key=f"sp_dsc_{d['id']}", width="stretch"):
+    aperto = bool(ref.get("id")) and ref["id"] in vedi
+    aperta_cat = st.session_state.get("sp_ds_cat") == d["id"]
+    ev = ra_riga(f"ds_{d['id']}", [("v", "🙈" if aperto else "👁️", "Chiudi" if aperto else "Vedi", "Vedi o scarica il file", not ref.get("id")),
+                                     ("m", "✏️", "Modifica", "Correggi i dati di questo documento"),
+                                     ("i", "📤", "Invia", "Invia questo documento (WhatsApp, email…)", False, _inv_alterna, (f"inv_aperto_sp_ds_{d['id']}",)),
+                                     ("e", "🗑️", "Elimina", "Elimina questo documento"),
+                                     ("c", "🏷️", "Categoria", "Cambia categoria (o cartella)")])
+    if ev["v"]:
+        vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
+        st.rerun()
+    if ev["m"]:
         st.session_state["sp_ds_cor"] = None if st.session_state.get("sp_ds_cor") == d["id"] else d["id"]
         st.rerun()
-    if ref.get("id") and ref["id"] in vedi:
-        _sp_mostra(ref)
-    e1, e2 = st.columns(2, gap="small")
-    with e1:
-        _fa_inv_voce(f"sp_ds_{d['id']}", "📤 Invia", f"{d.get('titolo')} – {p.get('nome', '')}", [("Area medica", d.get("specialita")), ("Data", _sp_data_it(d.get("data"))), ("Medico", d.get("medico")), ("Struttura", d.get("struttura")),
-                     ("Conclusioni", d.get("conclusioni")), ("Controllo", d.get("controllo_indicato")), ("Note", d.get("note"))], [ref] if ref.get("id") else [])
-    if e2.button("🗑️ Elimina", key=f"sp_dsd_{d['id']}", width="stretch"):
+    if ev["e"]:
         _sp_dialogo_togli_docsan(pid, d["id"], d.get("titolo"))
-    aperta_cat = st.session_state.get("sp_ds_cat") == d["id"]
-    if st.button("🙈 Chiudi" if aperta_cat else "🏷️ Cambia categoria (o cartella)", key=f"sp_dscat_{d['id']}", width="stretch"):
+    if ev["c"]:
         st.session_state["sp_ds_cat"] = None if aperta_cat else d["id"]
         st.rerun()
+    if aperto:
+        _sp_mostra(ref)
+    ra_pannello_invio(f"sp_ds_{d['id']}", f"{d.get('titolo')} – {p.get('nome', '')}", [("Area medica", d.get("specialita")), ("Data", _sp_data_it(d.get("data"))), ("Medico", d.get("medico")), ("Struttura", d.get("struttura")),
+                     ("Conclusioni", d.get("conclusioni")), ("Controllo", d.get("controllo_indicato")), ("Note", d.get("note"))], [ref] if ref.get("id") else [])
     if aperta_cat:
         st.caption("Scegli dove deve stare questo documento. Non perdi niente: cambia solo la categoria.")
         with st.form(f"sp_ds_catf_{d['id']}", border=False):

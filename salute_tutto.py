@@ -321,6 +321,26 @@ def _stt_nomi_file(x):
     return ", ".join(n[:3]) + (f" (+{len(n) - 3})" if len(n) > 3 else "")
 
 
+_STT_ENTE = re.compile(r"regione|azienda|\basl\b|a\.s\.l|ospedale|presidio|policlinico|poliambulatorio|residenza|dipartimento", re.I)
+
+
+def _stt_cosa_e(d, titolo, strut):
+    """«Contenuto» di un documento che non ha l'elenco degli esami né le conclusioni: DI COSA SI TRATTA (Emocromo, Esame completo urine, Ecocolordoppler…),
+    preso dalla prestazione o dal titolo («Esame di laboratorio · Emocromo · 20/06/2019» → «Emocromo»). Se nel titolo c'è solo il nome della struttura, resta vuoto."""
+    cosa = str(d.get("prestazione") or d.get("esame") or "").strip()
+    if not cosa:
+        parti = [x.strip() for x in str(titolo or "").split(" · ") if x.strip()]
+        parti = [x for x in parti if not re.fullmatch(r"\d{1,2}/\d{1,2}/\d{2,4}", x)]
+        if len(parti) > 1:
+            tipo = str(d.get("tipo") or "").strip().lower()
+            if parti[0].lower() == tipo or parti[0].lower() in ("esame di laboratorio", "referto di visita", "piano terapeutico", "esame strumentale"):
+                parti = parti[1:]
+        cosa = " · ".join(parti)
+    if not cosa or (strut and cosa.strip().lower() in str(strut).strip().lower()) or _STT_ENTE.search(cosa):
+        return ""
+    return cosa[:160]
+
+
 def _stt_righe_docsan(p):
     pr = p["p"]
     righe = []
@@ -331,7 +351,7 @@ def _stt_righe_docsan(p):
         concl = d.get("conclusioni", "")
         if "sr_conclusioni_valide" in globals() and not sr_conclusioni_valide(concl):
             concl = ""
-        contenuto = d.get("esami_elenco") or concl                                      # per gli esami: cosa contengono; per le visite: le conclusioni
+        contenuto = d.get("esami_elenco") or concl or _stt_cosa_e(d, titolo, strut)                                      # per gli esami: cosa contengono; per le visite: le conclusioni
         righe.append([_stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), medico, strut,
                       (str(contenuto)[:160] + ("…" if len(str(contenuto)) > 160 else "")), _stt_nomi_file(d)])
     return righe

@@ -3911,8 +3911,13 @@ def schermata_casa():
     for nome, g, imp in sc.get("bollette", [])[:4]:
         st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
     sel_c = ca_selettore_casa(c)
+    if sel_c == "__vuota__":                                           # la persona scelta non ha ancora una casa: si vede solo «➕ Aggiungi una casa»
+        st.info("Questa persona non ha ancora una casa: toccala qui sopra in «➕ Aggiungi una casa» e dalle un nome.")
+        return
     cv = ca_vista_casa(c, sel_c)
-    if len(ca_case(c)) > 1:
+    if "cpf_titolo" in globals():
+        cpf_titolo(c, sel_c)
+    elif len(ca_case(c)) > 1:
         st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
     t5, t1, t2, t3, t4 = st.tabs(["🏢 Amministrazione", "🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])      # Amministrazione è la prima scheda
     with t1:
