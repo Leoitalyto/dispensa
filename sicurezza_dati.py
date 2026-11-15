@@ -326,6 +326,9 @@ def bk_ui_ripristino(elenco):
 # lo spazio: quanto ce n'è, quanto se ne usa, che cosa pesa
 # ---------------------------------------------------------------------------------------------------------------------
 _BK_CSS = """<style>
+.st-key-bk_riquadro [role="tablist"]{position:relative !important;left:0 !important;right:auto !important;bottom:auto !important;top:auto !important;transform:none !important;width:100% !important;
+ flex-wrap:wrap;overflow:visible !important;border-radius:16px;box-shadow:none !important;margin:0 0 10px;padding:4px !important;z-index:1}
+.st-key-bk_riquadro [data-baseweb="tab-highlight"],.st-key-bk_riquadro [data-baseweb="tab-border"]{display:none !important}
 .bk-barra{position:relative;height:30px;border-radius:15px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.25);overflow:hidden;margin:6px 0 2px}
 .bk-barra>span{display:block;height:100%;float:left}
 .bk-scala{display:flex;justify-content:space-between;font-size:.78rem;opacity:.85;margin-bottom:8px}
@@ -493,11 +496,9 @@ def _bk_alterna():
     st.session_state["bk_aperto"] = not st.session_state.get("bk_aperto", False)
 
 
-if "schermata_utilita" in globals() and "_bk_utilita_prima" not in globals():
-    _bk_utilita_prima = schermata_utilita
-
-    def schermata_utilita():                                         # noqa: F811
-        r = _bk_utilita_prima()
+def bk_blocco_utilita():
+    """Backup, ripristino e spazio: riquadro «Sicurezza dei tuoi dati» della pagina Utilità (utilita.py)."""
+    if True:
         try:
             stato = bk_stato().get("ultimo") or {}
             giorni, _fa = bk_quanto_fa(stato.get("il", ""))
@@ -510,4 +511,3 @@ if "schermata_utilita" in globals() and "_bk_utilita_prima" not in globals():
                     bk_pannello()
         except Exception as ex:
             st.warning(f"Il riquadro del backup non è disponibile ({type(ex).__name__}).")
-        return r

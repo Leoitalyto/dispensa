@@ -647,12 +647,8 @@ def schermata_farmacia():
     return r
 
 
-if "_cs_utilita_prima" not in globals() and "schermata_utilita" in globals():
-    _cs_utilita_prima = schermata_utilita
-
-
-def schermata_utilita():
-    r = _cs_utilita_prima()
+def cs_blocco_utilita():
+    """Cestino e storico: stanno nel riquadro «Sicurezza dei tuoi dati» della pagina Utilità (utilita.py)."""
     try:
         if cs_attivo():
             recs, _g = cs_leggi()
@@ -668,4 +664,3 @@ def schermata_utilita():
                         cs_pagina(None, "cs_fam", FD_FILE)
     except Exception:
         pass
-    return r

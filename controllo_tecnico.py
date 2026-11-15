@@ -109,16 +109,11 @@ def ct_pannello():
     st.caption("Dopo ogni aggiornamento dell'app o di Streamlit guarda qui: se compare un 🔴 o un 🟡 nuovo, dimmelo e lo sistemo.")
 
 
-if "_ct_utilita_prima" not in globals() and "schermata_utilita" in globals():
-    _ct_utilita_prima = schermata_utilita
-
-
-def schermata_utilita():                                                   # noqa: F811
-    r = _ct_utilita_prima()
+def ct_blocco_utilita():
+    """Riquadro «Controllo tecnico» (solo amministratore) della pagina Utilità."""
     try:
         if bool((st.session_state.get("sess") or {}).get("admin")):
             with st.expander("🩺 Controllo tecnico dell'app (solo amministratore)"):
                 ct_pannello()
     except Exception:
         pass
-    return r

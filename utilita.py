@@ -9,6 +9,7 @@ Caricato da app_dispensa.py. Se mancano le immagini, la pagina funziona lo stess
 import base64
 import html
 import os
+from contextlib import contextmanager
 
 import streamlit as st
 
@@ -157,8 +158,44 @@ def _ut_blocco(u):
         _dialogo_bugiardino(k)
 
 
+@contextmanager
+def ut_riquadro(chiave, icona, titolo, a_cosa, colore):
+    """Un riquadro colorato con il nome e una riga che dice a cosa serve: dentro ci va il suo contenuto."""
+    st.markdown(f"<style>.st-key-utq_{chiave}{{border:2px solid {colore} !important;border-radius:20px !important;"
+                f"background:{colore}1c !important;margin-bottom:14px}}"
+                f".utq-testa-{chiave}{{background:{colore};color:#fff;border-radius:14px;padding:10px 14px;margin:0 0 8px;line-height:1.25}}"
+                f".utq-testa-{chiave} b{{font-size:1.12rem;display:block}}.utq-testa-{chiave} span{{font-size:.85rem;opacity:.95}}</style>",
+                unsafe_allow_html=True)
+    with st.container(border=True, key=f"utq_{chiave}"):
+        st.markdown(f"<div class='utq-testa-{chiave}'><b>{icona} {html.escape(titolo)}</b><span>{html.escape(a_cosa)}</span></div>",
+                    unsafe_allow_html=True)
+        yield
+
+
+def ut_gruppo(icona, titolo, a_cosa, colore):
+    """La striscia che separa i due gruppi: strumenti DELL'app e strumenti FUORI dall'app."""
+    st.markdown(f"<div style='border-left:8px solid {colore};padding:6px 12px;margin:18px 0 10px;border-radius:6px;background:{colore}22'>"
+                f"<div style='font-size:1.15rem;font-weight:800'>{icona} {html.escape(titolo)}</div>"
+                f"<div style='font-size:.85rem;opacity:.85'>{html.escape(a_cosa)}</div></div>", unsafe_allow_html=True)
+
+
+def _ut_chiama(nome):
+    """Disegna un pezzo della pagina, se c'è; un errore in un pezzo non rompe gli altri."""
+    f = globals().get(nome)
+    if not callable(f):
+        return
+    try:
+        f()
+    except Exception as ex:
+        st.warning(f"Questa parte non è disponibile ({type(ex).__name__}).")
+
+
+def _ut_admin():
+    return bool((st.session_state.get("sess") or {}).get("admin"))
+
+
 def schermata_utilita():
-    """La pagina Utilità (si apre dalla Home con la terza icona, accanto a Salute e I miei documenti)."""
+    """La pagina Utilità (si apre dalla Home con la terza icona). Due gruppi: 🔧 per far funzionare l'app · 🌐 strumenti fuori dall'app."""
     st.markdown(
         "<style>@keyframes ut-batte{0%,100%{transform:scale(1);filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}"
         "50%{transform:scale(1.06);filter:drop-shadow(0 0 16px rgba(0,200,215,.95))}}"
@@ -167,9 +204,26 @@ def schermata_utilita():
         ".ut-hero h1{margin:0;font-size:1.8rem;color:#fff;padding:0}.ut-hero p{margin:4px 0 0;opacity:.92}</style>",
         unsafe_allow_html=True)
     nav_barra("utilita")                                 # ← Archivio
-    st.markdown("<div class='ut-hero'><h1>🧰 Utilità</h1><p>Tocca il pulsante per avviare · tocca il nome per sapere cos'è</p></div>",
+    st.markdown("<div class='ut-hero'><h1>🧰 Utilità</h1><p>Scegli il riquadro colorato: strumenti per l'app o da usare fuori dall'app</p></div>",
                 unsafe_allow_html=True)
     if "pulsante_info" in globals():                      # il pulsante Informazioni sta sempre in alto
         pulsante_info("utilita")
-    for u in UTILITA:
-        _ut_blocco(u)
+
+    ut_gruppo("🔧", "Per far funzionare l'app", "Copie di sicurezza, cose eliminate, scambio dati, aspetto e telefono", "#1565c0")
+    with ut_riquadro("sicurezza", "🛟", "Sicurezza dei tuoi dati", "Copia di riserva, ripristino, spazio · cestino delle cose eliminate", "#2e7d32"):
+        _ut_chiama("bk_blocco_utilita")
+        _ut_chiama("cs_blocco_utilita")
+    with ut_riquadro("scambio", "📦", "Scambio con altre persone", "Mandare i tuoi dati a un altro utente di VitaMemo o riceverli", "#ef6c00"):
+        _ut_chiama("sc_blocco_utilita")
+    with ut_riquadro("aspetto", "⚙️", "Aspetto e telefono", "Testi più grandi, radio, freccia «torna su», libera spazio sul telefono", "#0277bd"):
+        _ut_chiama("pn_blocco_utilita")
+    if _ut_admin():
+        with ut_riquadro("tecnico", "🩺", "Controllo tecnico", "Solo per l'amministratore: l'app funziona bene?", "#546e7a"):
+            _ut_chiama("ct_blocco_utilita")
+
+    ut_gruppo("🌐", "Strumenti da usare fuori dall'app", "Si aprono in una nuova scheda del browser: l'app non manda loro i tuoi dati", "#8e24aa")
+    with ut_riquadro("musica", "🎵", "Utilità musicali", "Ascolta musica gratis, senza pubblicità e senza registrarti", "#7b1fa2"):
+        for u in UTILITA:
+            _ut_blocco(u)
+    with ut_riquadro("pdf", "📄", "Utilità PDF", "Crea, unisci, comprimi, converti, modifica e firma i PDF con i servizi più usati", "#c62828"):
+        _ut_chiama("upd_pannello")

@@ -351,12 +351,9 @@ if "nav_barra" in globals() and "_pn_nav_prima" not in globals():
         except Exception:
             return _pn_nav_prima(sezione)
 
-if "schermata_utilita" in globals() and "_pn_utilita_prima" not in globals():
-    _pn_utilita_prima = schermata_utilita
-
-    def schermata_utilita():                                         # noqa: F811
-        _pn_utilita_prima()
-        try:
-            pn_impostazioni()
-        except Exception:
-            pass
+def pn_blocco_utilita():
+    """Aspetto dell'app (testi, radio, freccia, Libera spazio): riquadro «Aspetto e telefono» della pagina Utilità."""
+    try:
+        pn_impostazioni()
+    except Exception:
+        pass

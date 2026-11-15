@@ -31,8 +31,10 @@ _TOUR = [
     ("I miei documenti", "Con la seconda icona entri in I miei documenti. Fai la foto del documento: l'app toglie lo sfondo, lo "
                          "raddrizza e prova a leggere tipo, numero e scadenza. Puoi sempre correggere i campi. "
                          "Ti avvisa sei e tre mesi prima della scadenza."),
-    ("Le Utilità", "Con la terza icona entri nelle Utilità: app utili come Velocity Music e Wimbi. Tocca il pulsante per avviarle e "
-                   "il nome per leggere il bugiardino."),
+    ("Le Utilità", "Con la terza icona entri nelle Utilità, divise in riquadri colorati con il loro nome. Sotto la striscia blu ci sono gli "
+                   "strumenti per far funzionare l'app: Sicurezza dei tuoi dati con il backup e il cestino, Scambio con altre persone, Aspetto e telefono. "
+                   "Sotto la striscia viola ci sono gli strumenti fuori dall'app: le Utilità musicali, con Velocity Music e Wimbi, e le Utilità PDF, "
+                   "con gli elenchi a cascata per unire, comprimere, modificare e firmare i PDF con iLovePDF, PDF24 e gli altri."),
     ("Aiuto sempre a portata di mano", "In alto, in ogni pagina, c'è il pulsante rosso Clicca per informazioni, con la guida e la ricerca. "
                                        "E io sono qui: toccami quando vuoi, anche con il microfono. Se non ti servo, mi disattivi dal pannello, "
                                        "e mi riattivi dal pulsante rosso. Buon lavoro!"),

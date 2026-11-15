@@ -494,11 +494,9 @@ def sc_pulsante(sezione):
 
 
 # ---- aggancio: Utilità ha il riquadro; ogni sezione ha il pulsante in fondo
-if "schermata_utilita" in globals() and "_sc_utilita_prima" not in globals():
-    _sc_utilita_prima = schermata_utilita
-
-    def schermata_utilita():                                         # noqa: F811
-        _sc_utilita_prima()
+def sc_blocco_utilita():
+    """Scambio dati: riquadro «Scambio con altre persone» della pagina Utilità (utilita.py)."""
+    if True:
         try:
             st.markdown("<div id='sc-scambio'></div>", unsafe_allow_html=True)
             # Lo scambio ha più passi (scegli cosa, password, prepara, scarica; oppure scegli il file, password, guarda, importa): se si usa il riquadro NON deve richiudersi a ogni tocco.

@@ -121,10 +121,15 @@ AG_CAPITOLI = [
           "I tuoi messaggi sono a destra in verde, quelli degli altri a sinistra in bianco. Un pallino rosso con il numero ti dice quanti messaggi nuovi hai.",
      "d": "Pulsante 💬 Chat in alto → scegli la persona → scrivi in basso → 📨 Invia.", "k": "chat messaggi famiglia scrivere tutti privata persone in vista altre persone nuovi messaggi"},
     {"id": "g_utilita", "s": "utilita", "t": "Le Utilità",
-     "x": "Nelle Utilità ci sono gli strumenti di servizio. Il Cestino, dove restano trenta giorni le cose eliminate. L'Aspetto dell'app, per avere testi più grandi. "
-          "Lo Scambio dati, per mandare i tuoi dati a un'altra persona o riceverli. Libera spazio, per togliere i file inutili dal telefono. "
-          "E le app utili, come Wimbi e Velocity Music, con il loro bugiardino che spiega cosa fanno.",
-     "d": "Pulsante viola 🧰 Utilità, l'ultimo della fila in alto.", "k": "utilità cestino aspetto testi grandi scambio dati libera spazio wimbi velocity app utili"},
+     "x": "Le Utilità sono divise in riquadri colorati, ognuno con il suo nome. Sotto la striscia blu, gli strumenti per far funzionare l'app: il riquadro verde Sicurezza dei tuoi dati, con backup, ripristino, spazio e Cestino; "
+          "l'arancione Scambio con altre persone; l'azzurro Aspetto e telefono, con i testi più grandi e Libera spazio. "
+          "Sotto la striscia viola, gli strumenti fuori dall'app: le Utilità musicali, con Wimbi e Velocity Music, e le Utilità PDF.",
+     "d": "Pulsante 🧰 Utilità → scegli il riquadro colorato.", "k": "utilità riquadri colorati cestino backup aspetto testi grandi scambio dati libera spazio wimbi velocity musica pdf app utili"},
+    {"id": "g_pdf", "s": "utilita", "t": "Lavorare con i PDF",
+     "x": "Nel riquadro rosso Utilità PDF ci sono due elenchi a cascata. Nel primo scegli cosa vuoi fare: unire, dividere, comprimere, convertire, modificare, firmare, mettere la password o trasformare foto in PDF. "
+          "Compaiono i servizi consigliati, come iLovePDF, PDF24, Sejda e Adobe, con costo e un pulsante per aprirli. "
+          "Nel secondo conosci un servizio: punto forte, limiti e privacy. Per i documenti riservati usa le app sul telefono, non i siti.",
+     "d": "🧰 Utilità → riquadro rosso 📄 Utilità PDF → «Cosa vuoi fare con il PDF?».", "k": "pdf unire dividere comprimere convertire modificare firmare password ruotare ocr foto in pdf ilovepdf pdf24 smallpdf sejda adobe"},
     {"id": "g_avvisi", "s": "farmacia", "t": "Come arrivano gli avvisi",
      "x": "L'app ti avvisa prima delle scadenze e all'ora delle terapie. Gli avvisi arrivano su Telegram, per email, su WhatsApp o come allarme sul Calendario del telefono: scegli tu quali. "
           "Telegram ed email sono gratuiti e sicuri; basta impostarli una volta. Dentro Salute c'è il pulsante per mandare un messaggio di prova, così controlli che tutto funzioni. "

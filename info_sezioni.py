@@ -384,15 +384,34 @@ La prossima volta, prima di eliminare, **leggi con calma la conferma**: «Annull
 
     "utilita": [
         ("🧰 A cosa serve la pagina Utilità",
-         """Raccoglie **app e siti utili** in un solo posto. Ognuno ha un grande **pulsante che pulsa**: toccalo e si avvia.
+         """Raccoglie in un solo posto **gli strumenti di servizio**, divisi in **riquadri colorati** con il loro nome. I riquadri sono in **due gruppi**:
 
-Sotto il pulsante c'è il **nome** dell'app: toccandolo si apre il **bugiardino**, cioè una spiegazione semplice di cosa fa e dei suoi vantaggi.
+🔧 **Per far funzionare l'app** (strisce blu): la sicurezza dei tuoi dati, lo scambio con altre persone, l'aspetto e il telefono.
+🌐 **Strumenti da usare fuori dall'app** (striscia viola): la musica e i PDF. Si aprono in una nuova scheda del browser.
 
-Per ora ci sono **Velocity Music** (il play azzurro) e **Wimbi** (il papero con le cuffie); altre utilità si aggiungeranno qui.""",
-         "utilità utilita pagina app pulsanti avviare raccolta siti cos'è a cosa serve"),
+Ogni riquadro ha in alto il **nome** e una riga che dice **a cosa serve**.""",
+         "utilità utilita pagina riquadri colorati gruppi strumenti cos'è a cosa serve app fuori dall'app"),
+        ("🎨 I riquadri colorati: quale scegliere",
+         """- 🟢 **Sicurezza dei tuoi dati**: fai la copia di riserva (backup), la ripristini, vedi lo spazio, recuperi le cose eliminate per sbaglio dal cestino.
+- 🟠 **Scambio con altre persone**: mandi i tuoi dati a un altro utente di VitaMemo, o li ricevi.
+- 🔵 **Aspetto e telefono**: testi più grandi, radio di sottofondo, freccia «torna su», libera spazio sul telefono.
+- 🩺 **Controllo tecnico** (grigio, solo amministratore): verifica che l'app funzioni.
+- 🟣 **Utilità musicali**: Velocity Music e Wimbi per ascoltare musica gratis.
+- 🔴 **Utilità PDF**: i servizi più usati per creare, unire, comprimere, modificare e firmare i PDF.
+
+Regola semplice: **i riquadri sotto la striscia blu lavorano sui dati dell'app; quelli sotto la striscia viola portano a servizi esterni** e non ricevono nulla dai tuoi dati.""",
+         "riquadri colori scegliere sicurezza scambio aspetto telefono controllo tecnico musica pdf quale"),
+        ("🔧 Gli strumenti per far funzionare l'app",
+         """- **🛟 Sicurezza dei tuoi dati**: tocca **«Backup, ripristino e spazio»** per scaricare la copia di tutto, riportarla indietro o vedere lo spazio usato. Sotto trovi il **🗑️ Cestino** e lo **🕘 Storico delle modifiche**.
+- **📦 Scambio con altre persone**: tocca la riga per esportare o importare dati, con password se vuoi.
+- **⚙️ Aspetto e telefono**: tocca la riga per cambiare la grandezza dei testi e liberare spazio sul telefono.
+- **🩺 Controllo tecnico**: lo vede solo l'amministratore.
+
+Ogni riquadro si apre con un tocco e si richiude con **✖ Chiudi**.""",
+         "sicurezza backup ripristino cestino storico scambio aspetto testi libera spazio controllo tecnico funzionamento app"),
         ("▶️ Come avviare un'app",
          """1. Dalla Home tocca l'icona **🧰 Utilità** (accanto a Salute e I miei documenti).
-2. Tocca il **grande pulsante** con il simbolo ▶️: l'app si apre in una nuova scheda del browser.
+2. Scendi fino al riquadro viola **🎵 Utilità musicali** e tocca il **grande pulsante** con il simbolo ▶️: l'app si apre in una nuova scheda del browser.
 3. Per tornare qui, chiudi quella scheda o torna indietro.""",
          "avviare aprire avvio play pulsante app link velocity music musica"),
         ("📖 Come leggere il bugiardino",
@@ -412,6 +431,22 @@ Indirizzo: https://wimbi.app/it/""",
 
 Indirizzo: https://velocitymusic.uk/""",
          "velocity music musica youtube gratis pubblicità lettore canzoni ascoltare radio"),
+        ("📄 Utilità PDF: come usare gli elenchi",
+         """Nel riquadro rosso **Utilità PDF** ci sono **due elenchi a cascata**:
+1. **«Cosa vuoi fare con il PDF?»**: tocca e scegli (unire, dividere, comprimere, convertire, modificare, compilare e firmare, password, ruotare, OCR, foto in PDF). Compaiono **i servizi consigliati, in ordine**, ognuno con **costo, dove si usa e il pulsante 🌐 Apri**.
+2. **«Oppure scegli un servizio»**: scegli per esempio iLovePDF o PDF24 e leggi **punto forte, costo e limiti, dove si usa, privacy**.
+
+Sotto la scelta c'è anche **«Dentro il servizio»** (il nome del comando da cercare) e, quando serve, cosa puoi fare **già dentro VitaMemo** senza uscire.""",
+         "pdf unire dividere comprimere convertire modificare firmare ilovepdf pdf24 smallpdf sejda adobe elenco cascata"),
+        ("🔒 Quale servizio PDF scegliere: costi e privacy",
+         """- **Gratis e semplice**: PDF24 (senza registrazione) e iLovePDF (con limiti).
+- **Modificare il testo**: Sejda e PDFgear.
+- **Compilare e firmare dal telefono**: Adobe Acrobat Reader e Xodo (app gratuite).
+- **Foto in PDF**: Google Drive («Scansiona») o Adobe Scan.
+- **Il più trasparente**: Stirling-PDF (open source).
+
+⚠️ I **siti** mandano il file a un server esterno: per documenti **riservati** (sanitari, identità, contratti) usa le **app sul telefono** e cancella il file dal sito a lavoro finito. **Prezzi e limiti cambiano: controllali sul sito prima di pagare.** L'app non manda nulla a questi servizi e non usa nessuna chiave.""",
+         "pdf privacy riservato costi gratis limiti scegliere sicuro app telefono stirling pdfgear xodo"),
     ],
 
     "documenti": [
@@ -472,7 +507,7 @@ In alto vedi i contatori. Se hai attivato **Telegram** o l'**email** (si fa in S
 _ID_GUIDA = {
     "dispensa": "d_assistente d_inizio d_aggiungere d_foto d_colori d_allergeni d_pulsanti d_icone d_cercare d_spesa d_gestisci d_statistiche d_famiglia d_account d_aiuto".split(),
     "farmacia": "f_cosa f_profili f_medicinale f_scadenze f_terapie f_prescrizioni f_visite f_vaccini f_scheda f_tessera f_aperta f_avvisi f_report f_invio f_el_med f_mod_med f_el_ter f_el_pre f_el_vis f_el_vac f_el_prof f_condividi f_archivio f_trasferisci f_sbaglio".split(),
-    "utilita": "u_cosa u_avviare u_bugiardino u_wimbi u_velocity".split(),
+    "utilita": "u_cosa u_riquadri u_app u_avviare u_bugiardino u_wimbi u_velocity u_pdf u_pdf_scelta".split(),
     "documenti": "x_cosa x_aggiungere x_foto x_colori x_cercare x_modificare x_tipi x_privacy".split(),
 }
 
