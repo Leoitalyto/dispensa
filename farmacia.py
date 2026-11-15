@@ -3542,13 +3542,24 @@ def _doc_dettaglio_corpo(doc_id, pid):
                     f"<td style='padding:4px 0'><b>{html.escape(str(v))}</b></td></tr>" for k, v in dati if v)
     st.markdown(f"<table style='border-collapse:collapse;width:100%'>{righe}</table>", unsafe_allow_html=True)
 
-    # --- fronte e retro: un tasto per vederli
+    # --- una sola riga di pulsanti: Mostra · Doppi · Note · Modifica · Elimina (Invia ed Esporta restano sotto)
     allegati = x.get("allegati", [])
+    k_vis = f"doc_vis_{doc_id}"
+    vis = st.session_state.get(k_vis, False)
+    k_nota = f"doc_note_{doc_id}"
+    nota_aperta = st.session_state.get(k_nota, False)
+    n_note = len(x.get("annotazioni") or [])
+    k_conf = f"doc_conf_{doc_id}"
+    ev = ra_riga(f"docd_{doc_id}", [
+        ("v", "🙈" if vis else "👁️", "Nascondi" if vis else "Mostra", "Mostra o nascondi fronte e retro", not allegati, _doc_alterna, (k_vis,)),
+        ("d", "🧹", "Doppi", "Togli i file doppi: se la stessa foto è stata salvata due volte, ne tengo una sola", len(allegati) < 2),
+        ("n", "📝", f"Note ({n_note})", "Annotazioni: non cambiano il documento originale", False, _doc_alterna, (k_nota,)),
+        ("m", "✏️", "Modifica", "Correggi i dati di questo documento", False),
+        ("e", "🗑️", "Elimina", "Elimina questo documento", False, _doc_imposta, (k_conf, True))])
+    if ev["m"]:
+        st.session_state["doc_modulo"] = {"pid": pid, "doc_id": doc_id}
+        st.rerun()
     if allegati:
-        k_vis = f"doc_vis_{doc_id}"
-        vis = st.session_state.get(k_vis, False)
-        st.button(("🙈 Nascondi fronte e retro" if vis else "👁️ Mostra fronte e retro"), key=f"doc_btnvis_{doc_id}",
-                  type="primary", width="stretch", on_click=_doc_alterna, args=(k_vis,))
         if vis:
             fronte, retro, altri = _doc_fronte_retro(allegati)
             for titolo, a_ in (("📄 Fronte", fronte), ("📄 Retro", retro)):
@@ -3571,8 +3582,7 @@ def _doc_dettaglio_corpo(doc_id, pid):
     else:
         st.info("Nessuna foto o file allegato. Tocca «Modifica» per aggiungere il fronte e il retro.")
 
-    if len(allegati) >= 2 and st.button("🧹 Togli i file doppi", key=f"doc_dup_{doc_id}", width="stretch",
-                                          help="Se la stessa foto è stata salvata due volte, ne tengo una sola."):
+    if ev["d"] and len(allegati) >= 2:
         with st.spinner("Controllo i file…"):
             doppi = _fa_ids_doppioni(allegati)
         if not doppi:
@@ -3590,14 +3600,9 @@ def _doc_dettaglio_corpo(doc_id, pid):
             else:
                 st.session_state["fa_msg"] = f"🧹 Tolto/i {len(doppi)} file doppio/i: la stessa foto era salvata due volte."
                 st.rerun()
-    if "tr_annotazioni_ui" in globals():
-        tr_annotazioni_ui("documenti", doc_id, f"doc_{doc_id}")
-    _fa_inv_voce(f"doc_{doc_id}", "📤 Invia questo documento (email, WhatsApp…)", f"{emoji} {x.get('tipo', 'Documento')} di {nomi.get(x.get('profilo', 'p0'), '')}".strip(),
-                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati", "Di chi è", "Giorni alla scadenza")], allegati)
-
-    # --- modifica ed eliminazione
-    st.divider()
-    if st.session_state.get(f"doc_conf_{doc_id}"):
+    if nota_aperta and "tr_annotazioni_ui" in globals():
+        tr_annotazioni_ui("documenti", doc_id, f"doc_{doc_id}", aperta=True)
+    if st.session_state.get(k_conf):
         st.warning(f"Vuoi eliminare **{x.get('tipo', 'questo documento')}**? Verranno eliminati anche i file allegati.")
         s1, s2 = st.columns(2, gap="small")
         if s1.button("Sì, elimina", type="primary", key=f"doc_si_{doc_id}", width="stretch"):
@@ -3605,16 +3610,13 @@ def _doc_dettaglio_corpo(doc_id, pid):
             if errore:
                 st.error(f"Non sono riuscito a eliminarlo: {errore}")
             else:
-                st.session_state.pop(f"doc_conf_{doc_id}", None)
+                st.session_state.pop(k_conf, None)
                 st.session_state["fa_msg"] = "🗑️ Documento eliminato."
                 st.rerun()
-        s2.button("Annulla", key=f"doc_no_{doc_id}", width="stretch", on_click=_doc_imposta, args=(f"doc_conf_{doc_id}", None))
-    else:
-        b1, b2 = st.columns(2, gap="small")
-        if b1.button("✏️ Modifica", key=f"doc_dmo_{doc_id}", width="stretch"):
-            st.session_state["doc_modulo"] = {"pid": pid, "doc_id": doc_id}
-            st.rerun()
-        b2.button("🗑️ Elimina", key=f"doc_del_{doc_id}", width="stretch", on_click=_doc_imposta, args=(f"doc_conf_{doc_id}", True))
+        s2.button("Annulla", key=f"doc_no_{doc_id}", width="stretch", on_click=_doc_imposta, args=(k_conf, None))
+    _fa_inv_voce(f"doc_{doc_id}", "📤 Invia questo documento (email, WhatsApp…)", f"{emoji} {x.get('tipo', 'Documento')} di {nomi.get(x.get('profilo', 'p0'), '')}".strip(),
+                 [(k, v) for k, v in dati if v and k not in ("Tipo", "File allegati", "Di chi è", "Giorni alla scadenza")], allegati)
+
 
 
 def _doc_dettaglio(doc_id, pid):

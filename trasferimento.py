@@ -451,7 +451,7 @@ def tr_aggiungi_annotazione(f, tipo, rec_id, testo, autore, oggi=None):
     return False
 
 
-def tr_annotazioni_ui(tipo, rec_id, chiave):
+def tr_annotazioni_ui(tipo, rec_id, chiave, aperta=False):
     """Le annotazioni di una voce (documento, prescrizione, visita, medicinale): si vedono e se ne aggiungono, senza toccare i file originali."""
     f = _fa_dati()
     rec = next((r for r in f.get(tipo, []) if r.get("id") == rec_id), None)
@@ -461,7 +461,7 @@ def tr_annotazioni_ui(tipo, rec_id, chiave):
     orig = (rec.get("origine") or {}).get("da")
     if orig:
         st.caption(f"📥 Ricevuto da **{orig}**. I file originali restano invariati: puoi correggere i dati scritti e aggiungere annotazioni.")
-    with st.expander(f"📝 Annotazioni ({len(note)})", expanded=False):
+    with st.expander(f"📝 Annotazioni ({len(note)})", expanded=False, **({"_aperta": True} if aperta else {})):
         for n in sorted(note, key=lambda x: x.get("data", ""), reverse=True):
             st.markdown(f"**{n.get('data', '')[8:10]}/{n.get('data', '')[5:7]}/{n.get('data', '')[:4]}** · {n.get('da', '')}: {n.get('testo', '')}")
         testo = st.text_area("Aggiungi un'annotazione", key=f"tr_nota_{chiave}", height=80, placeholder="Scrivi qui: non cambia il documento originale.")

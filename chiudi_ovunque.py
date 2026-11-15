@@ -269,4 +269,23 @@ if not getattr(st.dialog, "_vm_chiudi", False):
     _co_dialog._vm_chiudi = True
     st.dialog = _co_dialog
 
+# COMPATTAZIONE: sul telefono Streamlit mette le colonne una sotto l'altra. Se una fila è fatta SOLO di pulsanti (da 2 a 4: Modifica+Elimina, Sì+No, Salva+Annulla…),
+# restano invece affiancati, ognuno nel suo riquadro. Vale per tutta l'app, anche per i moduli futuri.
+_CO_ALTRO = ('input,textarea,select,table,img,iframe,[data-baseweb],[data-testid="stMarkdown"],[data-testid="stHtml"],[data-testid="stImage"],[data-testid="stMetric"],'
+             '[data-testid="stCaptionContainer"],[data-testid="stAlert"],[data-testid="stExpander"],[data-testid="stFileUploader"],[data-testid="stHorizontalBlock"],'
+             '[data-testid="stPopover"],[data-testid="stDataFrame"],[data-testid="stProgress"],[data-testid="stCheckbox"],[data-testid="stToggle"]')
+_CO_SOLO_PULSANTI = ('[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(2) button)'
+                     ':not(:has(> [data-testid="stColumn"]:nth-child(5)))'
+                     ':not(:has(> [data-testid="stColumn"] :is(' + _CO_ALTRO + ')))')
+CO_CSS_COMPATTA = ("<style>@media (max-width: 640px){"
+                   + _CO_SOLO_PULSANTI + "{flex-wrap:nowrap !important;gap:6px !important}"
+                   + _CO_SOLO_PULSANTI + " > [data-testid=\"stColumn\"]{min-width:0 !important;width:auto !important;flex:1 1 0 !important}"
+                   + _CO_SOLO_PULSANTI + " button{padding:.35rem .25rem !important;min-height:2.6rem}"
+                   + _CO_SOLO_PULSANTI + " button p{font-size:.86rem !important;line-height:1.15 !important;white-space:normal !important;word-break:break-word}"
+                   "}</style>")
+try:
+    st.markdown(CO_CSS_COMPATTA, unsafe_allow_html=True)
+except Exception:
+    pass
+
 co_inizio_run()
