@@ -153,7 +153,13 @@ if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
 
     def _vive_avvolgi(originale):
         def _nuovo(*a, **kw):
-            return _vive_segna(originale(*a, **kw))
+            esito = originale(*a, **kw)
+            if esito:
+                prima = _vive_elenco()
+                _vive_segna(esito)
+                if kw.get("on_click") and _vive_elenco() != prima:          # il pulsante ha già fatto il suo lavoro (on_click): un solo ridisegno subito, con la linguetta aperta
+                    _st_chiuse.rerun()
+            return esito
         _nuovo.__wrapped__ = originale
         return _nuovo
     for _nome_v in ("button", "form_submit_button", "download_button"):

@@ -1724,7 +1724,13 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
         st.caption("Scegli dove deve stare questo documento. Non perdi niente: cambia solo la categoria.")
         with st.form(f"sp_ds_catf_{d['id']}", border=False):
             nuovi = _sp_scelta_categoria(f"sp_ds_cat_{d['id']}", d, con_persona=len(_fa_profili(f)) > 1, f=f, pid=pid)
-            ok_c = st.form_submit_button("✅ Sposta", type="primary", width="stretch")
+            ra_css()
+            with st.container(horizontal=True, gap="small", key=f"vmduo_sposta_{d['id']}"):
+                ok_c = st.form_submit_button("✅ Sposta", type="primary", width="stretch")
+                no_c = st.form_submit_button("✖ Chiudi", width="stretch")
+        if no_c:
+            st.session_state.pop("sp_ds_cat", None)
+            st.rerun()
         if ok_c:
             dest = nuovi.pop("_persona", pid)
             _sp_riclassifica(pid, d["id"], nuovi, dest)
@@ -1815,7 +1821,13 @@ def sp_modulo_docsan(pid):
                 with st.popover("🏷️ Sposta tutti i documenti di questa linguetta"):
                     st.caption(f"Sposta **tutti i {len(gruppi[k])}** documenti di «{k}» in un'altra " + ("categoria di documento." if modo == "tipo" else "area medica."))
                     nuovi_g = _sp_scelta_categoria(f"sp_ds_bulk_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", None, solo=modo)
-                    if st.button(f"✅ Sposta {"il documento" if len(gruppi[k]) == 1 else "i " + str(len(gruppi[k])) + " documenti"}", key=f"sp_ds_bulkb_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", type="primary", width="stretch"):
+                    ra_css()
+                    with st.container(horizontal=True, gap="small", key=f"vmduo_bulk_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}"):
+                        _ok_b = st.button(f"✅ Sposta {"il documento" if len(gruppi[k]) == 1 else "i " + str(len(gruppi[k])) + " documenti"}", key=f"sp_ds_bulkb_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", type="primary", width="stretch")
+                        _no_b = st.button("✖ Chiudi", key=f"sp_ds_bulkc_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", width="stretch")
+                    if _no_b:
+                        st.rerun()
+                    if _ok_b:
                         ids = [x["id"] for x in gruppi[k]]
 
                         def _bulk(f_, ids=ids, nuovi=nuovi_g):

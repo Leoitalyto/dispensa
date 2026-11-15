@@ -15,6 +15,10 @@ div[class*="st-key-vmriga_"] button{width:100% !important;min-width:0 !important
 div[class*="st-key-vmriga_"] button p{font-size:11px !important;line-height:1.2 !important;text-align:center !important;margin:0 !important;white-space:normal !important;word-break:break-word}
 div[class*="st-key-vmriga_"] button div[data-testid="stMarkdownContainer"]{width:100%}
 div[class*="st-key-vmriga_"] button p::first-line{font-size:18px !important;line-height:1.5 !important}
+div[class*="st-key-vmduo_"]{flex-wrap:nowrap !important;gap:8px !important;width:100% !important}
+div[class*="st-key-vmduo_"] > div{flex:1 1 0 !important;min-width:0 !important;width:auto !important}
+div[class*="st-key-vmduo_"] [data-testid="stElementContainer"]{width:100% !important}
+div[class*="st-key-vmduo_"] button{width:100% !important;min-width:0 !important}
 </style>""", unsafe_allow_html=True)
 
 
