@@ -108,7 +108,7 @@ AN_CATEGORIE = {
     "spese": {"titolo": "💶 Spese", "singolare": "spesa", "fonte": False, "data": "data", "scad": None,
               "campi": [("data", "Data", "d"), ("voce", "Per che cosa", "t"), ("importo", "Importo (€)", "n"), ("note", "Note", "t")], "titolo_campo": "voce", "obbl": ("voce",)},
     "contatti": {"titolo": "📇 Veterinari e contatti", "singolare": "contatto", "fonte": False, "data": None, "scad": None,
-                 "campi": [("nome", "Nome", "t"), ("ruolo", "Chi è", ("s", AN_RUOLI_CONTATTO)), ("tel", "Telefono", "t"), ("email", "Email", "t"), ("indirizzo", "Indirizzo", "t"), ("note", "Note", "a")],
+                 "campi": [("nome", "Nome", "t"), ("ruolo", "Chi è", ("s", AN_RUOLI_CONTATTO)), ("tel", "Telefono fisso", "t"), ("cell", "Cellulare", "t"), ("email", "Email", "t"), ("indirizzo", "Indirizzo", "t"), ("sito", "🌐 Sito web (facoltativo)", "t"), ("note", "Note", "a")],
                  "titolo_campo": "nome", "obbl": ("nome",)},
     "agenda": {"titolo": "📅 Agenda e promemoria", "singolare": "appuntamento", "fonte": False, "data": "data", "scad": "data",
                "campi": [("data", "Data", "d"), ("ora", "Ora (facoltativa)", "t"), ("titolo", "Che cosa", "t"), ("tipo", "Tipo", ("s", AN_TIPI_AGENDA)), ("note", "Note", "a")],
@@ -535,7 +535,7 @@ def an_riassunto_voce(cat, r):
         det = [an_data_it(r.get("data")), (f"{float(r['importo']):.2f} €".replace(".", ",") if r.get("importo") not in (None, "") else "")]
     elif cat == "contatti":
         t = r.get("nome") or "Contatto"
-        det = [r.get("ruolo") or "", r.get("tel") or "", r.get("email") or "", r.get("indirizzo") or ""]
+        det = [r.get("ruolo") or "", r.get("tel") or "", r.get("cell") or "", r.get("email") or "", r.get("indirizzo") or "", r.get("sito") or ""]
     else:
         t = r.get("titolo") or "Appuntamento"
         det = [an_data_it(r.get("data")), r.get("ora") or "", r.get("tipo") or "", "✅ fatto" if r.get("fatto") else ""]
@@ -551,6 +551,15 @@ def _an_scheda_voce(cat, r, a, modificabile=True, chiave=""):
     if r.get("doc"):
         extra += "<span class='an-badge tipo'>📎 da documento</span>"
     st.markdown(f"<div class='an-card {cl}'><div class='t'>{_an_e(t)}</div><div>{an_badge_fonte(r)}{extra}</div><div class='s'>{_an_e(det)}</div></div>", unsafe_allow_html=True)
+    if cat == "contatti" and "cc_pulsanti" in globals():                           # stessi tasti di tutti gli altri badge: Chiama (fisso o cellulare), Scrivi, Sito
+        _bc = []
+        if cc_numeri(r.get("tel"), r.get("cell")):
+            _bc.append(("📞 Chiama", ("__chiama__", r.get("tel"), r.get("cell"), r.get("nome", ""))))
+        if r.get("email"):
+            _bc.append(("✉️ Scrivi", "mailto:" + r["email"]))
+        if cc_url(r.get("sito")):
+            _bc.append(("🌐 Sito", cc_url(r["sito"])))
+        cc_pulsanti(_bc, f"an_ct_{r['id']}{chiave}")
     if modificabile:
         c1, c2 = st.columns(2, gap="small")
         if c1.button("✏️ Correggi", key=f"an_mod_{cat}_{r['id']}{chiave}", width="stretch"):
