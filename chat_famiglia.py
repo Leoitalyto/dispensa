@@ -476,7 +476,7 @@ def schermata_chat():
     _ch_lista(chiave)
     with st.form("ch_form_" + chiave, clear_on_submit=True):
         testo = st.text_area("Il tuo messaggio", height=90, max_chars=CH_MAX_CAR, placeholder="Scrivi qui…", label_visibility="collapsed")
-        invia = st.form_submit_button("📨 Invia", type="primary", width="stretch")
+        invia = st.form_submit_button("📨 Invia", type="primary", width="stretch", _chiudi=False)
     if invia:
         if not ch_pulisci_testo(testo):
             st.warning("Scrivi qualcosa prima di inviare.")

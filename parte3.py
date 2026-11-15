@@ -104,7 +104,7 @@ if not sess:
     with st.form("accesso"):
         pw = st.text_input(t("La tua password personale"), type="password")
         ricorda = st.checkbox(t("Ricordami su questo telefono"), value=True)
-        invio = st.form_submit_button(t("Entra"), type="primary")
+        invio = st.form_submit_button(t("Entra"), type="primary", _chiudi=False)
     if invio:
         if troppi_tentativi():
             st.error(t("Troppi tentativi sbagliati. Aspetta un minuto e riprova."))

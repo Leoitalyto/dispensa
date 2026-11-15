@@ -1726,7 +1726,7 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
             nuovi = _sp_scelta_categoria(f"sp_ds_cat_{d['id']}", d, con_persona=len(_fa_profili(f)) > 1, f=f, pid=pid)
             ra_css()
             with st.container(horizontal=True, gap="small", key=f"vmduo_sposta_{d['id']}"):
-                ok_c = st.form_submit_button("✅ Sposta", type="primary", width="stretch")
+                ok_c = st.form_submit_button("✅ Sposta", type="primary", width="stretch", _chiudi=False)
                 no_c = st.form_submit_button("✖ Chiudi", width="stretch")
         if no_c:
             st.session_state.pop("sp_ds_cat", None)
@@ -1823,7 +1823,7 @@ def sp_modulo_docsan(pid):
                     nuovi_g = _sp_scelta_categoria(f"sp_ds_bulk_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", None, solo=modo)
                     ra_css()
                     with st.container(horizontal=True, gap="small", key=f"vmduo_bulk_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}"):
-                        _ok_b = st.button(f"✅ Sposta {"il documento" if len(gruppi[k]) == 1 else "i " + str(len(gruppi[k])) + " documenti"}", key=f"sp_ds_bulkb_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", type="primary", width="stretch")
+                        _ok_b = st.button(f"✅ Sposta {"il documento" if len(gruppi[k]) == 1 else "i " + str(len(gruppi[k])) + " documenti"}", key=f"sp_ds_bulkb_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", type="primary", width="stretch", _chiudi=False)
                         _no_b = st.button("✖ Chiudi", key=f"sp_ds_bulkc_{hashlib.md5(f"{gruppo}|{k}".encode("utf-8")).hexdigest()[:8]}", width="stretch")
                     if _no_b:
                         st.rerun()
