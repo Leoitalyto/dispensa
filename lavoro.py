@@ -785,15 +785,22 @@ def schermata_lavoro():
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
     voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato"]
+    solo_admin = ("🧮 Controllo ore", "💰 Stipendio previsto")                   # servono al modulo ore dell'amministratore: gli utenti non le vedono
+    if not (st.session_state.get("sess") or {}).get("admin"):
+        voci_viste = [v for v in voci if v not in solo_admin]
+    else:
+        voci_viste = voci
     st.markdown(_LV_CSS_SEZ, unsafe_allow_html=True)
     scelta = st.session_state.get("lv_sezione")
-    if scelta not in voci:
+    if scelta not in voci_viste:
         scelta = None
         st.session_state["lv_sezione"] = None
     if scelta is None:                                      # la schermata dei pulsanti grandi colorati, come in Amministrazione
         st.subheader("💼 Che cosa vuoi vedere?")
         with st.container(key="lv_hub"):
             for i, et in enumerate(voci):
+                if et not in voci_viste:
+                    continue
                 if st.button(et, key=f"lv_b_{i}", width="stretch"):
                     st.session_state["lv_sezione"] = et
                     st.rerun()

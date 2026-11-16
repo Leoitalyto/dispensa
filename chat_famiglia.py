@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""CHAT · una sezione tutta sua («💬 Chat»), gratuita, dentro l'app: messaggi tra le persone della famiglia che usano «La nostra dispensa».
+"""CHAT · una sezione tutta sua («💬 Chat»), gratuita, dentro l'app: ogni utente può SOLO contattare l'amministratore (richieste, segnalazioni, spiegazioni); l'amministratore vede
+le richieste in arrivo («📥 Richieste da leggere») e risponde. Niente gruppo «Tutti» e niente conversazioni fra utenti. (Il testo qui sotto descrive la versione di prima.)
 
 COSA C'È
 • «👨‍👩‍👧 Tutti»: la chat di gruppo con tutte le persone dell'app.
@@ -45,10 +46,8 @@ def ch_partecipanti(chiave):
 
 def ch_puo(chiave, uid):
     """Questa persona può leggere e scrivere in questa conversazione?"""
-    if chiave == "tutti":
-        return True
-    p = ch_partecipanti(chiave)
-    return bool(p) and uid in p
+    p = ch_partecipanti(chiave)                                   # niente gruppo «Tutti»: si parla solo fra un utente e l'amministratore
+    return bool(p) and str(uid) in p and "admin" in p
 
 
 def ch_pulisci_testo(testo):
@@ -90,7 +89,7 @@ def ch_elimina(d, chiave, msg_id, uid, admin=False):
 
 def ch_conversazioni_di(d, uid):
     """Le chiavi delle conversazioni che questa persona può vedere e che esistono nel file (più «tutti», sempre)."""
-    chiavi = ["tutti"]
+    chiavi = []
     for k in (d.get("conv") or {}):
         if k != "tutti" and ch_puo(k, uid) and k not in chiavi:
             chiavi.append(k)
@@ -211,7 +210,7 @@ def ch_ordine_conversazioni(d, uid, vista_uids):
     con_msg = [k for k in ch_conversazioni_di(d, uid) if k != "tutti" and (d.get("conv") or {}).get(k)]
     con_msg.sort(key=lambda k: ch_ultimo_messaggio(d, k), reverse=True)
     scelte = [ch_chiave_privata(uid, u) for u in vista_uids]
-    pulsanti = ["tutti"] + con_msg + [k for k in scelte if k not in con_msg]
+    pulsanti = con_msg + [k for k in scelte if k not in con_msg]
     return pulsanti, con_msg
 
 
@@ -427,7 +426,7 @@ def schermata_chat():
     st.markdown(_CH_CSS, unsafe_allow_html=True)
     _uri = ih_uri("chat.webp", 330) if "ih_uri" in globals() else ""                                  # l'icona blu e oro, senza sfondo; se il file manca resta l'emoji
     _ico = f"<img class='ico-img' alt='Chat' src='{_uri}'>" if _uri else "<div class='ico'>💬</div>"
-    st.markdown(f"<div class='ch-hero'>{_ico}<div><h1>Chat</h1><p>Scrivi alle persone della famiglia, dentro l'app</p></div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='ch-hero'>{_ico}<div><h1>Chat</h1><p>{'Le richieste delle persone che ti scrivono' if st.session_state.get('sess', {}).get('admin') else 'Scrivi all’amministratore, dentro l’app'}</p></div></div>", unsafe_allow_html=True)
     if "pulsante_info" in globals():
         try:
             pulsante_info("chat")
@@ -440,39 +439,49 @@ def schermata_chat():
         return
     nomi = _ch_nomi()
     d = _ch_dati()
-    altri = [(u, n) for u, n in nomi.items() if u != uid]
-    vista = ch_vista_pulita(_ch_vista(), [u for u, _n in altri])
-    k_pills, _con_msg = ch_ordine_conversazioni(d, uid, vista)                 # «Tutti» + ogni conversazione che ha messaggi + le persone scelte a mano
-    k_menu = [ch_chiave_privata(uid, u) for u, _n in altri if ch_chiave_privata(uid, u) not in k_pills]
-    chiavi = k_pills + k_menu
-    nl = ch_non_letti(d, uid)
-    etich = lambda k: ch_etichetta(k, uid, nomi) + (f" 🔴{nl[k]}" if nl.get(k) else "")
-    if len(chiavi) == 1:
-        st.caption("Per ora sei l'unica persona nell'app: qui scrivi a «Tutti». Quando altre persone avranno la loro password compariranno anche le conversazioni private.")
-    if "ch_conv" not in st.session_state:                                         # appena aperta la chat: riparte dall'ultima conversazione che stavi guardando
-        st.session_state["ch_conv"] = _ch_ultima()
-    if st.session_state.get("ch_conv") not in chiavi:
-        st.session_state["ch_conv"] = "tutti"
-    attuale = st.session_state["ch_conv"]
-    st.session_state["ch_pills"] = attuale if attuale in k_pills else None                       # i due comandi mostrano sempre la stessa conversazione
-    if hasattr(st, "pills"):
-        st.pills("Con chi vuoi parlare?", k_pills, format_func=etich, selection_mode="single", key="ch_pills", on_change=_ch_da_pills, label_visibility="collapsed")
+    sono_admin = bool(sess.get("admin"))
+    if not sono_admin:
+        chiave = ch_chiave_privata(uid, "admin")
+        st.info(f"💬 Qui puoi **contattare {nomi.get('admin') or 'l’amministratore'}** per **richieste, segnalazioni, spiegazioni** o qualunque cosa ti serva nell'app.\n\n"
+                "🙏 **Abbi pazienza**: la risposta non sempre può essere immediata, ma **arriverà sicuramente**. Quando risponde, vedi 🔔 sul bottone **💬 Chat**.")
     else:
-        st.radio("Con chi vuoi parlare?", k_pills, format_func=etich, index=k_pills.index(attuale) if attuale in k_pills else 0, horizontal=True, key="ch_pills_r", on_change=lambda: st.session_state.update(ch_conv=st.session_state.get("ch_pills_r")), label_visibility="collapsed")
-    if k_menu:
-        n_fuori = sum(nl.get(k, 0) for k in k_menu)
-        st.session_state["ch_menu"] = attuale if attuale in k_menu else None
-        st.selectbox("Altre persone", k_menu, index=None, format_func=etich, key="ch_menu", on_change=_ch_da_menu,
-                     placeholder=f"👥 Altre persone ({len(k_menu)})" + (f" 🔴{n_fuori}" if n_fuori else "") + "…", label_visibility="collapsed")
-    chiave = st.session_state["ch_conv"]
-    if altri:
-        with st.expander("⭐ Scegli chi tenere in vista"):
-            st.caption("Le persone che scegli qui compaiono come pulsanti in alto. Tutte le altre restano nel menu a tendina «Altre persone».")
-            st.multiselect("Persone sempre in vista", [u for u, _n in altri], default=vista, format_func=lambda u: nomi.get(u, u), key="ch_vista_sel", on_change=_ch_salva_vista, label_visibility="collapsed", placeholder="Scegli le persone…")
-            if st.session_state.get("ch_avviso"):
-                st.warning(st.session_state.pop("ch_avviso"))
-    if chiave != "tutti":
-        st.caption("🔒 Conversazione privata: la vedete solo voi due nell'app.")
+        altri = [(u, n) for u, n in nomi.items() if u != "admin"]
+        vista = ch_vista_pulita(_ch_vista(), [u for u, _n in altri])
+        k_pills, _con_msg = ch_ordine_conversazioni(d, uid, vista)                 # le conversazioni che hanno messaggi (la più recente per prima) + le persone scelte a mano
+        k_menu = [ch_chiave_privata(uid, u) for u, _n in altri if ch_chiave_privata(uid, u) not in k_pills]
+        chiavi = k_pills + k_menu
+        nl = ch_non_letti(d, uid)
+        etich = lambda k: ch_etichetta(k, uid, nomi) + (f" 🔴{nl[k]}" if nl.get(k) else "")
+        if not chiavi:
+            st.info("📥 Nessuna richiesta per ora. Quando una persona ti scrive dalla sua Chat, la trovi qui (e vedi 🔔 sul bottone **💬 Chat**). Gli utenti possono scrivere solo a te.")
+            return
+        if nl:                                                                      # la posta in arrivo: chi ha scritto e non hai ancora letto
+            st.markdown("##### 📥 Richieste da leggere")
+            for k in sorted(nl, key=lambda k: ch_ultimo_messaggio(d, k), reverse=True):
+                ult = ((d.get("conv") or {}).get(k) or [{}])[-1]
+                if st.button(f"{ch_etichetta(k, uid, nomi)} · 🔴 {nl[k]} nuov{'o' if nl[k] == 1 else 'i'} — «{(ult.get('testo') or '')[:45]}»", key="ch_in_" + k, width="stretch"):
+                    st.session_state["ch_conv"] = k
+                    _ch_ricorda_ultima(k)
+                    st.rerun()
+        if "ch_conv" not in st.session_state:                                         # appena aperta la chat: riparte dalla prima richiesta da leggere, o dall'ultima conversazione
+            ult_c = _ch_ultima()
+            st.session_state["ch_conv"] = next(iter(sorted(nl, key=lambda k: ch_ultimo_messaggio(d, k), reverse=True)), None) or (ult_c if ult_c in chiavi else chiavi[0])
+        if st.session_state.get("ch_conv") not in chiavi:
+            st.session_state["ch_conv"] = chiavi[0]
+        attuale = st.session_state["ch_conv"]
+        st.session_state["ch_pills"] = attuale if attuale in k_pills else None                       # i due comandi mostrano sempre la stessa conversazione
+        if k_pills:
+            if hasattr(st, "pills"):
+                st.pills("Con chi vuoi parlare?", k_pills, format_func=etich, selection_mode="single", key="ch_pills", on_change=_ch_da_pills, label_visibility="collapsed")
+            else:
+                st.radio("Con chi vuoi parlare?", k_pills, format_func=etich, index=k_pills.index(attuale) if attuale in k_pills else 0, horizontal=True, key="ch_pills_r", on_change=lambda: st.session_state.update(ch_conv=st.session_state["ch_pills_r"]))
+        if k_menu:
+            n_fuori = sum(nl.get(k, 0) for k in k_menu)
+            st.session_state["ch_menu"] = attuale if attuale in k_menu else None
+            st.selectbox("Altre persone", k_menu, index=None, format_func=etich, key="ch_menu", on_change=_ch_da_menu,
+                         placeholder=f"👥 Scrivi a un utente ({len(k_menu)})" + (f" 🔴{n_fuori}" if n_fuori else "") + "…", label_visibility="collapsed")
+        chiave = st.session_state["ch_conv"]
+        st.caption("🔒 Conversazione privata fra te e questa persona.")
     _ch_lista(chiave)
     with st.form("ch_form_" + chiave, clear_on_submit=True):
         testo = st.text_area("Il tuo messaggio", height=90, max_chars=CH_MAX_CAR, placeholder="Scrivi qui…", label_visibility="collapsed")
@@ -547,16 +556,17 @@ if "_NOMI_SEZIONI" in globals():
     _NOMI_SEZIONI.setdefault("chat", "💬 Chat")
     _GUIDE.setdefault("chat", [
         ("💬 Cos'è la Chat",
-         """Qui scrivi **alle persone della famiglia** che usano l'app, **gratis** e **senza uscire dall'app**. Si apre dal bottone **💬 Chat** in alto, accanto agli altri.
-In cima scegli **con chi parlare**: **👨‍👩‍👧 Tutti** (il gruppo di tutta la famiglia) oppure **👤 una persona** (conversazione **privata**, solo voi due). Sotto vedi i messaggi: **i tuoi a destra in verde**, **quelli degli altri a sinistra in bianco**, con il nome e l'ora.""",
-         "chat messaggi famiglia scrivere gruppo privata conversazione"),
+         """La Chat serve a **contattare l'amministratore dell'app** (chi gestisce l'app e la tua famiglia) per **richieste, segnalazioni, spiegazioni** o qualunque cosa ti serva. È **gratis** e **senza uscire dall'app**. Si apre dal bottone **💬 Chat** in alto.
+Puoi scrivere **solo all'amministratore** (non agli altri utenti). 🙏 **Abbi pazienza**: la risposta **non sempre può essere immediata**, ma **arriverà sicuramente**. Quando risponde, vedi **🔔** sul bottone **💬 Chat**.
+**Se sei l'amministratore:** in cima vedi **📥 Richieste da leggere** (chi ti ha scritto e quanti messaggi nuovi); tocca una richiesta per aprirla e rispondere. Con il menu **👥 Scrivi a un utente** puoi scrivere tu per primo.""",
+         "chat messaggi amministratore contattare richieste segnalazioni spiegazioni pazienza risposta"),
         ("✉️ Scrivere e leggere i messaggi",
-         """1. Apri **💬 Chat** e scegli **con chi parlare**.
+         """1. Apri **💬 Chat**.
 2. In fondo scrivi il messaggio (fino a **1000 caratteri**) e tocca **📨 Invia**.
-3. I messaggi **nuovi arrivano da soli**: la lista si aggiorna **ogni 10 secondi** finché la chat è aperta. Se c'è un messaggio che non hai letto, vedi **🔔** sul bottone **💬 Chat** e **🔴 con il numero** sulla persona.
-4. **Tutti i messaggi restano sempre lì**: la finestra dei messaggi si **scorre con il dito** verso l'alto per rivedere quelli più vecchi (si apre già sull'ultimo). Le conversazioni che hanno messaggi compaiono **da sole come pulsanti** in alto, la più recente per prima; quando riapri l'app ritrovi **l'ultima conversazione** che stavi guardando.
-**Se ti sei sbagliato:** apri **🗑️ Elimina un messaggio**, scegli il messaggio e tocca **🗑️ Elimina questo messaggio** (puoi togliere **solo i tuoi**; chi gestisce l'app può togliere qualunque messaggio).
-**Solo testo:** niente foto e niente file. **Privacy:** le conversazioni private non le vedono le altre persone nell'app, ma stanno nello stesso archivio privato dell'app: non scriverci cose segretissime.""",
+3. I messaggi **nuovi arrivano da soli**: la lista si aggiorna **ogni 10 secondi** finché la chat è aperta. Se c'è un messaggio che non hai letto, vedi **🔔** sul bottone **💬 Chat**.
+4. **Tutti i messaggi restano sempre lì**: scorri con il dito verso l'alto per rivedere quelli più vecchi.
+**Se ti sei sbagliato:** apri **🗑️ Elimina un messaggio**, scegli il messaggio e tocca **🗑️ Elimina questo messaggio** (puoi togliere **solo i tuoi**; l'amministratore può togliere qualunque messaggio).
+**Solo testo:** niente foto e niente file. **Privacy:** la conversazione la vedete **solo tu e l'amministratore**, ma sta nello stesso archivio privato dell'app: non scriverci cose segretissime.""",
          "chat scrivere messaggio invia eliminare non letti notifica privata testo"),
     ])
     _ID_GUIDA.setdefault("chat", ["ch_cosa", "ch_usa"])

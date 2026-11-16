@@ -115,11 +115,11 @@ AG_CAPITOLI = [
     {"id": 'g_animali_scambio', "s": "animali", "t": 'Animali: esportare, importare e sicurezza',
      "x": "Con Esporta tutto e condividi crei un solo file con dati, foto e documenti originali di un animale o di tutti, anche con una password. Lo mandi con WhatsApp, email o Telegram. Chi lo riceve tocca Importa archivio animale: controllo che il file sia intero, mostro cosa contiene e chiedo conferma. Non sostituisco mai niente in automatico: se l'animale esiste già, scegli se importarlo come nuovo, aggiornare, unire o annullare. Niente viene cancellato senza il tuo permesso, e se qualcosa si interrompe rimetto tutto a posto.",
      "d": '🐾 Animali → 📦 Esporta tutto e condividi; 📥 Importa archivio animale.', "k": 'report pdf veterinario esportare importare condividere pacchetto password duplicati unire aggiornare archivio animale whatsapp'},
-    {"id": "g_chat", "s": "chat", "t": "La Chat della famiglia",
-     "x": "Con la Chat scrivi alle persone della famiglia senza uscire dall'app, gratis. In alto scegli con chi parlare: Tutti, cioè il gruppo di famiglia, oppure una persona sola, in privato. "
-          "Scegli chi tenere in vista come pulsante; le altre persone stanno nel menu «Altre persone». "
-          "I tuoi messaggi sono a destra in verde, quelli degli altri a sinistra in bianco. Un pallino rosso con il numero ti dice quanti messaggi nuovi hai.",
-     "d": "Pulsante 💬 Chat in alto → scegli la persona → scrivi in basso → 📨 Invia.", "k": "chat messaggi famiglia scrivere tutti privata persone in vista altre persone nuovi messaggi"},
+    {"id": "g_chat", "s": "chat", "t": "La Chat con l'amministratore",
+     "x": "La Chat serve a contattare l'amministratore dell'app per richieste, segnalazioni, spiegazioni o qualunque cosa ti serva. È gratis e resta dentro l'app. Puoi scrivere solo all'amministratore, non agli altri utenti. "
+          "Abbi pazienza: la risposta non sempre può essere immediata, ma arriverà sicuramente. Quando l'amministratore risponde, vedi un pallino rosso con il numero sul bottone Chat. "
+          "I tuoi messaggi sono a destra in verde, quelli dell'amministratore a sinistra in bianco. Se sei tu l'amministratore, in cima trovi le richieste da leggere: tocchi quella che ti interessa e rispondi.",
+     "d": "Pulsante 💬 Chat in alto → scrivi in basso → 📨 Invia. Poi aspetta la risposta con pazienza.", "k": "chat messaggi amministratore contattare richieste segnalazioni spiegazioni pazienza risposta nuovi messaggi"},
     {"id": "g_utilita", "s": "utilita", "t": "Le Utilità",
      "x": "Le Utilità sono divise in riquadri colorati, ognuno con il suo nome. Sotto la striscia blu, gli strumenti per far funzionare l'app: il riquadro verde Sicurezza dei tuoi dati, con backup, ripristino, spazio e Cestino; "
           "l'arancione Scambio con altre persone; l'azzurro Aspetto e telefono, con i testi più grandi e Libera spazio. "

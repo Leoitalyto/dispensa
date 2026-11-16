@@ -730,7 +730,7 @@ def _fp(chiave, **valori):
     return testo.format(**valori) if valori else testo
 
 
-def campo_foto(chiave, attuale=""):
+def campo_foto(chiave, attuale="", archivio=True):
     """Punto unico per la foto. A sinistra 'Scatta' (apre la fotocamera VERA del telefono, lato posteriore, con messa a fuoco),
     a destra 'Carica dal telefono'. I due tasti li gestisce fotocamera.py: la foto scelta finisce nei campi nascosti qui sotto.
     Se il javascript non funzionasse, i tasti mostrano i normali campi di scatto / caricamento."""
@@ -738,9 +738,38 @@ def campo_foto(chiave, attuale=""):
         c_cam, c_gal = st.columns(2, gap="small")
         premuto_cam = c_cam.button("📷 " + t("Scatta la foto"), key=f"scatta_{chiave}", width="stretch")
         premuto_gal = c_gal.button("📁 " + t("Carica dal telefono"), key=f"galleria_{chiave}", width="stretch")
+    premuto_arch = st.button("🗂️ " + t("Scegli dall'archivio (foto già usate)"), key=f"archivio_{chiave}", width="stretch") if (archivio and "selettore_archivio" in globals()) else False
     with st.container(key="nascosti_" + chiave):
         foto_cam = st.file_uploader("camera", type=["jpg", "jpeg", "png", "webp"], key=f"fotocam_{chiave}")
         foto_gal = st.file_uploader("galleria", type=["jpg", "jpeg", "png", "webp"], key=f"fotogal_{chiave}")
+    if premuto_arch:
+        st.session_state[f"{chiave}_arch_aperto"] = not st.session_state.get(f"{chiave}_arch_aperto")
+    if archivio and st.session_state.get(f"{chiave}_arch_aperto") and "selettore_archivio" in globals():
+        with st.container(border=True):
+            st.markdown("**🗂️ " + t("Le foto già usate") + "**")
+            if not st.session_state.get("_arch_foto_riempito"):                # prima volta: ci mette anche le foto dei prodotti che hai già in dispensa
+                try:
+                    with st.spinner(t("Sto preparando l'archivio delle foto…")):
+                        if archivia_foto_esistenti(8) == 0:
+                            st.session_state["_arch_foto_riempito"] = True
+                except Exception:
+                    st.session_state["_arch_foto_riempito"] = True
+            try:
+                scelta_arch = selettore_archivio(chiave)
+            except Exception as e:
+                scelta_arch = ""
+                st.warning(t("Non riesco ad aprire l'archivio adesso. Riprova fra poco.") + f" ({type(e).__name__})")
+            if scelta_arch:
+                uri_arch = immagine_da_archivio(scelta_arch)
+                if uri_arch:
+                    st.session_state[f"{chiave}_da_arch"] = uri_arch
+                    st.session_state[f"{chiave}_arch_aperto"] = False
+                    st.rerun()
+                else:
+                    st.error(t("Non trovo il file di questa foto: provane un'altra."))
+            if st.button(t("Chiudi l'archivio"), key=f"archivio_chiudi_{chiave}", width="stretch"):
+                st.session_state[f"{chiave}_arch_aperto"] = False
+                st.rerun()
     if premuto_cam:
         st.session_state[f"{chiave}_fall_cam"] = True
     if premuto_gal:
@@ -771,6 +800,7 @@ def campo_foto(chiave, attuale=""):
             st.caption(_fp("foto_tolta"))
             file = None
     if file is not None:
+        st.session_state.pop(f"{chiave}_da_arch", None)                        # una foto nuova vale più di quella scelta dall'archivio
         st.caption(_fp("foto_ricevuta", nome=file.name, kb=file.size // 1024))
         problemi = controlla_foto(file.getvalue())
         if problemi and not st.session_state.get(f"{chiave}_ok_{ident_f}"):
@@ -810,6 +840,13 @@ def campo_foto(chiave, attuale=""):
         if st.button(_fp("foto_elimina"), key=f"fp_elimina2_{ident_f}", width="stretch"):
             st.session_state[f"{chiave}_scartata"] = ident_f
             st.rerun()
+    elif archivio and st.session_state.get(f"{chiave}_da_arch"):
+        nuova = st.session_state[f"{chiave}_da_arch"]
+        st.markdown(foto_ampia_html(nuova), unsafe_allow_html=True)
+        st.caption("✅ " + t("Foto scelta dall'archivio: ora salva il prodotto per usarla."))
+        if st.button("↩ " + t("Non usare questa foto"), key=f"arch_no_{chiave}", width="stretch"):
+            st.session_state.pop(f"{chiave}_da_arch", None)
+            st.rerun()
     elif attuale and src_sicuro(attuale):
         st.markdown(foto_ampia_html(src_sicuro(attuale)), unsafe_allow_html=True)
     return nuova
@@ -845,6 +882,9 @@ CSS = CSS.replace("</style>", """
 [class*="st-key-nascosti_"]{display:none !important}
 [class*="st-key-scatta_"] button,[class*="st-key-galleria_"] button{min-height:64px;border-radius:999px !important;font-weight:800 !important;font-size:1.02rem;
  border:2px solid rgba(13,148,136,.45) !important;box-shadow:0 4px 0 rgba(0,100,90,.25)}
+[class*="st-key-archivio_"] button{min-height:56px;border-radius:999px !important;font-weight:800 !important;background:rgba(255,255,255,.82) !important;
+ color:#0f766e !important;border:2px solid rgba(13,148,136,.45) !important;box-shadow:0 4px 0 rgba(0,100,90,.2)}
+[class*="st-key-archivio_"] button p{color:#0f766e !important;font-weight:800 !important}
 [class*="st-key-scatta_"] button{background:linear-gradient(135deg,#00a98f,#0288d1) !important;color:#fff !important;border:0 !important}
 [class*="st-key-scatta_"] button p{color:#fff !important}
 </style>""".replace("__CARICA__", t("Carica dal telefono")))

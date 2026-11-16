@@ -191,7 +191,7 @@ def _fa_modulo_medicinale(pid, med_id=None):
     st.markdown("**📷 Foto della confezione** (facoltativa)")
     ck = "fa_" + (med_id or "nuovo")
     try:
-        foto_nuova = campo_foto(ck, m.get("foto", ""))
+        foto_nuova = campo_foto(ck, m.get("foto", ""), archivio=False)          # i medicinali hanno già il loro archivio «Scegli una foto già usata»
     except NameError:                                  # manca foto_prodotto.py: si va avanti senza foto
         foto_nuova = ""
         st.caption("La foto non è disponibile in questo momento.")

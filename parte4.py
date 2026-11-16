@@ -151,6 +151,11 @@ with tab_aggiungi:
             nuove = [dict(base, id=uuid.uuid4().hex[:10], quantita=q, scadenza=d_) for q, d_ in parti]
             try:
                 salva(lambda d: (d.setdefault("articoli", []).extend(nuove), togli_da_spesa(d, nuove)), f"Aggiunto {base['nome']}")
+                if str(immagine).startswith("data:") and "archivia_immagine" in globals():                # la foto resta in archivio anche quando il prodotto finisce
+                    try:
+                        archivia_immagine(base["nome"], base["marca"], base["barcode"], immagine)
+                    except Exception:
+                        pass
                 st.session_state["messaggio"] = "✅ " + (t("{nome} aggiunto alla dispensa.", nome=base["nome"]) if len(nuove) == 1
                                                          else t("{nome}: aggiunte {n} scadenze.", nome=base["nome"], n=len(nuove)))
                 st.session_state["n_form"] = n + 1

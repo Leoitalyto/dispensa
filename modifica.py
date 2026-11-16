@@ -95,6 +95,11 @@ def apri_modifica(rid):
                                 x.update(singoli)
                 try:
                     salva(_applica, f"Modificato {comuni['nome']}")
+                    if nuova_foto and str(nuova_foto).startswith("data:") and "archivia_immagine" in globals():
+                        try:
+                            archivia_immagine(comuni["nome"], comuni["marca"], comuni["barcode"], nuova_foto)
+                        except Exception:
+                            pass
                     st.session_state["messaggio"] = "✅ " + t("Modifiche salvate.")
                     st.rerun()
                 except Exception as e:

@@ -73,7 +73,7 @@ La dispensa è **solo tua**: ogni persona ha la sua password e nessuno vede i pr
          "iniziare cominciare primi passi cos'è a cosa serve come funziona introduzione uso"),
         ("➕ Come aggiungere un prodotto",
          """1. Tocca **➕ Aggiungi** (scheda in basso).
-2. In alto c'è il punto della **foto**: tocca **📷 Scatta la foto** (si apre la fotocamera posteriore) oppure **📁 Carica dal telefono**.
+2. In alto c'è il punto della **foto**: tocca **📷 Scatta la foto** (si apre la fotocamera posteriore), **📁 Carica dal telefono** oppure **🗂️ Scegli dall'archivio** (le foto già usate, anche di prodotti finiti: tocca **Usa** sotto la foto).
 3. Scrivi il **nome** e la **marca**.
 4. Scrivi il **codice a barre** a mano (sono i numeri sotto le barre): l'app compila da sola ingredienti, valori e allergeni, se il prodotto è conosciuto.
 5. Scrivi **quante unità**, quanto **pesa** o quanti **litri**.

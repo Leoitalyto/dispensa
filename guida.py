@@ -97,7 +97,7 @@ La dispensa è **solo tua**: ogni persona ha la sua password e nessuno vede i pr
     with schede[3]:
         st.markdown(t("""**Aggiungere un prodotto, passo per passo** (scheda ➕ Aggiungi):
 
-1. **📸 Foto del prodotto**: tocca *Scatta la foto* (si apre la fotocamera posteriore) oppure *Carica dal telefono*.
+1. **📸 Foto del prodotto**: tocca *Scatta la foto* (si apre la fotocamera posteriore), *Carica dal telefono* oppure **🗂️ Scegli dall'archivio**: se il prodotto l'avevi già (anche se è finito e non è più in dispensa) ritrovi la sua foto e non devi rifarla.
 2. **Codice a barre**: scrivilo a mano (i numeri sotto le barre, di solito 13). L'app cerca il prodotto e compila nome, marca, contenuto, ingredienti e allergeni.
 3. **Dati del prodotto**: controlla il nome, scegli *per chi è* (adulti, neonati, animali) e *dove lo metti* (dispensa, frigo...).
 4. **Quante unità hai** e **scadenza**. Se lo stesso prodotto ha scadenze diverse, aggiungilo più volte: l'app le tiene separate.
