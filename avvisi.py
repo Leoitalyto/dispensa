@@ -257,7 +257,20 @@ def situazioni_presenti():
     for stato, righe in (("scaduto", scaduti), ("rosso", rossi), ("arancione", arancioni)):
         for r in righe:
             trovate.setdefault(categoria_di(r), set()).add(stato)
+    pref = _suono_scelto()
+    if pref in ("adulti", "neonati", "animali") and trovate:                    # 🔔 scelta del suono fatta dal campanellino della Dispensa
+        tutti = set().union(*trovate.values())
+        return ((pref, next(s for s in STATI_AVVISO if s in tutti)),)
     return tuple((c, next(s for s in STATI_AVVISO if s in trovate[c])) for c in CATEGORIE if c in trovate)
+
+
+def _suono_scelto():
+    """Il suono scelto nel campanellino: 'adulti', 'neonati', 'animali', 'nessuno' oppure None (automatico)."""
+    try:
+        v = ((dati.get("avvisi_sezioni") or {}).get("dispensa") or {}).get("suono")
+    except Exception:
+        return None
+    return {"classico": "adulti", "bimbi": "neonati", "animali": "animali", "nessuno": "nessuno"}.get(v)
 
 
 # ---------------------------------------------------------------------
@@ -278,7 +291,7 @@ with st.sidebar:
 
 
 def _elenco_avviso():
-    if _suono_ok:
+    if _suono_ok and _suono_scelto() != "nessuno":
         _wav = suono_avviso(situazioni_presenti())
         try:
             if hasattr(st, "iframe"):

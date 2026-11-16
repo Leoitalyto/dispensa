@@ -209,6 +209,11 @@ def nav_pagine(corrente):
             n = len(sc.get(sez, []))
             st.button((("● " if attiva else "") + etichetta) + (f" 🔔{n}" if n else ""), key=("navpa_" if attiva else "navp_") + sez, width="stretch",
                       on_click=(None if attiva else nav_vai), args=(None if attiva else (sez,)))
+    if "avs_bottone" in globals():                                     # 🔔 il campanellino degli avvisi di questa sezione
+        try:
+            avs_bottone(corrente)
+        except Exception:
+            pass
     pn_freccia_su()
     if "musica_inietta" in globals():                                  # la linguetta della radio di sottofondo (resta accesa in tutte le sezioni)
         try:
