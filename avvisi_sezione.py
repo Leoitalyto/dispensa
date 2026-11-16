@@ -8,7 +8,7 @@ _AVS_CAPACITA = {
     "dispensa": {"giorni": True, "ora": True, "canali": True, "suono": True, "invio": True},
     "salute": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "casa": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
-    "documenti": {"giorni": False, "ora": False, "canali": False, "suono": False, "invio": False},
+    "documenti": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
     "auto": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
 }
 _AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0)}
@@ -160,7 +160,8 @@ def _avs_corpo(sez, etichetta):
                                     format_func=lambda g: "Il giorno stesso" if g == 0 else f"{g} giorni prima")
                 nuovo["giorni"] = sorted(sc, reverse=True) or pred
             else:
-                st.caption("I giorni di preavviso di questa sezione si scelgono voce per voce (dentro ogni garanzia, bolletta, rata…).")
+                st.caption("I documenti avvisano 6 mesi e 3 mesi prima della scadenza (poi ogni lunedì se scaduti)." if sez == "documenti"
+                           else "I giorni di preavviso di questa sezione si scelgono voce per voce (dentro ogni garanzia, bolletta, rata…).")
             if cap.get("ora"):
                 usa_ora = st.checkbox("Scelgo io l'ora degli avvisi", value=bool(c.get("ora")), key=k + "usaora")
                 if usa_ora:

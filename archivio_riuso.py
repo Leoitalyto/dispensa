@@ -81,3 +81,37 @@ def _fa_salva_files(caricati, esistenti=None):                                  
             gia.add(u._rif["id"])
             risultato.append({x: y for x, y in u._rif.items() if x in ("id", "nome", "mime", "sha", "originale")})
     return risultato
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Pannello «porta un file nell'app» (Casa, Lavoro-buste paga, Auto, Animali, Salute…): in più, «🗂️ Scegli dall'archivio»
+# ---------------------------------------------------------------------------------------------------------------------
+_ar_riuso_pannello_originale = _ca_pannello_caricamento
+
+
+def _ca_pannello_caricamento(n, multi=True):                                                          # noqa: F811
+    up = _ar_riuso_pannello_originale(n, multi)
+    try:
+        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        rifs = _ar_riuso_riferimenti(d)
+        tipi = {i: r for i, r in rifs.items() if str(r.get("nome", "")).lower().rsplit(".", 1)[-1] in ("pdf", "jpg", "jpeg", "png", "webp")}
+        if not tipi:
+            return up
+        with st.expander("🗂️ Oppure scegli un file già nell'archivio (senza rifarlo)", _aperta=bool(st.session_state.get(f"ar_riuso_sel_{n}"))):
+            ids = list(tipi)[::-1][:300]
+            i = st.selectbox("File già salvati", ids, index=None, placeholder="Scrivi per cercare…", key=f"ar_riuso_sel_{n}",
+                             format_func=lambda x: str(tipi[x].get("nome", "file"))[:60])
+            if i and st.button("📥 Usa questo file", key=f"ar_riuso_usa_{n}", type="primary", width="stretch"):
+                dd = carica_dati(crea_archivio(), _fa_percorso_doc(i))
+                dati = base64.b64decode(dd["b64"]) if dd and dd.get("b64") else b""
+                if not dati:
+                    st.error("Non riesco a leggere questo file dall'archivio.")
+                else:
+                    r = tipi[i]
+                    nome = r.get("nome") or "file"
+                    mime = r.get("mime") or ("application/pdf" if nome.lower().endswith(".pdf") else "image/jpeg")
+                    st.session_state["ca_bozza_in"] = {"nome": nome, "mime": mime, "dati": dati, "link": ""}
+                    st.rerun()
+    except Exception as _e:
+        st.caption(f"(archivio non disponibile: {type(_e).__name__}: {_e})")
+    return up
