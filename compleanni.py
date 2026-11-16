@@ -217,6 +217,66 @@ def cp_audio_comprimi(dati, nome="voce.wav"):
     return None
 
 
+CP_EDITOR_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;background:transparent;font-family:system-ui,-apple-system,sans-serif;color:#dfe8ff;-webkit-user-select:none;user-select:none}
+#cp{width:min(86vw,260px);aspect-ratio:1/1;margin:8px auto 4px;border-radius:50%;border:3px solid #4aa8ff;box-shadow:0 0 16px rgba(74,168,255,.8);position:relative;overflow:hidden;background:#0f172a;touch-action:none;cursor:grab}
+#im{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;pointer-events:none;-webkit-user-drag:none}
+#gu{position:absolute;left:25%;top:12%;width:50%;height:66%;border:2px dashed rgba(255,255,255,.7);border-radius:50%;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+#nota{text-align:center;font-size:13px;line-height:1.35;margin:4px 8px 6px;opacity:.92}
+.bt{display:flex;gap:8px;justify-content:center;margin-bottom:4px}.bt button{font-size:20px;min-width:52px;height:42px;border-radius:12px;border:1px solid #4aa8ff;background:#14213d;color:#dfe8ff}
+#st{text-align:center;font-size:12px;opacity:.75;min-height:16px}</style></head><body>
+<div id="cp"><img id="im" alt=""><div id="gu"></div></div>
+<div id="nota">__NOTA__</div>
+<div class="bt"><button id="mn" type="button">&minus;</button><button id="rs" type="button">&#8634;</button><button id="pu" type="button">+</button></div>
+<div id="st"></div>
+<script>
+(function(){
+var ETICHETTA=__LABEL__, SRC=__IMG__, Z0=__Z__, PX0=__PX__, PY0=__PY__, ZMIN=0.7, ZMAX=4;
+var cp=document.getElementById('cp'), im=document.getElementById('im'), st=document.getElementById('st');
+var W=0,H=0,V=0,z=Z0,sx=0,sy=0,timer=null,ptr={},ultimo=null;
+function parentWin(){var w=window;for(var i=0;i<4;i++){try{if(w.document.querySelector('[data-testid="stApp"],.stApp'))return w;}catch(e){}if(w.parent===w)break;w=w.parent;}return null;}
+function campo(){var P=parentWin();return P?P.document.querySelector('input[aria-label="'+ETICHETTA+'"]'):null;}
+function scrivi(v){var P=parentWin(),el=campo();if(!P||!el||el.value===v)return false;
+ var set=Object.getOwnPropertyDescriptor(P.HTMLInputElement.prototype,'value').set;set.call(el,v);
+ el.dispatchEvent(new P.Event('input',{bubbles:true}));
+ el.dispatchEvent(new P.KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+ el.dispatchEvent(new P.FocusEvent('focusout',{bubbles:true}));return true;}
+function sq(){return Math.min(W,H)/z;}
+function lim(a,b){var lo=Math.min(0,b),hi=Math.max(0,b);return Math.max(lo,Math.min(hi,a));}
+function clampPos(){var q=sq();sx=lim(sx,W-q);sy=lim(sy,H-q);}
+function disegna(){var q=sq(),sc=V/q;im.style.width=(W*sc)+'px';im.style.height=(H*sc)+'px';im.style.transform='translate('+(-sx*sc)+'px,'+(-sy*sc)+'px)';}
+function perc(pos,dim){var q=sq(),r=dim-q;return Math.abs(r)<0.5?50:Math.max(0,Math.min(100,pos/r*100));}
+function valore(){return z.toFixed(2)+'|'+Math.round(perc(sx,W))+'|'+Math.round(perc(sy,H));}
+function pianifica(){clearTimeout(timer);timer=setTimeout(function(){var v=valore();if(v===ultimo)return;ultimo=v;
+ if(scrivi(v))st.textContent='\u2713 '+__OK__;else st.textContent='';},350);}
+function zoomA(nz,mx,my){nz=Math.max(ZMIN,Math.min(ZMAX,nz));var q=sq(),sc=V/q,ix=sx+mx/sc,iy=sy+my/sc;z=nz;q=sq();sc=V/q;sx=ix-mx/sc;sy=iy-my/sc;clampPos();disegna();pianifica();}
+function iniz(){V=cp.clientWidth;W=im.naturalWidth;H=im.naturalHeight;var q=sq();sx=PX0/100*(W-q);sy=PY0/100*(H-q);disegna();}
+im.onload=iniz;im.src=SRC;window.addEventListener('resize',function(){V=cp.clientWidth;disegna();});
+function pts(){return Object.keys(ptr).map(function(k){return ptr[k];});}
+cp.addEventListener('pointerdown',function(e){cp.setPointerCapture(e.pointerId);var r=cp.getBoundingClientRect();ptr[e.pointerId]={x:e.clientX-r.left,y:e.clientY-r.top};cp.style.cursor='grabbing';});
+cp.addEventListener('pointermove',function(e){if(!ptr[e.pointerId])return;var r=cp.getBoundingClientRect(),nx=e.clientX-r.left,ny=e.clientY-r.top,P=pts();
+ if(P.length>=2){var a=P[0],b=P[1],d0=Math.hypot(a.x-b.x,a.y-b.y),mx0=(a.x+b.x)/2,my0=(a.y+b.y)/2;ptr[e.pointerId]={x:nx,y:ny};P=pts();a=P[0];b=P[1];
+  var d1=Math.hypot(a.x-b.x,a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;if(d0>8){zoomA(z*d1/d0,mx,my);var sc=V/sq();sx-=(mx-mx0)/sc;sy-=(my-my0)/sc;clampPos();disegna();pianifica();}}
+ else{var o=ptr[e.pointerId],sc2=V/sq();sx-=(nx-o.x)/sc2;sy-=(ny-o.y)/sc2;ptr[e.pointerId]={x:nx,y:ny};clampPos();disegna();pianifica();}});
+function fine(e){delete ptr[e.pointerId];if(!pts().length)cp.style.cursor='grab';pianifica();}
+cp.addEventListener('pointerup',fine);cp.addEventListener('pointercancel',fine);
+cp.addEventListener('wheel',function(e){e.preventDefault();var r=cp.getBoundingClientRect();zoomA(z*(e.deltaY<0?1.1:0.91),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+document.getElementById('pu').onclick=function(){zoomA(z*1.15,V/2,V/2);};
+document.getElementById('mn').onclick=function(){zoomA(z/1.15,V/2,V/2);};
+document.getElementById('rs').onclick=function(){z=1;var q=sq();sx=0.5*(W-q);sy=(H>W?0.3:0.5)*(H-q);clampPos();disegna();pianifica();};
+window.__cp_stato=function(){return valore();};
+})();
+</script></body></html>"""
+
+
+def cp_editor_html(uri, etichetta, z, px, py):
+    import json as _j
+    return (CP_EDITOR_HTML.replace("__IMG__", _j.dumps(uri)).replace("__LABEL__", _j.dumps(etichetta))
+            .replace("__Z__", str(float(z))).replace("__PX__", str(float(px))).replace("__PY__", str(float(py)))
+            .replace("__NOTA__", _cp_html.escape(_cp_t("Pizzica con due dita per ingrandire · trascina per spostare: il viso va dentro l'ovale tratteggiato")))
+            .replace("__OK__", _j.dumps(_cp_t("Posizione registrata"))))
+
+
 def cp_rgba(hex_, a):
     h = hex_.lstrip("#")
     return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
@@ -308,7 +368,7 @@ CP_CSS = """<style>
 .cp-pregh:before{content:"🕊️";display:block;font-style:normal;font-size:1.1rem;margin-bottom:2px}
 .cp-pens{margin-top:10px;padding:9px 10px;border-radius:12px;border:1px solid var(--cg);background:var(--cg2);font-size:.9rem;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .cp-pens b{display:block;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--c);margin-bottom:3px}
-[class*="st-key-cp_vetrina_"]{position:sticky;top:48px;z-index:20;background:rgba(14,10,30,.94);border-radius:16px;padding:4px 0 2px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+[class*="st-key-nascosti_cpv_"]{display:none !important}
 .cp-anteprima{width:min(46vw,170px);aspect-ratio:1/1;margin:6px auto 4px;border-radius:50%;border:3px solid #4aa8ff;box-shadow:0 0 14px rgba(74,168,255,.7);
  background:#0f172a center/cover no-repeat;position:relative}
 .cp-anteprima:after{content:"";position:absolute;left:25%;top:14%;width:50%;height:62%;border:2px dashed rgba(255,255,255,.55);border-radius:50%}
@@ -471,6 +531,9 @@ def _cp_modulo(pid):
                     st.session_state[k + "_zoom"] = 1.0
                     st.session_state[k + "_px"] = 50
                     st.session_state[k + "_py"] = 30 if im0.size[1] > im0.size[0] else 50
+                    st.session_state[k + "_cur"] = st.session_state[k + "_init"] = (1.0, 50, st.session_state[k + "_py"])
+                    st.session_state[k + "_jv"] = ""
+                    st.session_state.pop(k + "_jlast", None)
                 except Exception:
                     st.warning(_cp_t("Non riesco a leggere questa foto: provane un'altra."))
         if ok_ not in st.session_state and p.get("foto_orig") and st.button("🔄 " + _cp_t("Ricentra la foto già salvata"), key=k + "_ricentra", width="stretch"):
@@ -478,7 +541,10 @@ def _cp_modulo(pid):
             if dati_o:
                 st.session_state[ok_] = cp_img_apri(dati_o)
                 pos = p.get("foto_pos") or [1.0, 50, 30]
-                st.session_state[k + "_zoom"], st.session_state[k + "_px"], st.session_state[k + "_py"] = float(pos[0]), int(pos[1]), int(pos[2])
+                st.session_state[k + "_zoom"], st.session_state[k + "_px"], st.session_state[k + "_py"] = round(float(pos[0]), 2), int(pos[1]), int(pos[2])
+                st.session_state[k + "_cur"] = st.session_state[k + "_init"] = (round(float(pos[0]), 2), int(pos[1]), int(pos[2]))
+                st.session_state[k + "_jv"] = ""
+                st.session_state.pop(k + "_jlast", None)
                 st.rerun()
             else:
                 st.warning(_cp_t("Non trovo la foto originale: scegli di nuovo la foto."))
@@ -486,15 +552,34 @@ def _cp_modulo(pid):
         foto_pos = p.get("foto_pos")
         if ok_ in st.session_state:
             im0 = st.session_state[ok_]
-            vetrina = st.container(key="cp_vetrina_" + k)                     # l'anteprima resta in vista mentre muovi i cursori
-            zoom = st.slider("🔍 " + _cp_t("Ingrandisci / rimpicciolisci"), 0.7, 4.0, step=0.05, key=k + "_zoom")
-            px = st.slider("↔️ " + _cp_t("Sposta a sinistra / a destra"), 0, 100, key=k + "_px")
-            py = st.slider("↕️ " + _cp_t("Sposta in alto / in basso"), 0, 100, key=k + "_py")
+            et = "cpvista" + k
+            with st.container(key="nascosti_cpv_" + k):                      # dove l'editor a pizzico scrive la posizione
+                jv = st.text_input(et, key=k + "_jv", label_visibility="collapsed")
+            if jv and jv != st.session_state.get(k + "_jlast"):
+                try:
+                    zz, pp, qq = jv.split("|")
+                    st.session_state[k + "_zoom"], st.session_state[k + "_px"], st.session_state[k + "_py"] = round(float(zz), 2), int(float(pp)), int(float(qq))
+                    st.session_state[k + "_cur"] = (st.session_state[k + "_zoom"], st.session_state[k + "_px"], st.session_state[k + "_py"])
+                    st.session_state[k + "_jlast"] = jv
+                except Exception:
+                    pass
+            vetrina = st.container(key="cp_vetrina_" + k)
+            with st.expander("🎚️ " + _cp_t("Se il pizzico non funziona: usa i cursori")):
+                zoom = st.slider("🔍 " + _cp_t("Ingrandisci / rimpicciolisci"), 0.7, 4.0, step=0.01, key=k + "_zoom")
+                px = st.slider("↔️ " + _cp_t("Sposta a sinistra / a destra"), 0, 100, key=k + "_px")
+                py = st.slider("↕️ " + _cp_t("Sposta in alto / in basso"), 0, 100, key=k + "_py")
+            cur = (round(zoom, 2), px, py)
+            if cur != st.session_state.get(k + "_cur"):                       # mossi i cursori: l'editor riparte da qui
+                st.session_state[k + "_cur"] = cur
+                st.session_state[k + "_init"] = cur
+            ini = st.session_state.setdefault(k + "_init", cur)
+            with vetrina:
+                if "_mostra_editor" in globals():
+                    _mostra_editor(cp_editor_html(cp_img_uri(im0, 85), et, *ini), 400)
             rit = cp_img_ritaglio(im0, zoom, px, py)
             foto_att = cp_img_uri(rit)
             foto_pos = [zoom, px, py]
-            vetrina.markdown(f"<div class='cp-anteprima' style=\"background-image:url('{foto_att}')\"></div>"
-                             f"<div style='text-align:center;font-size:.76rem;opacity:.85'>{_cp_html.escape(_cp_t('Così apparirà nel cerchio della scheda'))}</div>", unsafe_allow_html=True)
+            st.caption("👆 " + _cp_t("Quando sei contento, scorri in basso e tocca «Salva»."))
         elif foto_att:
             st.markdown(f"<div class='cp-anteprima' style=\"background-image:url('{_cp_html.escape(foto_att, quote=True)}')\"></div>", unsafe_allow_html=True)
         if foto_att and st.checkbox("🗑️ " + _cp_t("Togli la foto"), key=k + "_togli"):
