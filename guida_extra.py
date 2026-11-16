@@ -128,6 +128,33 @@ Il Cestino comprende **i tuoi dati personali** e, se sei l'amministratore, anche
 Se manca qualcosa (il nome o le unità) compare **un avviso sopra i pulsanti** e un messaggio giallo in alto, e il prodotto non viene salvato finché non lo completi.""",
       "salvare aggiungere prodotto pulsante salva invio tastiera non salva torna dispensa un altro pannello non si chiude unità nome", ("aggiungi", "prodotto"))
 
+    # ================= il campanellino degli avvisi e «Scegli dall'archivio»
+    _TXT_CAMP = """In ogni sezione, sotto i bottoni colorati, c'è **🔔 Avvisi di questa sezione**. Toccalo: si apre una finestra che dice **come sono impostati gli avvisi** e **cosa c'è in scadenza**.
+
+Da lì puoi cambiare:
+- **Ricevi gli avvisi di questa sezione**: l'interruttore li accende o li spegne.
+- **Quanti giorni prima avvisarmi**: scegli i giorni (0 = il giorno stesso). Se non tocchi niente restano quelli di sempre.
+- **Scelgo io l'ora**: spunta e scegli l'ora. Dopo aver scelto, premi **Invio** sulla tastiera per confermarla. Senza ora scelta gli avvisi arrivano al mattino.
+- **Dove ricevere gli avvisi**: «come le altre sezioni» oppure scegli tu tra **Telegram, Email, WhatsApp, SMS**. Togli la spunta a quelli che non vuoi.
+- **Calendario**: accendi «Vedi questi avvisi anche nel calendario» e premi **Scarica il calendario**. Apri il file: Android propone **Calendario Google**. Se cambi una data, scarica e apri di nuovo il file (gli appuntamenti si aggiornano, non si duplicano). Non è un collegamento automatico.
+- **Torna come prima** rimette tutto com'era.
+
+Premi **💾 Salva** per tenere le scelte.
+
+**Prima di tutto** scrivi i tuoi recapiti (Telegram, email, WhatsApp, SMS) in **Salute → Scegli come ricevere gli avvisi**: senza recapito quel canale non parte.
+
+**Da sapere:** gli avvisi li manda un programma automatico. A volte arriva con qualche minuto di ritardo; se l'ora scelta passa senza che parta, il messaggio viene recuperato entro 3 ore, una sola volta. Il **suono** si sceglie solo in Dispensa (finestra «Prodotti da controllare»): sugli altri canali suona il telefono con la sua notifica."""
+    for _sez in ("dispensa", "farmacia", "documenti", "casa", "auto"):
+        a(_sez, "x_campanello", "🔔 Il campanellino degli avvisi di questa sezione", _TXT_CAMP,
+          "campanello campanellino avvisi giorni ora canali telegram email whatsapp sms suono calendario google calendar")
+    _TXT_RIUSO = """Se hai già un file o una foto nell'archivio **non devi rifarli**:
+- **Salute** (visite, ricette, documenti, vaccini): sotto «scatta o scegli un file» c'è **🗂️ Oppure allega dall'archivio**. Scrivi per cercare, scegli il file e salva: si usa lo stesso file, senza copiarlo.
+- **Casa, Lavoro (buste paga), Auto, Animali**: nel riquadro dove carichi un file apri **🗂️ Oppure scegli un file già nell'archivio**, scegli e premi **📥 Usa questo file**: il documento viene letto come se lo avessi appena caricato.
+- **Dispensa** (foto del prodotto): **🗂️ Scegli dall'archivio** mostra le foto già usate, anche di prodotti finiti."""
+    for _sez in ("dispensa", "farmacia", "documenti", "archivio", "casa", "lavoro", "auto"):
+        a(_sez, "x_riuso_archivio", "🗂️ Riusare un file già in archivio", _TXT_RIUSO,
+          "archivio riusare file foto gia salvato scegli dall'archivio allegare senza rifare")
+
     # ================= i colori dei comandi
     colori = ("🎨 I colori dei comandi: sempre uguali",
               """In tutta l'app i pulsanti più usati hanno **sempre lo stesso colore**, così li riconosci anche senza leggere:

@@ -7,12 +7,14 @@ import datetime as _avs_dt
 _AVS_CAPACITA = {
     "dispensa": {"giorni": True, "ora": True, "canali": True, "suono": True, "invio": True},
     "salute": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
-    "casa": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
-    "documenti": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
-    "auto": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
+    "casa": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
+    "documenti": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
+    "auto": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
 }
-_AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0)}
+_AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0), "casa": (30, 14, 7, 1, 0),
+                    "auto": (90, 30, 15, 3, 0), "documenti": (180, 90)}
 _AVS_GIORNI_SCELTA = (90, 60, 45, 30, 21, 14, 10, 7, 5, 3, 2, 1, 0)
+_AVS_GIORNI_LUNGHI = (365, 270, 180, 120, 90, 60, 30, 14, 7, 3, 1, 0)
 _AVS_SUONI = {"auto": "🔄 Automatico (come adesso: dipende da adulti, bimbi o animali)", "classico": "🔔 Din-don (classico)",
               "bimbi": "👶 Voci dei bimbi", "animali": "🐾 Animali (gatto, cane, leone)", "nessuno": "🔇 Nessun suono"}
 _AVS_CANALI = (("telegram", "📱 Telegram", "telegram_chat_id"), ("email", "✉️ Email", "avviso_email"),
@@ -155,13 +157,19 @@ def _avs_corpo(sez, etichetta):
             if cap.get("giorni"):
                 pred = list(_AVS_GIORNI_PRED.get(sez, (7, 1, 0)))
                 att = c.get("giorni") if isinstance(c.get("giorni"), list) and c.get("giorni") else pred
-                opz = sorted(set(_AVS_GIORNI_SCELTA) | set(att), reverse=True)
+                opz = sorted(set(_AVS_GIORNI_LUNGHI if sez == "documenti" else _AVS_GIORNI_SCELTA) | set(att), reverse=True)
                 sc = st.multiselect("Quanti giorni prima avvisarmi (0 = il giorno stesso)", opz, default=sorted(set(att), reverse=True), key=k + "giorni",
                                     format_func=lambda g: "Il giorno stesso" if g == 0 else f"{g} giorni prima")
-                nuovo["giorni"] = sorted(sc, reverse=True) or pred
-            else:
-                st.caption("I documenti avvisano 6 mesi e 3 mesi prima della scadenza (poi ogni lunedì se scaduti)." if sez == "documenti"
-                           else "I giorni di preavviso di questa sezione si scelgono voce per voce (dentro ogni garanzia, bolletta, rata…).")
+                if sorted(sc, reverse=True) in (sorted(pred, reverse=True), []):
+                    nuovo.pop("giorni", None)                      # come i giorni di sempre: non si salva niente
+                else:
+                    nuovo["giorni"] = sorted(sc, reverse=True)
+            if sez == "casa":
+                st.caption("Questi giorni valgono per garanzie, manutenzioni e bollette. Le rate dell'amministrazione hanno i loro giorni, scelti nella rata.")
+            elif sez == "auto":
+                st.caption("Valgono per bollo, assicurazione, revisione, patente e simili. Le multe da pagare hanno giorni propri (15, 5, 3, 0).")
+            elif sez == "documenti":
+                st.caption("Di solito 180 giorni (6 mesi) e 90 giorni (3 mesi) prima della scadenza; poi ogni lunedì se è scaduto.")
             if cap.get("ora"):
                 usa_ora = st.checkbox("Scelgo io l'ora degli avvisi", value=bool(c.get("ora")), key=k + "usaora")
                 if usa_ora:
