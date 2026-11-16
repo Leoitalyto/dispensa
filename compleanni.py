@@ -452,6 +452,8 @@ def cp_blocco_utilita():
     if not st.session_state.get("cp_aperto"):
         st.caption(_cp_t("Tocca il badge per aprire i compleanni."))
         return
+    if "avs_apri" in globals() and st.button("🔔 " + _cp_t("Avvisi dei compleanni"), key="cp_campanello", width="stretch"):
+        avs_apri("compleanni", "Compleanni")
     if st.button("➕ " + _cp_t("Aggiungi una persona"), key="cp_nuovo", type="primary", width="stretch"):
         st.session_state["cp_modulo"] = "__nuovo__"
         st.rerun()

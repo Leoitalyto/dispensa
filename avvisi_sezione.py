@@ -10,9 +10,10 @@ _AVS_CAPACITA = {
     "casa": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "documenti": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "auto": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
+    "compleanni": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
 }
 _AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0), "casa": (30, 14, 7, 1, 0),
-                    "auto": (90, 30, 15, 3, 0), "documenti": (180, 90)}
+                    "auto": (90, 30, 15, 3, 0), "documenti": (180, 90), "compleanni": (7, 1, 0)}
 _AVS_GIORNI_SCELTA = (90, 60, 45, 30, 21, 14, 10, 7, 5, 3, 2, 1, 0)
 _AVS_GIORNI_LUNGHI = (365, 270, 180, 120, 90, 60, 30, 14, 7, 3, 1, 0)
 _AVS_SUONI = {"auto": "🔄 Automatico (come adesso: dipende da adulti, bimbi o animali)", "classico": "🔔 Din-don (classico)",
@@ -86,6 +87,18 @@ def avs_eventi(sez, d, oggi_):
         for x in f.get("documenti", []):
             if not x.get("senza_scadenza"):
                 aggiungi("d" + str(x.get("id") or x.get("tipo")), f"📄 Scade: {x.get('tipo', 'Documento')}", _avs_data(x.get("scadenza")))
+    elif sez == "compleanni":
+        for x in d.get("compleanni", []):
+            nasc = _avs_data(x.get("nascita"))
+            if nasc and not x.get("scomparso"):
+                for anno in (oggi_.year, oggi_.year + 1):
+                    try:
+                        prossimo = nasc.replace(year=anno)
+                    except ValueError:                           # 29 febbraio
+                        prossimo = nasc.replace(year=anno, day=28)
+                    if prossimo >= oggi_:
+                        aggiungi(str(x.get("id") or x.get("nome")), f"🎂 Compleanno di {(str(x.get('nome', '')) + ' ' + str(x.get('cognome', ''))).strip()}", prossimo)
+                        break
     elif sez == "auto" and "au_scadenze_avviso" in globals():
         for k, (g, txt) in enumerate(au_scadenze_avviso(d.get("auto") or {}, oggi_, 120)):
             if g is not None and g >= 0:
@@ -168,6 +181,8 @@ def _avs_corpo(sez, etichetta):
                 st.caption("Questi giorni valgono per garanzie, manutenzioni e bollette. Le rate dell'amministrazione hanno i loro giorni, scelti nella rata.")
             elif sez == "auto":
                 st.caption("Valgono per bollo, assicurazione, revisione, patente e simili. Le multe da pagare hanno giorni propri (15, 5, 3, 0).")
+            elif sez == "compleanni":
+                st.caption("Di solito 7 giorni prima, il giorno prima e il giorno stesso. Le persone segnate «non c'è più» non vengono avvisate.")
             elif sez == "documenti":
                 st.caption("Di solito 180 giorni (6 mesi) e 90 giorni (3 mesi) prima della scadenza; poi ogni lunedì se è scaduto.")
             if cap.get("ora"):
