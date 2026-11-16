@@ -268,13 +268,20 @@ def ost_pagina(c):
     st.markdown("##### 📊 Tutto l'anno")
     try:
         import pandas as pd
+        def _netto_m(x):
+            if x.get("netto") is not None:
+                return x["netto"]
+            return round(x["lordo"] * rapporto, 2) if (x.get("lordo") is not None and rapporto) else 0.0
         tab = pd.DataFrame([{"Mese": x["nome"].capitalize(), "Ore lavorate": round(x.get("ore_lavorate") or 0, 2), "Straord. (h)": round(x.get("straord") or 0, 2),
-                             "Lordo previsto (€)": round(x.get("lordo") or 0, 2)} for x in mesi])
+                             "Lordo previsto (€)": round(x.get("lordo") or 0, 2), "Netto previsto (€)": round(_netto_m(x) or 0, 2)} for x in mesi])
         st.dataframe(tab, hide_index=True, width="stretch")
-        st.bar_chart(tab.set_index("Mese")["Lordo previsto (€)"], height=220)
+        gr = tab[["Mese", "Lordo previsto (€)", "Netto previsto (€)"]].copy()
+        gr["Mese"] = [f"{i + 1:02d} {n[:3]}" for i, n in enumerate(gr["Mese"])]          # nell'ordine dei mesi (non alfabetico)
+        st.bar_chart(gr.set_index("Mese"), height=240)
     except Exception:
         st.warning("La tabella non è disponibile su questo dispositivo.")
-    st.caption(f"Totale anno: lordo previsto **{_ost_eur(ris['tot']['lordo'])}** · straordinario e notturno **{_ost_eur(ris['tot']['tot_str'])}**.")
+    netto_anno = sum((x.get("netto") if x.get("netto") is not None else (round((x.get("lordo") or 0) * rapporto, 2) if rapporto else 0)) for x in mesi) or None
+    st.caption(f"Totale anno: lordo previsto **{_ost_eur(ris['tot']['lordo'])}** · straordinario e notturno **{_ost_eur(ris['tot']['tot_str'])}**" + (f" · netto previsto **{_ost_eur(netto_anno)}**." if netto_anno else "."))
     st.download_button("📥 Scarica il modulo salvato (per compilarlo)", dati_f, file_name=salvato.get("nome") or nome_f, mime=mime_f, width="stretch", key="ost_scarica")
     rapporto_txt = "\n".join([f"PREVISIONE STIPENDIO {scelta} {ris['anno'] or ''}", ""] + [f"{a}: {b}" for a, b in righe] + ["", f"Lordo previsto: {_ost_eur(lordo)}", f"Netto previsto (stima): {_ost_eur(netto) if netto is not None else '—'}"])
     st.download_button("📄 Scarica la previsione del mese (testo)", rapporto_txt.encode("utf-8"), file_name=f"previsione_{scelta.lower()}.txt", mime="text/plain", width="stretch", key="ost_scarica_t")
