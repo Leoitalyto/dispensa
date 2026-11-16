@@ -165,6 +165,9 @@ Premi **💾 Salva** per tenere le scelte.
 - L'elenco è in ordine di **prossimo compleanno**: in alto chi compie gli anni più presto (se è oggi compare «🎉 Oggi!»).
 - Se **la persona non c'è più**, spunta **🕯️ Questa persona non c'è più**: al posto del segno compaiono due mani con una **candela dalla fiamma viva**, e la scheda passa nel gruppo **In memoria**.
 - Se non sai l'anno, spunta **«Non conosco l'anno»**: l'età non viene mostrata.
+- **La foto**: tocca «Scegli la foto» (galleria o fotocamera). Compare un'**anteprima nel cerchio** che resta in vista: con i cursori **ingrandisci/rimpicciolisci** e **sposta** la foto finché il viso sta al centro dell'ovale tratteggiato. Più avanti puoi **🔄 Ricentrare** la foto già salvata.
+- **I segni si muovono** secondo il loro significato (l'Ariete dà una testata, la Bilancia oscilla, i Pesci nuotano, il Cancro cammina di lato…).
+- Per chi **non c'è più** trovi anche: la **preghiera dell'eterno riposo** (nella lingua dell'app, la puoi nascondere), **✍️ un pensiero personale senza limiti di testo** e **🎙️ un messaggio vocale**: lo registri sul momento o scegli un file, e lo puoi **sostituire** o togliere quando vuoi.
 - ✏️ **Modifica** cambia i dati; 🗑️ **Elimina** manda la scheda nel Cestino, da cui la recuperi.""",
       "compleanni compleanno oroscopo segno zodiacale scheda persona foto contatti whatsapp telegram scomparso candela memoria")
 

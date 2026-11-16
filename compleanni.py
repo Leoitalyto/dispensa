@@ -10,6 +10,7 @@ import calendar
 import datetime as _cp_dt
 import html as _cp_html
 import io
+import os as _cp_os
 import re as _cp_re
 import uuid as _cp_uuid
 
@@ -43,6 +44,16 @@ CP_MESI = {
     "ro": ["ianuarie", "februarie", "martie", "aprilie", "mai", "iunie", "iulie", "august", "septembrie", "octombrie", "noiembrie", "decembrie"],
     "pt": ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
     "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+}
+CP_PREGHIERA = {
+    "it": "L'eterno riposo dona a loro, o Signore, e splenda ad essi la luce perpetua. Riposino in pace. Amen.",
+    "en": "Eternal rest grant unto them, O Lord, and let perpetual light shine upon them. May they rest in peace. Amen.",
+    "fr": "Donne-leur, Seigneur, le repos éternel, et que brille sur eux la lumière sans déclin. Qu'ils reposent en paix. Amen.",
+    "ar": "أعطهم يا رب الراحة الأبدية، ولينر لهم النور الدائم. ليرقدوا بسلام. آمين.",
+    "de": "Herr, gib ihnen die ewige Ruhe, und das ewige Licht leuchte ihnen. Lass sie ruhen in Frieden. Amen.",
+    "ro": "Odihna veșnică dă-le lor, Doamne, și lumina cea fără de sfârșit să le lucească lor. Să se odihnească în pace. Amin.",
+    "pt": "Dai-lhes, Senhor, o descanso eterno, e brilhe para eles a luz perpétua. Descansem em paz. Amém.",
+    "es": "Dales, Señor, el descanso eterno, y brille para ellos la luz perpetua. Descansen en paz. Amén.",
 }
 CP_RELAZIONI = ["", "Famiglia", "Amico/a", "Collega", "Vicino/a", "Conoscente", "Altro"]
 
@@ -108,16 +119,102 @@ def cp_nuovo_id():
     return _cp_uuid.uuid4().hex[:12]
 
 
-def cp_foto_da_file(f, lato=320):
-    """Foto quadrata al centro, piccola (webp) → data URI da tenere nella scheda."""
+def cp_img_apri(dati):
     from PIL import Image, ImageOps
-    im = ImageOps.exif_transpose(Image.open(io.BytesIO(f.getvalue()))).convert("RGB")
+    im = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+    im.thumbnail((1000, 1000), Image.LANCZOS)
+    return im
+
+
+def cp_img_ritaglio(im, zoom, px, py, lato=480):
+    """Il quadrato che finisce nel cerchio: zoom (1 = tutta la parte corta), px/py = posizione 0..100 sul resto della foto."""
+    from PIL import Image
     w, h = im.size
-    s = min(w, h)
-    im = im.crop(((w - s) // 2, (h - s) // 4 if h > w else (h - s) // 2, (w - s) // 2 + s, (h - s) // 4 + s if h > w else (h - s) // 2 + s)).resize((lato, lato), Image.LANCZOS)
+    sq = min(w, h) / float(zoom)
+    sx = int(round(px / 100.0 * (w - sq)))
+    sy = int(round(py / 100.0 * (h - sq)))
+    sqi = int(round(sq))
+    base = Image.new("RGB", (max(sqi, 1), max(sqi, 1)), (15, 23, 42))
+    base.paste(im.crop((max(sx, 0), max(sy, 0), min(sx + sqi, w), min(sy + sqi, h))), (max(-sx, 0), max(-sy, 0)))
+    return base.resize((lato, lato), Image.LANCZOS)
+
+
+def cp_img_uri(im, qualita=82):
     buf = io.BytesIO()
-    im.save(buf, "WEBP", quality=80, method=6)
+    im.save(buf, "WEBP", quality=qualita, method=6)
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def cp_img_bytes(im, qualita=78):
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=qualita, method=6)
+    return buf.getvalue()
+
+
+def cp_file_salva(dati, nome, mime):
+    """Mette un file (foto originale, messaggio vocale) nell'archivio dei documenti: nella scheda resta solo il riferimento."""
+    fid = _cp_uuid.uuid4().hex[:12]
+    corpo = {"nome": nome, "mime": mime, "b64": base64.b64encode(dati).decode()}
+    salva_file(_fa_percorso_doc(fid), lambda d, c=corpo: d.update(c), "Compleanni: file")
+    return {"id": fid, "nome": nome, "mime": mime}
+
+
+def cp_file_leggi(rif):
+    try:
+        d = carica_dati(crea_archivio(), _fa_percorso_doc(rif["id"]))
+        return base64.b64decode(d["b64"]) if d and d.get("b64") else None
+    except Exception:
+        return None
+
+
+def cp_file_cancella(rifs):
+    ids = [r.get("id") for r in rifs if isinstance(r, dict) and r.get("id")]
+    if ids:
+        try:
+            _fa_cancella_files(ids)
+        except Exception:
+            pass
+
+
+def cp_audio_comprimi(dati, nome="voce.wav"):
+    """Rende il messaggio vocale piccolo (voce, ~24 kbps). Ritorna (byte, mime, nome) oppure None se non si riesce."""
+    import shutil
+    import subprocess
+    import tempfile
+    if shutil.which("ffmpeg"):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = tmp + "/in." + (nome.rsplit(".", 1)[-1][:5] if "." in nome else "wav")
+            open(src, "wb").write(dati)
+            for est, mime, args in (("ogg", "audio/ogg", ["-c:a", "libopus", "-b:a", "24k"]), ("mp3", "audio/mpeg", ["-c:a", "libmp3lame", "-b:a", "48k"])):
+                out = f"{tmp}/out.{est}"
+                try:
+                    r = subprocess.run(["ffmpeg", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "24000", *args, out], capture_output=True, timeout=120)
+                    if r.returncode == 0 and _cp_os.path.getsize(out) > 0:
+                        return open(out, "rb").read(), mime, f"messaggio.{est}"
+                except Exception:
+                    pass
+    try:                                                    # senza ffmpeg: WAV a 16 kHz mono (più piccolo)
+        import wave
+        import numpy as np
+        with wave.open(io.BytesIO(dati)) as w:
+            ch, sw, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+            if sw != 2 or n / float(sr) > 150:
+                raise ValueError("non adatto")
+            x = np.frombuffer(w.readframes(n), dtype=np.int16).reshape(-1, ch).mean(axis=1)
+        nuovo = np.interp(np.linspace(0, len(x) - 1, int(len(x) * 16000.0 / sr)), np.arange(len(x)), x).astype(np.int16)
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as o:
+            o.setnchannels(1)
+            o.setsampwidth(2)
+            o.setframerate(16000)
+            o.writeframes(nuovo.tobytes())
+        return buf.getvalue(), "audio/wav", "messaggio.wav"
+    except Exception:
+        pass
+    if len(dati) <= 3_500_000:
+        est = nome.rsplit(".", 1)[-1].lower() if "." in nome else "wav"
+        return dati, {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav"}.get(est, "audio/mpeg"), nome
+    return None
 
 
 def cp_rgba(hex_, a):
@@ -152,8 +249,8 @@ CP_CSS = """<style>
 .cp-card:before{content:"";position:absolute;inset:5px;border-radius:15px;border:1px solid var(--c);opacity:.8;pointer-events:none;
  box-shadow:0 0 6px var(--cg)}
 .cp-testa{display:flex;gap:10px;align-items:center}
-.cp-foto{flex:0 0 64px;width:64px;height:64px;border-radius:50%;border:2px solid var(--c);box-shadow:0 0 10px var(--cg);
- background:#0f172a center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:var(--c)}
+.cp-foto{flex:0 0 92px;width:92px;height:92px;border-radius:50%;border:2px solid var(--c);box-shadow:0 0 10px var(--cg);
+ background:#0f172a center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:1.7rem;font-weight:800;color:var(--c)}
 .cp-nome{flex:1;min-width:0}.cp-nome b{display:block;font-size:1.12rem;line-height:1.2;color:#fff;word-break:break-word}
 .cp-nome i{font-style:normal;font-size:.8rem;opacity:.75;display:block}
 .cp-nome .cp-chip{display:inline-block;margin-top:5px;padding:2px 9px;border-radius:999px;border:1px solid var(--c);color:var(--c);font-size:.78rem;font-weight:700;background:var(--cg2);white-space:nowrap}
@@ -181,7 +278,42 @@ CP_CSS = """<style>
 [class*="st-key-cp_azioni_"] a,[class*="st-key-cp_azioni_"] button{font-size:.8rem !important;padding:.25rem .3rem !important;min-height:2.3rem !important}
 [class*="st-key-cp_data_"] [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;gap:.4rem !important}
 [class*="st-key-cp_data_"] [data-testid="stColumn"]{min-width:0 !important}
-@media (prefers-reduced-motion:reduce){.cp-fiamma,.cp-alone{animation:none}}
+/* ogni segno si muove secondo il suo significato (piano, in tono con l'app) */
+.cp-segno img{transform-origin:50% 60%;will-change:transform}
+.cp-an-ariete img{animation:cp-ariete 4.6s ease-in-out infinite}
+.cp-an-toro img{animation:cp-toro 5s ease-in-out infinite}
+.cp-an-gemelli img{animation:cp-gemelli 5.2s ease-in-out infinite alternate}
+.cp-an-cancro img{animation:cp-cancro 6s ease-in-out infinite}
+.cp-an-leone img{animation:cp-leone 4.2s ease-in-out infinite}
+.cp-an-vergine img{animation:cp-vergine 5.5s ease-in-out infinite}
+.cp-an-bilancia img{transform-origin:50% 22%;animation:cp-bilancia 3.8s ease-in-out infinite alternate}
+.cp-an-scorpione img{transform-origin:78% 88%;animation:cp-scorpione 4.4s ease-in-out infinite}
+.cp-an-sagittario img{animation:cp-sagittario 4.8s ease-in-out infinite}
+.cp-an-capricorno img{animation:cp-capricorno 6s ease-in-out infinite}
+.cp-an-acquario img{animation:cp-acquario 4s ease-in-out infinite alternate}
+.cp-an-pesci img{animation:cp-pesci 4.4s ease-in-out infinite alternate}
+@keyframes cp-ariete{0%,62%,100%{transform:translateX(0) rotate(0)}72%{transform:translateX(-4px) rotate(-2.5deg)}82%{transform:translateX(9px) rotate(3deg) scale(1.04)}90%{transform:translateX(0) rotate(0)}}
+@keyframes cp-toro{0%,55%,100%{transform:translateY(0) rotate(0)}62%{transform:translateY(4px) rotate(-1.8deg)}69%{transform:translateY(-1px)}76%{transform:translateY(4px) rotate(1.8deg)}84%{transform:translateY(0)}}
+@keyframes cp-gemelli{0%{transform:translateX(-3px) rotate(-1.6deg)}100%{transform:translateX(3px) rotate(1.6deg)}}
+@keyframes cp-cancro{0%,100%{transform:translateX(0) rotate(0)}12%,30%{transform:translateX(-7px) rotate(-1.5deg)}42%{transform:translateX(0)}54%,72%{transform:translateX(7px) rotate(1.5deg)}84%{transform:translateX(0)}}
+@keyframes cp-leone{0%,100%{transform:scale(1);filter:drop-shadow(0 0 8px var(--cg)) brightness(1)}50%{transform:scale(1.05);filter:drop-shadow(0 0 16px var(--c)) brightness(1.14)}}
+@keyframes cp-vergine{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(1.2deg)}}
+@keyframes cp-bilancia{0%{transform:rotate(-3.6deg)}100%{transform:rotate(3.6deg)}}
+@keyframes cp-scorpione{0%,66%,100%{transform:rotate(0)}72%{transform:rotate(-5deg)}79%{transform:rotate(4deg) scale(1.02)}86%{transform:rotate(-1deg)}}
+@keyframes cp-sagittario{0%,50%,100%{transform:translateX(0) scale(1)}68%{transform:translateX(-5px) scale(.97)}74%{transform:translateX(-5px) scale(.97)}80%{transform:translateX(9px) scale(1.03)}90%{transform:translateX(0) scale(1)}}
+@keyframes cp-capricorno{0%,100%{transform:translate(0,0) rotate(0)}20%{transform:translate(2px,-4px) rotate(-1.5deg)}40%{transform:translate(4px,-3px) rotate(0)}60%{transform:translate(5px,-8px) rotate(-1.5deg)}80%{transform:translate(2px,-3px) rotate(0)}}
+@keyframes cp-acquario{0%{transform:skewX(-2.5deg) translateY(0);filter:drop-shadow(0 0 8px var(--cg)) hue-rotate(0)}100%{transform:skewX(2.5deg) translateY(-4px);filter:drop-shadow(0 0 14px var(--c)) hue-rotate(-14deg)}}
+@keyframes cp-pesci{0%{transform:translate(-5px,3px) rotate(-2.5deg)}100%{transform:translate(5px,-3px) rotate(2.5deg)}}
+.cp-pregh{margin:10px 4px 0;text-align:center;font-style:italic;font-size:.86rem;line-height:1.45;color:#ffe2b0;opacity:.95}
+.cp-pregh:before{content:"🕊️";display:block;font-style:normal;font-size:1.1rem;margin-bottom:2px}
+.cp-pens{margin-top:10px;padding:9px 10px;border-radius:12px;border:1px solid var(--cg);background:var(--cg2);font-size:.9rem;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.cp-pens b{display:block;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--c);margin-bottom:3px}
+[class*="st-key-cp_vetrina_"]{position:sticky;top:48px;z-index:20;background:rgba(14,10,30,.94);border-radius:16px;padding:4px 0 2px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+.cp-anteprima{width:min(46vw,170px);aspect-ratio:1/1;margin:6px auto 4px;border-radius:50%;border:3px solid #4aa8ff;box-shadow:0 0 14px rgba(74,168,255,.7);
+ background:#0f172a center/cover no-repeat;position:relative}
+.cp-anteprima:after{content:"";position:absolute;left:25%;top:14%;width:50%;height:62%;border:2px dashed rgba(255,255,255,.55);border-radius:50%}
+.cp-guida-foto{font-size:.84rem;line-height:1.45;padding:8px 10px;border-radius:10px;background:rgba(74,168,255,.12);border:1px solid rgba(74,168,255,.4);margin-bottom:6px}
+@media (prefers-reduced-motion:reduce){.cp-segno img{animation:none !important}.cp-fiamma,.cp-alone{animation:none}}
 </style>"""
 
 
@@ -225,8 +357,17 @@ def _cp_scheda_html(p, oggi):
         destra = ("<div class='cp-fiacc'><img class='cp-base' alt='' src='data:image/webp;base64," + CPI_FIACCOLA + "'>"
                   "<div class='cp-alone'></div><img class='cp-fiamma' alt='' src='data:image/webp;base64," + CPI_FIAMMA + "'></div>")
     else:
-        destra = ("<div class='cp-segno'><img alt='" + e(cp_nome_segno(seg)) + "' src='data:image/webp;base64," + CPI_ZODIACO[seg] + "'>"
+        destra = ("<div class='cp-segno cp-an-" + seg + "'><img alt='" + e(cp_nome_segno(seg)) + "' src='data:image/webp;base64," + CPI_ZODIACO[seg] + "'>"
                   "<span>" + e(cp_nome_segno(seg)) + "</span></div>")
+    if scomparso:
+        if p.get("preghiera", True):
+            destra += "<div class='cp-pregh'>" + e(CP_PREGHIERA[_cp_lg()]) + "</div>"
+        pens = str(p.get("pensiero") or "").strip()
+        if pens:
+            blocco = f"<b>✍️ {e(_cp_t('Un pensiero'))}</b>{e(pens)}"
+            if len(pens) > 500:
+                blocco = f"<details><summary style='cursor:pointer;color:var(--c);font-weight:700'>✍️ {e(_cp_t('Leggi il pensiero'))}</summary>{e(pens)}</details>"
+            destra += f"<div class='cp-pens'>{blocco}</div>"
     righe = []
 
     def riga(ic, testo, link=""):
@@ -313,19 +454,51 @@ def _cp_modulo(pid):
     k = "cpf_" + (pid or "nuovo")
     with st.container(border=True, key=k + "_box"):
         st.markdown("**" + ("✏️ " + _cp_t("Modifica") if pid else "➕ " + _cp_t("Nuova persona")) + "**")
-        # 1) foto
-        foto_att = st.session_state.get(k + "_foto", p.get("foto", ""))
-        if foto_att:
-            st.markdown(f"<div style='width:84px;height:84px;border-radius:50%;background:url(\"{_cp_html.escape(foto_att, quote=True)}\") center/cover;margin:2px 0 6px'></div>", unsafe_allow_html=True)
-        f = st.file_uploader("📷 " + _cp_t("Foto (facoltativa)"), type=["jpg", "jpeg", "png", "webp"], key=k + "_up")
+        # 1) foto: scelta, poi si centra il viso nel cerchio con l'anteprima
+        st.markdown("<div class='cp-guida-foto'><b>📷 " + _cp_html.escape(_cp_t("Come mettere la foto")) + "</b><br>"
+                    + _cp_html.escape(_cp_t("1) Tocca «Scegli la foto» (galleria o fotocamera). 2) Con i cursori ingrandisci e sposta la foto finché il viso sta al centro dell'ovale tratteggiato. 3) Tocca «Salva». Puoi ricentrarla quando vuoi.")) + "</div>", unsafe_allow_html=True)
+        f = st.file_uploader("📷 " + _cp_t("Scegli la foto (facoltativa)"), type=["jpg", "jpeg", "png", "webp"], key=k + "_up")
+        ok_ = k + "_ob"
         if f is not None:
-            try:
-                st.session_state[k + "_foto"] = cp_foto_da_file(f)
-                foto_att = st.session_state[k + "_foto"]
-            except Exception:
-                st.warning(_cp_t("Non riesco a leggere questa foto: provane un'altra."))
+            ident = getattr(f, "file_id", None) or f"{f.name}{f.size}"
+            if st.session_state.get(k + "_fid") != ident:
+                try:
+                    im0 = cp_img_apri(f.getvalue())
+                    st.session_state[ok_] = im0
+                    st.session_state[k + "_fid"] = ident
+                    st.session_state[k + "_orig_bytes"] = True
+                    st.session_state[k + "_nome_orig"] = f.name
+                    st.session_state[k + "_zoom"] = 1.0
+                    st.session_state[k + "_px"] = 50
+                    st.session_state[k + "_py"] = 30 if im0.size[1] > im0.size[0] else 50
+                except Exception:
+                    st.warning(_cp_t("Non riesco a leggere questa foto: provane un'altra."))
+        if ok_ not in st.session_state and p.get("foto_orig") and st.button("🔄 " + _cp_t("Ricentra la foto già salvata"), key=k + "_ricentra", width="stretch"):
+            dati_o = cp_file_leggi(p["foto_orig"])
+            if dati_o:
+                st.session_state[ok_] = cp_img_apri(dati_o)
+                pos = p.get("foto_pos") or [1.0, 50, 30]
+                st.session_state[k + "_zoom"], st.session_state[k + "_px"], st.session_state[k + "_py"] = float(pos[0]), int(pos[1]), int(pos[2])
+                st.rerun()
+            else:
+                st.warning(_cp_t("Non trovo la foto originale: scegli di nuovo la foto."))
+        foto_att = p.get("foto", "")
+        foto_pos = p.get("foto_pos")
+        if ok_ in st.session_state:
+            im0 = st.session_state[ok_]
+            vetrina = st.container(key="cp_vetrina_" + k)                     # l'anteprima resta in vista mentre muovi i cursori
+            zoom = st.slider("🔍 " + _cp_t("Ingrandisci / rimpicciolisci"), 0.7, 4.0, step=0.05, key=k + "_zoom")
+            px = st.slider("↔️ " + _cp_t("Sposta a sinistra / a destra"), 0, 100, key=k + "_px")
+            py = st.slider("↕️ " + _cp_t("Sposta in alto / in basso"), 0, 100, key=k + "_py")
+            rit = cp_img_ritaglio(im0, zoom, px, py)
+            foto_att = cp_img_uri(rit)
+            foto_pos = [zoom, px, py]
+            vetrina.markdown(f"<div class='cp-anteprima' style=\"background-image:url('{foto_att}')\"></div>"
+                             f"<div style='text-align:center;font-size:.76rem;opacity:.85'>{_cp_html.escape(_cp_t('Così apparirà nel cerchio della scheda'))}</div>", unsafe_allow_html=True)
+        elif foto_att:
+            st.markdown(f"<div class='cp-anteprima' style=\"background-image:url('{_cp_html.escape(foto_att, quote=True)}')\"></div>", unsafe_allow_html=True)
         if foto_att and st.checkbox("🗑️ " + _cp_t("Togli la foto"), key=k + "_togli"):
-            foto_att = ""
+            foto_att, foto_pos = "", None
         # 2) chi è
         c1, c2 = st.columns(2, gap="small")
         nome = c1.text_input(_cp_t("Nome") + " *", value=p.get("nome", ""), key=k + "_nome")
@@ -359,6 +532,21 @@ def _cp_modulo(pid):
         data_sc = None
         if scomp:
             data_sc = cp_campo_data(k + "_dsc", _cp_t("Data (facoltativa)"), cp_data(p.get("data_scomparsa")))
+        preghiera, pensiero, voce_nuova, voce_togli = True, "", None, False
+        if scomp:
+            st.markdown("<div style='margin-top:8px;font-weight:700'>🕊️ " + _cp_html.escape(_cp_t("Ricordo")) + "</div>", unsafe_allow_html=True)
+            preghiera = st.checkbox(_cp_t("Mostra la preghiera dell'eterno riposo"), value=p.get("preghiera", True), key=k + "_pregh")
+            pensiero = st.text_area("✍️ " + _cp_t("Un pensiero personale (scrivi quanto vuoi, senza limiti)"), value=p.get("pensiero", ""), key=k + "_pens", height=220)
+            st.markdown("<div style='font-weight:600;margin-top:4px'>🎙️ " + _cp_html.escape(_cp_t("Messaggio vocale")) + "</div>", unsafe_allow_html=True)
+            if p.get("voce"):
+                dv = cp_file_leggi(p["voce"])
+                if dv:
+                    st.audio(dv, format=p["voce"].get("mime", "audio/ogg"))
+                    st.caption(_cp_t("Questo è il messaggio salvato. Se ne registri un altro qui sotto, lo sostituisce."))
+                voce_togli = st.checkbox("🗑️ " + _cp_t("Togli il messaggio vocale"), key=k + "_vtogli")
+            reg = st.audio_input("🎙️ " + _cp_t("Registra adesso (tocca il microfono, parla, poi ferma)"), key=k + "_vreg") if hasattr(st, "audio_input") else None
+            fv = st.file_uploader("📁 " + _cp_t("Oppure scegli un file audio"), type=["mp3", "m4a", "ogg", "wav", "aac", "opus", "webm"], key=k + "_vup")
+            voce_nuova = reg or fv
         b1, b2 = st.columns(2, gap="small")
         if b1.button("✅ " + _cp_t("Salva"), type="primary", key=k + "_ok", width="stretch"):
             if not nome.strip():
@@ -372,7 +560,41 @@ def _cp_modulo(pid):
                    "nascita": nascita.isoformat(), "anno_ignoto": bool(anno_ignoto), "luogo": luogo.strip(), "cellulare": cell.strip(),
                    "fisso": fisso.strip(), "whatsapp": wa.strip(), "telegram": tg.strip(), "email": email.strip(), "indirizzo": indirizzo.strip(),
                    "sito": (sito or "").strip(), "regalo": regalo.strip(), "note": note.strip(), "foto": foto_att, "scomparso": bool(scomp),
-                   "data_scomparsa": data_sc.isoformat() if (scomp and data_sc) else ""}
+                   "data_scomparsa": data_sc.isoformat() if (scomp and data_sc) else "", "preghiera": bool(preghiera), "pensiero": pensiero.strip()}
+            da_cancellare = []
+            # foto originale (serve per ricentrare dopo) e posizione
+            vecchia_o = p.get("foto_orig")
+            if foto_att and foto_pos:
+                rec["foto_pos"] = foto_pos
+                if st.session_state.get(k + "_orig_bytes"):
+                    try:
+                        rec["foto_orig"] = cp_file_salva(cp_img_bytes(st.session_state[ok_], 85), "foto_originale.webp", "image/webp")
+                        if vecchia_o:
+                            da_cancellare.append(vecchia_o)
+                    except Exception:
+                        st.warning(_cp_t("Non sono riuscito a tenere la foto originale: la foto nel cerchio è salvata lo stesso."))
+                elif vecchia_o:
+                    rec["foto_orig"] = vecchia_o
+            elif vecchia_o:
+                da_cancellare.append(vecchia_o)
+            # messaggio vocale
+            vecchia_v = p.get("voce")
+            if scomp:
+                if voce_nuova is not None:
+                    risultato = cp_audio_comprimi(voce_nuova.getvalue(), getattr(voce_nuova, "name", "voce.wav"))
+                    if not risultato:
+                        st.error(_cp_t("Il messaggio vocale è troppo lungo o in un formato che non riesco a ridurre: registralo più corto."))
+                        return
+                    with st.spinner(_cp_t("Salvo il messaggio vocale…")):
+                        rec["voce"] = cp_file_salva(*risultato)
+                    if vecchia_v:
+                        da_cancellare.append(vecchia_v)
+                elif vecchia_v and not voce_togli:
+                    rec["voce"] = vecchia_v
+                elif vecchia_v:
+                    da_cancellare.append(vecchia_v)
+            elif vecchia_v:
+                da_cancellare.append(vecchia_v)
 
             def _m(d):
                 lst = d.setdefault("compleanni", [])
@@ -383,6 +605,7 @@ def _cp_modulo(pid):
                 else:
                     lst.append(rec)
             _cp_salva(_m, "Compleanni: " + rec["nome"])
+            cp_file_cancella(da_cancellare)
             for s in [x for x in st.session_state if str(x).startswith(k)]:
                 st.session_state.pop(s, None)
             st.session_state["cp_modulo"] = None
@@ -412,6 +635,13 @@ def _cp_elenco():
         for p in gruppo:
             pid = p["id"]
             st.markdown(_cp_scheda_html(p, oggi), unsafe_allow_html=True)
+            if p.get("scomparso") and p.get("voce"):
+                with st.expander("🎙️ " + _cp_t("Ascolta il messaggio vocale")):
+                    dv = cp_file_leggi(p["voce"])
+                    if dv:
+                        st.audio(dv, format=p["voce"].get("mime", "audio/ogg"))
+                    else:
+                        st.caption(_cp_t("Non trovo il file audio."))
             _cp_pulsanti(p, pid)
             if st.session_state.get("cp_modulo") == pid:
                 _cp_modulo(pid)
@@ -426,6 +656,7 @@ def _cp_elenco():
                 s1, s2 = st.columns(2, gap="small")
                 if s1.button("🗑️ " + _cp_t("Sì, elimina"), key=f"cp_siel_{pid}", type="primary", width="stretch"):
                     _cp_salva(lambda d, _i=pid: d.__setitem__("compleanni", [x for x in d.get("compleanni", []) if x.get("id") != _i]), "Compleanni: eliminato " + str(p.get("nome", "")))
+                    cp_file_cancella([p.get("foto_orig"), p.get("voce")])
                     st.session_state["cp_elimina"] = None
                     st.rerun()
                 if s2.button(_cp_t("No"), key=f"cp_noel_{pid}", width="stretch"):
