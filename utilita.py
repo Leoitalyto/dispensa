@@ -227,6 +227,8 @@ def schermata_utilita():
     ut_gruppo("🌐", "Strumenti da usare fuori dall'app", "Si aprono in una nuova scheda del browser: l'app non manda loro i tuoi dati", "#8e24aa")
     with ut_riquadro("pdf", "📄", "Utilità PDF", "Crea, unisci, comprimi, converti, modifica e firma i PDF con i servizi più usati", "#c62828"):
         _ut_chiama("upd_pannello")
+    with ut_riquadro("compleanni", "🎂", "Compleanni", "Le persone che ami: data, segno, contatti e una candela per chi non c'è più", "#e91e63"):
+        _ut_chiama("cp_blocco_utilita")
     with ut_riquadro("musica", "🎵", "Utilità musicali", "Ascolta musica gratis, senza pubblicità e senza registrarti", "#7b1fa2"):   # sempre l'ULTIMO riquadro della pagina
         st.markdown("<style>.st-key-ut_musica_riga [data-testid='stHorizontalBlock']{flex-wrap:nowrap !important;gap:.5rem !important}"
                     ".st-key-ut_musica_riga [data-testid='stColumn']{min-width:0 !important;flex:1 1 0 !important;width:auto !important}</style>", unsafe_allow_html=True)

@@ -23,7 +23,7 @@ GUIDA_VERSIONI = {
     "lavoro": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["lavoro.py", "casa.py", "cestino.py"]},
     "auto": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente_extra.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "auto_soccorso.py", "auto_emergenza.py", "libretto.py",
                                                                          "diagnostica.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica_spie.py", "cestino.py"]},
-    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "utilita_pdf.py", "controllo_ore.py", "ore_stipendio.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py", "controllo_tecnico.py"]},
+    "utilita": {"versione": GUIDA_VERSIONE, "data": GUIDA_DATA, "moduli": ["assistente.py", "assistente_extra.py", "utilita.py", "compleanni.py", "utilita_pdf.py", "controllo_ore.py", "ore_stipendio.py", "libera_spazio.py", "scambio.py", "nomi_utenti.py", "musica.py", "cestino.py", "accessibilita.py", "controllo_tecnico.py"]},
 }
 
 
@@ -154,6 +154,19 @@ Premi **💾 Salva** per tenere le scelte.
     for _sez in ("dispensa", "farmacia", "documenti", "archivio", "casa", "lavoro", "auto"):
         a(_sez, "x_riuso_archivio", "🗂️ Riusare un file già in archivio", _TXT_RIUSO,
           "archivio riusare file foto gia salvato scegli dall'archivio allegare senza rifare")
+
+    # ================= i compleanni (Utilità)
+    a("utilita", "x_compleanni", "🎂 Compleanni: le schede delle persone",
+      """In **Utilità → 🎂 Compleanni** tocca il **badge «Buon compleanno»** per aprire l'elenco (toccalo di nuovo per chiuderlo).
+
+- **➕ Aggiungi una persona**: scrivi nome e data di nascita (giorno, mese, anno). Tutto il resto è facoltativo: **foto, luogo di nascita, cognome, soprannome, cellulare, telefono fisso, WhatsApp, Telegram, email, indirizzo, sito web, idee regalo, note**.
+- Ogni persona ha la sua **scheda con cornice neon** del colore del suo **segno zodiacale**, scelto in automatico dalla data. Il nome del segno è nella lingua dell'app.
+- Sotto la scheda ci sono i tasti per **chiamare, scrivere su WhatsApp o Telegram, mandare una email, aprire il sito**.
+- L'elenco è in ordine di **prossimo compleanno**: in alto chi compie gli anni più presto (se è oggi compare «🎉 Oggi!»).
+- Se **la persona non c'è più**, spunta **🕯️ Questa persona non c'è più**: al posto del segno compaiono due mani con una **candela dalla fiamma viva**, e la scheda passa nel gruppo **In memoria**.
+- Se non sai l'anno, spunta **«Non conosco l'anno»**: l'età non viene mostrata.
+- ✏️ **Modifica** cambia i dati; 🗑️ **Elimina** manda la scheda nel Cestino, da cui la recuperi.""",
+      "compleanni compleanno oroscopo segno zodiacale scheda persona foto contatti whatsapp telegram scomparso candela memoria")
 
     # ================= i colori dei comandi
     colori = ("🎨 I colori dei comandi: sempre uguali",
