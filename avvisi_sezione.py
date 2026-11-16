@@ -9,7 +9,7 @@ _AVS_CAPACITA = {
     "salute": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "casa": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
     "documenti": {"giorni": False, "ora": False, "canali": False, "suono": False, "invio": False},
-    "auto": {"giorni": False, "ora": False, "canali": False, "suono": False, "invio": False},
+    "auto": {"giorni": False, "ora": True, "canali": True, "suono": False, "invio": True},
 }
 _AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0)}
 _AVS_GIORNI_SCELTA = (90, 60, 45, 30, 21, 14, 10, 7, 5, 3, 2, 1, 0)
