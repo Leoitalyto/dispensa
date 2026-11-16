@@ -18,7 +18,9 @@ OST_ETICHETTE = [("lavorabili", ("ore lavorabili usate",)), ("lorde", ("ore lavo
                  ("imp_fest", ("importo straordinario festivo",)), ("imp_nott", ("importo lavoro notturno 33%",)), ("imp_nottfest", ("importo lavoro notturno festivo",)),
                  ("tot_str", ("totale straordinario",)), ("base", ("retribuzione mensile fissa", "retribuzione base")), ("lordo", ("retribuzione lorda prevista",)),
                  ("netto", ("stipendio netto previsto",))]
-OST_ETICHETTE_NUOVE = [("detrazione", ("detrazione ore",)), ("p104", ("permessi legge 104 pagati",)), ("vestiario", ("indennità lavoro vestito", "indennita lavoro vestito")),
+OST_ETICHETTE_NUOVE = [("ore_13", ("straordinario al 13%",)), ("imp_13", ("importo straordinario 13%",)), ("gia13", ("ore al 13% già usate",)),
+                       ("mens", ("mensilità aggiuntiva", "mensilita aggiuntiva")), ("unatan", ("altre voci una tantum",)), ("cred", ("rimborso 730",)),
+                       ("detrazione", ("detrazione ore",)), ("p104", ("permessi legge 104 pagati",)), ("vestiario", ("indennità lavoro vestito", "indennita lavoro vestito")),
                        ("pasti", ("buoni pasto",))]                       # solo nel modulo nuovo (assenti nel vecchio)
 
 
@@ -84,11 +86,16 @@ def ost_leggi(dati):
             calcolato = True
         mesi.append(riga)
     p = wb["Parametri"]
-    par = {"paga": _ost_n(p["B14"].value), "trattenute": _ost_n(p["B16"].value), "ore_sett": _ost_n(p["B4"].value)}
+    def _par(inizio):
+        for rr_ in range(3, 40):
+            if str(p.cell(rr_, 1).value or "").strip().lower().startswith(inizio):
+                return _ost_n(p.cell(rr_, 2).value)
+        return None
+    par = {"paga": _par("paga oraria base"), "trattenute": _par("trattenute stimate") or _par("trattenute sul lordo"), "ore_sett": _par("ore settimanali")}
     ore_g = {}
-    for r in range(4, 11):
+    for r in range(4, 12):
         nome_a = str(p.cell(r, 5).value or "").strip()
-        if nome_a:
+        if nome_a in OST_ASSENZE:
             ore_g[nome_a] = _ost_n(p.cell(r, 6).value) or 0.0
     par["ore_assenza"] = ore_g
     for riga in mesi:                       # ore delle assenze a giornata intera, secondo la tabella dei Parametri
@@ -202,14 +209,17 @@ def ost_pagina(c):
     st.markdown(f"##### 📅 {scelta} {ris['anno'] or ''}")
     rapporto, n_buste = (None, 0)
     tratt = ris["par"].get("trattenute")
-    if tratt:
+    if m.get("netto") is not None:
+        rapporto = None
+        origine = (f"con le trattenute del foglio «Parametri» ({tratt * 100:.1f}% del lordo di un mese normale; 13ª e 14ª tassate di più)" if tratt else "dal foglio del modulo")
+    elif tratt:
         rapporto = 1 - tratt
         origine = f"con le trattenute del modulo ({tratt * 100:.1f}%)"
     else:
         rapporto, n_buste = ost_rapporto_trattenute(c)
         origine = f"in base alle tue ultime {n_buste} buste paga (resta circa il {rapporto * 100:.0f}% del lordo)" if rapporto else ""
     lordo = m.get("lordo")
-    netto = round(lordo * rapporto, 2) if (lordo is not None and rapporto) else m.get("netto")
+    netto = m.get("netto") if m.get("netto") is not None else (round(lordo * rapporto, 2) if (lordo is not None and rapporto) else None)
     c1, c2 = st.columns(2)
     c1.metric("💶 Lordo previsto", _ost_eur(lordo))
     c2.metric("💰 Netto previsto (stima)", _ost_eur(netto) if netto is not None else "—")
@@ -230,11 +240,15 @@ def ost_pagina(c):
                 ("Indennità lavoro vestito", _ost_eur(m.get("vestiario"))),
                 ("Buoni pasto", _ost_eur(m.get("pasti")))] if m.get("detrazione") is not None else
                ([("   di cui permessi Legge 104 (retribuiti)", f"{h104:.2f} h · {_ost_eur(round(h104 * (m.get('paga') or 0), 2))}")] if h104 else [])),
+             *([("Straordinario 13% (entro il tetto annuo)", f"{m.get('ore_13') or 0:.2f} h · {_ost_eur(m.get('imp_13'))}")] if m.get("ore_13") is not None else []),
              ("Straordinario 20%", f"{m.get('ore_ord') or 0:.2f} h · {_ost_eur(m.get('imp_ord'))}"),
              ("Straordinario festivo 65%", f"{m.get('ore_fest') or 0:.2f} h · {_ost_eur(m.get('imp_fest'))}"),
              ("Lavoro notturno 33%", f"{m.get('ore_nott') or 0:.2f} h · {_ost_eur(m.get('imp_nott'))}"),
              ("Lavoro notturno festivo 75%", f"{m.get('ore_nottfest') or 0:.2f} h · {_ost_eur(m.get('imp_nottfest'))}"),
-             ("Totale straordinario e notturno", _ost_eur(m.get("tot_str")))]
+             ("Totale straordinario e notturno", _ost_eur(m.get("tot_str"))),
+             *([("Mensilità aggiuntiva (13ª / 14ª)", _ost_eur(m.get("mens")))] if m.get("mens") else []),
+             *([("Altre voci una tantum", _ost_eur(m.get("unatan")))] if m.get("unatan") else []),
+             *([("Rimborso 730 / crediti netti", _ost_eur(m.get("cred")))] if m.get("cred") else [])]
     gg = m.get("assenze_giorni") or {}
     if gg:
         og = ris["par"].get("ore_assenza") or {}
