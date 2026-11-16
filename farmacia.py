@@ -1026,7 +1026,7 @@ def _fa_dialogo_visita(pid, vis_id=None):
         note = st.text_area("Note personali", value=v.get("note", ""))
         if v.get("allegati"):
             st.caption(f"Documenti già allegati: {len(v['allegati'])} (si aprono ed eliminano dalla scheda).")
-        nuovi = st.file_uploader("Allega referti: scatta una foto o scegli PDF e immagini", type=TIPI_FILE,
+        nuovi = ar_uploader("Allega referti: scatta una foto o scegli PDF e immagini", type=TIPI_FILE,
                                  accept_multiple_files=True)
         inviato = st.form_submit_button("Salva", type="primary")
     if inviato:
@@ -1243,7 +1243,7 @@ def _fa_dialogo_prescrizione(pid, pre_id=None):
         note = st.text_area("Note", value=r.get("note", ""))
         if r.get("allegati"):
             st.caption(f"File già allegati: {len(r['allegati'])} (si vedono e si tolgono dal dettaglio della prescrizione).")
-        nuovi = st.file_uploader("Allega la ricetta: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
+        nuovi = ar_uploader("Allega la ricetta: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
         inviato = st.form_submit_button("Salva", type="primary")
     if inviato:
         if not (prescritto.strip() or codice.strip() or nuovi):
@@ -1446,7 +1446,7 @@ def _fa_tab_vaccini(f, pid, nomi, oggi_):
     st.subheader(f"📄 Documento vaccinale di {nomi[pid]}")
     pagine = (f.get("vaccini_doc") or {}).get(pid, [])
     with st.form("fa_form_vacdoc_" + pid, clear_on_submit=True):
-        nuovi = st.file_uploader("Fotografa il documento o scegli le pagine (foto o PDF)", type=TIPI_FILE,
+        nuovi = ar_uploader("Fotografa il documento o scegli le pagine (foto o PDF)", type=TIPI_FILE,
                                  accept_multiple_files=True, key="fa_up_vac_" + pid)
         invio = st.form_submit_button("Salva le pagine")
     if invio and nuovi:
@@ -3783,7 +3783,7 @@ def _doc_modulo(pid, doc_id=None):
         scadenza = st.date_input("Data di scadenza", value=_fa_data(pre.get("scadenza") or x.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
         note = st.text_area("Note", value=x.get("note") or pre.get("note", ""))
-        nuovi = st.file_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
+        nuovi = ar_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
                                  accept_multiple_files=True)
         invio = st.form_submit_button("💾 Salva il documento", type="primary", width="stretch")
     st.caption("L'avviso arriva 6 mesi prima della scadenza (primo avviso) e 3 mesi prima (secondo avviso, più insistente).")

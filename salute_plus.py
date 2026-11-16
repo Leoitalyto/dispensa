@@ -188,7 +188,7 @@ def _sp_file_voce(pid, chiave, titolo):
                 _sp_dialogo_togli_file(pid, chiave, r)
             if aperto:
                 _sp_mostra(r)
-        nuovi = st.file_uploader("Carica il documento (PDF o foto)", type=TIPI_FILE, accept_multiple_files=True, key=f"sp_up_{chiave}_{pid}_{giro}")
+        nuovi = ar_uploader("Carica il documento (PDF o foto)", type=TIPI_FILE, accept_multiple_files=True, key=f"sp_up_{chiave}_{pid}_{giro}")
         if nuovi and st.button("💾 Salva il documento", key=f"sp_salva_{chiave}_{pid}", type="primary", width="stretch"):
             try:
                 nuovi_refs = _fa_salva_files(nuovi, esistenti=refs)
@@ -1777,7 +1777,7 @@ def sp_modulo_docsan(pid):
             arrivi.append((b.get("nome") or "documento", b["dati"]))
     else:
         giro = st.session_state.get("sp_ds_giro", 0)
-        nuovi = st.file_uploader("📎 Scegli i documenti (puoi sceglierne più di uno)", type=TIPI_FILE, accept_multiple_files=True, key=f"sp_ds_up_{giro}")
+        nuovi = ar_uploader("📎 Scegli i documenti (puoi sceglierne più di uno)", type=TIPI_FILE, accept_multiple_files=True, key=f"sp_ds_up_{giro}")
         for up in nuovi or []:
             arrivi.append((up.name, up.getvalue()))
         if nuovi:
@@ -1929,7 +1929,7 @@ def _fa_dialogo_visita(pid, vis_id=None, prefill=None):                         
         if v.get("allegati"):
             st.caption(f"Documenti già allegati: {len(v['allegati'])} (si aprono ed eliminano dalla scheda).")
         st.caption("📎 Per allegare un referto o un esame, dopo aver salvato usa **Carica un referto, un esame o una ricetta (lo leggo io)**: lo leggo e lo metto nella stessa specialità.")
-        nuovi = st.file_uploader("Oppure allega qui: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
+        nuovi = ar_uploader("Oppure allega qui: scatta una foto o scegli PDF e immagini", type=TIPI_FILE, accept_multiple_files=True)
         inviato = st.form_submit_button("Salva", type="primary")
     if inviato:
         categoria = nuova.strip() or cat
