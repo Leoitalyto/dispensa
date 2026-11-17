@@ -652,6 +652,8 @@ def _cp_modulo(pid):
                    "fisso": fisso.strip(), "whatsapp": wa.strip(), "telegram": tg.strip(), "email": email.strip(), "indirizzo": indirizzo.strip(),
                    "sito": (sito or "").strip(), "regalo": regalo.strip(), "note": note.strip(), "foto": foto_att, "scomparso": bool(scomp),
                    "data_scomparsa": data_sc.isoformat() if (scomp and data_sc) else "", "preghiera": bool(preghiera), "pensiero": pensiero.strip()}
+            if p.get("ricordi"):
+                rec["ricordi"] = p["ricordi"]                            # il diario dei ricordi non si perde modificando la scheda
             da_cancellare = []
             if scomp and sep_dati is not None:                          # dove riposa (sepolture.py)
                 try:
@@ -745,6 +747,8 @@ def _cp_elenco():
                         st.caption(_cp_t("Non trovo il file audio."))
             if p.get("scomparso") and "sp_mostra" in globals():
                 sp_mostra(p)
+            if "dr_blocco" in globals():
+                dr_blocco(p)
             _cp_pulsanti(p, pid)
             if st.session_state.get("cp_modulo") == pid:
                 _cp_modulo(pid)
@@ -759,7 +763,7 @@ def _cp_elenco():
                 s1, s2 = st.columns(2, gap="small")
                 if s1.button("🗑️ " + _cp_t("Sì, elimina"), key=f"cp_siel_{pid}", type="primary", width="stretch"):
                     _cp_salva(lambda d, _i=pid: d.__setitem__("compleanni", [x for x in d.get("compleanni", []) if x.get("id") != _i]), "Compleanni: eliminato " + str(p.get("nome", "")))
-                    cp_file_cancella([p.get("foto_orig"), p.get("voce")] + (sp_files(p) if "sp_files" in globals() else []))
+                    cp_file_cancella([p.get("foto_orig"), p.get("voce")] + (sp_files(p) if "sp_files" in globals() else []) + (dr_files(p) if "dr_files" in globals() else []))
                     st.session_state["cp_elimina"] = None
                     st.rerun()
                 if s2.button(_cp_t("No"), key=f"cp_noel_{pid}", width="stretch"):
