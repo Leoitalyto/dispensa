@@ -41,14 +41,14 @@ SA_SEGNI = {
     "acquario": {"corpo": None,
                  "parti": [([(60, 8), (78, 5), (92, 18), (98, 38), (90, 52), (75, 45), (66, 30)], (62, 12), "sa-skew", 3.2, 4, 0),
                            ([(18, 22), (52, 18), (56, 40), (40, 52), (18, 48), (12, 36)], (45, 50), "sa-rock", 3.6, 2.5, 0)]},
-    "pesci": {"corpo": ("sa-nuota", 3.6, 0), "parti": []},
+    "pesci": {"corpo": ("sa-nuota", 3.6, 0), "parti": [], "liquido": True},
     "vergine": {"corpo": ("sa-bob", 5.5, 1.5),
                 "parti": [([(66, 24), (80, 22), (82, 34), (76, 46), (66, 52), (60, 44)], (66, 48), "sa-rock", 3.4, 8, 0),
                           ([(14, 12), (22, 12), (26, 19), (22, 27), (14, 27), (10, 19)], (18, 19), "sa-bob", 4, 3, 0)]},
 }
 # scintille e altri effetti: (tipo, x, y, grandezza px, ritardo s, durata s)
 SA_EFFETTI = {
-    "ariete": [("st", 10, 70, 6, 0, 2.4), ("st", 88, 25, 5, 1.1, 2.8), ("st", 50, 8, 5, .5, 2.2)],
+    "ariete": [("occhio", 38.5, 44.5, 15, 0, 4.6), ("occhio", 61.5, 44.5, 15, 0, 4.6), ("st", 10, 70, 6, 0, 2.4), ("st", 88, 25, 5, 1.1, 2.8), ("st", 50, 8, 5, .5, 2.2)],
     "toro": [("fumo", 42, 83, 14, 0, 2.2), ("fumo", 58, 83, 14, 1.1, 2.2), ("st", 14, 40, 5, .4, 2.6)],
     "gemelli": [("cuore", 50, 30, 12, 0, 3.4), ("st", 90, 20, 5, 1, 2.4)],
     "cancro": [("st", 92, 8, 6, 0, 2.6), ("bolla", 50, 40, 8, 0, 3.2), ("bolla", 58, 55, 6, 1.4, 3.6)],
@@ -59,7 +59,7 @@ SA_EFFETTI = {
     "sagittario": [("lampo", 97, 22, 22, 0, 4.8), ("st", 12, 22, 5, .5, 2.6), ("st", 50, 8, 5, 1.4, 2.2)],
     "capricorno": [("st", 20, 74, 5, 0, 2.2), ("st", 86, 78, 6, .8, 2.6), ("st", 50, 8, 5, 1.5, 2.4)],
     "acquario": [("scorri", 0, 0, 0, 0, 0.9), ("goccia", 14, 70, 6, 0, 1.3), ("goccia", 30, 78, 6, .6, 1.3), ("st", 84, 20, 5, .8, 2.4)],
-    "pesci": [("bolla", 46, 30, 7, 0, 3), ("bolla", 40, 45, 5, 1.1, 3.4), ("bolla", 80, 55, 6, 1.9, 3.1), ("bolla", 62, 72, 6, .5, 3.3), ("bolla", 30, 62, 5, 2.2, 3.6), ("st", 12, 20, 5, .3, 2.4)],
+    "pesci": [("bolla2", 8, 78, 11, 0, 4.2), ("bolla2", 22, 90, 8, 1.3, 3.8), ("bolla2", 48, 92, 12, 2.4, 4.6), ("bolla2", 72, 88, 9, .7, 4.0), ("bolla2", 92, 70, 12, 1.9, 4.4), ("bolla2", 90, 35, 8, 3.1, 3.9), ("bolla2", 6, 40, 9, 2.0, 4.3), ("bolla2", 50, 50, 7, .4, 3.6), ("bolla2", 35, 20, 8, 3.3, 4.1), ("st", 12, 20, 5, .3, 2.4)],
 }
 # la zona dove scorre l'acqua dell'Acquario (poligono in %)
 SA_ACQUA = [(6, 42), (34, 42), (42, 60), (46, 80), (40, 100), (0, 100), (4, 70)]
@@ -86,6 +86,13 @@ def _sa_foro(fori):
     return "polygon(evenodd," + ",".join(pts) + ")"
 
 
+# un filtro «acqua»: l'onda attraversa tutta la figura, pinne e code ondeggiano in modo morbido, senza tagli
+SA_FILTRO = ("<svg width='0' height='0' style='position:absolute' aria-hidden='true'><filter id='sa-liquido' x='-10%' y='-10%' width='120%' height='120%' color-interpolation-filters='sRGB'>"
+             "<feTurbulence type='fractalNoise' baseFrequency='0.012 0.020' numOctaves='2' seed='3' result='r'>"
+             "<animate attributeName='baseFrequency' dur='7s' values='0.012 0.020;0.018 0.012;0.012 0.020' repeatCount='indefinite'/></feTurbulence>"
+             "<feDisplacementMap in='SourceGraphic' in2='r' scale='9' xChannelSelector='R' yChannelSelector='G'/></filter></svg>")
+
+
 def sa_segno_html(seg, b64, nome):
     e = _sa_html.escape
     prop = SA_PROPORZIONI.get(seg, 1.2)
@@ -101,6 +108,8 @@ def sa_segno_html(seg, b64, nome):
         else:
             strati.append(f"<i class='sa-fx sa-{tipo}' style='left:{x}%;top:{y}%;--g:{g}px;animation-delay:{-dl}s;animation-duration:{dur}s'></i>")
     corpo = ""
+    if cfg.get("liquido"):
+        strati.insert(0, SA_FILTRO)
     if cfg["corpo"]:
         k, dur, amp = cfg["corpo"]
         val = f"{amp}%" if k in ("sa-bob", "sa-circle", "sa-pull", "sa-wave") else f"{amp}deg"
@@ -113,6 +122,7 @@ SA_CSS = """<style>
 .cp-segno.sa .sa-box{position:relative;margin:0 auto;width:min(var(--w),62%);aspect-ratio:var(--ar);filter:drop-shadow(0 0 8px var(--cg))}
 .sa-l{position:absolute;inset:0;background:var(--im) center/100% 100% no-repeat;will-change:transform}
 .sa-corpo{position:absolute;inset:0}
+.cp-an-pesci .sa-corpo{filter:url(#sa-liquido)}
 .sa-scorri{background:repeating-linear-gradient(172deg,rgba(170,245,255,0) 0,rgba(170,245,255,.5) 7px,rgba(170,245,255,0) 14px);background-size:100% 14px;mix-blend-mode:screen;-webkit-mask-image:var(--im);mask-image:var(--im);-webkit-mask-size:100% 100%;mask-size:100% 100%;animation:sa-scorri .9s linear infinite}
 @keyframes sa-scorri{from{background-position:0 0}to{background-position:0 14px}}
 @keyframes sa-rock{0%,100%{transform:rotate(calc(var(--a) / -1))}50%{transform:rotate(var(--a))}}
@@ -144,6 +154,10 @@ SA_CSS = """<style>
 .sa-fumo{border-radius:50%;background:radial-gradient(circle,rgba(220,240,255,.85),rgba(160,200,255,.25) 60%,transparent 75%);opacity:0;animation:sa-fumo 2.2s ease-out infinite}
 @keyframes sa-fumo{0%{opacity:0;transform:translate(0,0) scale(.3)}25%{opacity:.9}100%{opacity:0;transform:translate(0,10px) scale(1.8)}}
 .sa-bolla{border-radius:50%;border:1px solid rgba(220,250,255,.9);background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.7),rgba(120,220,255,.15) 60%);opacity:0;animation:sa-bolla 3s ease-in infinite}
+.sa-bolla2{border-radius:50%;border:1.5px solid rgba(225,252,255,.95);background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.85),rgba(120,225,255,.18) 55%,rgba(80,200,255,.08));box-shadow:0 0 6px rgba(150,240,255,.8);opacity:0;animation:sa-bolla2 4s ease-in-out infinite}
+@keyframes sa-bolla2{0%{opacity:0;transform:translate(0,0) scale(.5)}12%{opacity:1}35%{transform:translate(9px,-18px) scale(.9)}65%{opacity:.95;transform:translate(-8px,-36px) scale(1)}100%{opacity:0;transform:translate(6px,-56px) scale(1.15)}}
+.sa-occhio{border-radius:50%;background:radial-gradient(circle,#fff 0,#fff3a0 22%,#ff9a1f 45%,rgba(255,80,0,.55) 65%,transparent 78%);mix-blend-mode:screen;opacity:0;filter:drop-shadow(0 0 5px #ff8a00);animation:sa-occhio 4.6s ease-in-out infinite}
+@keyframes sa-occhio{0%,52%{opacity:0;transform:scale(.4)}60%{opacity:.8;transform:scale(.9)}66%,76%{opacity:1;transform:scale(1.5)}86%{opacity:.35;transform:scale(1)}94%,100%{opacity:0;transform:scale(.4)}}
 @keyframes sa-bolla{0%{opacity:0;transform:translate(0,6px) scale(.5)}20%{opacity:.9}100%{opacity:0;transform:translate(3px,-22px) scale(1.1)}}
 .sa-cuore{background:none;animation:sa-cuore 3.4s ease-in-out infinite}
 .sa-cuore:after{content:"💗";font-size:var(--g);line-height:1;position:absolute;left:0;top:0}
