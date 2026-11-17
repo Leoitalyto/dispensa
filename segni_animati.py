@@ -41,7 +41,7 @@ SA_SEGNI = {
     "acquario": {"corpo": None,
                  "parti": [([(60, 8), (78, 5), (92, 18), (98, 38), (90, 52), (75, 45), (66, 30)], (62, 12), "sa-skew", 3.2, 4, 0),
                            ([(18, 22), (52, 18), (56, 40), (40, 52), (18, 48), (12, 36)], (45, 50), "sa-rock", 3.6, 2.5, 0)]},
-    "pesci": {"corpo": ("sa-nuota", 3.6, 0), "parti": [], "liquido": True},
+    "pesci": {"corpo": ("sa-nuota", 4.3, 0), "parti": [], "onda": (30, 6, 3.6)},
     "vergine": {"corpo": ("sa-bob", 5.5, 1.5),
                 "parti": [([(66, 24), (80, 22), (82, 34), (76, 46), (66, 52), (60, 44)], (66, 48), "sa-rock", 3.4, 8, 0),
                           ([(14, 12), (22, 12), (26, 19), (22, 27), (14, 27), (10, 19)], (18, 19), "sa-bob", 4, 3, 0)]},
@@ -99,6 +99,13 @@ def sa_segno_html(seg, b64, nome):
     cfg = SA_SEGNI.get(seg, {"corpo": None, "parti": []})
     foro = _sa_foro([x[0] for x in cfg["parti"]])
     strati = ["<div class='sa-l sa-base'" + (f" style=\"clip-path:{foro}\"" if foro else "") + "></div>"]
+    if cfg.get("onda"):
+        # onda morbida: l'immagine è fatta di tante fettine sottili che oscillano una dopo l'altra: pinne e code ondeggiano senza tagli
+        n, amp, dur = cfg["onda"]
+        strati = []
+        for i in range(n):
+            alto, basso = max(0, i * 100 / n - 0.35), max(0, 100 - (i + 1) * 100 / n - 0.35)
+            strati.append(f"<div class='sa-l' style=\"clip-path:inset({alto:.2f}% 0 {basso:.2f}% 0);animation:sa-onda {dur}s ease-in-out {-i * dur * 1.4 / n:.3f}s infinite;--a:{amp}px\"></div>")
     for poly, (ox, oy), k, dur, amp, dl in cfg["parti"]:
         val = f"{amp}%" if k in ("sa-bob", "sa-circle", "sa-pull", "sa-wave") else f"{amp}deg"
         strati.append(f"<div class='sa-l sa-p' style=\"clip-path:{_sa_poly(poly)};transform-origin:{ox}% {oy}%;animation:{k} {dur}s ease-in-out {-dl}s infinite;--a:{val}\"></div>")
@@ -122,7 +129,6 @@ SA_CSS = """<style>
 .cp-segno.sa .sa-box{position:relative;margin:0 auto;width:min(var(--w),62%);aspect-ratio:var(--ar);filter:drop-shadow(0 0 8px var(--cg))}
 .sa-l{position:absolute;inset:0;background:var(--im) center/100% 100% no-repeat;will-change:transform}
 .sa-corpo{position:absolute;inset:0}
-.cp-an-pesci .sa-corpo{filter:url(#sa-liquido)}
 .sa-scorri{background:repeating-linear-gradient(172deg,rgba(170,245,255,0) 0,rgba(170,245,255,.5) 7px,rgba(170,245,255,0) 14px);background-size:100% 14px;mix-blend-mode:screen;-webkit-mask-image:var(--im);mask-image:var(--im);-webkit-mask-size:100% 100%;mask-size:100% 100%;animation:sa-scorri .9s linear infinite}
 @keyframes sa-scorri{from{background-position:0 0}to{background-position:0 14px}}
 @keyframes sa-rock{0%,100%{transform:rotate(calc(var(--a) / -1))}50%{transform:rotate(var(--a))}}
@@ -137,6 +143,7 @@ SA_CSS = """<style>
 @keyframes sa-trot{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
 @keyframes sa-walk{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
 @keyframes sa-nuota{0%,100%{transform:translate(-2.5%,1.5%) rotate(-3.5deg)}25%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}50%{transform:translate(2.5%,1.5%) rotate(3.5deg)}75%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}}
+@keyframes sa-onda{0%,100%{transform:translateX(calc(var(--a) / -1))}50%{transform:translateX(var(--a))}}
 @keyframes sa-claw{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(-7deg)}66%{transform:rotate(2deg)}74%{transform:rotate(-7deg)}84%{transform:rotate(0)}}
 @keyframes sa-dito{0%,50%,100%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}58%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}66%{transform:rotate(2deg) translate(11%,-18%) rotate(-10deg) translate(-11%,18%)}74%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}84%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}}
 @keyframes sa-clawr{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(7deg)}66%{transform:rotate(-2deg)}74%{transform:rotate(7deg)}84%{transform:rotate(0)}}
