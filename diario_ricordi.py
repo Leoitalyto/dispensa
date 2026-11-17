@@ -607,6 +607,87 @@ def _dr_editor(p, pid, pg, col):
             st.rerun()
 
 
+def _dr_miniatura(rif):
+    ch = "dr_th_" + str(rif.get("id"))
+    if ch not in st.session_state:
+        uri = ""
+        try:
+            import base64 as _b64
+            from PIL import Image
+            dati = _dr_foto_bytes(rif)
+            if dati:
+                im = Image.open(_dr_io.BytesIO(dati)).convert("RGB")
+                im.thumbnail((110, 110))
+                b = _dr_io.BytesIO()
+                im.save(b, "WEBP", quality=60)
+                uri = "data:image/webp;base64," + _b64.b64encode(b.getvalue()).decode()
+        except Exception:
+            uri = ""
+        st.session_state[ch] = uri
+    return st.session_state.get(ch) or ""
+
+
+def _dr_gestione(p, pid, pagine, i):
+    """Elenco delle pagine: sposta su/giù, cambia la foto, elimina."""
+    with st.expander(f"🗂️ Gestisci le pagine ({len(pagine)}): ordine, cambia foto, elimina"):
+        for n, q in enumerate(pagine):
+            qid = q["id"]
+            th = _dr_miniatura(q["foto"]) if q.get("foto") else ""
+            st.markdown("<div style='display:flex;align-items:center;gap:10px;margin:8px 0 2px'>"
+                        + (f"<img src='{th}' style='width:56px;height:56px;object-fit:cover;border-radius:12px;border:2px solid {_dr_colore(p)}'>" if th else "<div style='width:56px;height:56px;border-radius:12px;background:#222'></div>")
+                        + f"<b>Pagina {n + 1}</b>" + (" · <i>quella che vedi</i>" if n == i else "") + "</div>", unsafe_allow_html=True)
+            b1, b2, b3, b4 = st.columns(4, gap="small")
+            if b1.button("⬆️", key=f"dr_su_{qid}", help="Sposta prima", disabled=n == 0, width="stretch"):
+                _dr_salva_persona(pid, lambda x, n=n: x["ricordi"].insert(n - 1, x["ricordi"].pop(n)), "Diario ricordi: pagina spostata")
+                st.session_state["dr_pag"] = n - 1
+                st.rerun()
+            if b2.button("⬇️", key=f"dr_giu_{qid}", help="Sposta dopo", disabled=n >= len(pagine) - 1, width="stretch"):
+                _dr_salva_persona(pid, lambda x, n=n: x["ricordi"].insert(n + 1, x["ricordi"].pop(n)), "Diario ricordi: pagina spostata")
+                st.session_state["dr_pag"] = n + 1
+                st.rerun()
+            if b3.button("🔄", key=f"dr_cam_{qid}", help="Cambia la foto", width="stretch"):
+                st.session_state["dr_cambia"] = None if st.session_state.get("dr_cambia") == qid else qid
+                st.session_state["dr_conf2"] = None
+                st.rerun()
+            if b4.button("🗑️", key=f"dr_eli_{qid}", help="Elimina la pagina", width="stretch"):
+                st.session_state["dr_conf2"] = None if st.session_state.get("dr_conf2") == qid else qid
+                st.session_state["dr_cambia"] = None
+                st.rerun()
+            if st.session_state.get("dr_cambia") == qid:
+                nf = st.file_uploader("Scegli la nuova foto (si cambia da sola)", type=["jpg", "jpeg", "png", "webp"], key=f"dr_nfo_{qid}")
+                if nf is not None:
+                    fid = getattr(nf, "file_id", None) or nf.name
+                    if st.session_state.get(f"dr_cdone_{qid}") != fid:
+                        try:
+                            with st.spinner("Cambio la foto… non toccare niente"):
+                                b_, ar_ = _dr_comprimi(nf.getvalue())
+                                rif = cp_file_salva(b_, "ricordo.webp", "image/webp")
+                                vecchia = q.get("foto")
+                                _dr_salva_persona(pid, lambda x, qid=qid, r=rif, a=ar_: [z.update(foto=r, ar=a, z=1.0, px=50, py=50) for z in x.get("ricordi", []) if z.get("id") == qid], "Diario ricordi: foto cambiata")
+                                if vecchia:
+                                    cp_file_cancella([vecchia])
+                            st.session_state[f"dr_cdone_{qid}"] = fid
+                            st.session_state["dr_cambia"] = None
+                            st.session_state["dr_pag"] = n
+                            st.toast("🔄 Foto cambiata")
+                            st.rerun()
+                        except Exception as e_:
+                            st.session_state[f"dr_cdone_{qid}"] = fid
+                            st.error(f"Non sono riuscito a cambiare la foto ({type(e_).__name__}). Riprova.")
+            if st.session_state.get("dr_conf2") == qid:
+                st.warning(f"Eliminare la pagina {n + 1} con la sua foto?")
+                s1, s2 = st.columns(2, gap="small")
+                if s1.button("🗑️ Sì, elimina", key=f"dr_si2_{qid}", type="primary", width="stretch"):
+                    _dr_salva_persona(pid, lambda x, qid=qid: x.__setitem__("ricordi", [z for z in x.get("ricordi", []) if z.get("id") != qid]), "Diario ricordi: pagina eliminata")
+                    cp_file_cancella([q.get("foto")])
+                    st.session_state["dr_conf2"] = None
+                    st.session_state["dr_pag"] = max(0, min(i, len(pagine) - 2))
+                    st.rerun()
+                if s2.button("No", key=f"dr_no2_{qid}", width="stretch"):
+                    st.session_state["dr_conf2"] = None
+                    st.rerun()
+
+
 def _dr_scorrimento_ui(p, pid):
     with st.expander("⏱️ Scorrimento automatico (ogni " + str(int(p.get("durata") or 7)) + " secondi)" if p.get("auto", True) else "⏱️ Scorrimento automatico (spento)"):
         at = st.toggle("Le foto scorrono da sole", value=bool(p.get("auto", True)), key=f"dr_at_{pid}")
@@ -671,6 +752,7 @@ def _dr_diario(p, pid, col):
         st.rerun()
     with st.expander("➕ Aggiungi altre foto al diario"):
         _dr_nuove(p, pid)
+    _dr_gestione(p, pid, pagine, i)
     _dr_scorrimento_ui(p, pid)
     _dr_musica_ui(p, pid)
     for _k in (1, 2):                                          # a pagina già mostrata, preparo le prossime foto: il cambio pagina non aspetta l'archivio
