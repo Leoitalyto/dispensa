@@ -11,9 +11,10 @@ _AVS_CAPACITA = {
     "documenti": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "auto": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
     "compleanni": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
+    "badante": {"giorni": True, "ora": True, "canali": True, "suono": False, "invio": True},
 }
 _AVS_GIORNI_PRED = {"dispensa": (60, 30, 14, 7, 1, 0), "salute": (60, 30, 14, 7, 1, 0), "casa": (30, 14, 7, 1, 0),
-                    "auto": (90, 30, 15, 3, 0), "documenti": (180, 90), "compleanni": (7, 1, 0)}
+                    "auto": (90, 30, 15, 3, 0), "documenti": (180, 90), "compleanni": (7, 1, 0), "badante": (3, 0)}
 _AVS_GIORNI_SCELTA = (90, 60, 45, 30, 21, 14, 10, 7, 5, 3, 2, 1, 0)
 _AVS_GIORNI_LUNGHI = (365, 270, 180, 120, 90, 60, 30, 14, 7, 3, 1, 0)
 _AVS_SUONI = {"auto": "🔄 Automatico (come adesso: dipende da adulti, bimbi o animali)", "classico": "🔔 Din-don (classico)",
@@ -87,6 +88,10 @@ def avs_eventi(sez, d, oggi_):
         for x in f.get("documenti", []):
             if not x.get("senza_scadenza"):
                 aggiungi("d" + str(x.get("id") or x.get("tipo")), f"📄 Scade: {x.get('tipo', 'Documento')}", _avs_data(x.get("scadenza")))
+    elif sez == "badante" and "bdt_calcolo" in globals() and (d.get("badante") or {}).get("inizio"):
+        r_ = bdt_calcolo(d["badante"], oggi_)
+        if r_["fine"] is not None:
+            aggiungi("fine", "👵 Finiscono i soldi della badante", r_["fine"])
     elif sez == "compleanni":
         for x in d.get("compleanni", []):
             nasc = _avs_data(x.get("nascita"))
@@ -181,6 +186,8 @@ def _avs_corpo(sez, etichetta):
                 st.caption("Questi giorni valgono per garanzie, manutenzioni e bollette. Le rate dell'amministrazione hanno i loro giorni, scelti nella rata.")
             elif sez == "auto":
                 st.caption("Valgono per bollo, assicurazione, revisione, patente e simili. Le multe da pagare hanno giorni propri (15, 5, 3, 0).")
+            elif sez == "badante":
+                st.caption("Ti avviso 3 giorni prima e l'ultimo giorno in cui i soldi bastano. Si calcola da soldi consegnati, tariffa e giorni di lavoro.")
             elif sez == "compleanni":
                 st.caption("Di solito 7 giorni prima, il giorno prima e il giorno stesso. Le persone segnate «non c'è più» non vengono avvisate.")
             elif sez == "documenti":

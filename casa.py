@@ -3924,6 +3924,8 @@ def schermata_casa():
         cpf_titolo(c, sel_c)
     elif len(ca_case(c)) > 1:
         st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
+    if "cb_barra_casa" in globals():
+        cb_barra_casa(c)
     t5, t1, t2, t3, t4 = st.tabs(["🏢 Amministrazione", "🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])      # Amministrazione è la prima scheda
     with t1:
         if getattr(t1, "open", True):                                  # si disegna solo la scheda aperta (più veloce)

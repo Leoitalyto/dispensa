@@ -155,6 +155,31 @@ Premi **💾 Salva** per tenere le scelte.
         a(_sez, "x_riuso_archivio", "🗂️ Riusare un file già in archivio", _TXT_RIUSO,
           "archivio riusare file foto gia salvato scegli dall'archivio allegare senza rifare")
 
+    # ================= numeri utili, appuntamenti, conti, badante (Casa e altre sezioni)
+    for sez_ in ("casa", "salute", "documenti", "archivio", "lavoro", "auto", "animali", "utilita"):
+        a(sez_, "x_numeri_utili_" + sez_, "📞 Numeri utili e 📅 Appuntamenti",
+          """In ogni sezione (tranne Dispensa), sotto il campanellino, ci sono due bottoni.
+
+**📞 Numeri utili** è la tua rubrica di chi serve in quella sezione. Per ogni persona o ditta scrivi: **nome, mestiere, ambito, telefono dell'ufficio e cellulare, orari, sito, email, indirizzo**.
+- Se c'è un lavoro, spunta **«C'è un preventivo»**: scegli lo stato, l'importo, le **date di inizio e fine lavori** e allega il **PDF o la foto del preventivo**.
+- In **«Documenti ricevuti»** metti PDF, foto, fatture, contratti.
+- Con **«Apri preventivo, file e pagamenti»** segni **acconti, rate e saldo** (data, importo, per cosa) e vedi quanto hai già pagato e quanto resta.
+- C'è anche il campo **Note**. Sotto ogni scheda ci sono i tasti per chiamare, scrivere su WhatsApp, mandare una email, aprire la mappa o il sito.
+
+**📅 Appuntamenti**: scrivi **nominativo, funzione, data, orario, telefono, motivazione e note**. In alto vedi i **prossimi**, in ordine di data; quelli passati o fatti sono raccolti sotto. Con **«Metti nel calendario del telefono»** l'appuntamento entra nel calendario con un avviso.""")
+    a("casa", "x_conti_casa", "💶 Tenuta dei conti",
+      """In **Casa** tocca **💶 Tenuta dei conti**. Aggiungi quante voci vuoi: **conti correnti** (con la banca), **Postepay**, **libretti postali**, **BOT, BTP**, fondi, azioni, buoni postali, contanti. Vedi il **totale** in alto e in fondo, i **subtotali** per tipo e un campo **Note**. Per i titoli di Stato puoi segnare anche la scadenza.""")
+    a("casa", "x_badante", "👵 Badante (solo amministratore)",
+      """In **Casa**, solo per l'amministratore, c'è **👵 Badante**.
+- Imposta la **tariffa** (di solito 20 € per 2 ore), i giorni in cui viene e da quale giorno conti.
+- Ogni giorno tocca **✅ Venuta** oppure **❌ Non è venuta**; se l'importo cambia usa **«Un altro giorno o un altro importo»**.
+- Con **«Ho dato dei soldi a mia madre»** segni quanto hai consegnato e quando.
+- L'app calcola quanto resta e **fino a quando bastano i soldi**.
+- Il tasto **🔔 Avvisi della badante** ti avvisa **3 giorni prima** e **l'ultimo giorno** (puoi cambiare i giorni).
+- Ci sono anche **contatti della badante** e **note**.""")
+    a("utilita", "x_interruttori", "💡 Selettori a interruttore",
+      """In tutta l'app i selettori a pillola (per scegliere persona, casa, veicolo…) funzionano come **interruttori**: quello **attivo è azzurro neon e pulsa**, gli altri sembrano **spenti**.""")
+
     # ================= i compleanni (Utilità)
     a("utilita", "x_compleanni", "🎂 Compleanni: le schede delle persone",
       """In **Utilità → 🎂 Compleanni** tocca il **badge «Buon compleanno»** per aprire l'elenco (toccalo di nuovo per chiuderlo).
