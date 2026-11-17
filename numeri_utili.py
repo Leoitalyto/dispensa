@@ -119,7 +119,7 @@ def _rbu_data_opz(k, etichetta, attuale):
 
 def _rbu_modulo(sez, voce):
     k = "rbu_f_" + sez + "_" + (voce.get("id") or "nuovo")
-    mest = RBU_MESTIERI.get(sez, []) + [RBU_ALTRO]
+    mest = RBU_MESTIERI.get(sez.split("@")[0], []) + [RBU_ALTRO]
     with st.container(border=True, key=k + "_box"):
         st.markdown("**" + ("✏️ Modifica" if voce.get("id") else "➕ Nuovo numero utile") + "**")
         # 1) chi è
@@ -267,8 +267,9 @@ def _rbu_dettagli(sez, voce):
         _rbu_pagamenti(sez, voce)
 
 
-def _rbu_corpo(sez):
+def _rbu_corpo(sez0):
     st.markdown(RBU_CSS, unsafe_allow_html=True)
+    sez = sc_scegli_profilo(sez0) if "sc_scegli_profilo" in globals() else sez0
     d = sc_dati()
     lista = _rbu_voci(d, sez)
     st.caption("Chi chiamare quando serve: mestiere, orari, preventivi, documenti e pagamenti. I tuoi numeri sono visibili solo a te.")

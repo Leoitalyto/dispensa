@@ -166,6 +166,8 @@ Premi **💾 Salva** per tenere le scelte.
 - Con **«Apri preventivo, file e pagamenti»** segni **acconti, rate e saldo** (data, importo, per cosa) e vedi quanto hai già pagato e quanto resta.
 - C'è anche il campo **Note**. Sotto ogni scheda ci sono i tasti per chiamare, scrivere su WhatsApp, mandare una email, aprire la mappa o il sito.
 
+**Di chi sono?** In **Salute, I miei documenti e Casa**, dove scegli una persona (tu, tua madre, un familiare…), numeri e appuntamenti sono **separati per persona**: sotto i bottoni vedi di chi sono, e dentro la finestra puoi cambiare persona con le pillole in alto. I tuoi restano tuoi.
+
 **📅 Appuntamenti**: scrivi **nominativo, funzione, data, orario, telefono, motivazione e note**. In alto vedi i **prossimi**, in ordine di data; quelli passati o fatti sono raccolti sotto. Con **«Metti nel calendario del telefono»** l'appuntamento entra nel calendario con un avviso.""")
     a("casa", "x_conti_casa", "💶 Tenuta dei conti",
       """In **Casa** tocca **💶 Tenuta dei conti**. Aggiungi quante voci vuoi: **conti correnti** (con la banca), **Postepay**, **libretti postali**, **BOT, BTP**, fondi, azioni, buoni postali, contanti. Vedi il **totale** in alto e in fondo, i **subtotali** per tipo e un campo **Note**. Per i titoli di Stato puoi segnare anche la scadenza.""")

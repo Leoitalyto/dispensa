@@ -146,7 +146,8 @@ def _apn_card(sez, a, passato):
                            file_name="appuntamento.ics", mime="text/calendar", key=f"apn_ics_{aid}", width="stretch")
 
 
-def _apn_corpo(sez):
+def _apn_corpo(sez0):
+    sez = sc_scegli_profilo(sez0) if "sc_scegli_profilo" in globals() else sez0
     st.markdown(RBU_CSS, unsafe_allow_html=True) if "RBU_CSS" in globals() else None
     d = sc_dati()
     lista = _apn_lista(d, sez)

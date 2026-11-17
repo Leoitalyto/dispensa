@@ -10,6 +10,57 @@ import uuid as _sc_uuid
 import streamlit as st
 
 SC_ESCLUSE = ("dispensa", "chat")
+SC_CON_PROFILI = ("salute", "documenti", "casa")          # sezioni dove si sceglie una persona (tu, tua madre, un familiare…)
+
+
+def sc_profili():
+    try:
+        return cpf_profili()
+    except Exception:
+        return []
+
+
+def sc_profilo_corrente(sez):
+    """L'id della persona che stai guardando in quella sezione (vuoto = te stesso)."""
+    pr = sc_profili()
+    ids = [i for i, _n in pr]
+    if sez == "casa":
+        pid = st.session_state.get("ca_pers_sel")
+    else:
+        pid = st.session_state.get("fa_profilo")
+    return pid if pid in ids else (ids[0] if ids else "")
+
+
+def sc_contesto(sez, pid=None):
+    """Chiave dei dati: per te è il nome della sezione (come prima), per un altro profilo «sezione@id»."""
+    pr = sc_profili()
+    if sez not in SC_CON_PROFILI or len(pr) < 2:
+        return sez
+    pid = pid or sc_profilo_corrente(sez)
+    return sez if pid == pr[0][0] else f"{sez}@{pid}"
+
+
+def sc_nome_profilo(sez):
+    pr = dict(sc_profili())
+    return pr.get(sc_profilo_corrente(sez), "")
+
+
+def sc_scegli_profilo(sez):
+    """Dentro la finestra: pillole «di chi sono questi numeri/appuntamenti». Restituisce la chiave dei dati."""
+    pr = sc_profili()
+    if sez not in SC_CON_PROFILI or len(pr) < 2:
+        return sez
+    ids = [i for i, _n in pr]
+    nomi = dict(pr)
+    k = "sc_pf_" + sez
+    if st.session_state.get(k) not in ids:
+        st.session_state[k] = sc_profilo_corrente(sez)
+    sc = st.pills("Di chi", ids, format_func=lambda i: ("👤 " + nomi[i]), selection_mode="single", default=st.session_state[k], key=k + "_w", label_visibility="collapsed")
+    if sc in ids:
+        st.session_state[k] = sc
+    pid = st.session_state[k]
+    st.caption("Stai guardando quelli di: **" + str(nomi.get(pid, "")) + "**" + (" (tuoi)" if pid == ids[0] else ""))
+    return sez if pid == ids[0] else f"{sez}@{pid}"
 
 
 def sc_id():
@@ -80,6 +131,8 @@ def sc_dialogo(titolo, corpo, larghezza="large"):
     Si chiude solo con «✖ Chiudi»."""
     st.session_state["_sc_dlg"] = (titolo, corpo, larghezza, st.session_state.get("_sc_sez_corr"))
     st.session_state["_sc_aperto_ora"] = True
+    for _k in [k for k in st.session_state if str(k).startswith("sc_pf_")]:
+        st.session_state.pop(_k, None)                       # all'apertura si riparte dalla persona che stai guardando
     st.dialog(titolo, width=larghezza, dismissible=False)(_sc_corpo_chiudibile(corpo))()
 
 
@@ -205,7 +258,7 @@ def sc_barra(corrente):
     prossimi = 0
     try:
         if "apn_prossimi" in globals():
-            prossimi = apn_prossimi(corrente)
+            prossimi = apn_prossimi(sc_contesto(corrente))
     except Exception:
         pass
     with st.container(key="sc_barra"):
@@ -214,6 +267,8 @@ def sc_barra(corrente):
             rbu_apri(corrente)
         if c2.button("📅 Appuntamenti" + (f" ({prossimi})" if prossimi else ""), key="sc_ap_" + corrente, width="stretch") and "apn_apri" in globals():
             apn_apri(corrente)
+    if corrente in SC_CON_PROFILI and len(sc_profili()) > 1 and sc_contesto(corrente) != corrente:
+        st.caption("👤 Numeri utili e appuntamenti di **" + sc_nome_profilo(corrente) + "** (dentro puoi cambiare persona)")
     if not st.session_state.pop("_sc_aperto_ora", False):
         _sc_riapri(corrente)
 
