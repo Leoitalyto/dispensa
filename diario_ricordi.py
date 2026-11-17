@@ -271,6 +271,9 @@ setInterval(function(){
  document.querySelectorAll('.dr-pp').forEach(function(b){var t=pausa?'\u25B6':'\u23F8';if(b.textContent!==t)b.textContent=t;});
  if(pg.dataset.id!==idv){idv=pg.dataset.id;t0=Date.now();if(pausa)tp=Date.now();return;}
  if(pausa||document.querySelector('.dr-foto.dr-zoom'))return;
+ var occ=document.querySelector('[data-testid="stFileUploaderFile"],[data-testid="stStatusWidget"],[data-testid="stExpander"] details[open],button.ts-occ');
+ var ac=document.activeElement;
+ if(occ||(ac&&(ac.tagName==='INPUT'||ac.tagName==='TEXTAREA'))){t0=Date.now();return;}      // l'utente sta salvando o scrivendo: lo scorrimento aspetta
  var dur=(parseFloat(pg.dataset.dur)||7)*1000;
  if(Date.now()-t0>=dur){var b=document.querySelector('[class*="st-key-nascosti_dra_"] button');if(b){t0=Date.now();esci(function(){b.click();});}}
 },400);
@@ -491,43 +494,51 @@ def _dr_musica_ui(p, pid):
                 st.rerun()
         f = st.file_uploader("Scegli un file MP3 (si salva da solo)" if not m else "Cambia la musica: scegli un file MP3 (si salva da solo)", type=["mp3", "m4a", "ogg", "wav"], key=f"dr_mp3_{pid}")
         fid = getattr(f, "file_id", None) or (f.name + str(f.size) if f is not None else None)
+        if st.session_state.pop(f"dr_mok_{pid}", False):
+            st.success("🎵 Musica salvata: ora si sente e compare la barra del volume.")
         if f is not None and st.session_state.get(f"dr_mdone_{pid}") != fid:          # si salva da sola appena scegli il file: niente tasto da toccare
-            st.session_state[f"dr_mdone_{pid}"] = fid
-            dati = f.getvalue()
-            nome = getattr(f, "name", "musica.mp3")
-            mime = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav"}.get(nome.rsplit(".", 1)[-1].lower(), "audio/mpeg")
-            if len(dati) > 3_500_000:                                  # file pesante: lo rendo più leggero (se c'è ffmpeg)
-                try:
-                    import shutil
-                    import subprocess
-                    import tempfile
-                    if shutil.which("ffmpeg"):
-                        with tempfile.TemporaryDirectory() as tmp:
-                            a, b = tmp + "/in." + nome.rsplit(".", 1)[-1], tmp + "/out.mp3"
-                            open(a, "wb").write(dati)
-                            subprocess.run(["ffmpeg", "-y", "-i", a, "-vn", "-ac", "2", "-b:a", "96k", b], capture_output=True, timeout=120)
-                            d2 = open(b, "rb").read()
-                            if d2:
-                                dati, mime, nome = d2, "audio/mpeg", nome.rsplit(".", 1)[0] + ".mp3"
-                except Exception:
-                    pass
-            if len(dati) > 8_000_000:
-                st.error("Il file è troppo pesante (massimo circa 8 MB). Scegli un MP3 più corto o più leggero.")
-                return
-            try:
-                with st.spinner("Salvo la musica…"):
-                    rif = cp_file_salva(dati, nome, mime)
-            except Exception as e:
-                st.error(f"Non sono riuscito a salvare la musica ({type(e).__name__}). Riprova.")
-                return
-            vecchia = m
-            _dr_salva_persona(pid, lambda x: x.__setitem__("musica", rif), "Diario ricordi: musica")
-            if vecchia:
-                cp_file_cancella([vecchia])
-            st.session_state.pop(f"dr_mp3_{pid}", None)
-            st.session_state.pop("dr_mus_" + str(rif.get("id")), None)
-            st.toast("🎵 Musica salvata: ora si sente e compare la barra del volume")
-            st.rerun()
+            st.session_state.pop(f"dr_merr_{pid}", None)
+            esito = None
+            with st.spinner("Preparo e salvo la musica… (possono servire anche 20 secondi, non toccare niente)"):
+                dati = f.getvalue()
+                nome = getattr(f, "name", "musica.mp3")
+                mime = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav"}.get(nome.rsplit(".", 1)[-1].lower(), "audio/mpeg")
+                if len(dati) > 2_500_000:                                  # file pesante: lo rendo più leggero (se c'è ffmpeg)
+                    try:
+                        import shutil
+                        import subprocess
+                        import tempfile
+                        if shutil.which("ffmpeg"):
+                            with tempfile.TemporaryDirectory() as tmp:
+                                a_, b_ = tmp + "/in." + nome.rsplit(".", 1)[-1], tmp + "/out.mp3"
+                                open(a_, "wb").write(dati)
+                                subprocess.run(["ffmpeg", "-y", "-i", a_, "-vn", "-ac", "2", "-b:a", "96k", b_], capture_output=True, timeout=120)
+                                d2 = open(b_, "rb").read()
+                                if d2 and len(d2) < len(dati):
+                                    dati, mime, nome = d2, "audio/mpeg", nome.rsplit(".", 1)[0] + ".mp3"
+                    except Exception:
+                        pass
+                if len(dati) > 8_000_000:
+                    esito = "Il file è troppo pesante (massimo circa 8 MB). Scegli un MP3 più corto o più leggero."
+                else:
+                    try:
+                        rif = cp_file_salva(dati, nome, mime)
+                        vecchia = m
+                        _dr_salva_persona(pid, lambda x: x.__setitem__("musica", rif), "Diario ricordi: musica")
+                        if vecchia:
+                            cp_file_cancella([vecchia])
+                        st.session_state.pop("dr_mus_" + str(rif.get("id")), None)
+                    except Exception as e:
+                        esito = f"Non sono riuscito a salvare la musica ({type(e).__name__}). Riprova tra un attimo."
+            st.session_state[f"dr_mdone_{pid}"] = fid                # segnato solo a lavoro finito: se la pagina si interrompe, riprova da sola
+            if esito:
+                st.session_state[f"dr_merr_{pid}"] = esito
+            else:
+                st.session_state.pop(f"dr_mp3_{pid}", None)
+                st.session_state[f"dr_mok_{pid}"] = True
+                st.rerun()
+        if st.session_state.get(f"dr_merr_{pid}"):
+            st.error(st.session_state[f"dr_merr_{pid}"])
 
 
 def _dr_editor(p, pid, pg, col):
