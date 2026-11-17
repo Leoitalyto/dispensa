@@ -170,7 +170,7 @@ Premi **💾 Salva** per tenere le scelte.
 
 **📅 Appuntamenti**: scrivi **nominativo, funzione, data, orario, telefono, motivazione e note**. In alto vedi i **prossimi**, in ordine di data; quelli passati o fatti sono raccolti sotto. Con **«Metti nel calendario del telefono»** l'appuntamento entra nel calendario con un avviso.""")
     a("casa", "x_conti_casa", "💶 Tenuta dei conti",
-      """In **Casa** tocca **💶 Tenuta dei conti**. Aggiungi quante voci vuoi: **conti correnti** (con la banca), **Postepay**, **libretti postali**, **BOT, BTP**, fondi, azioni, buoni postali, contanti. Vedi il **totale** in alto e in fondo, i **subtotali** per tipo e un campo **Note**. Per i titoli di Stato puoi segnare anche la scadenza.""")
+      """In **Casa** tocca **💶 Tenuta dei conti**. Aggiungi quante voci vuoi: **conti correnti** (con la banca), **Postepay**, **libretti postali**, **BOT, BTP**, fondi, azioni, buoni postali, contanti. Vedi il **totale** in alto e in fondo, i **subtotali** per tipo e un campo **Note**. Per i titoli di Stato puoi segnare anche la scadenza. **Ogni persona ha i suoi conti**: se in Casa hai scelto, per esempio, tua madre, il bottone diventa **«Conti di …»** e dentro, con le pillole in alto, scegli di chi sono i conti. I conti di una persona non si mescolano con quelli degli altri.""")
     a("casa", "x_badante", "👵 Badante (solo amministratore)",
       """In **Casa**, solo per l'amministratore, c'è **👵 Badante**.
 - Imposta la **tariffa** (di solito 20 € per 2 ore), i giorni in cui viene e da quale giorno conti.

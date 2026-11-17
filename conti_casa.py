@@ -11,17 +11,25 @@ def _tcn_icona(tipo):
     return next((i for i, t in TCN_TIPI if t == tipo), "💰")
 
 
-def _tcn_voci(d):
-    return [v for v in ((d.get("conti") or {}).get("voci") or []) if isinstance(v, dict)]
+def _tcn_ref(d, ctx="casa", crea=False):
+    """Dove stanno i conti: per te d["conti"] (come prima); per un'altra persona d["conti_profili"]["casa@id"]."""
+    if ctx in (None, "", "casa"):
+        return d.setdefault("conti", {}) if crea else (d.get("conti") or {})
+    base = d.setdefault("conti_profili", {}) if crea else (d.get("conti_profili") or {})
+    return base.setdefault(ctx, {}) if crea else (base.get(ctx) or {})
 
 
-def tcn_totale(d):
-    return sum(float(v.get("importo") or 0) for v in _tcn_voci(d))
+def _tcn_voci(d, ctx="casa"):
+    return [v for v in (_tcn_ref(d, ctx).get("voci") or []) if isinstance(v, dict)]
 
 
-def _tcn_salva(rec):
+def tcn_totale(d, ctx="casa"):
+    return sum(float(v.get("importo") or 0) for v in _tcn_voci(d, ctx))
+
+
+def _tcn_salva(rec, ctx="casa"):
     def _m(d):
-        c = d.setdefault("conti", {})
+        c = _tcn_ref(d, ctx, True)
         lst = c.setdefault("voci", [])
         for i, x in enumerate(lst):
             if x.get("id") == rec["id"]:
@@ -32,8 +40,8 @@ def _tcn_salva(rec):
     sc_salva(_m, "Conti: " + str(rec.get("tipo", "")))
 
 
-def _tcn_modulo(v):
-    k = "tcn_f_" + (v.get("id") or "nuovo")
+def _tcn_modulo(v, ctx="casa"):
+    k = "tcn_f_" + ctx.replace("@", "_") + "_" + (v.get("id") or "nuovo")
     with st.container(border=True, key=k + "_box"):
         st.markdown("**" + ("✏️ Modifica" if v.get("id") else "➕ Aggiungi una voce") + "**")
         nomi = [t for _i, t in TCN_TIPI]
@@ -52,7 +60,7 @@ def _tcn_modulo(v):
         if b1.button("✅ Salva", type="primary", key=k + "_ok", width="stretch"):
             rec = {**v, "id": v.get("id") or sc_id(), "tipo": tipo, "banca": banca.strip(), "nome": nome.strip(), "importo": float(importo or 0),
                    "scadenza": scad.isoformat() if scad else "", "nota": nota.strip(), "aggiornato": sc_oggi().isoformat()}
-            _tcn_salva(rec)
+            _tcn_salva(rec, ctx)
             st.session_state["tcn_mod"] = None
             st.toast("✅ Salvato")
             sc_rerun()
@@ -62,9 +70,10 @@ def _tcn_modulo(v):
 
 
 def _tcn_corpo():
+    ctx = sc_scegli_profilo("casa") if "sc_scegli_profilo" in globals() else "casa"     # di chi sono i conti: tuoi o di un'altra persona
     d = sc_dati()
-    voci = _tcn_voci(d)
-    tot = tcn_totale(d)
+    voci = _tcn_voci(d, ctx)
+    tot = tcn_totale(d, ctx)
     st.markdown(
         "<div style='padding:12px;border-radius:16px;border:2px solid #20e6ff;background:#0a1626;text-align:center;box-shadow:0 0 14px rgba(32,230,255,.45)'>"
         f"<div style='color:#8ff3ff;font-size:.85rem'>TOTALE A DISPOSIZIONE</div><div style='color:#fff;font-size:1.7rem;font-weight:800'>{sc_esc(sc_euro(tot))}</div></div>",
@@ -73,7 +82,7 @@ def _tcn_corpo():
         st.session_state["tcn_mod"] = "__nuovo__"
         sc_rerun()
     if st.session_state.get("tcn_mod") == "__nuovo__":
-        _tcn_modulo({})
+        _tcn_modulo({}, ctx)
     if not voci:
         st.info("Non c'è ancora niente. Aggiungi per esempio un conto corrente e la banca.")
     ordine = [t for _i, t in TCN_TIPI]
@@ -96,7 +105,7 @@ def _tcn_corpo():
             st.markdown(f"<div class='rbu-card'><b class='rbu-nome'>{sc_esc(titolo)}</b> — <b>{sc_esc(sc_euro(v.get('importo')))}</b>"
                         + (f"<div class='rbu-righe'>{sc_esc(' · '.join(extra))}</div>" if extra else "") + "</div>", unsafe_allow_html=True)
             if st.session_state.get("tcn_mod") == vid:
-                _tcn_modulo(v)
+                _tcn_modulo(v, ctx)
                 continue
             c1, c2 = st.columns(2, gap="small")
             if c1.button("✏️ Modifica", key=f"tcn_ed_{vid}", width="stretch"):
@@ -105,7 +114,7 @@ def _tcn_corpo():
             if st.session_state.get("tcn_conferma") == vid:
                 s1, s2 = st.columns(2, gap="small")
                 if s1.button("🗑️ Sì, elimina", key=f"tcn_si_{vid}", type="primary", width="stretch"):
-                    sc_salva(lambda dd, vid=vid: dd["conti"].__setitem__("voci", [x for x in dd["conti"].get("voci", []) if x.get("id") != vid]), "Conti: voce eliminata")
+                    sc_salva(lambda dd, vid=vid: _tcn_ref(dd, ctx, True).__setitem__("voci", [x for x in _tcn_ref(dd, ctx, True).get("voci", []) if x.get("id") != vid]), "Conti: voce eliminata")
                     st.session_state["tcn_conferma"] = None
                     sc_rerun()
                 if s2.button("No", key=f"tcn_no2_{vid}", width="stretch"):
@@ -116,15 +125,16 @@ def _tcn_corpo():
                 sc_rerun()
     if voci:
         st.markdown(f"### 🧮 Totale: {sc_esc(sc_euro(tot))}", unsafe_allow_html=True)
-    note = st.text_area("📝 Note sui conti", value=(d.get("conti") or {}).get("note", ""), key="tcn_note", height=100)
-    if note != (d.get("conti") or {}).get("note", "") and st.button("💾 Salva le note", key="tcn_note_ok", width="stretch"):
-        sc_salva(lambda dd: dd.setdefault("conti", {}).__setitem__("note", note), "Conti: note")
+    note = st.text_area("📝 Note sui conti", value=_tcn_ref(d, ctx).get("note", ""), key="tcn_note_" + ctx, height=100)
+    if note != _tcn_ref(d, ctx).get("note", "") and st.button("💾 Salva le note", key="tcn_note_ok_" + ctx, width="stretch"):
+        sc_salva(lambda dd: _tcn_ref(dd, ctx, True).__setitem__("note", note), "Conti: note")
         st.toast("✅ Note salvate")
         sc_rerun()
 
 
 def tcn_apri():
     st.session_state["tcn_mod"] = None
+    st.session_state.pop("sc_pf_casa", None)                           # parte dalla persona scelta in Casa
     sc_dialogo("💶 Tenuta dei conti", lambda: (st.markdown(RBU_CSS, unsafe_allow_html=True) if "RBU_CSS" in globals() else None, _tcn_corpo()))
 
 
@@ -134,7 +144,13 @@ def cb_barra_casa(c=None):
     admin = bool((st.session_state.get("sess") or {}).get("admin"))
     with st.container(key="sc_barra_casa"):
         cols = st.columns(2 if admin else 1, gap="small")
-        if cols[0].button("💶 Tenuta dei conti", key="cb_conti", width="stretch"):
+        _chi = ""
+        try:
+            if "sc_contesto" in globals() and sc_contesto("casa") != "casa":
+                _chi = sc_nome_profilo("casa")
+        except Exception:
+            _chi = ""
+        if cols[0].button("💶 Conti di " + _chi if _chi else "💶 Tenuta dei conti", key="cb_conti", width="stretch"):
             tcn_apri()
         if admin and "bdt_apri" in globals():
             if cols[1].button("👵 Badante", key="cb_badante", width="stretch"):
