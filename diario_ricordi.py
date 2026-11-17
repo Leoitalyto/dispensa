@@ -79,10 +79,18 @@ def _dr_tr(z, px, py):
     return f"translate({(50 - px) / 50 * mx:.2f}%,{(50 - py) / 50 * mx:.2f}%) scale({z:.3f})"
 
 
-def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False):
+def _dr_foto_bytes(rif):
+    """La foto si legge dall'archivio una volta sola per sessione (lo scorrimento automatico non deve richiamarla ogni volta)."""
+    ch = "dr_img_" + str(rif.get("id"))
+    if ch not in st.session_state:
+        st.session_state[ch] = cp_file_leggi(rif)
+    return st.session_state.get(ch)
+
+
+def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None):
     """La pagina: foto grande come la scheda, bordi stondati, testi e icone sopra. mod=(etichetta, z, px, py): la foto si inquadra con le dita."""
     if dati is None and pg.get("foto"):
-        dati = cp_file_leggi(pg["foto"])
+        dati = _dr_foto_bytes(pg["foto"])
     try:
         z, px, py = float(pg.get("z") or 1), float(pg.get("px", 50)), float(pg.get("py", 50))
     except Exception:
@@ -102,11 +110,15 @@ def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False):
     sopra = "".join(dr_el_html(e) for e in list(els) + ([extra] if extra else []))
     did = str(pg.get("did") or "").strip()
     ar = float(pg.get("ar") or 1.2)
-    vbar = "<div class='dr-vbar'><span class='dr-mus'>▶</span><div class='dr-vol'><i></i></div></div>" if musica else ""
-    return (f"<div class='dr-pag' style='--c:{col}'><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
+    vbar = ""
+    if musica or auto:
+        vbar = ("<div class='dr-vbar'>" + ("<span class='dr-pp'>⏸</span>" if auto else "")
+                + ("<span class='dr-mus'>▶</span><div class='dr-vol'><i></i></div>" if musica else "<div class='dr-fill'></div>") + "</div>")
+        if auto:
+            vbar += f"<div class='dr-prog'><i style='animation-duration:{float(auto['dur']):.1f}s'></i></div>"
+    at = f" data-id='{_dr_html.escape(str(pg.get('id') or ''), quote=True)}' data-dur='{float(auto['dur']):.1f}' data-auto='1'" if auto else ""
+    return (f"<div class='dr-pag' style='--c:{col}'{at}><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
             + (f"<div class='dr-did'>{_dr_html.escape(did)}</div>" if did else "") + vbar + "</div>")
-
-
 
 
 DR_CSS = """<style>
@@ -145,7 +157,13 @@ DR_CSS = """<style>
 .dr-vol::before{content:"";position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:rgba(255,255,255,.22)}
 .dr-vol i{position:absolute;left:0;top:9px;height:4px;width:var(--v);border-radius:2px;background:var(--c);box-shadow:0 0 6px var(--c)}
 .dr-vol i::after{content:"";position:absolute;right:-7px;top:-5px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 8px var(--c)}
-[class*="st-key-nascosti_drg_"],[class*="st-key-nascosti_drjs_"]{display:none !important}
+[class*="st-key-nascosti_drg_"],[class*="st-key-nascosti_drjs_"],[class*="st-key-nascosti_dra_"]{display:none !important}
+.dr-pp{min-width:26px;text-align:center;color:#fff;font-size:16px;line-height:1;cursor:pointer;text-shadow:0 0 6px var(--c)}
+.dr-fill{flex:1}
+.dr-prog{height:3px;margin:6px 4px 0;border-radius:2px;background:rgba(255,255,255,.16);overflow:hidden}
+.dr-prog i{display:block;height:100%;width:0;background:var(--c);box-shadow:0 0 6px var(--c);animation:dr-prog linear forwards}
+.dr-pausa .dr-prog i{animation-play-state:paused}
+@keyframes dr-prog{from{width:0}to{width:100%}}
 [class*="st-key-dr_musica_"]{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
 .dr-vuota{padding:40px 10px;text-align:center;color:#9ab;line-height:1.3}
 .dr-el{position:absolute;transform:translate(-50%,-50%);text-align:center;line-height:1.15;white-space:nowrap;font-weight:700;
@@ -199,10 +217,23 @@ function pianifica(f){var s=S(f);clearTimeout(s.t);s.t=setTimeout(function(){
  var px=mx>0.01?50-tx/mx*50:50,py=mx>0.01?50-ty/mx*50:50;
  px=Math.max(0,Math.min(100,px));py=Math.max(0,Math.min(100,py));
  scrivi(f.dataset.lab,s.z.toFixed(2)+'|'+Math.round(px)+'|'+Math.round(py));},350);}
+var pausa=false,idv=null,t0=0,tp=0;
+function setPausa(v){pausa=v;document.body.classList.toggle('dr-pausa',v);if(v)tp=Date.now();else t0+=Date.now()-tp;
+ document.querySelectorAll('.dr-pp').forEach(function(b){b.textContent=v?'\u25B6':'\u23F8';});}
+setInterval(function(){
+ var pg=document.querySelector('.dr-pag[data-auto]');
+ if(!pg){idv=null;return;}
+ document.querySelectorAll('.dr-pp').forEach(function(b){var t=pausa?'\u25B6':'\u23F8';if(b.textContent!==t)b.textContent=t;});
+ if(pg.dataset.id!==idv){idv=pg.dataset.id;t0=Date.now();if(pausa)tp=Date.now();return;}
+ if(pausa||document.querySelector('.dr-foto.dr-zoom'))return;
+ var dur=(parseFloat(pg.dataset.dur)||7)*1000;
+ if(Date.now()-t0>=dur){var b=document.querySelector('[class*="st-key-nascosti_dra_"] button');if(b){t0=Date.now();b.click();}}
+},400);
 var vdrag=null;
 document.addEventListener('pointerdown',function(e){
  var tg=e.target;if(!tg||!tg.closest)return;
  var v=tg.closest('.dr-vol');if(v){vdrag=v;setVol(v,e.clientX);e.preventDefault();return;}
+ var pp=tg.closest('.dr-pp');if(pp){setPausa(!pausa);return;}
  var m=tg.closest('.dr-mus');if(m){var a=au();if(a){if(a.paused){a.volume=vol;a.play().catch(function(){});}else a.pause();setTimeout(ui,100);}return;}
  var f=tg.closest('.dr-foto');if(!f)return;
  var s=S(f),r=f.getBoundingClientRect();
@@ -299,17 +330,70 @@ def _dr_nuove(p, pid):
         st.rerun()
 
 
+def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el):
+    """Testi colorati e icone da mettere sopra la foto (colore, carattere, grandezza, posizione). Ritorna (elemento in anteprima o None, id)."""
+    sel = st.session_state.get(sel_key)
+    cur = next((e for e in els if e["id"] == sel), None)
+    st.markdown("**✍️ Testi colorati e 😊 icone sopra la foto**")
+    tipo = st.pills("Cosa aggiungo", ["✍️ Testo", "😊 Icona"], default=("😊 Icona" if cur and cur.get("k") == "i" else "✍️ Testo"), key=kp + "_tipo", label_visibility="collapsed") or "✍️ Testo"
+    kk = kp + "_" + (sel or "n")
+    testo_t = tipo.startswith("✍")
+    if testo_t:
+        testo = st.text_area("Scrivi il testo", value=(cur or {}).get("t", "") if cur and cur.get("k") == "t" else "", key=kk + "_t", height=80)
+        fnt = st.selectbox("Carattere", list(DR_FONT), index=list(DR_FONT).index(cur["f"]) if cur and cur.get("f") in DR_FONT else 0, key=kk + "_f")
+        colore = st.color_picker("Colore", value=(cur or {}).get("c", "#ffffff") if cur and cur.get("k") == "t" else "#ffffff", key=kk + "_c")
+    else:
+        sc = st.pills("Scegli un'icona", DR_ICONE, key=kk + "_ic", label_visibility="collapsed")
+        testo = st.text_input("Oppure scrivi un'icona (emoji)", value=sc or ((cur or {}).get("t", "") if cur and cur.get("k") == "i" else ""), key=kk + "_ic2" + (sc or ""))
+        fnt, colore = "Classico", "#ffffff"
+    gr = st.slider("Grandezza", 12, 80 if testo_t else 140, int((cur or {}).get("s", 28 if testo_t else 40)), key=kk + "_s")
+    x = st.slider("Posizione: sinistra ↔ destra", 0, 100, int((cur or {}).get("x", 50)), key=kk + "_x")
+    y = st.slider("Posizione: alto ↕ basso", 0, 100, int((cur or {}).get("y", 50)), key=kk + "_y")
+    nuovo = {"id": sel if cur else _dr_uuid.uuid4().hex[:8], "k": "t" if testo_t else "i", "t": testo, "c": colore, "s": gr, "x": x, "y": y, "f": fnt}
+    b1, b2 = st.columns(2, gap="small")
+    if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch", disabled=not testo.strip()):
+        salva_el(nuovo)
+        st.session_state[sel_key] = None
+        _dr_pulisci(kp + "_")
+        st.rerun()
+    if cur and b2.button("Nuovo elemento", key=kk + "_nuovo", width="stretch"):
+        st.session_state[sel_key] = None
+        st.rerun()
+    if els:
+        st.markdown("**Già sulla foto**")
+        for e in els:
+            r1, r2, r3 = st.columns([3, 1, 1], gap="small")
+            r1.markdown(("✍️ " if e.get("k") == "t" else "") + _dr_html.escape(str(e.get("t", ""))[:28]))
+            if r2.button("✏️", key=f"{kp}_ed_{e['id']}", help="Modifica", width="stretch"):
+                st.session_state[sel_key] = e["id"]
+                st.rerun()
+            if r3.button("🗑️", key=f"{kp}_del_{e['id']}", help="Togli", width="stretch"):
+                togli_el(e["id"])
+                st.rerun()
+    return (nuovo if testo.strip() else None), nuovo["id"]
+
+
 def _dr_pend(p, pid, col):
     coda = st.session_state.get("dr_pend") or []
     it = coda[0]
     k = "dr_pn_" + it["i"]
-    st.markdown(f"<div class='dr-num'>👀 Anteprima · foto {1} di {len(coda)}</div>", unsafe_allow_html=True)
+    kls = k + "_els"
+    els = st.session_state.setdefault(kls, [])
+    st.markdown(f"<div class='dr-num'>👀 Anteprima · foto 1 di {len(coda)}</div>", unsafe_allow_html=True)
     ph = st.container()
     _dr_gesto(k, 1.0, 50, 50)
     st.caption("👆 Pizzica con due dita sulla foto per ingrandire, trascina per spostare. Così la vedrai nel diario.")
     z, px, py = _dr_cursori(k)
     did = st.text_input("Didascalia sotto la foto (facoltativa)", key=k + "_did")
-    ph.markdown(dr_pagina_html({"ar": it["ar"], "did": did}, [], col, dati=it["b"], mod=("drg" + k, z, px, py)), unsafe_allow_html=True)
+    dur = st.number_input("⏱️ Secondi su questa foto (0 = come nel diario)", 0, 120, 0, key=k + "_dur")
+
+    def _salva_el(n):
+        st.session_state[kls] = [e for e in st.session_state[kls] if e["id"] != n["id"]] + [n]
+
+    def _togli_el(eid):
+        st.session_state[kls] = [e for e in st.session_state[kls] if e["id"] != eid]
+    nuovo, eid = _dr_pannello_el(k + "p", els, k + "_sel", _salva_el, _togli_el)
+    ph.markdown(dr_pagina_html({"ar": it["ar"], "did": did}, [e for e in els if e["id"] != eid], col, nuovo, dati=it["b"], mod=("drg" + k, z, px, py)), unsafe_allow_html=True)
     b1, b2 = st.columns(2, gap="small")
     if b1.button("💾 Salva la pagina", type="primary", key=k + "_ok", width="stretch"):
         try:
@@ -317,7 +401,7 @@ def _dr_pend(p, pid, col):
         except Exception as e:
             st.error(f"Non sono riuscito a salvare ({type(e).__name__}). Riprova.")
             return
-        pagina = {"id": _dr_uuid.uuid4().hex[:10], "foto": rif, "did": did.strip(), "els": [], "z": round(float(z), 2), "px": int(px), "py": int(py), "ar": it["ar"]}
+        pagina = {"id": _dr_uuid.uuid4().hex[:10], "foto": rif, "did": did.strip(), "els": list(els), "z": round(float(z), 2), "px": int(px), "py": int(py), "ar": it["ar"], "dur": int(dur)}
         _dr_salva_persona(pid, lambda x: x.setdefault("ricordi", []).append(pagina), "Diario ricordi: nuova pagina")
         st.session_state["dr_pend"] = coda[1:] or None
         st.session_state["dr_pag"] = len(dr_pagine(p))
@@ -384,53 +468,23 @@ def _dr_editor(p, pid, pg, col):
     _dr_gesto(kf, pg.get("z") or 1.0, pg.get("px", 50), pg.get("py", 50))
     st.caption("👆 Pizzica con due dita sulla foto per ingrandire, trascina per spostare.")
     z, px, py = _dr_cursori(kf)
-    cadr = {"z": round(float(z), 2), "px": int(px), "py": int(py)}
     did = st.text_input("Didascalia sotto la foto (facoltativa)", value=pg.get("did", ""), key=k + "_did")
-    st.markdown("**Testi e icone sopra la foto**")
-    sel = st.session_state.get("dr_el")
-    cur = next((e for e in els if e["id"] == sel), None)
-    tipo = st.pills("Cosa aggiungo", ["✍️ Testo", "😊 Icona"], default=("😊 Icona" if cur and cur.get("k") == "i" else "✍️ Testo"), key=k + "_tipo", label_visibility="collapsed") or "✍️ Testo"
-    kk = k + "_" + (sel or "n")
-    extra = None
-    if tipo.startswith("✍"):
-        testo = st.text_area("Scrivi il testo", value=(cur or {}).get("t", "") if cur and cur.get("k") == "t" else "", key=kk + "_t", height=80)
-        fnt = st.selectbox("Carattere", list(DR_FONT), index=list(DR_FONT).index(cur["f"]) if cur and cur.get("f") in DR_FONT else 0, key=kk + "_f")
-    else:
-        sc = st.pills("Scegli un'icona", DR_ICONE, key=kk + "_ic", label_visibility="collapsed")
-        testo = st.text_input("Oppure scrivi un'icona (emoji)", value=sc or ((cur or {}).get("t", "") if cur and cur.get("k") == "i" else ""), key=kk + "_ic2" + (sc or ""))
-        fnt = "Classico"
-    colore = st.color_picker("Colore", value=(cur or {}).get("c", "#ffffff") if cur and cur.get("k") == ("t" if tipo.startswith("✍") else "i") else "#ffffff", key=kk + "_c") if tipo.startswith("✍") else "#ffffff"
-    gr = st.slider("Grandezza", 12, 140 if not tipo.startswith("✍") else 80, int((cur or {}).get("s", 40 if not tipo.startswith("✍") else 28)), key=kk + "_s")
-    x = st.slider("Posizione: sinistra ↔ destra", 0, 100, int((cur or {}).get("x", 50)), key=kk + "_x")
-    y = st.slider("Posizione: alto ↕ basso", 0, 100, int((cur or {}).get("y", 50)), key=kk + "_y")
-    nuovo = {"id": sel if cur else _dr_uuid.uuid4().hex[:8], "k": "t" if tipo.startswith("✍") else "i", "t": testo, "c": colore, "s": gr, "x": x, "y": y, "f": fnt}
-    resto = [e for e in els if e["id"] != nuovo["id"]]
-    ph.markdown(dr_pagina_html({**pg, "did": did}, resto, col, nuovo if testo.strip() else None, mod=("drg" + kf, z, px, py)), unsafe_allow_html=True)
-    b1, b2 = st.columns(2, gap="small")
-    if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch", disabled=not testo.strip()):
-        def _fn(x_, pgid=pg["id"]):
+    dur = st.number_input("⏱️ Secondi su questa foto (0 = come nel diario)", 0, 120, int(pg.get("dur") or 0), key=k + "_dur")
+    cadr = {"z": round(float(z), 2), "px": int(px), "py": int(py), "dur": int(dur)}
+
+    def _salva_el(n, pgid=pg["id"]):
+        def _fn(x_):
             for q in x_.get("ricordi", []):
                 if q.get("id") == pgid:
-                    q["els"] = [e for e in q.get("els", []) if e.get("id") != nuovo["id"]] + [nuovo]
+                    q["els"] = [e for e in q.get("els", []) if e.get("id") != n["id"]] + [n]
+                    q["did"] = did
                     q.update(cadr)
         _dr_salva_persona(pid, _fn, "Diario ricordi: testo/icona")
-        st.session_state["dr_el"] = None
-        _dr_pulisci(k + "_")
-        st.rerun()
-    if cur and b2.button("Nuovo elemento", key=kk + "_nuovo", width="stretch"):
-        st.session_state["dr_el"] = None
-        st.rerun()
-    if els:
-        st.markdown("**Già sulla foto**")
-        for e in els:
-            r1, r2, r3 = st.columns([3, 1, 1], gap="small")
-            r1.markdown(("✍️ " if e.get("k") == "t" else "") + _dr_html.escape(str(e.get("t", ""))[:28]))
-            if r2.button("✏️", key=f"{k}_ed_{e['id']}", help="Modifica", width="stretch"):
-                st.session_state["dr_el"] = e["id"]
-                st.rerun()
-            if r3.button("🗑️", key=f"{k}_del_{e['id']}", help="Togli", width="stretch"):
-                _dr_salva_persona(pid, lambda x_, pgid=pg["id"], eid=e["id"]: [q.update(els=[z_ for z_ in q.get("els", []) if z_.get("id") != eid]) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: tolto")
-                st.rerun()
+
+    def _togli_el(eid, pgid=pg["id"]):
+        _dr_salva_persona(pid, lambda x_: [q.update(els=[z_ for z_ in q.get("els", []) if z_.get("id") != eid]) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: tolto")
+    nuovo, eid = _dr_pannello_el(k + "p", els, "dr_el", _salva_el, _togli_el)
+    ph.markdown(dr_pagina_html({**pg, "did": did}, [e for e in els if e["id"] != eid], col, nuovo, mod=("drg" + kf, z, px, py)), unsafe_allow_html=True)
     st.markdown("**Cambia la foto**")
     nf = st.file_uploader("Nuova foto per questa pagina", type=["jpg", "jpeg", "png", "webp"], key=k + "_nf")
     c1, c2 = st.columns(2, gap="small")
@@ -470,6 +524,16 @@ def _dr_editor(p, pid, pg, col):
             st.rerun()
 
 
+def _dr_scorrimento_ui(p, pid):
+    with st.expander("⏱️ Scorrimento automatico (ogni " + str(int(p.get("durata") or 7)) + " secondi)" if p.get("auto", True) else "⏱️ Scorrimento automatico (spento)"):
+        at = st.toggle("Le foto scorrono da sole", value=bool(p.get("auto", True)), key=f"dr_at_{pid}")
+        du = st.number_input("Quanti secondi resta ogni foto", 2, 120, int(p.get("durata") or 7), key=f"dr_du_{pid}")
+        if st.button("💾 Salva", key=f"dr_ds_{pid}", type="primary", width="stretch"):
+            _dr_salva_persona(pid, lambda x: x.update(auto=bool(at), durata=int(du)), "Diario ricordi: scorrimento")
+            st.toast("✅ Salvato")
+            st.rerun()
+
+
 def _dr_diario(p, pid, col):
     if st.session_state.get("dr_pend"):
         _dr_pend(p, pid, col)
@@ -488,7 +552,13 @@ def _dr_diario(p, pid, col):
     if st.session_state.get("dr_mod") == pg["id"]:
         _dr_editor(p, pid, pg, col)
         return
-    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica"))), unsafe_allow_html=True)
+    auto = {"dur": float(pg.get("dur") or p.get("durata") or 7)} if (len(pagine) > 1 and p.get("auto", True)) else None
+    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica")), auto=auto), unsafe_allow_html=True)
+    if auto:
+        with st.container(key=f"nascosti_dra_{pid}"):             # lo scorrimento automatico tocca questo bottone: vai alla pagina dopo (dall'ultima, torna alla prima)
+            if st.button("auto", key=f"dr_aut_{pid}"):
+                st.session_state["dr_pag"] = (i + 1) % len(pagine)
+                st.rerun()
     n1, n2 = st.columns(2, gap="small")
     if n1.button("◀ Indietro", key=f"dr_prev_{pid}", width="stretch", disabled=i == 0):
         st.session_state["dr_pag"] = i - 1
@@ -502,6 +572,7 @@ def _dr_diario(p, pid, col):
         st.rerun()
     with st.expander("➕ Aggiungi altre foto al diario"):
         _dr_nuove(p, pid)
+    _dr_scorrimento_ui(p, pid)
     _dr_musica_ui(p, pid)
     _dr_chiudi(pid, "p")                                      # il bottone rosso in ogni pagina
 
