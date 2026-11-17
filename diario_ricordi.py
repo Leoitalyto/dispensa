@@ -400,12 +400,15 @@ def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el, undo_key=None, riprist
     def _ricorda():                                          # prima di ogni cambio, si ricorda com'era: tutto si può rimettere a posto
         if undo_key:
             st.session_state[undo_key] = (st.session_state.get(undo_key) or [])[-19:] + [[dict(e) for e in els]]
-    if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch", disabled=not testo.strip()):
-        _ricorda()
-        salva_el(nuovo)
-        st.session_state[sel_key] = None
-        _dr_pulisci(kp + "_")
-        st.rerun()
+    if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch"):
+        if not testo.strip():
+            st.warning("Scrivi prima il testo o scegli un'icona.")
+        else:
+            _ricorda()
+            salva_el(nuovo)
+            st.session_state[sel_key] = None
+            _dr_pulisci(kp + "_")
+            st.rerun()
     if cur and b2.button("Nuovo elemento", key=kk + "_nuovo", width="stretch"):
         st.session_state[sel_key] = None
         st.rerun()
@@ -486,8 +489,10 @@ def _dr_musica_ui(p, pid):
                 cp_file_cancella([m])
                 st.session_state.pop("dr_mus_" + str(m.get("id")), None)
                 st.rerun()
-        f = st.file_uploader("Scegli un file MP3" if not m else "Cambia la musica (file MP3)", type=["mp3", "m4a", "ogg", "wav"], key=f"dr_mp3_{pid}")
-        if f is not None and st.button("💾 Salva la musica", type="primary", key=f"dr_msalva_{pid}", width="stretch"):
+        f = st.file_uploader("Scegli un file MP3 (si salva da solo)" if not m else "Cambia la musica: scegli un file MP3 (si salva da solo)", type=["mp3", "m4a", "ogg", "wav"], key=f"dr_mp3_{pid}")
+        fid = getattr(f, "file_id", None) or (f.name + str(f.size) if f is not None else None)
+        if f is not None and st.session_state.get(f"dr_mdone_{pid}") != fid:          # si salva da sola appena scegli il file: niente tasto da toccare
+            st.session_state[f"dr_mdone_{pid}"] = fid
             dati = f.getvalue()
             nome = getattr(f, "name", "musica.mp3")
             mime = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav"}.get(nome.rsplit(".", 1)[-1].lower(), "audio/mpeg")
@@ -510,7 +515,8 @@ def _dr_musica_ui(p, pid):
                 st.error("Il file è troppo pesante (massimo circa 8 MB). Scegli un MP3 più corto o più leggero.")
                 return
             try:
-                rif = cp_file_salva(dati, nome, mime)
+                with st.spinner("Salvo la musica…"):
+                    rif = cp_file_salva(dati, nome, mime)
             except Exception as e:
                 st.error(f"Non sono riuscito a salvare la musica ({type(e).__name__}). Riprova.")
                 return
@@ -519,7 +525,8 @@ def _dr_musica_ui(p, pid):
             if vecchia:
                 cp_file_cancella([vecchia])
             st.session_state.pop(f"dr_mp3_{pid}", None)
-            st.toast("🎵 Musica salvata")
+            st.session_state.pop("dr_mus_" + str(rif.get("id")), None)
+            st.toast("🎵 Musica salvata: ora si sente e compare la barra del volume")
             st.rerun()
 
 
