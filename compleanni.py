@@ -738,6 +738,8 @@ def _cp_elenco():
         for p in gruppo:
             pid = p["id"]
             st.markdown(_cp_scheda_html(p, oggi), unsafe_allow_html=True)
+            if "dr_bottone" in globals():
+                dr_bottone(p)
             if p.get("scomparso") and p.get("voce"):
                 with st.expander("🎙️ " + _cp_t("Ascolta il messaggio vocale")):
                     dv = cp_file_leggi(p["voce"])

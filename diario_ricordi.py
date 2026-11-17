@@ -77,7 +77,10 @@ def dr_pagina_html(pg, els, col, extra=None):
 
 
 DR_CSS = """<style>
+.cp-card{padding-bottom:112px !important}
+[class*="st-key-dr_apri_"]{margin-top:-122px;position:relative;z-index:2;gap:0 !important}
 [class*="st-key-dr_apri_"],[class*="st-key-dr_chiudi_"]{display:flex;flex-direction:column;align-items:center}
+[class*="st-key-dr_apri_"]+*{margin-top:0}
 [class*="st-key-dr_apri_"] [data-testid="stButton"],[class*="st-key-dr_chiudi_"] [data-testid="stButton"]{width:auto !important;display:flex;justify-content:center}
 [class*="st-key-dr_apri_"] button,[class*="st-key-dr_chiudi_"] button{width:68px !important;height:68px !important;min-height:0 !important;padding:0 !important;border-radius:50% !important;
  position:relative;transition:transform .12s}
@@ -88,7 +91,7 @@ DR_CSS = """<style>
 [class*="st-key-dr_apri_"] button:active,[class*="st-key-dr_chiudi_"] button:active{transform:translateY(3px)}
 [class*="st-key-dr_apri_"] button p,[class*="st-key-dr_chiudi_"] button p{font-size:2.1rem !important;line-height:1 !important;color:#fff !important;font-weight:900 !important;
  text-shadow:0 0 8px #fff,0 0 14px rgba(255,255,255,.9)}
-.dr-leg{text-align:center;font-size:.78rem;font-weight:700;margin:4px 0 8px;color:#cfe}
+.dr-leg{text-align:center;font-size:.78rem;font-weight:700;margin:6px 0 0;color:#cfe}
 .dr-pag{margin:10px 2px;padding:8px;border-radius:24px;border:2px solid var(--c);background:#0b1120;box-shadow:0 0 8px var(--c),0 0 20px var(--c);
  transform-origin:left center;animation:dr-sfoglia .55s ease-out}
 .dr-foto{position:relative;container-type:inline-size;border-radius:18px;overflow:hidden;background:#05080f;line-height:0}
@@ -255,19 +258,23 @@ def _dr_diario(p, pid, col):
     _dr_chiudi(pid, "p")                                      # il bottone rosso in ogni pagina
 
 
-def dr_blocco(p):
-    """Sotto la scheda: il bottone verde e, se aperto, il diario."""
+def dr_bottone(p):
+    """Il bottone verde DENTRO la scheda (subito dopo la scheda, tirato su dentro la cornice)."""
     pid = p["id"]
     st.markdown(DR_CSS, unsafe_allow_html=True)
     n = len(dr_pagine(p))
     aperto = st.session_state.get("dr_aperto") == pid
-    if not aperto:
-        with st.container(key=f"dr_apri_{pid}"):
-            if st.button("⏻", key=f"dr_o_{pid}", help="Apri il diario dei ricordi"):
-                st.session_state["dr_aperto"] = pid
-                st.session_state["dr_pag"] = 0
-                st.session_state["dr_mod"] = None
-                st.rerun()
+    with st.container(key=f"dr_apri_{pid}"):
+        if st.button("⏻", key=f"dr_o_{pid}", help="Apri il diario dei ricordi" if not aperto else "Chiudi il diario"):
+            if aperto:
+                st.session_state["dr_aperto"] = None
+            else:
+                st.session_state.update({"dr_aperto": pid, "dr_pag": 0, "dr_mod": None})
+            st.rerun()
         st.markdown(f"<div class='dr-leg'>📖 Diario dei ricordi{f' ({n})' if n else ''}</div>", unsafe_allow_html=True)
-        return
-    _dr_diario(p, pid, _dr_colore(p))
+
+
+def dr_blocco(p):
+    """Se aperto, il diario sotto la scheda."""
+    if st.session_state.get("dr_aperto") == p["id"]:
+        _dr_diario(p, p["id"], _dr_colore(p))
