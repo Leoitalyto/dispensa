@@ -617,6 +617,14 @@ def _dr_scorrimento_ui(p, pid):
             st.rerun()
 
 
+def _dr_rr():
+    """Cambio pagina: si ridisegna solo il diario (non tutta la schermata): molto più veloce."""
+    try:
+        st.rerun(scope="fragment")
+    except Exception:
+        st.rerun()
+
+
 def _dr_diario(p, pid, col):
     if st.session_state.get("dr_pend"):
         _dr_pend(p, pid, col)
@@ -640,13 +648,13 @@ def _dr_diario(p, pid, col):
     with n1.container(key=f"dr_navp_{pid}"):
         if st.button("◀ Indietro", key=f"dr_prev_{pid}", width="stretch", disabled=i == 0):
             st.session_state["dr_pag"] = i - 1
-            st.rerun()
+            _dr_rr()
     with nm:
         _dr_chiudi(pid, "p", legenda=False)                    # il rosso: chiude il diario e torna la scheda
     with n2.container(key=f"dr_navp2_{pid}"):
         if st.button("Avanti ▶", key=f"dr_next_{pid}", width="stretch", disabled=i >= len(pagine) - 1):
             st.session_state["dr_pag"] = i + 1
-            st.rerun()
+            _dr_rr()
     import random as _rnd
     ult = st.session_state.get("dr_fx", 0)
     fx = _rnd.choice([n for n in range(1, 9) if n != ult])         # ogni foto entra con un effetto diverso dall'ultimo
@@ -656,7 +664,7 @@ def _dr_diario(p, pid, col):
         with st.container(key=f"nascosti_dra_{pid}"):             # lo scorrimento automatico tocca questo bottone: vai alla pagina dopo (dall'ultima, torna alla prima)
             if st.button("auto", key=f"dr_aut_{pid}"):
                 st.session_state["dr_pag"] = (i + 1) % len(pagine)
-                st.rerun()
+                _dr_rr()
     if st.button("✏️ Inquadra, testi e icone", key=f"dr_mod_{pid}", width="stretch"):
         st.session_state["dr_mod"] = pg["id"]
         st.session_state["dr_el"] = None
@@ -665,6 +673,13 @@ def _dr_diario(p, pid, col):
         _dr_nuove(p, pid)
     _dr_scorrimento_ui(p, pid)
     _dr_musica_ui(p, pid)
+    for _k in (1, 2):                                          # a pagina già mostrata, preparo le prossime foto: il cambio pagina non aspetta l'archivio
+        try:
+            _s = pagine[(i + _k) % len(pagine)]
+            if _s.get("foto"):
+                _dr_foto_bytes(_s["foto"])
+        except Exception:
+            pass
 
 
 def _dr_installa_js():
@@ -720,9 +735,14 @@ def _dr_musica_player(p):
         st.warning("🎵 Non trovo più il file della musica. Apri «🎵 Musica del diario» in fondo e caricalo di nuovo.")
 
 
+@st.fragment
+def _dr_frammento(p, pid, col):
+    _dr_diario(p, pid, col)
+
+
 def dr_blocco(p):
     """Se aperto, il diario sotto la scheda (con la musica, se c'è)."""
     if st.session_state.get("dr_aperto") == p["id"]:
         _dr_base(p["id"])
         _dr_musica_player(p)
-        _dr_diario(p, p["id"], _dr_colore(p))
+        _dr_frammento(p, p["id"], _dr_colore(p))
