@@ -635,6 +635,9 @@ def _cp_modulo(pid):
             reg = st.audio_input("🎙️ " + _cp_t("Registra adesso (tocca il microfono, parla, poi ferma)"), key=k + "_vreg") if hasattr(st, "audio_input") else None
             fv = st.file_uploader("📁 " + _cp_t("Oppure scegli un file audio"), type=["mp3", "m4a", "ogg", "wav", "aac", "opus", "webm"], key=k + "_vup")
             voce_nuova = reg or fv
+            sep_dati, sep_nuove, sep_togli = sp_campi(p, k) if "sp_campi" in globals() else (None, [], [])
+        else:
+            sep_dati, sep_nuove, sep_togli = None, [], []
         b1, b2 = st.columns(2, gap="small")
         if b1.button("✅ " + _cp_t("Salva"), type="primary", key=k + "_ok", width="stretch"):
             if not nome.strip():
@@ -650,6 +653,16 @@ def _cp_modulo(pid):
                    "sito": (sito or "").strip(), "regalo": regalo.strip(), "note": note.strip(), "foto": foto_att, "scomparso": bool(scomp),
                    "data_scomparsa": data_sc.isoformat() if (scomp and data_sc) else "", "preghiera": bool(preghiera), "pensiero": pensiero.strip()}
             da_cancellare = []
+            if scomp and sep_dati is not None:                          # dove riposa (sepolture.py)
+                try:
+                    with st.spinner(_cp_t("Salvo le foto…")):
+                        rec["sepoltura"], _tolte = sp_salva_foto(sep_dati, sep_nuove, sep_togli)
+                    da_cancellare += _tolte
+                except Exception as _e:
+                    st.error(f"Non sono riuscito a salvare le foto della sepoltura ({type(_e).__name__}). Riprova.")
+                    return
+            elif p.get("sepoltura"):
+                rec["sepoltura"] = p["sepoltura"]                        # non si perde se togli la spunta
             # foto originale (serve per ricentrare dopo) e posizione
             vecchia_o = p.get("foto_orig")
             if foto_att and foto_pos:
@@ -730,6 +743,8 @@ def _cp_elenco():
                         st.audio(dv, format=p["voce"].get("mime", "audio/ogg"))
                     else:
                         st.caption(_cp_t("Non trovo il file audio."))
+            if p.get("scomparso") and "sp_mostra" in globals():
+                sp_mostra(p)
             _cp_pulsanti(p, pid)
             if st.session_state.get("cp_modulo") == pid:
                 _cp_modulo(pid)
@@ -744,7 +759,7 @@ def _cp_elenco():
                 s1, s2 = st.columns(2, gap="small")
                 if s1.button("🗑️ " + _cp_t("Sì, elimina"), key=f"cp_siel_{pid}", type="primary", width="stretch"):
                     _cp_salva(lambda d, _i=pid: d.__setitem__("compleanni", [x for x in d.get("compleanni", []) if x.get("id") != _i]), "Compleanni: eliminato " + str(p.get("nome", "")))
-                    cp_file_cancella([p.get("foto_orig"), p.get("voce")])
+                    cp_file_cancella([p.get("foto_orig"), p.get("voce")] + (sp_files(p) if "sp_files" in globals() else []))
                     st.session_state["cp_elimina"] = None
                     st.rerun()
                 if s2.button(_cp_t("No"), key=f"cp_noel_{pid}", width="stretch"):
