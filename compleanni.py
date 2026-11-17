@@ -417,8 +417,11 @@ def _cp_scheda_html(p, oggi):
         destra = ("<div class='cp-fiacc'><img class='cp-base' alt='' src='data:image/webp;base64," + CPI_FIACCOLA + "'>"
                   "<div class='cp-alone'></div><img class='cp-fiamma' alt='' src='data:image/webp;base64," + CPI_FIAMMA + "'></div>")
     else:
-        destra = ("<div class='cp-segno cp-an-" + seg + "'><img alt='" + e(cp_nome_segno(seg)) + "' src='data:image/webp;base64," + CPI_ZODIACO[seg] + "'>"
-                  "<span>" + e(cp_nome_segno(seg)) + "</span></div>")
+        if "sa_segno_html" in globals():
+            destra = sa_segno_html(seg, CPI_ZODIACO[seg], cp_nome_segno(seg))        # segni con i pezzi che si muovono (segni_animati.py)
+        else:
+            destra = ("<div class='cp-segno cp-an-" + seg + "'><img alt='" + e(cp_nome_segno(seg)) + "' src='data:image/webp;base64," + CPI_ZODIACO[seg] + "'>"
+                      "<span>" + e(cp_nome_segno(seg)) + "</span></div>")
     if scomparso:
         if p.get("preghiera", True):
             destra += "<div class='cp-pregh'>" + e(CP_PREGHIERA[_cp_lg()]) + "</div>"

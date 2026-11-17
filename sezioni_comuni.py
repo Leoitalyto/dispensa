@@ -62,8 +62,36 @@ def sc_rerun():
         st.rerun()
 
 
+def _sc_chiuso():
+    st.session_state.pop("_sc_dlg", None)
+
+
+def _sc_corpo_chiudibile(corpo):
+    def _c():
+        if st.button("✖ Chiudi", key="sc_chiudi_dlg", width="stretch"):
+            st.session_state.pop("_sc_dlg", None)
+            st.rerun()                                   # ridisegno completo: la finestra sparisce
+        corpo()
+    return _c
+
+
 def sc_dialogo(titolo, corpo, larghezza="large"):
-    st.dialog(titolo, width=larghezza)(corpo)()
+    """Finestra che NON si chiude da sola: né toccando fuori, né col tasto indietro, né se la pagina si ridisegna mentre scrivi.
+    Si chiude solo con «✖ Chiudi»."""
+    st.session_state["_sc_dlg"] = (titolo, corpo, larghezza, st.session_state.get("_sc_sez_corr"))
+    st.session_state["_sc_aperto_ora"] = True
+    st.dialog(titolo, width=larghezza, dismissible=False)(_sc_corpo_chiudibile(corpo))()
+
+
+def _sc_riapri(corrente):
+    d = st.session_state.get("_sc_dlg")
+    if not d:
+        return
+    titolo, corpo, larghezza, sez = d
+    if sez != corrente:
+        st.session_state.pop("_sc_dlg", None)
+        return
+    st.dialog(titolo, width=larghezza, dismissible=False)(_sc_corpo_chiudibile(corpo))()
 
 
 def sc_esc(x):
@@ -173,6 +201,7 @@ def sc_barra(corrente):
     if corrente in SC_ESCLUSE:
         return
     st.markdown(SC_CSS, unsafe_allow_html=True)
+    st.session_state["_sc_sez_corr"] = corrente
     prossimi = 0
     try:
         if "apn_prossimi" in globals():
@@ -185,6 +214,8 @@ def sc_barra(corrente):
             rbu_apri(corrente)
         if c2.button("📅 Appuntamenti" + (f" ({prossimi})" if prossimi else ""), key="sc_ap_" + corrente, width="stretch") and "apn_apri" in globals():
             apn_apri(corrente)
+    if not st.session_state.pop("_sc_aperto_ora", False):
+        _sc_riapri(corrente)
 
 
 if "_sc_nav_prima" not in globals() and "nav_pagine" in globals():

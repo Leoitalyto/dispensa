@@ -185,6 +185,7 @@ Premi **💾 Salva** per tenere le scelte.
       """In **Utilità → 🎂 Compleanni** tocca il **badge «Buon compleanno»** per aprire l'elenco (toccalo di nuovo per chiuderlo).
 
 - **➕ Aggiungi una persona**: scrivi nome e data di nascita (giorno, mese, anno). Tutto il resto è facoltativo: **foto, luogo di nascita, cognome, soprannome, cellulare, telefono fisso, WhatsApp, Telegram, email, indirizzo, sito web, idee regalo, note**.
+- I **segni zodiacali si muovono davvero**: il granchio cammina e pizzica con le chele, lo scorpione sta in guardia e colpisce con la coda, i pesci nuotano e si rincorrono, l'acquario versa acqua che scorre, il sagittario tende l'arco e la freccia scintilla.
 - Ogni persona ha la sua **scheda con cornice neon** del colore del suo **segno zodiacale**, scelto in automatico dalla data. Il nome del segno è nella lingua dell'app.
 - Sotto la scheda ci sono i tasti per **chiamare, scrivere su WhatsApp o Telegram, mandare una email, aprire il sito**.
 - L'elenco è in ordine di **prossimo compleanno**: in alto chi compie gli anni più presto (se è oggi compare «🎉 Oggi!»).
