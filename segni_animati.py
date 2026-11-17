@@ -163,8 +163,8 @@ SA_CSS = """<style>
 .sa-bolla{border-radius:50%;border:1px solid rgba(220,250,255,.9);background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.7),rgba(120,220,255,.15) 60%);opacity:0;animation:sa-bolla 3s ease-in infinite}
 .sa-bolla2{border-radius:50%;border:1.5px solid rgba(225,252,255,.95);background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.85),rgba(120,225,255,.18) 55%,rgba(80,200,255,.08));box-shadow:0 0 6px rgba(150,240,255,.8);opacity:0;animation:sa-bolla2 4s ease-in-out infinite}
 @keyframes sa-bolla2{0%{opacity:0;transform:translate(0,0) scale(.5)}12%{opacity:1}35%{transform:translate(9px,-18px) scale(.9)}65%{opacity:.95;transform:translate(-8px,-36px) scale(1)}100%{opacity:0;transform:translate(6px,-56px) scale(1.15)}}
-.sa-occhio{border-radius:50%;background:radial-gradient(circle,#fff 0,#fff3a0 22%,#ff9a1f 45%,rgba(255,80,0,.55) 65%,transparent 78%);mix-blend-mode:screen;opacity:0;filter:drop-shadow(0 0 5px #ff8a00);animation:sa-occhio 4.6s ease-in-out infinite}
-@keyframes sa-occhio{0%,52%{opacity:0;transform:scale(.4)}60%{opacity:.8;transform:scale(.9)}66%,76%{opacity:1;transform:scale(1.5)}86%{opacity:.35;transform:scale(1)}94%,100%{opacity:0;transform:scale(.4)}}
+.sa-occhio{width:6.6% !important;height:3.4% !important;margin:0 !important;border-radius:50%;background:radial-gradient(ellipse,#fff 0,#ffe27a 35%,#ff9a1f 70%,rgba(255,110,0,.0) 100%);mix-blend-mode:screen;opacity:0;animation:sa-occhio 4.6s ease-in-out infinite}
+@keyframes sa-occhio{0%,52%{opacity:0;transform:translate(-50%,-50%) scale(.8)}60%{opacity:.7;transform:translate(-50%,-50%) scale(1)}66%,76%{opacity:1;transform:translate(-50%,-50%) scale(1)}86%{opacity:.3;transform:translate(-50%,-50%) scale(1)}94%,100%{opacity:0;transform:translate(-50%,-50%) scale(.8)}}
 @keyframes sa-bolla{0%{opacity:0;transform:translate(0,6px) scale(.5)}20%{opacity:.9}100%{opacity:0;transform:translate(3px,-22px) scale(1.1)}}
 .sa-cuore{background:none;animation:sa-cuore 3.4s ease-in-out infinite}
 .sa-cuore:after{content:"💗";font-size:var(--g);line-height:1;position:absolute;left:0;top:0}
