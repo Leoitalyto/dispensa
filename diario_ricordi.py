@@ -20,7 +20,10 @@ def dr_pagine(p):
 
 
 def dr_files(p):
-    return [x.get("foto") for x in dr_pagine(p) if x.get("foto")]
+    r = [x.get("foto") for x in dr_pagine(p) if x.get("foto")]
+    if isinstance(p.get("musica"), dict) and p["musica"].get("id"):
+        r.append(p["musica"])
+    return r
 
 
 def _dr_colore(p):
@@ -43,12 +46,22 @@ def _dr_salva_persona(pid, fn, msg):
 
 
 def _dr_comprimi(dati):
+    """Foto più leggera possibile senza perdere qualità visibile: lato lungo 1280 px (bastano per lo schermo del telefono anche nitido),
+    WEBP; provo qualità alta e scendo solo se serve per stare sotto circa 170 KB (mai sotto 74). Ritorna (byte, rapporto larghezza/altezza)."""
     from PIL import Image, ImageOps
-    im = ImageOps.exif_transpose(Image.open(_dr_io.BytesIO(dati))).convert("RGB")
-    im.thumbnail((1400, 1400), Image.LANCZOS)
-    b = _dr_io.BytesIO()
-    im.save(b, "WEBP", quality=80, method=6)
-    return b.getvalue()
+    im = ImageOps.exif_transpose(Image.open(_dr_io.BytesIO(dati)))
+    if im.mode not in ("RGB",):
+        im = im.convert("RGB")
+    im.thumbnail((1280, 1280), Image.LANCZOS)
+    ar = max(0.75, min(1.33, im.width / float(max(1, im.height))))
+    migliore = None
+    for q in (86, 82, 78, 74):
+        b = _dr_io.BytesIO()
+        im.save(b, "WEBP", quality=q, method=6)                   # senza metadati (EXIF, GPS): pesa meno
+        migliore = b.getvalue()
+        if len(migliore) <= 170_000:
+            break
+    return migliore, round(ar, 3)
 
 
 def dr_el_html(e):
@@ -61,19 +74,39 @@ def dr_el_html(e):
             f"font-size:{s / 4:.2f}cqw;font-family:{fam}\">{t}</span>")
 
 
-def dr_pagina_html(pg, els, col, extra=None):
-    """La pagina: foto grande come la scheda, bordi stondati, testi e icone sopra."""
-    dati = cp_file_leggi(pg.get("foto") or {}) if pg.get("foto") else None
+def _dr_tr(z, px, py):
+    mx = (z - 1) * 50.0
+    return f"translate({(50 - px) / 50 * mx:.2f}%,{(50 - py) / 50 * mx:.2f}%) scale({z:.3f})"
+
+
+def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False):
+    """La pagina: foto grande come la scheda, bordi stondati, testi e icone sopra. mod=(etichetta, z, px, py): la foto si inquadra con le dita."""
+    if dati is None and pg.get("foto"):
+        dati = cp_file_leggi(pg["foto"])
+    try:
+        z, px, py = float(pg.get("z") or 1), float(pg.get("px", 50)), float(pg.get("py", 50))
+    except Exception:
+        z, px, py = 1.0, 50.0, 50.0
+    attr = ""
+    if mod:
+        lab, z, px, py = mod
+        attr = f" data-mod='1' data-lab='{_dr_html.escape(lab, quote=True)}'"
+    z = max(1.0, min(4.0, float(z)))
+    attr += f" data-z='{z:.2f}' data-px='{float(px):.0f}' data-py='{float(py):.0f}'"
     if not dati:
         img = "<div class='dr-vuota'>La foto non c'è più</div>"
     else:
         import base64 as _b64
         mime = (pg.get("foto") or {}).get("mime") or "image/webp"
-        img = f"<img src='data:{mime};base64,{_b64.b64encode(dati).decode()}' alt=''>"
+        img = f"<img class='dr-img' style='transform:{_dr_tr(z, float(px), float(py))}' src='data:{mime};base64,{_b64.b64encode(dati).decode()}' alt=''>"
     sopra = "".join(dr_el_html(e) for e in list(els) + ([extra] if extra else []))
     did = str(pg.get("did") or "").strip()
-    return (f"<div class='dr-pag' style='--c:{col}'><div class='dr-foto'>{img}{sopra}</div>"
-            + (f"<div class='dr-did'>{_dr_html.escape(did)}</div>" if did else "") + "</div>")
+    ar = float(pg.get("ar") or 1.2)
+    vbar = "<div class='dr-vbar'><span class='dr-mus'>▶</span><div class='dr-vol'><i></i></div></div>" if musica else ""
+    return (f"<div class='dr-pag' style='--c:{col}'><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
+            + (f"<div class='dr-did'>{_dr_html.escape(did)}</div>" if did else "") + vbar + "</div>")
+
+
 
 
 DR_CSS = """<style>
@@ -101,8 +134,19 @@ DR_CSS = """<style>
 [class*="st-key-dr_apri_"] .dr-leg{position:absolute;right:84px;bottom:18px;margin:0;text-align:right;white-space:nowrap}
 .dr-pag{margin:10px 2px;padding:8px;border-radius:24px;border:2px solid var(--c);background:#0b1120;box-shadow:0 0 8px var(--c),0 0 20px var(--c);
  transform-origin:left center;animation:dr-sfoglia .55s ease-out}
-.dr-foto{position:relative;container-type:inline-size;border-radius:18px;overflow:hidden;background:#05080f;line-height:0}
-.dr-foto img{width:100%;height:auto;display:block}
+.dr-foto{position:relative;container-type:inline-size;border-radius:18px;overflow:hidden;background:#05080f;line-height:0;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.dr-foto[data-mod],.dr-foto.dr-zoom{touch-action:none}
+.dr-foto[data-mod]{outline:2px dashed rgba(255,255,255,.55);outline-offset:-6px;cursor:grab}
+.dr-zi{position:absolute;left:0;top:0;right:0;bottom:0;transform-origin:center}
+.dr-img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;transform-origin:center;pointer-events:none;-webkit-user-drag:none}
+.dr-vbar{display:flex;align-items:center;gap:8px;padding:9px 4px 0 2px}
+.dr-mus{min-width:26px;text-align:center;color:#fff;font-size:16px;line-height:1;cursor:pointer;text-shadow:0 0 6px var(--c)}
+.dr-vol{flex:1;height:22px;position:relative;touch-action:none;cursor:pointer;--v:70%}
+.dr-vol::before{content:"";position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:rgba(255,255,255,.22)}
+.dr-vol i{position:absolute;left:0;top:9px;height:4px;width:var(--v);border-radius:2px;background:var(--c);box-shadow:0 0 6px var(--c)}
+.dr-vol i::after{content:"";position:absolute;right:-7px;top:-5px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 8px var(--c)}
+[class*="st-key-nascosti_drg_"],[class*="st-key-nascosti_drjs_"]{display:none !important}
+[class*="st-key-dr_musica_"]{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
 .dr-vuota{padding:40px 10px;text-align:center;color:#9ab;line-height:1.3}
 .dr-el{position:absolute;transform:translate(-50%,-50%);text-align:center;line-height:1.15;white-space:nowrap;font-weight:700;
  text-shadow:0 0 3px rgba(0,0,0,.95),0 1px 4px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.6)}
@@ -113,39 +157,234 @@ DR_CSS = """<style>
 </style>"""
 
 
+DR_JS = r"""<script>
+(function(){
+if(window.__drOK)return;window.__drOK=1;
+var vol=0.7;
+try{var s0=parseFloat(localStorage.getItem('dr_vol'));if(!isNaN(s0))vol=Math.max(0,Math.min(1,s0));}catch(e){}
+function au(){return document.querySelector('[class*="st-key-dr_musica_"] audio');}
+function ui(){
+ var a=au();
+ document.querySelectorAll('.dr-vol').forEach(function(el){el.style.setProperty('--v',(vol*100)+'%');});
+ var t=(a&&!a.paused)?(vol===0?'🔇':'🔊'):'▶';
+ document.querySelectorAll('.dr-mus').forEach(function(b){if(b.textContent!==t)b.textContent=t;});
+ if(a&&Math.abs(a.volume-vol)>0.001)a.volume=vol;
+}
+document.addEventListener('play',function(e){if(e.target&&e.target.tagName==='AUDIO'){e.target.volume=vol;setTimeout(ui,60);}},true);
+document.addEventListener('pause',function(){setTimeout(ui,60);},true);
+new MutationObserver(function(){clearTimeout(window.__drT);window.__drT=setTimeout(ui,60);}).observe(document.body,{childList:true,subtree:true});
+function setVol(el,x){var r=el.getBoundingClientRect();vol=Math.max(0,Math.min(1,(x-r.left)/Math.max(1,r.width)));
+ try{localStorage.setItem('dr_vol',String(vol));}catch(e){}ui();}
+function scrivi(lab,v){var el=document.querySelector('input[aria-label="'+lab+'"]');if(!el||el.value===v)return;
+ var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(el,v);
+ el.dispatchEvent(new Event('input',{bubbles:true}));
+ el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+ el.dispatchEvent(new FocusEvent('focusout',{bubbles:true}));}
+function S(el){
+ var sig=el.dataset.z+'|'+el.dataset.px+'|'+el.dataset.py;
+ if(el._s&&el._s.sig===sig)return el._s;
+ var z=parseFloat(el.dataset.z)||1,px=parseFloat(el.dataset.px),py=parseFloat(el.dataset.py);
+ if(isNaN(px))px=50;if(isNaN(py))py=50;
+ var r=el.getBoundingClientRect(),mx=(z-1)*50,mod=!!el.dataset.mod;
+ el._s={sig:sig,mod:mod,z:mod?z:1,tx:mod?(50-px)/50*mx/100*r.width:0,ty:mod?(50-py)/50*mx/100*r.height:0,ptr:{},last:0,t:null};
+ return el._s;}
+function apply(f){
+ var s=S(f),r=f.getBoundingClientRect(),lx=(s.z-1)/2*r.width,ly=(s.z-1)/2*r.height;
+ s.tx=Math.max(-lx,Math.min(lx,s.tx));s.ty=Math.max(-ly,Math.min(ly,s.ty));
+ var t=f.querySelector(s.mod?'.dr-img':'.dr-zi');
+ if(t)t.style.transform='translate('+(s.tx/r.width*100)+'%,'+(s.ty/r.height*100)+'%) scale('+s.z+')';
+ if(!s.mod)f.classList.toggle('dr-zoom',s.z>1.001);}
+function pianifica(f){var s=S(f);clearTimeout(s.t);s.t=setTimeout(function(){
+ var r=f.getBoundingClientRect(),mx=(s.z-1)*50,tx=s.tx/r.width*100,ty=s.ty/r.height*100;
+ var px=mx>0.01?50-tx/mx*50:50,py=mx>0.01?50-ty/mx*50:50;
+ px=Math.max(0,Math.min(100,px));py=Math.max(0,Math.min(100,py));
+ scrivi(f.dataset.lab,s.z.toFixed(2)+'|'+Math.round(px)+'|'+Math.round(py));},350);}
+var vdrag=null;
+document.addEventListener('pointerdown',function(e){
+ var tg=e.target;if(!tg||!tg.closest)return;
+ var v=tg.closest('.dr-vol');if(v){vdrag=v;setVol(v,e.clientX);e.preventDefault();return;}
+ var m=tg.closest('.dr-mus');if(m){var a=au();if(a){if(a.paused){a.volume=vol;a.play().catch(function(){});}else a.pause();setTimeout(ui,100);}return;}
+ var f=tg.closest('.dr-foto');if(!f)return;
+ var s=S(f),r=f.getBoundingClientRect();
+ s.ptr[e.pointerId]={x:e.clientX-r.left-r.width/2,y:e.clientY-r.top-r.height/2};
+ try{f.setPointerCapture(e.pointerId);}catch(x){}
+ if(!s.mod){var n=Date.now();if(n-s.last<320&&Object.keys(s.ptr).length===1){s.z=1;s.tx=0;s.ty=0;apply(f);}s.last=n;}
+},true);
+document.addEventListener('pointermove',function(e){
+ if(vdrag){setVol(vdrag,e.clientX);return;}
+ var tg=e.target;var f=tg&&tg.closest?tg.closest('.dr-foto'):null;
+ if(!f||!f._s||!f._s.ptr[e.pointerId])return;
+ var s=f._s,r=f.getBoundingClientRect(),nx=e.clientX-r.left-r.width/2,ny=e.clientY-r.top-r.height/2,ids=Object.keys(s.ptr);
+ if(ids.length>=2){
+  var a=s.ptr[ids[0]],b=s.ptr[ids[1]],d0=Math.hypot(a.x-b.x,a.y-b.y),m0x=(a.x+b.x)/2,m0y=(a.y+b.y)/2;
+  s.ptr[e.pointerId]={x:nx,y:ny};a=s.ptr[ids[0]];b=s.ptr[ids[1]];
+  var d1=Math.hypot(a.x-b.x,a.y-b.y),m1x=(a.x+b.x)/2,m1y=(a.y+b.y)/2;
+  if(d0>6){var nz=Math.max(1,Math.min(4,s.z*d1/d0)),k=nz/s.z;s.tx=m1x-k*(m0x-s.tx);s.ty=m1y-k*(m0y-s.ty);s.z=nz;}
+ }else{
+  var o=s.ptr[e.pointerId];s.ptr[e.pointerId]={x:nx,y:ny};
+  if(!s.mod&&s.z<=1.001)return;
+  s.tx+=nx-o.x;s.ty+=ny-o.y;}
+ apply(f);if(s.mod)pianifica(f);
+},true);
+function fine(e){
+ vdrag=null;var tg=e.target;var f=tg&&tg.closest?tg.closest('.dr-foto'):null;
+ if(f&&f._s){delete f._s.ptr[e.pointerId];if(f._s.mod)pianifica(f);}}
+document.addEventListener('pointerup',fine,true);
+document.addEventListener('pointercancel',fine,true);
+document.addEventListener('wheel',function(e){
+ var f=e.target&&e.target.closest?e.target.closest('.dr-foto[data-mod]'):null;if(!f)return;
+ e.preventDefault();var s=S(f);var nz=Math.max(1,Math.min(4,s.z*(e.deltaY<0?1.1:0.91))),k=nz/s.z;s.tx*=k;s.ty*=k;s.z=nz;apply(f);pianifica(f);},{passive:false});
+ui();
+})();
+</script>"""
+
+
 def _dr_chiudi(pid, k):
     with st.container(key=f"dr_chiudi_{pid}_{k}"):
         if st.button("⏻", key=f"dr_x_{pid}_{k}", help="Chiudi il diario"):
-            st.session_state["dr_aperto"] = None
-            st.session_state["dr_mod"] = None
+            st.session_state.update({"dr_aperto": None, "dr_mod": None, "dr_pend": None})
             st.rerun()
     st.markdown("<div class='dr-leg'>Chiudi il diario</div>", unsafe_allow_html=True)
 
 
-def _dr_nuove(p, pid):
-    """Carica una o più foto: ognuna diventa una pagina."""
-    up = (ar_uploader("📷 Scegli le foto ricordo", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key=f"dr_up_{pid}")
-          if "ar_uploader" in globals() else st.file_uploader("📷 Scegli le foto ricordo", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key=f"dr_up_{pid}"))
-    if up and st.button(f"➕ Aggiungi {len(up)} pagina/e al diario", type="primary", key=f"dr_addp_{pid}", width="stretch"):
-        nuove = []
+def _dr_gesto(k, z0, px0, py0):
+    """Inquadratura: le dita (script) scrivono in un campo nascosto; i cursori sono la riserva. Ritorna (z, px, py)."""
+    with st.container(key="nascosti_drg_" + k):
+        jv = st.text_input("drg" + k, key=k + "_jv", label_visibility="collapsed")
+    st.session_state.setdefault(k + "_z", float(z0))
+    st.session_state.setdefault(k + "_px", int(px0))
+    st.session_state.setdefault(k + "_py", int(py0))
+    if jv and jv != st.session_state.get(k + "_jlast"):
         try:
-            with st.spinner("Salvo le foto…"):
+            zz, pp, qq = jv.split("|")
+            st.session_state[k + "_z"] = max(1.0, min(4.0, round(float(zz), 2)))
+            st.session_state[k + "_px"] = max(0, min(100, int(float(pp))))
+            st.session_state[k + "_py"] = max(0, min(100, int(float(qq))))
+            st.session_state[k + "_jlast"] = jv
+        except Exception:
+            pass
+    return k
+
+
+def _dr_cursori(k):
+    with st.expander("🎚️ Se il pizzico non funziona: usa i cursori"):
+        z = st.slider("🔍 Ingrandisci", 1.0, 4.0, step=0.05, key=k + "_z")
+        px = st.slider("↔️ Sposta a sinistra / a destra", 0, 100, key=k + "_px")
+        py = st.slider("↕️ Sposta in alto / in basso", 0, 100, key=k + "_py")
+    return z, px, py
+
+
+def _dr_pulisci(prefisso):
+    for s_ in [s for s in st.session_state if str(s).startswith(prefisso)]:
+        st.session_state.pop(s_, None)
+
+
+def _dr_nuove(p, pid):
+    """Sceglie le foto: ognuna passa dall'anteprima (inquadratura) prima di diventare una pagina."""
+    tipi = ["jpg", "jpeg", "png", "webp"]
+    up = (ar_uploader("📷 Scegli le foto ricordo", type=tipi, accept_multiple_files=True, key=f"dr_up_{pid}")
+          if "ar_uploader" in globals() else st.file_uploader("📷 Scegli le foto ricordo", type=tipi, accept_multiple_files=True, key=f"dr_up_{pid}"))
+    if up and st.button(f"👀 Vedi l'anteprima di {len(up)} foto", type="primary", key=f"dr_addp_{pid}", width="stretch"):
+        coda = []
+        try:
+            with st.spinner("Preparo le foto…"):
                 for f in up:
-                    rif = cp_file_salva(_dr_comprimi(f.getvalue()), "ricordo.webp", "image/webp")
-                    nuove.append({"id": _dr_uuid.uuid4().hex[:10], "foto": rif, "did": "", "els": []})
+                    b, ar = _dr_comprimi(f.getvalue())
+                    coda.append({"i": _dr_uuid.uuid4().hex[:8], "b": b, "ar": ar})
         except Exception as e:
-            st.error(f"Non sono riuscito a salvare una foto ({type(e).__name__}). Riprova.")
+            st.error(f"Non riesco a leggere una foto ({type(e).__name__}). Riprova con un'altra.")
             return
-        _dr_salva_persona(pid, lambda x: x.setdefault("ricordi", []).extend(nuove), "Diario ricordi: nuove pagine")
-        st.session_state["dr_pag"] = len(dr_pagine(p)) + len(nuove) - 1
+        st.session_state["dr_pend"] = coda
         st.session_state.pop(f"dr_up_{pid}", None)
         st.rerun()
 
 
+def _dr_pend(p, pid, col):
+    coda = st.session_state.get("dr_pend") or []
+    it = coda[0]
+    k = "dr_pn_" + it["i"]
+    st.markdown(f"<div class='dr-num'>👀 Anteprima · foto {1} di {len(coda)}</div>", unsafe_allow_html=True)
+    ph = st.container()
+    _dr_gesto(k, 1.0, 50, 50)
+    st.caption("👆 Pizzica con due dita sulla foto per ingrandire, trascina per spostare. Così la vedrai nel diario.")
+    z, px, py = _dr_cursori(k)
+    did = st.text_input("Didascalia sotto la foto (facoltativa)", key=k + "_did")
+    ph.markdown(dr_pagina_html({"ar": it["ar"], "did": did}, [], col, dati=it["b"], mod=("drg" + k, z, px, py)), unsafe_allow_html=True)
+    b1, b2 = st.columns(2, gap="small")
+    if b1.button("💾 Salva la pagina", type="primary", key=k + "_ok", width="stretch"):
+        try:
+            rif = cp_file_salva(it["b"], "ricordo.webp", "image/webp")
+        except Exception as e:
+            st.error(f"Non sono riuscito a salvare ({type(e).__name__}). Riprova.")
+            return
+        pagina = {"id": _dr_uuid.uuid4().hex[:10], "foto": rif, "did": did.strip(), "els": [], "z": round(float(z), 2), "px": int(px), "py": int(py), "ar": it["ar"]}
+        _dr_salva_persona(pid, lambda x: x.setdefault("ricordi", []).append(pagina), "Diario ricordi: nuova pagina")
+        st.session_state["dr_pend"] = coda[1:] or None
+        st.session_state["dr_pag"] = len(dr_pagine(p))
+        _dr_pulisci(k)
+        st.rerun()
+    if b2.button("Salta questa foto", key=k + "_no", width="stretch"):
+        st.session_state["dr_pend"] = coda[1:] or None
+        _dr_pulisci(k)
+        st.rerun()
+
+
+def _dr_musica_ui(p, pid):
+    m = p.get("musica") if isinstance(p.get("musica"), dict) else None
+    with st.expander("🎵 Musica del diario" + (" (c'è)" if m else "")):
+        if m:
+            st.caption("🎶 " + str(m.get("nome") or "musica") + " — parte quando tocchi il bottone verde.")
+            if st.button("🗑️ Togli la musica", key=f"dr_mtogli_{pid}", width="stretch"):
+                _dr_salva_persona(pid, lambda x: x.pop("musica", None), "Diario ricordi: tolta la musica")
+                cp_file_cancella([m])
+                st.session_state.pop("dr_mus_" + str(m.get("id")), None)
+                st.rerun()
+        f = st.file_uploader("Scegli un file MP3" if not m else "Cambia la musica (file MP3)", type=["mp3", "m4a", "ogg", "wav"], key=f"dr_mp3_{pid}")
+        if f is not None and st.button("💾 Salva la musica", type="primary", key=f"dr_msalva_{pid}", width="stretch"):
+            dati = f.getvalue()
+            nome = getattr(f, "name", "musica.mp3")
+            mime = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav"}.get(nome.rsplit(".", 1)[-1].lower(), "audio/mpeg")
+            if len(dati) > 3_500_000:                                  # file pesante: lo rendo più leggero (se c'è ffmpeg)
+                try:
+                    import shutil
+                    import subprocess
+                    import tempfile
+                    if shutil.which("ffmpeg"):
+                        with tempfile.TemporaryDirectory() as tmp:
+                            a, b = tmp + "/in." + nome.rsplit(".", 1)[-1], tmp + "/out.mp3"
+                            open(a, "wb").write(dati)
+                            subprocess.run(["ffmpeg", "-y", "-i", a, "-vn", "-ac", "2", "-b:a", "96k", b], capture_output=True, timeout=120)
+                            d2 = open(b, "rb").read()
+                            if d2:
+                                dati, mime, nome = d2, "audio/mpeg", nome.rsplit(".", 1)[0] + ".mp3"
+                except Exception:
+                    pass
+            if len(dati) > 8_000_000:
+                st.error("Il file è troppo pesante (massimo circa 8 MB). Scegli un MP3 più corto o più leggero.")
+                return
+            try:
+                rif = cp_file_salva(dati, nome, mime)
+            except Exception as e:
+                st.error(f"Non sono riuscito a salvare la musica ({type(e).__name__}). Riprova.")
+                return
+            vecchia = m
+            _dr_salva_persona(pid, lambda x: x.__setitem__("musica", rif), "Diario ricordi: musica")
+            if vecchia:
+                cp_file_cancella([vecchia])
+            st.session_state.pop(f"dr_mp3_{pid}", None)
+            st.toast("🎵 Musica salvata")
+            st.rerun()
+
+
 def _dr_editor(p, pid, pg, col):
     k = f"dr_e_{pg['id']}"
+    kf = f"dr_f_{pg['id']}"                                  # inquadratura (non si cancella quando salvi un testo)
     els = list(pg.get("els") or [])
     ph = st.container()                                     # anteprima in alto, sopra i campi
+    _dr_gesto(kf, pg.get("z") or 1.0, pg.get("px", 50), pg.get("py", 50))
+    st.caption("👆 Pizzica con due dita sulla foto per ingrandire, trascina per spostare.")
+    z, px, py = _dr_cursori(kf)
+    cadr = {"z": round(float(z), 2), "px": int(px), "py": int(py)}
     did = st.text_input("Didascalia sotto la foto (facoltativa)", value=pg.get("did", ""), key=k + "_did")
     st.markdown("**Testi e icone sopra la foto**")
     sel = st.session_state.get("dr_el")
@@ -161,24 +400,22 @@ def _dr_editor(p, pid, pg, col):
         testo = st.text_input("Oppure scrivi un'icona (emoji)", value=sc or ((cur or {}).get("t", "") if cur and cur.get("k") == "i" else ""), key=kk + "_ic2" + (sc or ""))
         fnt = "Classico"
     colore = st.color_picker("Colore", value=(cur or {}).get("c", "#ffffff") if cur and cur.get("k") == ("t" if tipo.startswith("✍") else "i") else "#ffffff", key=kk + "_c") if tipo.startswith("✍") else "#ffffff"
-    if tipo.startswith("✍"):
-        st.caption("Colori veloci: bianco, giallo, rosa, rosso, azzurro, verde, viola, arancio, nero (scegli dal selettore qui sopra).")
     gr = st.slider("Grandezza", 12, 140 if not tipo.startswith("✍") else 80, int((cur or {}).get("s", 40 if not tipo.startswith("✍") else 28)), key=kk + "_s")
     x = st.slider("Posizione: sinistra ↔ destra", 0, 100, int((cur or {}).get("x", 50)), key=kk + "_x")
     y = st.slider("Posizione: alto ↕ basso", 0, 100, int((cur or {}).get("y", 50)), key=kk + "_y")
     nuovo = {"id": sel if cur else _dr_uuid.uuid4().hex[:8], "k": "t" if tipo.startswith("✍") else "i", "t": testo, "c": colore, "s": gr, "x": x, "y": y, "f": fnt}
     resto = [e for e in els if e["id"] != nuovo["id"]]
-    ph.markdown(dr_pagina_html({**pg, "did": did}, resto, col, nuovo if testo.strip() else None), unsafe_allow_html=True)
+    ph.markdown(dr_pagina_html({**pg, "did": did}, resto, col, nuovo if testo.strip() else None, mod=("drg" + kf, z, px, py)), unsafe_allow_html=True)
     b1, b2 = st.columns(2, gap="small")
     if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch", disabled=not testo.strip()):
         def _fn(x_, pgid=pg["id"]):
             for q in x_.get("ricordi", []):
                 if q.get("id") == pgid:
                     q["els"] = [e for e in q.get("els", []) if e.get("id") != nuovo["id"]] + [nuovo]
+                    q.update(cadr)
         _dr_salva_persona(pid, _fn, "Diario ricordi: testo/icona")
         st.session_state["dr_el"] = None
-        for s_ in [s for s in st.session_state if str(s).startswith(k + "_")]:
-            st.session_state.pop(s_, None)
+        _dr_pulisci(k + "_")
         st.rerun()
     if cur and b2.button("Nuovo elemento", key=kk + "_nuovo", width="stretch"):
         st.session_state["dr_el"] = None
@@ -192,7 +429,7 @@ def _dr_editor(p, pid, pg, col):
                 st.session_state["dr_el"] = e["id"]
                 st.rerun()
             if r3.button("🗑️", key=f"{k}_del_{e['id']}", help="Togli", width="stretch"):
-                _dr_salva_persona(pid, lambda x_, pgid=pg["id"], eid=e["id"]: [q.update(els=[z for z in q.get("els", []) if z.get("id") != eid]) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: tolto")
+                _dr_salva_persona(pid, lambda x_, pgid=pg["id"], eid=e["id"]: [q.update(els=[z_ for z_ in q.get("els", []) if z_.get("id") != eid]) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: tolto")
                 st.rerun()
     st.markdown("**Cambia la foto**")
     nf = st.file_uploader("Nuova foto per questa pagina", type=["jpg", "jpeg", "png", "webp"], key=k + "_nf")
@@ -202,18 +439,20 @@ def _dr_editor(p, pid, pg, col):
             for q in x_.get("ricordi", []):
                 if q.get("id") == pgid:
                     q["did"] = did
+                    q.update(cadr)
         _dr_salva_persona(pid, _fn2, "Diario ricordi: didascalia")
         if nf is not None:
             try:
-                rif = cp_file_salva(_dr_comprimi(nf.getvalue()), "ricordo.webp", "image/webp")
+                b_, ar_ = _dr_comprimi(nf.getvalue())
+                rif = cp_file_salva(b_, "ricordo.webp", "image/webp")
                 vecchia = pg.get("foto")
-                _dr_salva_persona(pid, lambda x_, pgid=pg["id"], r=rif: [q.update(foto=r) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: nuova foto")
+                _dr_salva_persona(pid, lambda x_, pgid=pg["id"], r=rif, a=ar_: [q.update(foto=r, ar=a, z=1.0, px=50, py=50) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: nuova foto")
                 cp_file_cancella([vecchia])
             except Exception as e_:
                 st.error(f"Non sono riuscito a cambiare la foto ({type(e_).__name__}).")
                 return
-        st.session_state["dr_mod"] = None
-        st.session_state["dr_el"] = None
+        st.session_state.update({"dr_mod": None, "dr_el": None})
+        _dr_pulisci(kf)
         st.rerun()
     if c2.button("🗑️ Elimina pagina", key=k + "_elim", width="stretch"):
         st.session_state["dr_conf"] = pg["id"]
@@ -232,10 +471,14 @@ def _dr_editor(p, pid, pg, col):
 
 
 def _dr_diario(p, pid, col):
+    if st.session_state.get("dr_pend"):
+        _dr_pend(p, pid, col)
+        return
     pagine = dr_pagine(p)
     if not pagine:
         st.info("Il diario è vuoto. Scegli una o più foto: ognuna sarà una pagina.")
         _dr_nuove(p, pid)
+        _dr_musica_ui(p, pid)
         _dr_chiudi(pid, "v")
         return
     i = max(0, min(int(st.session_state.get("dr_pag", 0)), len(pagine) - 1))
@@ -245,7 +488,7 @@ def _dr_diario(p, pid, col):
     if st.session_state.get("dr_mod") == pg["id"]:
         _dr_editor(p, pid, pg, col)
         return
-    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col), unsafe_allow_html=True)
+    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica"))), unsafe_allow_html=True)
     n1, n2 = st.columns(2, gap="small")
     if n1.button("◀ Indietro", key=f"dr_prev_{pid}", width="stretch", disabled=i == 0):
         st.session_state["dr_pag"] = i - 1
@@ -253,35 +496,64 @@ def _dr_diario(p, pid, col):
     if n2.button("Avanti ▶", key=f"dr_next_{pid}", width="stretch", disabled=i >= len(pagine) - 1):
         st.session_state["dr_pag"] = i + 1
         st.rerun()
-    m1, m2 = st.columns(2, gap="small")
-    if m1.button("✏️ Testi e icone", key=f"dr_mod_{pid}", width="stretch"):
+    if st.button("✏️ Inquadra, testi e icone", key=f"dr_mod_{pid}", width="stretch"):
         st.session_state["dr_mod"] = pg["id"]
         st.session_state["dr_el"] = None
         st.rerun()
-    with m2:
-        pass
     with st.expander("➕ Aggiungi altre foto al diario"):
         _dr_nuove(p, pid)
+    _dr_musica_ui(p, pid)
     _dr_chiudi(pid, "p")                                      # il bottone rosso in ogni pagina
+
+
+def _dr_installa_js():
+    import json as _j
+    corpo = DR_JS.strip()
+    corpo = corpo[len("<script>"):-len("</script>")]
+    cod = ("<!doctype html><html><body><script>(function(){try{var P=window.parent;if(P.__drOK)return;var s=P.document.createElement('script');s.textContent="
+           + _j.dumps(corpo).replace("</", "<\\/") + ";P.document.head.appendChild(s);}catch(e){}})();</script></body></html>")
+    if "_mostra_editor" in globals():
+        _mostra_editor(cod, 1)
+    elif hasattr(st, "iframe"):
+        st.iframe(cod, height=1)
+    else:
+        import streamlit.components.v1 as _c
+        _c.html(cod, height=1)
 
 
 def dr_bottone(p):
     """Il bottone verde DENTRO la scheda (subito dopo la scheda, tirato su dentro la cornice)."""
     pid = p["id"]
     st.markdown(DR_CSS, unsafe_allow_html=True)
+    with st.container(key="nascosti_drjs_" + pid):             # installa lo script (gesti, volume) nella pagina dell'app
+        _dr_installa_js()
     n = len(dr_pagine(p))
     aperto = st.session_state.get("dr_aperto") == pid
     with st.container(key=f"dr_apri_{pid}"):
         if st.button("⏻", key=f"dr_o_{pid}", help="Apri il diario dei ricordi" if not aperto else "Chiudi il diario"):
             if aperto:
-                st.session_state["dr_aperto"] = None
+                st.session_state.update({"dr_aperto": None, "dr_pend": None})
             else:
-                st.session_state.update({"dr_aperto": pid, "dr_pag": 0, "dr_mod": None})
+                st.session_state.update({"dr_aperto": pid, "dr_pag": 0, "dr_mod": None, "dr_pend": None})
             st.rerun()
         st.markdown(f"<div class='dr-leg'>📖 Diario dei ricordi{f' ({n})' if n else ''}</div>", unsafe_allow_html=True)
 
 
+def _dr_musica_player(p):
+    m = p.get("musica") if isinstance(p.get("musica"), dict) else None
+    if not m or not m.get("id"):
+        return
+    chiave = "dr_mus_" + str(m["id"])
+    if chiave not in st.session_state:
+        st.session_state[chiave] = cp_file_leggi(m)
+    dati = st.session_state.get(chiave)
+    if dati:
+        with st.container(key=f"dr_musica_{p['id']}"):          # parte da sola quando tocchi il bottone verde
+            st.audio(dati, format=m.get("mime") or "audio/mpeg", loop=True, autoplay=True)
+
+
 def dr_blocco(p):
-    """Se aperto, il diario sotto la scheda."""
+    """Se aperto, il diario sotto la scheda (con la musica, se c'è)."""
     if st.session_state.get("dr_aperto") == p["id"]:
+        _dr_musica_player(p)
         _dr_diario(p, p["id"], _dr_colore(p))
