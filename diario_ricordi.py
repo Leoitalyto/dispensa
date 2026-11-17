@@ -91,7 +91,7 @@ def _dr_foto_bytes(rif):
     return st.session_state.get(ch)
 
 
-def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None, pila=False):
+def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None, pila=False, effetto=0):
     """La pagina: foto grande come la scheda, bordi stondati, testi e icone sopra. mod=(etichetta, z, px, py): la foto si inquadra con le dita."""
     if dati is None and pg.get("foto"):
         dati = _dr_foto_bytes(pg["foto"])
@@ -121,7 +121,7 @@ def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, 
         if auto:
             vbar += f"<div class='dr-prog'><i style='animation-duration:{float(auto['dur']):.1f}s'></i></div>"
     at = f" data-id='{_dr_html.escape(str(pg.get('id') or ''), quote=True)}' data-dur='{float(auto['dur']):.1f}' data-auto='1'" if auto else ""
-    return (f"<div class='dr-pag{' dr-pila' if pila else ''}' style='--c:{col}'{at}><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
+    return (f"<div class='dr-pag{' dr-pila' if pila else ''}{f' dr-in-{effetto}' if effetto else ''}' style='--c:{col}'{at}><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
             + (f"<div class='dr-did'>{_dr_html.escape(did)}</div>" if did else "") + vbar + "</div>")
 
 
@@ -149,7 +149,7 @@ DR_CSS = """<style>
 .dr-leg{text-align:center;font-size:.78rem;font-weight:700;margin:6px 0 0;color:#cfe}
 [class*="st-key-dr_apri_"] .dr-leg{position:absolute;right:84px;bottom:18px;margin:0;text-align:right;white-space:nowrap}
 .dr-pag{margin:10px 2px;padding:8px;border-radius:24px;border:2px solid var(--c);background:#0b1120;box-shadow:0 0 8px var(--c),0 0 20px var(--c);
- transform-origin:left center;animation:dr-sfoglia .55s ease-out}
+ transform-origin:center}
 .dr-foto{position:relative;container-type:inline-size;border-radius:18px;overflow:hidden;background:#05080f;line-height:0;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 .dr-foto[data-mod],.dr-foto.dr-zoom{touch-action:none}
 .dr-foto[data-mod]{outline:2px dashed rgba(255,255,255,.55);outline-offset:-6px;cursor:grab}
@@ -176,8 +176,39 @@ DR_CSS = """<style>
  text-shadow:0 0 3px rgba(0,0,0,.95),0 1px 4px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.6)}
 .dr-did{padding:8px 6px 2px;text-align:center;font-style:italic;color:#e9eefb;font-size:.92rem;line-height:1.35}
 .dr-num{text-align:center;font-size:.8rem;opacity:.8;margin:2px 0}
-@keyframes dr-sfoglia{from{transform:perspective(900px) rotateY(-65deg);opacity:.2}to{transform:perspective(900px) rotateY(0);opacity:1}}
-@media (prefers-reduced-motion:reduce){.dr-pag{animation:none}}
+@keyframes dr-in-1{from{transform:translateX(60%) rotate(6deg);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-1{from{transform:none;filter:none;opacity:1}to{transform:translateX(-70%) rotate(-8deg);opacity:0}}
+.dr-pag.dr-in-1{animation:dr-in-1 .65s ease-out both}
+.dr-pag.dr-out-1{animation:dr-out-1 .45s ease-in forwards}
+@keyframes dr-in-2{from{transform:translateX(-60%) rotate(-6deg);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-2{from{transform:none;filter:none;opacity:1}to{transform:translateX(70%) rotate(8deg);opacity:0}}
+.dr-pag.dr-in-2{animation:dr-in-2 .65s ease-out both}
+.dr-pag.dr-out-2{animation:dr-out-2 .45s ease-in forwards}
+@keyframes dr-in-3{from{transform:scale(.55);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-3{from{transform:none;filter:none;opacity:1}to{transform:scale(.5);opacity:0}}
+.dr-pag.dr-in-3{animation:dr-in-3 .65s ease-out both}
+.dr-pag.dr-out-3{animation:dr-out-3 .45s ease-in forwards}
+@keyframes dr-in-4{from{transform:perspective(900px) rotateY(-75deg);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-4{from{transform:none;filter:none;opacity:1}to{transform:perspective(900px) rotateY(75deg);opacity:0}}
+.dr-pag.dr-in-4{animation:dr-in-4 .65s ease-out both}
+.dr-pag.dr-out-4{animation:dr-out-4 .45s ease-in forwards}
+@keyframes dr-in-5{from{transform:translateY(-45%);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-5{from{transform:none;filter:none;opacity:1}to{transform:translateY(45%);opacity:0}}
+.dr-pag.dr-in-5{animation:dr-in-5 .65s ease-out both}
+.dr-pag.dr-out-5{animation:dr-out-5 .45s ease-in forwards}
+@keyframes dr-in-6{from{transform:rotate(-25deg) scale(.5);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-6{from{transform:none;filter:none;opacity:1}to{transform:rotate(25deg) scale(.4);opacity:0}}
+.dr-pag.dr-in-6{animation:dr-in-6 .65s ease-out both}
+.dr-pag.dr-out-6{animation:dr-out-6 .45s ease-in forwards}
+@keyframes dr-in-7{from{transform:scale(1.1);filter:blur(14px);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-7{from{transform:none;filter:none;opacity:1}to{transform:scale(1.12);filter:blur(14px);opacity:0}}
+.dr-pag.dr-in-7{animation:dr-in-7 .65s ease-out both}
+.dr-pag.dr-out-7{animation:dr-out-7 .45s ease-in forwards}
+@keyframes dr-in-8{from{transform:perspective(900px) rotateX(70deg);opacity:0}to{transform:none;filter:none;opacity:1}}
+@keyframes dr-out-8{from{transform:none;filter:none;opacity:1}to{transform:perspective(900px) rotateX(-70deg);opacity:0}}
+.dr-pag.dr-in-8{animation:dr-in-8 .65s ease-out both}
+.dr-pag.dr-out-8{animation:dr-out-8 .45s ease-in forwards}
+@media (prefers-reduced-motion:reduce){.dr-pag{animation:none !important}}
 </style>"""
 
 
@@ -223,7 +254,15 @@ function pianifica(f){var s=S(f);clearTimeout(s.t);s.t=setTimeout(function(){
  var px=mx>0.01?50-tx/mx*50:50,py=mx>0.01?50-ty/mx*50:50;
  px=Math.max(0,Math.min(100,px));py=Math.max(0,Math.min(100,py));
  scrivi(f.dataset.lab,s.z.toFixed(2)+'|'+Math.round(px)+'|'+Math.round(py));},350);}
-var pausa=false,idv=null,t0=0,tp=0;
+var pausa=false,idv=null,t0=0,tp=0,inUscita=false;
+function esci(cb){var pg=document.querySelector('.dr-pag');
+ if(inUscita)return;
+ if(!pg||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)){cb();return;}
+ inUscita=true;var n=1+Math.floor(Math.random()*8);pg.className=pg.className.replace(/dr-in-\d/g,'')+' dr-out-'+n;
+ setTimeout(function(){inUscita=false;cb();},460);}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[class*="st-key-dr_navp"] button');
+ if(!b||b.disabled)return;if(b._go){b._go=false;return;}
+ e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();esci(function(){b._go=true;b.click();});},true);
 function setPausa(v){pausa=v;document.body.classList.toggle('dr-pausa',v);if(v)tp=Date.now();else t0+=Date.now()-tp;
  document.querySelectorAll('.dr-pp').forEach(function(b){b.textContent=v?'\u25B6':'\u23F8';});}
 setInterval(function(){
@@ -233,7 +272,7 @@ setInterval(function(){
  if(pg.dataset.id!==idv){idv=pg.dataset.id;t0=Date.now();if(pausa)tp=Date.now();return;}
  if(pausa||document.querySelector('.dr-foto.dr-zoom'))return;
  var dur=(parseFloat(pg.dataset.dur)||7)*1000;
- if(Date.now()-t0>=dur){var b=document.querySelector('[class*="st-key-nascosti_dra_"] button');if(b){t0=Date.now();b.click();}}
+ if(Date.now()-t0>=dur){var b=document.querySelector('[class*="st-key-nascosti_dra_"] button');if(b){t0=Date.now();esci(function(){b.click();});}}
 },400);
 var vdrag=null;
 document.addEventListener('pointerdown',function(e){
@@ -276,12 +315,13 @@ ui();
 </script>"""
 
 
-def _dr_chiudi(pid, k):
+def _dr_chiudi(pid, k, legenda=True):
     with st.container(key=f"dr_chiudi_{pid}_{k}"):
         if st.button("⏻", key=f"dr_x_{pid}_{k}", help="Chiudi il diario"):
             st.session_state.update({"dr_aperto": None, "dr_mod": None, "dr_pend": None})
             st.rerun()
-    st.markdown("<div class='dr-leg'>Chiudi il diario</div>", unsafe_allow_html=True)
+    if legenda:
+        st.markdown("<div class='dr-leg'>Chiudi il diario</div>", unsafe_allow_html=True)
 
 
 def _dr_gesto(k, z0, px0, py0):
@@ -336,7 +376,7 @@ def _dr_nuove(p, pid):
         st.rerun()
 
 
-def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el):
+def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el, undo_key=None, ripristina=None):
     """Testi colorati e icone da mettere sopra la foto (colore, carattere, grandezza, posizione). Ritorna (elemento in anteprima o None, id)."""
     sel = st.session_state.get(sel_key)
     cur = next((e for e in els if e["id"] == sel), None)
@@ -357,7 +397,11 @@ def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el):
     y = st.slider("Posizione: alto ↕ basso", 0, 100, int((cur or {}).get("y", 50)), key=kk + "_y")
     nuovo = {"id": sel if cur else _dr_uuid.uuid4().hex[:8], "k": "t" if testo_t else "i", "t": testo, "c": colore, "s": gr, "x": x, "y": y, "f": fnt}
     b1, b2 = st.columns(2, gap="small")
+    def _ricorda():                                          # prima di ogni cambio, si ricorda com'era: tutto si può rimettere a posto
+        if undo_key:
+            st.session_state[undo_key] = (st.session_state.get(undo_key) or [])[-19:] + [[dict(e) for e in els]]
     if b1.button("💾 " + ("Salva le modifiche" if cur else "Metti sulla foto"), key=kk + "_ok", type="primary", width="stretch", disabled=not testo.strip()):
+        _ricorda()
         salva_el(nuovo)
         st.session_state[sel_key] = None
         _dr_pulisci(kp + "_")
@@ -374,8 +418,19 @@ def _dr_pannello_el(kp, els, sel_key, salva_el, togli_el):
                 st.session_state[sel_key] = e["id"]
                 st.rerun()
             if r3.button("🗑️", key=f"{kp}_del_{e['id']}", help="Togli", width="stretch"):
+                _ricorda()
                 togli_el(e["id"])
                 st.rerun()
+    pila = st.session_state.get(undo_key) if undo_key else None
+    if pila and ripristina:
+        st.caption("Niente è definitivo: puoi sempre rimettere le cose come prima.")
+        if st.button(f"↩️ Annulla l'ultima modifica ({len(pila)})", key=kp + "_undo", width="stretch"):
+            prima = pila[-1]
+            st.session_state[undo_key] = pila[:-1]
+            ripristina(prima)
+            st.session_state[sel_key] = None
+            _dr_pulisci(kp + "_")
+            st.rerun()
     return (nuovo if testo.strip() else None), nuovo["id"]
 
 
@@ -398,7 +453,9 @@ def _dr_pend(p, pid, col):
 
     def _togli_el(eid):
         st.session_state[kls] = [e for e in st.session_state[kls] if e["id"] != eid]
-    nuovo, eid = _dr_pannello_el(k + "p", els, k + "_sel", _salva_el, _togli_el)
+    def _ripr(prima):
+        st.session_state[kls] = prima
+    nuovo, eid = _dr_pannello_el(k + "p", els, k + "_sel", _salva_el, _togli_el, k + "_undo", _ripr)
     ph.markdown(dr_pagina_html({"ar": it["ar"], "did": did}, [e for e in els if e["id"] != eid], col, nuovo, dati=it["b"], mod=("drg" + k, z, px, py)), unsafe_allow_html=True)
     b1, b2 = st.columns(2, gap="small")
     if b1.button("💾 Salva la pagina", type="primary", key=k + "_ok", width="stretch"):
@@ -489,7 +546,9 @@ def _dr_editor(p, pid, pg, col):
 
     def _togli_el(eid, pgid=pg["id"]):
         _dr_salva_persona(pid, lambda x_: [q.update(els=[z_ for z_ in q.get("els", []) if z_.get("id") != eid]) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: tolto")
-    nuovo, eid = _dr_pannello_el(k + "p", els, "dr_el", _salva_el, _togli_el)
+    def _ripr(prima, pgid=pg["id"]):
+        _dr_salva_persona(pid, lambda x_: [q.update(els=prima) for q in x_.get("ricordi", []) if q.get("id") == pgid], "Diario ricordi: annullato")
+    nuovo, eid = _dr_pannello_el(k + "p", els, "dr_el", _salva_el, _togli_el, "dr_undo_" + pg["id"], _ripr)
     ph.markdown(dr_pagina_html({**pg, "did": did}, [e for e in els if e["id"] != eid], col, nuovo, mod=("drg" + kf, z, px, py)), unsafe_allow_html=True)
     st.markdown("**Cambia la foto**")
     nf = st.file_uploader("Nuova foto per questa pagina", type=["jpg", "jpeg", "png", "webp"], key=k + "_nf")
@@ -559,19 +618,27 @@ def _dr_diario(p, pid, col):
         _dr_editor(p, pid, pg, col)
         return
     auto = {"dur": float(pg.get("dur") or p.get("durata") or 7)} if (len(pagine) > 1 and p.get("auto", True)) else None
-    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica")), auto=auto, pila=len(pagine) > 1), unsafe_allow_html=True)
+    n1, nm, n2 = st.columns([5, 3, 5], gap="small", vertical_alignment="center")   # in alto: Indietro · bottone rosso · Avanti
+    with n1.container(key=f"dr_navp_{pid}"):
+        if st.button("◀ Indietro", key=f"dr_prev_{pid}", width="stretch", disabled=i == 0):
+            st.session_state["dr_pag"] = i - 1
+            st.rerun()
+    with nm:
+        _dr_chiudi(pid, "p", legenda=False)                    # il rosso: chiude il diario e torna la scheda
+    with n2.container(key=f"dr_navp2_{pid}"):
+        if st.button("Avanti ▶", key=f"dr_next_{pid}", width="stretch", disabled=i >= len(pagine) - 1):
+            st.session_state["dr_pag"] = i + 1
+            st.rerun()
+    import random as _rnd
+    ult = st.session_state.get("dr_fx", 0)
+    fx = _rnd.choice([n for n in range(1, 9) if n != ult])         # ogni foto entra con un effetto diverso dall'ultimo
+    st.session_state["dr_fx"] = fx
+    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica")), auto=auto, pila=len(pagine) > 1, effetto=fx), unsafe_allow_html=True)
     if auto:
         with st.container(key=f"nascosti_dra_{pid}"):             # lo scorrimento automatico tocca questo bottone: vai alla pagina dopo (dall'ultima, torna alla prima)
             if st.button("auto", key=f"dr_aut_{pid}"):
                 st.session_state["dr_pag"] = (i + 1) % len(pagine)
                 st.rerun()
-    n1, n2 = st.columns(2, gap="small")
-    if n1.button("◀ Indietro", key=f"dr_prev_{pid}", width="stretch", disabled=i == 0):
-        st.session_state["dr_pag"] = i - 1
-        st.rerun()
-    if n2.button("Avanti ▶", key=f"dr_next_{pid}", width="stretch", disabled=i >= len(pagine) - 1):
-        st.session_state["dr_pag"] = i + 1
-        st.rerun()
     if st.button("✏️ Inquadra, testi e icone", key=f"dr_mod_{pid}", width="stretch"):
         st.session_state["dr_mod"] = pg["id"]
         st.session_state["dr_el"] = None
@@ -580,7 +647,6 @@ def _dr_diario(p, pid, col):
         _dr_nuove(p, pid)
     _dr_scorrimento_ui(p, pid)
     _dr_musica_ui(p, pid)
-    _dr_chiudi(pid, "p")                                      # il bottone rosso in ogni pagina
 
 
 def _dr_installa_js():
