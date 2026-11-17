@@ -77,21 +77,28 @@ def dr_pagina_html(pg, els, col, extra=None):
 
 
 DR_CSS = """<style>
-.cp-card{padding-bottom:112px !important}
-[class*="st-key-dr_apri_"]{margin-top:-122px;position:relative;z-index:2;gap:0 !important}
-[class*="st-key-dr_apri_"],[class*="st-key-dr_chiudi_"]{display:flex;flex-direction:column;align-items:center}
-[class*="st-key-dr_apri_"]+*{margin-top:0}
+.cp-card{padding-bottom:70px !important}
+[class*="st-key-dr_apri_"]{margin-top:-94px;position:relative;z-index:2;gap:0 !important;display:flex;flex-direction:column;align-items:flex-end;padding-right:22px;height:54px}
+[class*="st-key-dr_chiudi_"]{display:flex;flex-direction:column;align-items:center}
 [class*="st-key-dr_apri_"] [data-testid="stButton"],[class*="st-key-dr_chiudi_"] [data-testid="stButton"]{width:auto !important;display:flex;justify-content:center}
-[class*="st-key-dr_apri_"] button,[class*="st-key-dr_chiudi_"] button{width:68px !important;height:68px !important;min-height:0 !important;padding:0 !important;border-radius:50% !important;
- position:relative;transition:transform .12s}
-[class*="st-key-dr_apri_"] button{background:radial-gradient(circle at 34% 26%,#d6ff7a 0,#86e01e 40%,#3fa510 100%) !important;border:3px solid #2e8f0d !important;
- box-shadow:0 5px 0 #1f6d08,0 0 14px rgba(120,230,40,.75),inset 0 -6px 10px rgba(0,80,0,.35) !important}
-[class*="st-key-dr_chiudi_"] button{background:radial-gradient(circle at 34% 26%,#ff8a8a 0,#ee2230 42%,#b3121e 100%) !important;border:3px solid #9c0f1b !important;
- box-shadow:0 5px 0 #6e0a12,0 0 14px rgba(255,60,60,.7),inset 0 -6px 10px rgba(90,0,0,.4) !important}
-[class*="st-key-dr_apri_"] button:active,[class*="st-key-dr_chiudi_"] button:active{transform:translateY(3px)}
-[class*="st-key-dr_apri_"] button p,[class*="st-key-dr_chiudi_"] button p{font-size:2.1rem !important;line-height:1 !important;color:#fff !important;font-weight:900 !important;
- text-shadow:0 0 8px #fff,0 0 14px rgba(255,255,255,.9)}
+[class*="st-key-dr_apri_"] button,[class*="st-key-dr_chiudi_"] button{width:54px !important;height:54px !important;min-height:0 !important;padding:0 !important;border-radius:50% !important;position:relative;
+ border:3px solid #c9ced6 !important;transition:transform .12s,box-shadow .15s,filter .15s;font-size:0 !important;overflow:visible}
+[class*="st-key-dr_apri_"] button p,[class*="st-key-dr_chiudi_"] button p{display:none !important}
+[class*="st-key-dr_apri_"] button::before,[class*="st-key-dr_chiudi_"] button::before{content:"";position:absolute;left:50%;top:50%;width:62%;height:62%;transform:translate(-50%,-50%);
+ background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 12v36' stroke='white' stroke-width='9' stroke-linecap='round' fill='none'/%3E%3Cpath d='M29 27a36 36 0 1 0 42 0' stroke='white' stroke-width='9' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") center/contain no-repeat;
+ filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 6px rgba(255,255,255,.85))}
+[class*="st-key-dr_apri_"] button::after,[class*="st-key-dr_chiudi_"] button::after{content:"";position:absolute;left:14%;top:7%;width:72%;height:42%;border-radius:50%;background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0));pointer-events:none}
+[class*="st-key-dr_apri_"] button{background:radial-gradient(circle at 50% 38%,#8bea3d 0,#4cbb17 55%,#2f8f0c 100%) !important;
+ box-shadow:0 3px 6px rgba(0,0,0,.45),0 0 8px rgba(110,220,50,.45),inset 0 -5px 8px rgba(0,70,0,.35) !important}
+[class*="st-key-dr_chiudi_"] button{background:radial-gradient(circle at 50% 38%,#ff6a6a 0,#e01f26 55%,#a80f16 100%) !important;
+ box-shadow:0 3px 6px rgba(0,0,0,.45),0 0 8px rgba(255,70,70,.45),inset 0 -5px 8px rgba(90,0,0,.4) !important}
+[class*="st-key-dr_apri_"] button:hover,[class*="st-key-dr_apri_"] button:focus,[class*="st-key-dr_apri_"] button:active{filter:brightness(1.18) saturate(1.2);
+ box-shadow:0 0 12px #b6ff6a,0 0 28px #7dff2a,0 0 48px rgba(125,255,42,.8),inset 0 -3px 6px rgba(0,70,0,.2) !important;transform:scale(1.06)}
+[class*="st-key-dr_chiudi_"] button:hover,[class*="st-key-dr_chiudi_"] button:focus,[class*="st-key-dr_chiudi_"] button:active{filter:brightness(1.18) saturate(1.2);
+ box-shadow:0 0 12px #ff9a9a,0 0 28px #ff3b3b,0 0 48px rgba(255,59,59,.8),inset 0 -3px 6px rgba(90,0,0,.2) !important;transform:scale(1.06)}
+[class*="st-key-dr_apri_"] button:active,[class*="st-key-dr_chiudi_"] button:active{transform:scale(.96)}
 .dr-leg{text-align:center;font-size:.78rem;font-weight:700;margin:6px 0 0;color:#cfe}
+[class*="st-key-dr_apri_"] .dr-leg{position:absolute;right:84px;bottom:18px;margin:0;text-align:right;white-space:nowrap}
 .dr-pag{margin:10px 2px;padding:8px;border-radius:24px;border:2px solid var(--c);background:#0b1120;box-shadow:0 0 8px var(--c),0 0 20px var(--c);
  transform-origin:left center;animation:dr-sfoglia .55s ease-out}
 .dr-foto{position:relative;container-type:inline-size;border-radius:18px;overflow:hidden;background:#05080f;line-height:0}
