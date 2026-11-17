@@ -697,6 +697,9 @@ def _dr_musica_player(p):
     if dati:
         with st.container(key=f"dr_musica_{p['id']}"):          # parte da sola quando tocchi il bottone verde
             st.audio(dati, format=m.get("mime") or "audio/mpeg", loop=True, autoplay=True)
+    else:
+        st.session_state.pop(chiave, None)
+        st.warning("🎵 Non trovo più il file della musica. Apri «🎵 Musica del diario» in fondo e caricalo di nuovo.")
 
 
 def dr_blocco(p):
