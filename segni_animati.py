@@ -41,7 +41,7 @@ SA_SEGNI = {
     "acquario": {"corpo": None,
                  "parti": [([(60, 8), (78, 5), (92, 18), (98, 38), (90, 52), (75, 45), (66, 30)], (62, 12), "sa-skew", 3.2, 4, 0),
                            ([(18, 22), (52, 18), (56, 40), (40, 52), (18, 48), (12, 36)], (45, 50), "sa-rock", 3.6, 2.5, 0)]},
-    "pesci": {"corpo": ("sa-nuota", 4.3, 0), "parti": [], "onda": (30, 6, 3.6)},
+    "pesci": {"corpo": ("sa-bob", 6.5, 1), "parti": [], "striscia": (24, 2.2)},
     "vergine": {"corpo": ("sa-bob", 5.5, 1.5),
                 "parti": [([(66, 24), (80, 22), (82, 34), (76, 46), (66, 52), (60, 44)], (66, 48), "sa-rock", 3.4, 8, 0),
                           ([(14, 12), (22, 12), (26, 19), (22, 27), (14, 27), (10, 19)], (18, 19), "sa-bob", 4, 3, 0)]},
@@ -93,13 +93,40 @@ SA_FILTRO = ("<svg width='0' height='0' style='position:absolute' aria-hidden='t
              "<feDisplacementMap in='SourceGraphic' in2='r' scale='9' xChannelSelector='R' yChannelSelector='G'/></filter></svg>")
 
 
+_SA_STRISCIA = {}
+
+
+def sa_striscia_b64():
+    """La striscia dei fotogrammi dei Pesci (segni_pesci.webp, nella cartella del programma), letta una volta sola."""
+    if "b" not in _SA_STRISCIA:
+        import base64 as _b64
+        import os as _os
+        b = None
+        for cart in (globals().get("_cartella"), _os.getcwd(), _os.path.dirname(_os.path.abspath(__file__)) if "__file__" in globals() else None):
+            try:
+                with open(_os.path.join(cart, "segni_pesci.webp"), "rb") as f:
+                    b = _b64.b64encode(f.read()).decode()
+                break
+            except Exception:
+                continue
+        _SA_STRISCIA["b"] = b
+    return _SA_STRISCIA["b"]
+
+
 def sa_segno_html(seg, b64, nome):
     e = _sa_html.escape
     prop = SA_PROPORZIONI.get(seg, 1.2)
     cfg = SA_SEGNI.get(seg, {"corpo": None, "parti": []})
     foro = _sa_foro([x[0] for x in cfg["parti"]])
     strati = ["<div class='sa-l sa-base'" + (f" style=\"clip-path:{foro}\"" if foro else "") + "></div>"]
-    if cfg.get("onda"):
+    if cfg.get("striscia"):
+        # nuoto vero: 24 fotogrammi calcolati con l'onda dei pesci (ampiezza minima alla testa, massima alla coda, una lunghezza d'onda per pesce,
+        # onda che va dalla testa alla coda) e le pinne pettorali che remano piano; si mostrano uno dopo l'altro
+        n, dur = cfg["striscia"]
+        b = sa_striscia_b64()
+        if b:
+            strati = [f"<div class='sa-l sa-strip' style=\"background-image:url(data:image/webp;base64,{b});background-size:100% {n * 100}%;animation:sa-striscia {dur}s steps({n},jump-none) infinite\"></div>"]
+    elif cfg.get("onda"):
         # onda morbida: l'immagine è fatta di tante fettine sottili che oscillano una dopo l'altra: pinne e code ondeggiano senza tagli
         n, amp, dur = cfg["onda"]
         strati = []
@@ -144,6 +171,7 @@ SA_CSS = """<style>
 @keyframes sa-walk{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
 @keyframes sa-nuota{0%,100%{transform:translate(-2.5%,1.5%) rotate(-3.5deg)}25%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}50%{transform:translate(2.5%,1.5%) rotate(3.5deg)}75%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}}
 @keyframes sa-onda{0%,100%{transform:translateX(calc(var(--a) / -1))}50%{transform:translateX(var(--a))}}
+@keyframes sa-striscia{from{background-position:0 0}to{background-position:0 100%}}
 @keyframes sa-claw{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(-7deg)}66%{transform:rotate(2deg)}74%{transform:rotate(-7deg)}84%{transform:rotate(0)}}
 @keyframes sa-dito{0%,50%,100%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}58%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}66%{transform:rotate(2deg) translate(11%,-18%) rotate(-10deg) translate(-11%,18%)}74%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}84%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}}
 @keyframes sa-clawr{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(7deg)}66%{transform:rotate(-2deg)}74%{transform:rotate(7deg)}84%{transform:rotate(0)}}
