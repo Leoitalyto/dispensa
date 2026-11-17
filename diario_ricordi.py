@@ -36,6 +36,10 @@ def _dr_colore(p):
         return "#20e6ff"
 
 
+def _dr_nome(p):
+    return "Il diario di " + " ".join(x for x in (str(p.get("nome") or "").strip(), str(p.get("cognome") or "").strip()) if x)
+
+
 def _dr_salva_persona(pid, fn, msg):
     def _m(d):
         for x in d.get("compleanni", []):
@@ -87,7 +91,7 @@ def _dr_foto_bytes(rif):
     return st.session_state.get(ch)
 
 
-def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None):
+def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None, pila=False):
     """La pagina: foto grande come la scheda, bordi stondati, testi e icone sopra. mod=(etichetta, z, px, py): la foto si inquadra con le dita."""
     if dati is None and pg.get("foto"):
         dati = _dr_foto_bytes(pg["foto"])
@@ -117,7 +121,7 @@ def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, 
         if auto:
             vbar += f"<div class='dr-prog'><i style='animation-duration:{float(auto['dur']):.1f}s'></i></div>"
     at = f" data-id='{_dr_html.escape(str(pg.get('id') or ''), quote=True)}' data-dur='{float(auto['dur']):.1f}' data-auto='1'" if auto else ""
-    return (f"<div class='dr-pag' style='--c:{col}'{at}><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
+    return (f"<div class='dr-pag{' dr-pila' if pila else ''}' style='--c:{col}'{at}><div class='dr-foto' style='aspect-ratio:{ar:.3f}'{attr}><div class='dr-zi'>{img}{sopra}</div></div>"
             + (f"<div class='dr-did'>{_dr_html.escape(did)}</div>" if did else "") + vbar + "</div>")
 
 
@@ -162,6 +166,8 @@ DR_CSS = """<style>
 .dr-fill{flex:1}
 .dr-prog{height:3px;margin:6px 4px 0;border-radius:2px;background:rgba(255,255,255,.16);overflow:hidden}
 .dr-prog i{display:block;height:100%;width:0;background:var(--c);box-shadow:0 0 6px var(--c);animation:dr-prog linear forwards}
+.dr-pila{margin-bottom:22px;box-shadow:0 5px 0 -1px #0b1120,0 6px 0 0 var(--c),0 11px 0 -1px #0b1120,0 12px 0 0 var(--c),0 0 8px var(--c),0 0 20px var(--c)}
+.dr-diario-t{text-align:center;font-weight:800;font-size:1.05rem;margin:14px 0 2px;color:#fff;text-shadow:0 0 8px var(--c)}
 .dr-pausa .dr-prog i{animation-play-state:paused}
 @keyframes dr-prog{from{width:0}to{width:100%}}
 [class*="st-key-dr_musica_"]{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
@@ -548,12 +554,12 @@ def _dr_diario(p, pid, col):
     i = max(0, min(int(st.session_state.get("dr_pag", 0)), len(pagine) - 1))
     st.session_state["dr_pag"] = i
     pg = pagine[i]
-    st.markdown(f"<div class='dr-num'>📖 Pagina {i + 1} di {len(pagine)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='dr-diario-t' style='--c:{col}'>📖 {_dr_html.escape(_dr_nome(p))}</div><div class='dr-num'>Pagina {i + 1} di {len(pagine)}</div>", unsafe_allow_html=True)
     if st.session_state.get("dr_mod") == pg["id"]:
         _dr_editor(p, pid, pg, col)
         return
     auto = {"dur": float(pg.get("dur") or p.get("durata") or 7)} if (len(pagine) > 1 and p.get("auto", True)) else None
-    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica")), auto=auto), unsafe_allow_html=True)
+    st.markdown(dr_pagina_html(pg, pg.get("els") or [], col, musica=bool(p.get("musica")), auto=auto, pila=len(pagine) > 1), unsafe_allow_html=True)
     if auto:
         with st.container(key=f"nascosti_dra_{pid}"):             # lo scorrimento automatico tocca questo bottone: vai alla pagina dopo (dall'ultima, torna alla prima)
             if st.button("auto", key=f"dr_aut_{pid}"):
@@ -592,12 +598,16 @@ def _dr_installa_js():
         _c.html(cod, height=1)
 
 
-def dr_bottone(p):
-    """Il bottone verde DENTRO la scheda (subito dopo la scheda, tirato su dentro la cornice)."""
-    pid = p["id"]
+def _dr_base(pid):
     st.markdown(DR_CSS, unsafe_allow_html=True)
     with st.container(key="nascosti_drjs_" + pid):             # installa lo script (gesti, volume) nella pagina dell'app
         _dr_installa_js()
+
+
+def dr_bottone(p):
+    """Il bottone verde DENTRO la scheda (subito dopo la scheda, tirato su dentro la cornice)."""
+    pid = p["id"]
+    _dr_base(pid)
     n = len(dr_pagine(p))
     aperto = st.session_state.get("dr_aperto") == pid
     with st.container(key=f"dr_apri_{pid}"):
@@ -626,5 +636,6 @@ def _dr_musica_player(p):
 def dr_blocco(p):
     """Se aperto, il diario sotto la scheda (con la musica, se c'è)."""
     if st.session_state.get("dr_aperto") == p["id"]:
+        _dr_base(p["id"])
         _dr_musica_player(p)
         _dr_diario(p, p["id"], _dr_colore(p))

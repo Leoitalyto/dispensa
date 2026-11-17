@@ -737,6 +737,9 @@ def _cp_elenco():
             st.markdown(f"<div style='margin:18px 0 0;font-weight:800;color:{CP_COLORE_MEMORIA}'>{_cp_html.escape(titolo)}</div>", unsafe_allow_html=True)
         for p in gruppo:
             pid = p["id"]
+            if "dr_blocco" in globals() and st.session_state.get("dr_aperto") == pid:
+                dr_blocco(p)                                          # il diario prende il posto della scheda
+                continue
             st.markdown(_cp_scheda_html(p, oggi), unsafe_allow_html=True)
             if "dr_bottone" in globals():
                 dr_bottone(p)
