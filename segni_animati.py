@@ -41,11 +41,7 @@ SA_SEGNI = {
     "acquario": {"corpo": None,
                  "parti": [([(60, 8), (78, 5), (92, 18), (98, 38), (90, 52), (75, 45), (66, 30)], (62, 12), "sa-skew", 3.2, 4, 0),
                            ([(18, 22), (52, 18), (56, 40), (40, 52), (18, 48), (12, 36)], (45, 50), "sa-rock", 3.6, 2.5, 0)]},
-    "pesci": {"corpo": ("sa-bob", 4, 2),
-              "parti": [([(8, 8), (55, 8), (55, 40), (40, 60), (15, 60), (5, 35)], (40, 40), "sa-circle", 5, 3, 0),
-                        ([(28, 62), (50, 62), (55, 92), (40, 98), (25, 85)], (40, 62), "sa-flap", 1.1, 10, 0),
-                        ([(45, 60), (95, 60), (98, 85), (60, 98), (45, 85)], (70, 70), "sa-circle", 5, 3, 2.5),
-                        ([(55, 2), (80, 2), (90, 30), (65, 38), (55, 20)], (65, 36), "sa-flap", 1.1, 10, 0.5)]},
+    "pesci": {"corpo": ("sa-nuota", 3.6, 0), "parti": []},
     "vergine": {"corpo": ("sa-bob", 5.5, 1.5),
                 "parti": [([(66, 24), (80, 22), (82, 34), (76, 46), (66, 52), (60, 44)], (66, 48), "sa-rock", 3.4, 8, 0),
                           ([(14, 12), (22, 12), (26, 19), (22, 27), (14, 27), (10, 19)], (18, 19), "sa-bob", 4, 3, 0)]},
@@ -63,7 +59,7 @@ SA_EFFETTI = {
     "sagittario": [("lampo", 97, 22, 22, 0, 4.8), ("st", 12, 22, 5, .5, 2.6), ("st", 50, 8, 5, 1.4, 2.2)],
     "capricorno": [("st", 20, 74, 5, 0, 2.2), ("st", 86, 78, 6, .8, 2.6), ("st", 50, 8, 5, 1.5, 2.4)],
     "acquario": [("scorri", 0, 0, 0, 0, 0.9), ("goccia", 14, 70, 6, 0, 1.3), ("goccia", 30, 78, 6, .6, 1.3), ("st", 84, 20, 5, .8, 2.4)],
-    "pesci": [("bolla", 46, 30, 7, 0, 3), ("bolla", 40, 45, 5, 1.1, 3.4), ("bolla", 80, 55, 6, 1.9, 3.1)],
+    "pesci": [("bolla", 46, 30, 7, 0, 3), ("bolla", 40, 45, 5, 1.1, 3.4), ("bolla", 80, 55, 6, 1.9, 3.1), ("bolla", 62, 72, 6, .5, 3.3), ("bolla", 30, 62, 5, 2.2, 3.6), ("st", 12, 20, 5, .3, 2.4)],
 }
 # la zona dove scorre l'acqua dell'Acquario (poligono in %)
 SA_ACQUA = [(6, 42), (34, 42), (42, 60), (46, 80), (40, 100), (0, 100), (4, 70)]
@@ -130,6 +126,7 @@ SA_CSS = """<style>
 @keyframes sa-flap{0%,100%{transform:rotate(calc(var(--a) / -1)) skewY(-3deg)}50%{transform:rotate(var(--a)) skewY(3deg)}}
 @keyframes sa-trot{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
 @keyframes sa-walk{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
+@keyframes sa-nuota{0%,100%{transform:translate(-2.5%,1.5%) rotate(-3.5deg)}25%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}50%{transform:translate(2.5%,1.5%) rotate(3.5deg)}75%{transform:translate(0,-1.5%) rotate(0deg) scale(1.02)}}
 @keyframes sa-claw{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(-7deg)}66%{transform:rotate(2deg)}74%{transform:rotate(-7deg)}84%{transform:rotate(0)}}
 @keyframes sa-dito{0%,50%,100%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}58%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}66%{transform:rotate(2deg) translate(11%,-18%) rotate(-10deg) translate(-11%,18%)}74%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}84%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}}
 @keyframes sa-clawr{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(7deg)}66%{transform:rotate(-2deg)}74%{transform:rotate(7deg)}84%{transform:rotate(0)}}
