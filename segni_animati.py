@@ -10,22 +10,45 @@ import html as _sa_html
 SA_PROPORZIONI = {"ariete": 277 / 199, "toro": 288 / 219, "gemelli": 234 / 206, "cancro": 248 / 204, "leone": 246 / 227, "vergine": 284 / 225,
                   "bilancia": 263 / 224, "scorpione": 246 / 220, "sagittario": 279 / 227, "capricorno": 300 / 219, "acquario": 263 / 227, "pesci": 274 / 223}
 
-# (cx, cy, rx, ry, ox, oy, animazione, durata, ampiezza, ritardo)
-SA_PARTI = {
-    "ariete": [(50, 52, 42, 46, 50, 85, "sa-butt", 4.6, 5, 0), (16, 48, 16, 30, 30, 50, "sa-rock", 4.6, 3, 0.2), (84, 48, 16, 30, 70, 50, "sa-rock", 4.6, 3, 0.2)],
-    "toro": [(50, 50, 42, 48, 50, 90, "sa-rock", 5, 3, 0), (50, 84, 20, 10, 50, 80, "sa-breath", 2.2, 3, 0)],
-    "gemelli": [(30, 52, 33, 50, 62, 95, "sa-rock", 5.2, 3.5, 0), (72, 52, 33, 50, 38, 95, "sa-rock", 5.2, 3.5, 2.6)],
-    "cancro": [(14, 26, 17, 28, 36, 46, "sa-pinch", 3.2, 16, 0), (86, 26, 17, 28, 64, 46, "sa-pinchr", 3.2, 16, 1.6),
-               (22, 78, 22, 20, 40, 55, "sa-walk", 0.7, 5, 0), (78, 78, 22, 20, 60, 55, "sa-walk", 0.7, 5, 0.35), (50, 56, 30, 26, 50, 50, "sa-wave", 2.8, 4, 0)],
-    "leone": [(28, 50, 36, 50, 60, 55, "sa-flick", 2.6, 3, 0), (70, 55, 28, 42, 55, 70, "sa-rock", 4.2, 2, 0), (89, 86, 11, 12, 50, 50, "sa-bob", 3, 4, 0)],
-    "vergine": [(60, 32, 14, 16, 52, 48, "sa-rock", 3.4, 9, 0), (45, 22, 17, 22, 50, 40, "sa-rock", 5, 2.5, 0.6), (60, 84, 38, 12, 50, 70, "sa-skew", 3.6, 2.5, 0), (9, 24, 10, 12, 50, 50, "sa-bob", 4, 5, 0)],
-    "bilancia": [(50, 20, 40, 14, 50, 50, "sa-rock", 3.8, 2.2, 0), (22, 46, 22, 28, 22, 10, "sa-bob", 3.8, 5, 0), (78, 46, 22, 28, 78, 10, "sa-bob", 3.8, 5, 1.9)],
-    "scorpione": [(40, 22, 20, 24, 56, 46, "sa-strike", 4.4, 38, 0), (15, 44, 17, 17, 36, 55, "sa-pinch", 2.8, 13, 0), (38, 68, 19, 13, 56, 56, "sa-pinchr", 2.8, 11, 1.4),
-                  (55, 58, 48, 38, 55, 90, "sa-guard", 4.4, 4, 0)],
-    "sagittario": [(63, 20, 30, 24, 42, 22, "sa-pull", 4.8, 7, 0), (9, 65, 15, 24, 20, 52, "sa-skew", 2.4, 5, 0), (40, 78, 30, 14, 50, 60, "sa-trot", 0.9, 2.5, 0)],
-    "capricorno": [(73, 28, 20, 28, 62, 56, "sa-flap", 2.6, 10, 0), (60, 80, 30, 18, 60, 60, "sa-skew", 3, 3, 0), (28, 28, 22, 26, 40, 60, "sa-rock", 5, 3, 0)],
-    "acquario": [(50, 82, 52, 20, 50, 80, "sa-wave", 2.4, 3.2, 0), (67, 30, 18, 30, 50, 15, "sa-skew", 3.2, 3.5, 0.5), (41, 30, 11, 15, 55, 55, "sa-rock", 3.6, 4, 0)],
-    "pesci": [(28, 33, 30, 30, 50, 50, "sa-circle", 5, 5, 0), (62, 62, 30, 24, 50, 50, "sa-circle", 5, 5, 2.5), (68, 18, 15, 20, 62, 40, "sa-flap", 1.2, 9, 0)],
+# Per ogni segno: "corpo" = movimento di tutta la figura (anim, durata, ampiezza); "parti" = pezzi ritagliati con un poligono (in %),
+# ognuno col suo perno e il suo movimento: (poligono, (perno x, perno y), animazione, durata s, ampiezza, ritardo s).
+# Il pezzo si toglie dall'immagine di base (niente doppioni): si vede solo quello che si muove.
+SA_SEGNI = {
+    "ariete": {"corpo": ("sa-butt", 4.6, 3), "parti": []},
+    "toro": {"corpo": ("sa-rock", 5, 2.2), "parti": []},
+    "gemelli": {"corpo": ("sa-rock", 5.2, 1.8), "parti": []},
+    "leone": {"corpo": ("sa-flick", 2.8, 1.6), "parti": []},
+    "cancro": {"corpo": ("sa-wave", 3.2, 3),
+               "parti": [([(14, 38), (10, 30), (14, 22), (24, 14), (30, 18), (38, 13), (46, 9), (46, 13), (38, 16), (36, 20), (30, 24), (26, 32), (22, 38)], (17, 35), "sa-claw", 3.2, 0, 0),
+                         ([(24, 14), (32, 7), (44, 5), (46, 9), (38, 13), (30, 18)], (17, 35), "sa-dito", 3.2, 0, 0),
+                         ([(86, 38), (90, 30), (86, 22), (76, 14), (70, 18), (62, 13), (54, 9), (54, 13), (62, 16), (64, 20), (70, 24), (74, 32), (78, 38)], (83, 35), "sa-clawr", 3.2, 0, 0),
+                         ([(76, 14), (68, 7), (56, 5), (54, 9), (62, 13), (70, 18)], (83, 35), "sa-ditor", 3.2, 0, 0),
+                         ([(0, 60), (30, 54), (34, 66), (28, 80), (32, 98), (4, 98), (0, 80)], (30, 58), "sa-walk", 0.8, 4, 0),
+                         ([(100, 60), (70, 54), (66, 66), (72, 80), (68, 98), (96, 98), (100, 80)], (70, 58), "sa-walk", 0.8, 4, 0.4)]},
+    "scorpione": {"corpo": ("sa-guard", 4.4, 3),
+                  "parti": [([(33, 38), (32, 22), (38, 8), (50, 0), (64, 2), (74, 10), (80, 22), (81, 34), (74, 40), (66, 34), (60, 22), (52, 18), (46, 22), (46, 34), (42, 42)], (72, 38), "sa-strike", 4.4, 22, 0),
+                            ([(5, 62), (8, 52), (15, 48), (24, 48), (27, 56), (22, 64), (16, 70), (14, 78), (9, 80), (5, 72)], (25, 52), "sa-pinch", 2.8, 14, 0),
+                            ([(30, 82), (40, 78), (52, 74), (60, 70), (67, 72), (70, 80), (66, 88), (58, 94), (46, 95), (34, 92)], (66, 76), "sa-pinchr", 2.8, 12, 1.4)]},
+    "sagittario": {"corpo": None,
+                   "parti": [([(58, 14), (80, 12), (100, 15), (100, 30), (80, 34), (60, 34)], (60, 24), "sa-pull", 4.8, 6, 0),
+                             ([(22, 50), (10, 46), (2, 55), (0, 75), (6, 92), (20, 94), (24, 70)], (22, 52), "sa-skew", 2.4, 5, 0)]},
+    "bilancia": {"corpo": None,
+                 "parti": [([(12, 20), (16, 20), (40, 64), (40, 76), (3, 76), (2, 62)], (14, 20), "sa-bob", 3.8, 4, 0),
+                           ([(84, 20), (88, 20), (98, 62), (98, 76), (61, 76), (60, 64)], (86, 20), "sa-bob", 3.8, 4, 1.9)]},
+    "capricorno": {"corpo": ("sa-bob", 5, 2),
+                   "parti": [([(58, 22), (68, 18), (76, 10), (88, 12), (90, 22), (84, 34), (76, 42), (70, 50), (62, 52), (58, 40)], (70, 52), "sa-flap", 2.6, 9, 0),
+                             ([(18, 10), (40, 5), (55, 12), (52, 35), (36, 48), (14, 45), (10, 32)], (45, 50), "sa-rock", 5, 2, 0)]},
+    "acquario": {"corpo": None,
+                 "parti": [([(60, 8), (78, 5), (92, 18), (98, 38), (90, 52), (75, 45), (66, 30)], (62, 12), "sa-skew", 3.2, 4, 0),
+                           ([(18, 22), (52, 18), (56, 40), (40, 52), (18, 48), (12, 36)], (45, 50), "sa-rock", 3.6, 2.5, 0)]},
+    "pesci": {"corpo": ("sa-bob", 4, 2),
+              "parti": [([(8, 8), (55, 8), (55, 40), (40, 60), (15, 60), (5, 35)], (40, 40), "sa-circle", 5, 3, 0),
+                        ([(28, 62), (50, 62), (55, 92), (40, 98), (25, 85)], (40, 62), "sa-flap", 1.1, 10, 0),
+                        ([(45, 60), (95, 60), (98, 85), (60, 98), (45, 85)], (70, 70), "sa-circle", 5, 3, 2.5),
+                        ([(55, 2), (80, 2), (90, 30), (65, 38), (55, 20)], (65, 36), "sa-flap", 1.1, 10, 0.5)]},
+    "vergine": {"corpo": ("sa-bob", 5.5, 1.5),
+                "parti": [([(66, 24), (80, 22), (82, 34), (76, 46), (66, 52), (60, 44)], (66, 48), "sa-rock", 3.4, 8, 0),
+                          ([(14, 12), (22, 12), (26, 19), (22, 27), (14, 27), (10, 19)], (18, 19), "sa-bob", 4, 3, 0)]},
 }
 # scintille e altri effetti: (tipo, x, y, grandezza px, ritardo s, durata s)
 SA_EFFETTI = {
@@ -37,34 +60,65 @@ SA_EFFETTI = {
     "vergine": [("st", 28, 70, 5, 0, 2.4), ("st", 78, 40, 6, .9, 2.8), ("st", 20, 48, 5, 1.6, 2.2)],
     "bilancia": [("st", 50, 5, 7, 0, 2.2), ("st", 18, 40, 5, 1.2, 2.6), ("st", 82, 40, 5, .6, 2.4)],
     "scorpione": [("st", 36, 4, 7, 2.5, 4.4), ("st", 88, 70, 5, 0, 2.6)],
-    "sagittario": [("lampo", 86, 19, 20, 0, 4.8), ("st", 12, 22, 5, .5, 2.6), ("st", 50, 8, 5, 1.4, 2.2)],
+    "sagittario": [("lampo", 97, 22, 22, 0, 4.8), ("st", 12, 22, 5, .5, 2.6), ("st", 50, 8, 5, 1.4, 2.2)],
     "capricorno": [("st", 20, 74, 5, 0, 2.2), ("st", 86, 78, 6, .8, 2.6), ("st", 50, 8, 5, 1.5, 2.4)],
-    "acquario": [("acqua", 25, 41, 7, 0, 1.1), ("goccia", 20, 62, 5, 0, 1.3), ("goccia", 30, 62, 5, .6, 1.3), ("st", 84, 20, 5, .8, 2.4)],
+    "acquario": [("scorri", 0, 0, 0, 0, 0.9), ("goccia", 14, 70, 6, 0, 1.3), ("goccia", 30, 78, 6, .6, 1.3), ("st", 84, 20, 5, .8, 2.4)],
     "pesci": [("bolla", 46, 30, 7, 0, 3), ("bolla", 40, 45, 5, 1.1, 3.4), ("bolla", 80, 55, 6, 1.9, 3.1)],
 }
+# la zona dove scorre l'acqua dell'Acquario (poligono in %)
+SA_ACQUA = [(6, 42), (34, 42), (42, 60), (46, 80), (40, 100), (0, 100), (4, 70)]
+
+
+def _sa_poly(punti):
+    return "polygon(" + ",".join(f"{x}% {y}%" for x, y in punti) + ")"
+
+
+def _sa_riduci(punti, f=0.985):
+    cx = sum(x for x, _y in punti) / len(punti)
+    cy = sum(y for _x, y in punti) / len(punti)
+    return [(cx + (x - cx) * f, cy + (y - cy) * f) for x, y in punti]
+
+
+def _sa_foro(fori):
+    """clip-path della base: tutta l'immagine meno i pezzi che si muovono (nessun doppione)."""
+    if not fori:
+        return ""
+    pts = ["0 0", "100% 0", "100% 100%", "0 100%", "0 0"]
+    for f in fori:
+        f = _sa_riduci(f)
+        pts += [f"{x:.1f}% {y:.1f}%" for x, y in f] + [f"{f[0][0]:.1f}% {f[0][1]:.1f}%", "0 0"]
+    return "polygon(evenodd," + ",".join(pts) + ")"
 
 
 def sa_segno_html(seg, b64, nome):
     e = _sa_html.escape
     prop = SA_PROPORZIONI.get(seg, 1.2)
-    strati = ["<div class='sa-l sa-base'></div>"]
-    for cx, cy, rx, ry, ox, oy, k, dur, amp, dl in SA_PARTI.get(seg, []):
-        if k in ("sa-bob", "sa-circle", "sa-pull", "sa-wave"):
-            val = f"{amp}px"
-        else:
-            val = f"{amp}deg"
-        strati.append(f"<div class='sa-l' style=\"--mk:radial-gradient(ellipse {rx}% {ry}% at {cx}% {cy}%,#000 58%,transparent 100%);transform-origin:{ox}% {oy}%;"
-                      f"animation:{k} {dur}s ease-in-out {-dl}s infinite;--a:{val}\"></div>")
+    cfg = SA_SEGNI.get(seg, {"corpo": None, "parti": []})
+    foro = _sa_foro([x[0] for x in cfg["parti"]])
+    strati = ["<div class='sa-l sa-base'" + (f" style=\"clip-path:{foro}\"" if foro else "") + "></div>"]
+    for poly, (ox, oy), k, dur, amp, dl in cfg["parti"]:
+        val = f"{amp}%" if k in ("sa-bob", "sa-circle", "sa-pull", "sa-wave") else f"{amp}deg"
+        strati.append(f"<div class='sa-l sa-p' style=\"clip-path:{_sa_poly(poly)};transform-origin:{ox}% {oy}%;animation:{k} {dur}s ease-in-out {-dl}s infinite;--a:{val}\"></div>")
     for tipo, x, y, g, dl, dur in SA_EFFETTI.get(seg, []):
-        strati.append(f"<i class='sa-fx sa-{tipo}' style='left:{x}%;top:{y}%;--g:{g}px;animation-delay:{-dl}s;animation-duration:{dur}s'></i>")
+        if tipo == "scorri":
+            strati.append(f"<i class='sa-l sa-scorri' style=\"clip-path:{_sa_poly(SA_ACQUA)};animation-duration:{dur}s\"></i>")
+        else:
+            strati.append(f"<i class='sa-fx sa-{tipo}' style='left:{x}%;top:{y}%;--g:{g}px;animation-delay:{-dl}s;animation-duration:{dur}s'></i>")
+    corpo = ""
+    if cfg["corpo"]:
+        k, dur, amp = cfg["corpo"]
+        val = f"{amp}%" if k in ("sa-bob", "sa-circle", "sa-pull", "sa-wave") else f"{amp}deg"
+        corpo = f" style=\"animation:{k} {dur}s ease-in-out infinite;--a:{val};transform-origin:50% 85%\""
     return (f"<div class='cp-segno sa cp-an-{seg}'><div class='sa-box' role='img' aria-label='{e(nome)}' "
-            f"style=\"--im:url(data:image/webp;base64,{b64});--ar:{prop:.4f};--w:{min(150, 130 * prop):.1f}px\">" + "".join(strati) + f"</div><span>{e(nome)}</span></div>")
+            f"style=\"--im:url(data:image/webp;base64,{b64});--ar:{prop:.4f};--w:{min(150, 130 * prop):.1f}px\"><div class='sa-corpo'{corpo}>" + "".join(strati) + f"</div></div><span>{e(nome)}</span></div>")
 
 
 SA_CSS = """<style>
 .cp-segno.sa .sa-box{position:relative;margin:0 auto;width:min(var(--w),62%);aspect-ratio:var(--ar);filter:drop-shadow(0 0 8px var(--cg))}
 .sa-l{position:absolute;inset:0;background:var(--im) center/100% 100% no-repeat;will-change:transform}
-.sa-l:not(.sa-base){-webkit-mask-image:var(--mk);mask-image:var(--mk)}
+.sa-corpo{position:absolute;inset:0}
+.sa-scorri{background:repeating-linear-gradient(172deg,rgba(170,245,255,0) 0,rgba(170,245,255,.5) 7px,rgba(170,245,255,0) 14px);background-size:100% 14px;mix-blend-mode:screen;-webkit-mask-image:var(--im);mask-image:var(--im);-webkit-mask-size:100% 100%;mask-size:100% 100%;animation:sa-scorri .9s linear infinite}
+@keyframes sa-scorri{from{background-position:0 0}to{background-position:0 14px}}
 @keyframes sa-rock{0%,100%{transform:rotate(calc(var(--a) / -1))}50%{transform:rotate(var(--a))}}
 @keyframes sa-butt{0%,55%,100%{transform:rotate(0) translateY(0)}62%{transform:rotate(calc(var(--a) / -1)) translateY(2px)}74%{transform:rotate(var(--a)) translateY(6px) scale(1.04)}86%{transform:rotate(0) translateY(0)}}
 @keyframes sa-bob{0%,100%{transform:translateY(calc(var(--a) / -1))}50%{transform:translateY(var(--a))}}
@@ -76,6 +130,10 @@ SA_CSS = """<style>
 @keyframes sa-flap{0%,100%{transform:rotate(calc(var(--a) / -1)) skewY(-3deg)}50%{transform:rotate(var(--a)) skewY(3deg)}}
 @keyframes sa-trot{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
 @keyframes sa-walk{0%,100%{transform:translateY(0) skewX(calc(var(--a) / -1))}50%{transform:translateY(-2px) skewX(var(--a))}}
+@keyframes sa-claw{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(-7deg)}66%{transform:rotate(2deg)}74%{transform:rotate(-7deg)}84%{transform:rotate(0)}}
+@keyframes sa-dito{0%,50%,100%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}58%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}66%{transform:rotate(2deg) translate(11%,-18%) rotate(-10deg) translate(-11%,18%)}74%{transform:rotate(-7deg) translate(11%,-18%) rotate(24deg) translate(-11%,18%)}84%{transform:rotate(0) translate(11%,-18%) rotate(0) translate(-11%,18%)}}
+@keyframes sa-clawr{0%,50%,100%{transform:rotate(0)}58%{transform:rotate(7deg)}66%{transform:rotate(-2deg)}74%{transform:rotate(7deg)}84%{transform:rotate(0)}}
+@keyframes sa-ditor{0%,50%,100%{transform:rotate(0) translate(-11%,-18%) rotate(0) translate(11%,18%)}58%{transform:rotate(7deg) translate(-11%,-18%) rotate(-24deg) translate(11%,18%)}66%{transform:rotate(-2deg) translate(-11%,-18%) rotate(10deg) translate(11%,18%)}74%{transform:rotate(7deg) translate(-11%,-18%) rotate(-24deg) translate(11%,18%)}84%{transform:rotate(0) translate(-11%,-18%) rotate(0) translate(11%,18%)}}
 @keyframes sa-pinch{0%,52%,100%{transform:rotate(0)}58%{transform:rotate(var(--a))}64%{transform:rotate(0)}70%{transform:rotate(var(--a))}76%{transform:rotate(0)}}
 @keyframes sa-pinchr{0%,52%,100%{transform:rotate(0)}58%{transform:rotate(calc(var(--a) / -1))}64%{transform:rotate(0)}70%{transform:rotate(calc(var(--a) / -1))}76%{transform:rotate(0)}}
 @keyframes sa-strike{0%,30%,100%{transform:rotate(0)}38%{transform:rotate(calc(var(--a) / -2))}46%{transform:rotate(var(--a))}52%{transform:rotate(calc(var(--a) / 1.25))}62%{transform:rotate(0)}}
