@@ -96,7 +96,7 @@ def ls_attivo():
     """True se il promemoria è acceso (si spegne da Utilità → Aspetto dell'app)."""
     if "ls_on" not in st.session_state:
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"])
+            d = carica_dati(crea_archivio(), percorso_mio())
             v = (d.get("impostazioni") or {}).get("libera_spazio", True)
         except Exception:
             v = True
@@ -112,7 +112,7 @@ def ls_ui_impostazione():
         try:
             def _fn(d, v=on):
                 d.setdefault("impostazioni", {})["libera_spazio"] = v
-            salva(_fn, "Aspetto: promemoria libera spazio")
+            salva_file(percorso_mio(), _fn, "Aspetto: promemoria libera spazio")
         except Exception as e:
             st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
         st.rerun()
@@ -182,7 +182,7 @@ def ls_banner():
         st.session_state.pop("ls_pendente", None)
         st.session_state["ls_on"] = False
         try:
-            salva(lambda d: d.setdefault("impostazioni", {}).__setitem__("libera_spazio", False), "Aspetto: promemoria libera spazio spento")
+            salva_file(percorso_mio(), lambda d: d.setdefault("impostazioni", {}).__setitem__("libera_spazio", False), "Aspetto: promemoria libera spazio spento")
         except Exception:
             pass
         st.rerun()

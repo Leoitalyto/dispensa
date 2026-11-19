@@ -92,7 +92,7 @@ _ar_riuso_pannello_originale = _ca_pannello_caricamento
 def _ca_pannello_caricamento(n, multi=True):                                                          # noqa: F811
     up = _ar_riuso_pannello_originale(n, multi)
     try:
-        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        d = carica_dati(crea_archivio(), percorso_mio())
         rifs = _ar_riuso_riferimenti(d)
         tipi = {i: r for i, r in rifs.items() if str(r.get("nome", "")).lower().rsplit(".", 1)[-1] in ("pdf", "jpg", "jpeg", "png", "webp")}
         if not tipi:

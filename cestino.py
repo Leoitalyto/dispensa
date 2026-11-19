@@ -254,7 +254,7 @@ def _rm_scrivi(d, righe, quando):
 
 
 def _cs_percorso_personale():
-    p = st.session_state.get("percorso") or ""
+    p = (percorso_mio() if "percorso_mio" in globals() else st.session_state.get("percorso")) or ""
     return p if (p.startswith("dispense/") and p.endswith(".json")) else ""
 
 

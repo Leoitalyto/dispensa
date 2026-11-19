@@ -652,9 +652,9 @@ def _cp_modulo(pid):
                    "fisso": fisso.strip(), "whatsapp": wa.strip(), "telegram": tg.strip(), "email": email.strip(), "indirizzo": indirizzo.strip(),
                    "sito": (sito or "").strip(), "regalo": regalo.strip(), "note": note.strip(), "foto": foto_att, "scomparso": bool(scomp),
                    "data_scomparsa": data_sc.isoformat() if (scomp and data_sc) else "", "preghiera": bool(preghiera), "pensiero": pensiero.strip()}
-            for _k_dr in ("ricordi", "musica", "auto", "durata"):          # il diario dei ricordi (foto, musica, scorrimento) non si perde modificando la scheda
-                if p.get(_k_dr) not in (None, "", []):
-                    rec[_k_dr] = p[_k_dr]
+            for _k_v, _v_v in (p or {}).items():          # tutto quello che il modulo non tocca (diario, musica, campi futuri…) resta com'era
+                if _k_v not in rec and _k_v not in ("foto_pos", "foto_orig", "voce", "sepoltura"):
+                    rec[_k_v] = _v_v
             da_cancellare = []
             if scomp and sep_dati is not None:                          # dove riposa (sepolture.py)
                 try:

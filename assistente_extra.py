@@ -607,7 +607,7 @@ def _mr_dialogo(sezione):
         if q.strip() and (cerca or st.session_state.get("mr_ultima") == q.strip()):
             st.session_state["mr_ultima"] = q.strip()
             try:
-                d = carica_dati(crea_archivio(), st.session_state["percorso"])
+                d = carica_dati(crea_archivio(), percorso_mio())
             except Exception:
                 st.error("Non riesco a leggere i tuoi documenti ora. Riprova fra poco.")
                 return

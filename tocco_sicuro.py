@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """👆 Tocco sicuro (tutta l'app): sul telefono, con la tastiera aperta, il primo tocco su «Salva» spesso si perde (la tastiera si chiude, lo schermo si sposta e il tocco cade a vuoto).
 Questo piccolo script nella pagina: 1) se tocchi un bottone mentre scrivi in un campo, chiude la tastiera, aspetta che il testo sia registrato e poi preme il bottone da solo (un tocco basta);
-2) appena tocchi un bottone di salvataggio lo mostra «occupato» per un attimo, così non lo tocchi due volte. Prefisso: ts_"""
+2) appena tocchi un bottone di SALVATAGGIO (Salva, 💾, Conferma, Invia, Registra) lo mostra «occupato» per un attimo, così non lo tocchi due volte. Prefisso: ts_"""
 import json as _ts_json
 
 import streamlit as st
@@ -16,9 +16,9 @@ var st=null;
 function bottone(t){return t&&t.closest?t.closest('button'):null;}
 function campo(){var a=document.activeElement;return a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA');}
 function occupa(b){var tx=(b.textContent||'');
- if(/salva|💾|✅|metti|aggiungi|elimina|togli|conferma|invia|registra/i.test(tx)){b.classList.add('ts-occ');setTimeout(function(){b.classList.remove('ts-occ');},2600);}}
+ if(/salva|\uD83D\uDCBE|conferma|invia|registra/i.test(tx)){b.classList.add('ts-occ');setTimeout(function(){b.classList.remove('ts-occ');},2600);}}
 document.addEventListener('touchstart',function(e){var b=bottone(e.target);
- if(!b||b.disabled||!e.touches||e.touches.length!==1){st=null;return;}
+ if(!b||b.disabled||!e.touches||e.touches.length!==1||b.closest('[data-testid="stNumberInput"],[data-testid="stDateInput"],[data-testid="stTimeInput"],[data-baseweb="popover"]')){st=null;return;}
  st={b:b,x:e.touches[0].clientX,y:e.touches[0].clientY,campo:campo(),moved:false};},{passive:true,capture:true});
 document.addEventListener('touchmove',function(e){if(st&&e.touches&&e.touches[0]&&(Math.abs(e.touches[0].clientX-st.x)>12||Math.abs(e.touches[0].clientY-st.y)>12))st.moved=true;},{passive:true,capture:true});
 document.addEventListener('touchend',function(e){var s=st;st=null;

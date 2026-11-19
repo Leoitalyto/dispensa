@@ -345,7 +345,7 @@ def _inv_alterna(chiave):
 
 def _inv_dati_conto():
     try:
-        return carica_dati(crea_archivio(), st.session_state["percorso"])
+        return carica_dati(crea_archivio(), percorso_mio())
     except Exception:
         return {}
 

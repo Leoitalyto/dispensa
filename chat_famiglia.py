@@ -310,7 +310,7 @@ def _ch_vista():
     """Le persone che questa persona ha scelto di tenere in vista (si ricorda nel suo file personale). Nessuna, finché non sceglie."""
     if "ch_vista" not in st.session_state:
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"]) or {}
+            d = carica_dati(crea_archivio(), percorso_mio()) or {}
             v = (d.get("impostazioni") or {}).get("chat_vista", [])
         except Exception:
             v = []
@@ -323,7 +323,7 @@ def _ch_salva_vista():
     scelte = [str(x) for x in (st.session_state.get("ch_vista_sel") or [])]
     st.session_state["ch_vista"] = scelte
     try:
-        salva(lambda d, v=scelte: d.setdefault("impostazioni", {}).__setitem__("chat_vista", v), "Chat: persone in vista")
+        salva_file(percorso_mio(), lambda d, v=scelte: d.setdefault("impostazioni", {}).__setitem__("chat_vista", v), "Chat: persone in vista")
     except Exception as e:
         st.session_state["ch_avviso"] = f"Non sono riuscito a ricordare la scelta ({type(e).__name__})."
 
@@ -332,7 +332,7 @@ def _ch_ultima():
     """L'ultima conversazione aperta da questa persona (si ricorda nel suo file personale: riaprendo l'app ritrova la stessa)."""
     if "ch_ultima" not in st.session_state:
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"]) or {}
+            d = carica_dati(crea_archivio(), percorso_mio()) or {}
             v = (d.get("impostazioni") or {}).get("chat_ultima")
         except Exception:
             v = None
@@ -346,7 +346,7 @@ def _ch_ricorda_ultima(chiave):
         return
     st.session_state["ch_ultima"] = chiave
     try:
-        salva(lambda d, v=chiave: d.setdefault("impostazioni", {}).__setitem__("chat_ultima", v), "Chat: ultima conversazione")
+        salva_file(percorso_mio(), lambda d, v=chiave: d.setdefault("impostazioni", {}).__setitem__("chat_ultima", v), "Chat: ultima conversazione")
     except Exception:
         pass                                                         # se non si salva, nessun danno: alla prossima apertura parte da «Tutti»
 

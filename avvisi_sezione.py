@@ -153,7 +153,7 @@ def avs_guida_testo(sez):
 
 
 def _avs_corpo(sez, etichetta):
-    d = carica_dati(crea_archivio(), st.session_state["percorso"])
+    d = carica_dati(crea_archivio(), percorso_mio())
     cap = _AVS_CAPACITA.get(sez, {})
     c = avs_cfg(d, sez)
     k = f"avs_{sez}_"
@@ -246,14 +246,14 @@ def _avs_corpo(sez, etichetta):
     if a.button("💾 Salva", type="primary", key=k + "salva", width="stretch"):
         try:
             pulito = {x: y for x, y in nuovo.items() if y is not None}
-            salva(lambda dd: dd.setdefault("avvisi_sezioni", {}).__setitem__(sez, pulito), "Avvisi della sezione")
+            salva_file(percorso_mio(), lambda dd: dd.setdefault("avvisi_sezioni", {}).__setitem__(sez, pulito), "Avvisi della sezione")
             st.session_state["avs_ok"] = "Salvato ✅"
         except Exception as e:
             st.error(f"Non sono riuscito a salvare: {e}")
             return
         st.rerun()
     if b.button("↩️ Torna come prima", key=k + "reset", width="stretch"):
-        salva(lambda dd: (dd.get("avvisi_sezioni") or {}).pop(sez, None), "Avvisi della sezione")
+        salva_file(percorso_mio(), lambda dd: (dd.get("avvisi_sezioni") or {}).pop(sez, None), "Avvisi della sezione")
         st.session_state["avs_ok"] = "Rimessi come prima ✅"
         st.rerun()
 

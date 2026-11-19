@@ -25,7 +25,7 @@ def controlla_nuova_password(nuova, conferma, utenti, uid):
     occupata = (pa and hmac.compare_digest(h, hash_password(pa))) or any(
         u["id"] != uid and hmac.compare_digest(u.get("hash", ""), h) for u in utenti)
     if occupata:
-        registro_errori().append(time.time())        # conta come tentativo, per non poter "indovinare" le password altrui
+        segna_errore()        # conta come tentativo, per non poter "indovinare" le password altrui
         return t("Questa password non è utilizzabile: scegline un'altra.")
     return None
 
@@ -41,8 +41,11 @@ def salva_nuova_password(uid, nuova):
                 x["pw_cambiata"] = adesso().isoformat(timespec="minutes")
     salva_file("utenti.json", aggiorna, "Password cambiata")
     st.session_state["sess"] = dict(st.session_state["sess"], h=h)
-    if st.query_params.get("k"):                       # l'accesso ricordato su questo telefono segue la nuova password
-        st.query_params["k"] = nuova
+    if st.query_params.get("k"):                       # l'accesso ricordato su questo telefono segue la nuova password (con un codice nuovo)
+        try:
+            st.query_params["k"] = crea_codice_ricordami(st.session_state["sess"])
+        except Exception:
+            pass
 
 
 def modulo_cambio_password(forzata=False):

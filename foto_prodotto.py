@@ -363,7 +363,7 @@ def controlla_foto(dati):
     return problemi
 
 
-def _scontorna_completa(dati, lato=720, mantieni=False):
+def _scontorna_completa(dati, lato=560, mantieni=False):
     """Da una foto (bytes) a (immagine WebP trasparente ritagliata e addrizzata, modo). mantieni=True: tutta la foto, senza togliere lo sfondo."""
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
     img.thumbnail((1200, 1200))
@@ -400,11 +400,11 @@ def _scontorna_completa(dati, lato=720, mantieni=False):
     nitida.putalpha(out.getchannel("A"))
     out = nitida
     buf = io.BytesIO()
-    out.save(buf, "WEBP", quality=86, method=6)
+    out.save(buf, "WEBP", quality=82, method=6)              # 560 px e qualità 82: sul telefono non si vede differenza e pesa circa la metà
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode(), modo
 
 
-def scontorna_e_addrizza(dati, lato=720):
+def scontorna_e_addrizza(dati, lato=560):
     """Da una foto (bytes) a una immagine WebP trasparente, ritagliata sul prodotto e addrizzata. Ritorna 'data:image/webp;base64,...'."""
     return _scontorna_completa(dati, lato)[0]
 
@@ -425,7 +425,7 @@ def _foto_lavorata_modo(dati, mantieni=False):
         try:
             mem[chiave] = _scontorna_completa(dati, mantieni=mantieni)
         except Exception:
-            mem[chiave] = (foto_a_data_uri(dati, 720), "intera")   # se qualcosa va storto resta la foto normale
+            mem[chiave] = (foto_a_data_uri(dati, 560), "intera")   # se qualcosa va storto resta la foto normale
     return mem[chiave]
 
 

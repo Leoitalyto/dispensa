@@ -86,9 +86,20 @@ def _dr_tr(z, px, py):
 def _dr_foto_bytes(rif):
     """La foto si legge dall'archivio una volta sola per sessione (lo scorrimento automatico non deve richiamarla ogni volta)."""
     ch = "dr_img_" + str(rif.get("id"))
+    lru = [x for x in (st.session_state.get("dr_img_lru") or []) if x != ch]
     if ch not in st.session_state:
         st.session_state[ch] = cp_file_leggi(rif)
+    lru.append(ch)
+    for vecchia in lru[:-8]:                                  # in memoria al massimo 8 foto (quella che vedi e le prossime): il server non si riempie
+        st.session_state.pop(vecchia, None)
+    st.session_state["dr_img_lru"] = lru[-8:]
     return st.session_state.get(ch)
+
+
+def _dr_libera():
+    """Chiudendo il diario: via dalla memoria musica e foto."""
+    for k_ in [k for k in st.session_state if str(k).startswith(("dr_img_", "dr_mus_", "dr_th_"))]:
+        st.session_state.pop(k_, None)
 
 
 def dr_pagina_html(pg, els, col, extra=None, dati=None, mod=None, musica=False, auto=None, pila=False, effetto=0):
@@ -322,6 +333,7 @@ def _dr_chiudi(pid, k, legenda=True):
     with st.container(key=f"dr_chiudi_{pid}_{k}"):
         if st.button("⏻", key=f"dr_x_{pid}_{k}", help="Chiudi il diario"):
             st.session_state.update({"dr_aperto": None, "dr_mod": None, "dr_pend": None})
+            _dr_libera()
             st.rerun()
     if legenda:
         st.markdown("<div class='dr-leg'>Chiudi il diario</div>", unsafe_allow_html=True)
@@ -795,6 +807,7 @@ def dr_bottone(p):
         if st.button("⏻", key=f"dr_o_{pid}", help="Apri il diario dei ricordi" if not aperto else "Chiudi il diario"):
             if aperto:
                 st.session_state.update({"dr_aperto": None, "dr_pend": None})
+                _dr_libera()
             else:
                 st.session_state.update({"dr_aperto": pid, "dr_pag": 0, "dr_mod": None, "dr_pend": None})
             st.rerun()

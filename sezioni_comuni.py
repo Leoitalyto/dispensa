@@ -75,11 +75,11 @@ def sc_oggi():
 
 
 def sc_dati():
-    return carica_dati(crea_archivio(), st.session_state["percorso"])
+    return carica_dati(crea_archivio(), percorso_mio())
 
 
 def sc_salva(fn, msg):
-    salva(fn, msg)
+    salva_file(percorso_mio(), fn, msg)          # sempre nel file personale (anche se in quel momento si guarda la dispensa di un altro)
 
 
 def sc_euro(x):

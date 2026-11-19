@@ -33,7 +33,7 @@ def pn_testo():
     """La grandezza dei testi scelta da questa persona (si ricorda): normale, grande, molto grande."""
     if "pn_testo" not in st.session_state:
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"])
+            d = carica_dati(crea_archivio(), percorso_mio())
             v = (d.get("impostazioni") or {}).get("testo", "normale")
         except Exception:
             v = "normale"
@@ -83,7 +83,7 @@ def pn_scadenze():
     """Cosa c'è in scadenza, per sezione: {sezione: [testo, …]}. Dispensa, Salute (medicinali, ricette, visite, richiami, controlli), documenti personali e Casa (bollette, garanzie, manutenzioni)."""
     out = {}
     try:
-        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+        d = carica_dati(crea_archivio(), percorso_mio())
         oggi_ = oggi()
     except Exception:
         return out
@@ -265,7 +265,7 @@ def pn_lato():
     if "pn_lato" not in st.session_state:
         lato = "destra"
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"]) or {}
+            d = carica_dati(crea_archivio(), percorso_mio()) or {}
             lato = (d.get("impostazioni") or {}).get("freccia", "destra")
         except Exception:
             pass
@@ -316,7 +316,7 @@ def pn_impostazioni():
                 try:
                     def _fnm(d, v=m_on):
                         d.setdefault("impostazioni", {})["musica"] = v
-                    salva(_fnm, "Aspetto: radio di sottofondo")
+                    salva_file(percorso_mio(), _fnm, "Aspetto: radio di sottofondo")
                 except Exception as e:
                     st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
                 st.rerun()
@@ -328,7 +328,7 @@ def pn_impostazioni():
             try:
                 def _fnt(d, v=t_sc):
                     d.setdefault("impostazioni", {})["testo"] = v
-                salva(_fnt, "Aspetto: grandezza dei testi")
+                salva_file(percorso_mio(), _fnt, "Aspetto: grandezza dei testi")
             except Exception as e:
                 st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
             st.rerun()
@@ -340,7 +340,7 @@ def pn_impostazioni():
             try:
                 def _fn(d, v=scelta):
                     d.setdefault("impostazioni", {})["freccia"] = v
-                salva(_fn, "Aspetto: lato della freccia")
+                salva_file(percorso_mio(), _fn, "Aspetto: lato della freccia")
             except Exception as e:
                 st.warning(f"Non sono riuscito a ricordare la scelta: {e}")
             st.rerun()

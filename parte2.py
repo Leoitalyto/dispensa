@@ -17,21 +17,35 @@ class ArchivioLocale:
     def _percorso(self, nome):
         return os.path.join(self.cartella, *nome.split("/"))
 
-    def leggi(self, nome):
+    def leggi_grezzo(self, nome):
         try:
             with open(self._percorso(nome), encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-    def modifica(self, nome, fn, messaggio=""):
-        dati = self.leggi(nome)
-        fn(dati)
+    def leggi(self, nome):
+        dati = self.leggi_grezzo(nome)
+        return _img_risolvi(self, nome, dati) if "_img_risolvi" in globals() else dati
+
+    def _scrivi_json(self, nome, dati):
         percorso = self._percorso(nome)
         os.makedirs(os.path.dirname(percorso), exist_ok=True)
         with tempfile.NamedTemporaryFile("w", delete=False, dir=os.path.dirname(percorso), encoding="utf-8") as tmp:
             json.dump(dati, tmp, ensure_ascii=False)
         os.replace(tmp.name, percorso)
+
+    def _img_scrivi(self, nome, uri):
+        if not os.path.exists(self._percorso(nome)):
+            self._scrivi_json(nome, {"d": uri})
+
+    def _img_leggi(self, nome):
+        return (self.leggi_grezzo(nome) or {}).get("d")
+
+    def modifica(self, nome, fn, messaggio=""):
+        dati = self.leggi(nome)
+        fn(dati)
+        self._scrivi_json(nome, _img_estrai(self, nome, dati) if "_img_estrai" in globals() else dati)
         return dati
 
     def elimina(self, nome, messaggio=""):
@@ -56,7 +70,7 @@ def _gh_memoria_globale():
 
 
 _GH_MEMORIA, _GH_BLOCCO = _gh_memoria_globale()               # (archivio, ramo, nome) -> {"dati", "sha", "t"}
-_GH_TTL, _GH_MAX_BYTE, _GH_MAX_VOCI = 60.0, 600 * 1024, 40
+_GH_TTL, _GH_MAX_BYTE, _GH_MAX_VOCI = 60.0, 2 * 1024 * 1024, 40
 
 
 def _gh_veloce():
@@ -64,6 +78,179 @@ def _gh_veloce():
         return str(st.secrets.get("ARCHIVIO_VELOCE", "si")).strip().lower() not in ("no", "off", "0", "spento")
     except Exception:
         return True
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# FOTO A PARTE: le foto grandi dentro i dati (prodotti, medicinali, persone…) si salvano in file separati (documenti/<persona>/vmi_….json) e nel file
+# dei dati resta solo un segnaposto «vmimg:vmi_…». Chi legge riceve i dati con le foto rimesse al loro posto (nessun'altra parte dell'app cambia).
+# Così ogni «Salva» manda pochi KB invece di molti MB. Le foto sono file «per impronta»: la stessa foto non si carica mai due volte.
+# I file vecchi si convertono da soli al primo salvataggio. Le foto dei prodotti troppo pesanti vengono rimpicciolite un poco (lato 560 px).
+# ---------------------------------------------------------------------------------------------------------------------
+_IMG_SEGNO = "vmimg:"
+_IMG_SOGLIA = 12000                                   # sotto questa misura (circa 9 KB) la foto resta dentro i dati
+_IMG_RAM_MAX = 120 * 1024 * 1024                      # memoria del server per le foto già lette (poi si buttano le meno usate)
+
+
+@st.cache_resource
+def _img_memoria_globale():
+    import collections
+    return collections.OrderedDict(), {"byte": 0}, set(), _gh_thr.Lock()
+
+
+_IMG_RAM, _IMG_STATO, _IMG_ESISTONO, _IMG_BLOCCO = _img_memoria_globale()
+
+
+def _img_file_dati(nome):
+    return bool(re.fullmatch(r"dispense/[A-Za-z0-9_\-]+\.json|famiglia/dispensa\.json", str(nome or "")))
+
+
+def _img_cartella(nome):
+    m = re.fullmatch(r"dispense/([A-Za-z0-9_\-]+)\.json", nome)
+    return f"documenti/{m.group(1) if m else 'famiglia'}"
+
+
+def _img_ram_metti(fid, uri):
+    with _IMG_BLOCCO:
+        if fid in _IMG_RAM:
+            _IMG_RAM.move_to_end(fid)
+            return
+        _IMG_RAM[fid] = uri
+        _IMG_STATO["byte"] += len(uri)
+        while _IMG_STATO["byte"] > _IMG_RAM_MAX and len(_IMG_RAM) > 1:
+            _k, _v = _IMG_RAM.popitem(last=False)
+            _IMG_STATO["byte"] -= len(_v)
+
+
+def _img_ram_leggi(fid):
+    with _IMG_BLOCCO:
+        v = _IMG_RAM.get(fid)
+        if v is not None:
+            _IMG_RAM.move_to_end(fid)
+        return v
+
+
+def _img_rimpicciolisci(uri):
+    """Foto di un prodotto troppo pesante: lato massimo 560 px, WebP 80 (la differenza non si vede sul telefono)."""
+    try:
+        from PIL import Image as _I
+        testa, b64 = uri.split(",", 1)
+        im = _I.open(io.BytesIO(base64.b64decode(b64)))
+        if max(im.size) <= 560:                                       # già piccola: non si ricomprime mai (perderebbe qualità a ogni salvataggio)
+            return uri
+        im = im.convert("RGBA") if (im.mode in ("RGBA", "LA", "P")) else im.convert("RGB")
+        im.thumbnail((560, 560), _I.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "WEBP", quality=80, method=6)
+        nuovo = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+        return nuovo if len(nuovo) < len(uri) else uri
+    except Exception:
+        return uri
+
+
+def _img_estrai(arch, nome, dati):
+    """Copia dei dati con le foto grandi al posto di un segnaposto; carica (tutte insieme) le foto che mancano. Se una foto non si riesce a salvare resta dentro i dati: niente si perde."""
+    if not _img_file_dati(nome) or not isinstance(dati, dict):
+        return dati
+    cart = _img_cartella(nome)
+    scelte = {}                                                   # foto originale -> (fid, foto da salvare)
+    da_caricare = {}
+
+    def _prepara(x, chiave=None):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                _prepara(v, k)
+        elif isinstance(x, list):
+            for v in x:
+                _prepara(v, chiave)
+        elif isinstance(x, str) and len(x) > _IMG_SOGLIA and x.startswith("data:image/") and x not in scelte:
+            uri = _img_rimpicciolisci(x) if (chiave == "immagine" and len(x) > 160000) else x
+            fid = "vmi_" + hashlib.sha1(uri.encode("utf-8")).hexdigest()[:24]
+            scelte[x] = (fid, uri)
+            percorso = f"{cart}/{fid}.json"
+            with _IMG_BLOCCO:
+                gia = (id(arch), percorso) in _IMG_ESISTONO
+            if not gia:
+                da_caricare[percorso] = uri
+    _prepara(dati)
+    if not scelte:
+        return dati
+    riusciti = set()
+    if da_caricare:
+        if hasattr(arch, "_img_scrivi_tanti"):
+            try:
+                riusciti = set(arch._img_scrivi_tanti(da_caricare))
+            except Exception:
+                riusciti = set()
+        else:
+            for p_, u_ in da_caricare.items():
+                try:
+                    arch._img_scrivi(p_, u_)
+                    riusciti.add(p_)
+                except Exception:
+                    pass
+        with _IMG_BLOCCO:
+            for p_ in riusciti:
+                _IMG_ESISTONO.add((id(arch), p_))
+    pronti = {}
+    for orig, (fid, uri) in scelte.items():
+        percorso = f"{cart}/{fid}.json"
+        if percorso in da_caricare and percorso not in riusciti:
+            continue                                              # non caricata: resta dentro i dati
+        _img_ram_metti(fid, uri)
+        pronti[orig] = _IMG_SEGNO + fid
+
+    def _giro(x):
+        if isinstance(x, dict):
+            return {k: _giro(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [_giro(v) for v in x]
+        if isinstance(x, str) and x in pronti:
+            return pronti[x]
+        return x
+    return _giro(dati)
+
+
+def _img_risolvi(arch, nome, dati):
+    """Rimette le foto al posto dei segnaposti (dalla memoria del server; quelle che mancano si leggono insieme, in parallelo)."""
+    if not _img_file_dati(nome) or not isinstance(dati, dict):
+        return dati
+    cart = _img_cartella(nome)
+    mancanti = set()
+
+    def _cerca(x):
+        if isinstance(x, dict):
+            for v in x.values():
+                _cerca(v)
+        elif isinstance(x, list):
+            for v in x:
+                _cerca(v)
+        elif isinstance(x, str) and x.startswith(_IMG_SEGNO) and _img_ram_leggi(x[len(_IMG_SEGNO):]) is None:
+            mancanti.add(x[len(_IMG_SEGNO):])
+    _cerca(dati)
+    if mancanti:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _prendi(fid):
+            try:
+                uri = arch._img_leggi(f"{cart}/{fid}.json")
+                if uri:
+                    _img_ram_metti(fid, uri)
+                    with _IMG_BLOCCO:
+                        _IMG_ESISTONO.add((id(arch), f"{cart}/{fid}.json"))
+            except Exception:
+                pass
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            list(ex.map(_prendi, sorted(mancanti)))
+
+    def _giro(x):
+        if isinstance(x, dict):
+            return {k: _giro(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [_giro(v) for v in x]
+        if isinstance(x, str) and x.startswith(_IMG_SEGNO):
+            return _img_ram_leggi(x[len(_IMG_SEGNO):]) or ""            # foto introvabile: come se non ci fosse
+        return x
+    return _giro(dati)
 
 
 class ArchivioGitHub:
@@ -129,12 +316,83 @@ class ArchivioGitHub:
         self._mem_metti(nome, dati_, j["sha"])
         return dati_, j["sha"]
 
-    def leggi(self, nome):
+    def leggi_grezzo(self, nome):
         m = self._mem_leggi(nome)                                   # appena letto o scritto da noi: niente richiesta
         if m is not None:
             return m[0]
         dati, _ = self._leggi(nome)
         return dati if dati is not None else {}
+
+    def leggi(self, nome):
+        return _img_risolvi(self, nome, self.leggi_grezzo(nome))
+
+    def _img_scrivi(self, nome, uri):
+        try:
+            self._scrivi(nome, {"d": uri}, None, "Foto")
+        except Conflitto:                                           # esiste già (stessa impronta = stessa foto): va bene così
+            pass
+        self._mem_togli(nome)
+
+    def _img_scrivi_tanti(self, voci):
+        """Tante foto in UN solo salvataggio su GitHub (blob in parallelo, un albero, un commit). Se qualcosa va storto: una alla volta."""
+        voci = dict(voci)
+        if len(voci) <= 2:
+            fatti = []
+            for p_, u_ in voci.items():
+                try:
+                    self._img_scrivi(p_, u_)
+                    fatti.append(p_)
+                except Exception:
+                    pass
+            return fatti
+        api = f"https://api.github.com/repos/{self.repo}"
+        try:
+            ramo = self.ramo
+            if not ramo:
+                r = self.http.get(api, headers=self.intest, timeout=20)
+                r.raise_for_status()
+                ramo = r.json().get("default_branch") or "main"
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _blob(item):
+                p_, u_ = item
+                rb = self.http.post(f"{api}/git/blobs", headers=self.intest, json={"content": json.dumps({"d": u_}, ensure_ascii=False), "encoding": "utf-8"}, timeout=60)
+                rb.raise_for_status()
+                return p_, rb.json()["sha"]
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                blobs = dict(ex.map(_blob, list(voci.items())))
+            for _tent in range(4):
+                rr = self.http.get(f"{api}/git/ref/heads/{ramo}", headers=self.intest, timeout=20)
+                rr.raise_for_status()
+                testa = rr.json()["object"]["sha"]
+                rc = self.http.get(f"{api}/git/commits/{testa}", headers=self.intest, timeout=20)
+                rc.raise_for_status()
+                rt = self.http.post(f"{api}/git/trees", headers=self.intest, timeout=60, json={
+                    "base_tree": rc.json()["tree"]["sha"], "tree": [{"path": p_, "mode": "100644", "type": "blob", "sha": b_} for p_, b_ in blobs.items()]})
+                rt.raise_for_status()
+                rn = self.http.post(f"{api}/git/commits", headers=self.intest, timeout=30, json={"message": f"Foto ({len(blobs)})", "tree": rt.json()["sha"], "parents": [testa]})
+                rn.raise_for_status()
+                ru = self.http.patch(f"{api}/git/refs/heads/{ramo}", headers=self.intest, timeout=30, json={"sha": rn.json()["sha"], "force": False})
+                if ru.status_code == 422:                          # qualcuno ha salvato nello stesso istante: riprovo sopra il suo salvataggio
+                    time.sleep(0.6 * (_tent + 1))
+                    continue
+                ru.raise_for_status()
+                return list(blobs)
+        except Exception:
+            pass
+        fatti = []
+        for p_, u_ in voci.items():
+            try:
+                self._img_scrivi(p_, u_)
+                fatti.append(p_)
+            except Exception:
+                pass
+        return fatti
+
+    def _img_leggi(self, nome):
+        dati, _ = self._leggi(nome)
+        self._mem_togli(nome)                                       # le foto hanno la loro memoria: non occupano quella dei dati
+        return (dati or {}).get("d")
 
     def _scrivi(self, nome, dati, sha, messaggio):
         corpo = {"message": messaggio or "Aggiornamento dispensa",
@@ -164,9 +422,10 @@ class ArchivioGitHub:
             else:
                 dati, sha = self._leggi(nome)
                 dati = dati if dati is not None else {}
+            dati = _img_risolvi(self, nome, dati)                     # le foto al loro posto, così fn() lavora sui dati di sempre
             fn(dati)
             try:
-                self._scrivi(nome, dati, sha, messaggio)
+                self._scrivi(nome, _img_estrai(self, nome, dati), sha, messaggio)
                 return dati
             except Conflitto:                    # qualcun altro ha salvato nel frattempo: riprovo
                 time.sleep(0.5 * (tentativo + 1))
@@ -216,8 +475,30 @@ def carica_dati(_archivio, nome):
 
 
 def salva_file(nome, fn, messaggio):
-    crea_archivio().modifica(nome, fn, messaggio)
+    """Ogni salvataggio dell'app passa da qui: si vede «Salvo…» finché GitHub non ha risposto (così non si tocca due volte)."""
+    try:
+        attesa = st.spinner("💾 " + t("Salvo…"))
+        attesa.__enter__()
+    except Exception:
+        attesa = None
+    try:
+        crea_archivio().modifica(nome, fn, messaggio)
+    finally:
+        if attesa is not None:
+            try:
+                attesa.__exit__(None, None, None)
+            except Exception:
+                pass
     carica_dati.clear()
+
+
+def percorso_mio():
+    """Il file PERSONALE di chi ha fatto l'accesso, anche mentre sta guardando la dispensa di famiglia o quella di un altro.
+    Da usare per tutto quello che non è la dispensa (impostazioni, avvisi, ricerca nei documenti, chat…)."""
+    s_ = st.session_state.get("sess") or {}
+    if s_.get("uid"):
+        return f"dispense/{s_['uid']}.json"
+    return st.session_state.get("percorso")
 
 
 def salva(fn, messaggio):
@@ -265,11 +546,98 @@ def registro_errori():
     return []
 
 
+TENTATIVI_PER_TELEFONO, TENTATIVI_IN_TUTTO = 8, 40
+
+
+def _chiave_tentativi():
+    """Chi sta provando: la sessione del browser (l'indirizzo di rete dietro Streamlit Cloud può essere lo stesso per tutti, quindi non lo uso)."""
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        return "s:" + str(get_script_run_ctx().session_id)
+    except Exception:
+        return "?"
+
+
+def segna_errore():
+    registro_errori().append((time.time(), _chiave_tentativi()))
+
+
 def troppi_tentativi():
-    """Massimo 8 password sbagliate al minuto in tutta l'app: rende inutile provare a indovinare."""
+    """Massimo 8 password sbagliate al minuto dallo stesso telefono (così chi sbaglia non blocca gli altri) e 40 in tutta l'app."""
     r = registro_errori()
-    r[:] = [t for t in r if time.time() - t < 60]
-    return len(r) >= 8
+    ora = time.time()
+    r[:] = [x for x in r if isinstance(x, tuple) and ora - x[0] < 60]
+    mia = _chiave_tentativi()
+    return sum(1 for _t, k in r if k == mia) >= TENTATIVI_PER_TELEFONO or len(r) >= TENTATIVI_IN_TUTTO
+
+
+# ---------- «Ricordami su questo telefono»: un codice casuale, mai la password nel link ----------
+ACCESSI_FILE = "accessi_ricordati.json"
+ACCESSI_GIORNI = 180
+
+
+def _impronta_codice(codice):
+    return hashlib.sha256(("vm-codice|" + str(codice)).encode("utf-8")).hexdigest()
+
+
+def crea_codice_ricordami(accesso):
+    """Nuovo codice per questo telefono. Vale finché la password della persona resta la stessa."""
+    import secrets as _sec
+    codice = "t1." + _sec.token_urlsafe(24)
+    voce = {"uid": accesso["uid"], "h": accesso["h"], "creato": adesso().isoformat(timespec="minutes"), "usato": adesso().isoformat(timespec="minutes")}
+
+    def _fn(d, imp=_impronta_codice(codice)):
+        t_ = d.setdefault("t", {})
+        from datetime import timedelta as _td
+        limite = (adesso() - _td(days=ACCESSI_GIORNI)).isoformat(timespec="minutes")
+        for k in [k for k, v in t_.items() if str(v.get("usato", "")) < limite]:   # i codici non usati da 6 mesi si buttano
+            t_.pop(k, None)
+        miei = sorted([k for k, v in t_.items() if v.get("uid") == voce["uid"]], key=lambda k: t_[k].get("usato", ""))
+        for k in miei[:-9]:                                       # al massimo 10 telefoni ricordati per persona
+            t_.pop(k, None)
+        t_[imp] = voce
+    salva_file(ACCESSI_FILE, _fn, "Accesso ricordato su un telefono")
+    return codice
+
+
+def accesso_da_codice(codice, utenti):
+    """L'accesso legato a un codice «ricordami», oppure None se il codice non vale più (password cambiata, persona bloccata)."""
+    if not str(codice or "").startswith("t1."):
+        return None
+    try:
+        voce = (carica_dati(crea_archivio(), ACCESSI_FILE).get("t") or {}).get(_impronta_codice(codice))
+    except Exception:
+        return None
+    if not voce:
+        return None
+    if voce.get("uid") == "admin":
+        pa = password_admin()
+        if pa and hmac.compare_digest(voce.get("h", ""), hash_password(pa)):
+            acc = {"uid": "admin", "nome": nome_admin(), "admin": True, "h": voce["h"]}
+        else:
+            return None
+    else:
+        u = next((x for x in utenti if x.get("id") == voce.get("uid") and x.get("attivo", True) and hmac.compare_digest(x.get("hash", ""), voce.get("h", ""))), None)
+        if not u:
+            return None
+        acc = {"uid": u["id"], "nome": u["nome"], "admin": False, "h": voce["h"]}
+    try:                                                          # segna l'uso al massimo una volta al giorno
+        if (adesso() - datetime.fromisoformat(voce.get("usato") or "2000-01-01T00:00")).days >= 1:
+            imp = _impronta_codice(codice)
+            salva_file(ACCESSI_FILE, lambda d: (d.get("t") or {}).get(imp, {}).__setitem__("usato", adesso().isoformat(timespec="minutes")), "Accesso ricordato usato")
+    except Exception:
+        pass
+    return acc
+
+
+def dimentica_codice(codice):
+    if not str(codice or "").startswith("t1."):
+        return
+    try:
+        imp = _impronta_codice(codice)
+        salva_file(ACCESSI_FILE, lambda d: (d.get("t") or {}).pop(imp, None), "Accesso ricordato tolto")
+    except Exception:
+        pass
 
 
 def cerca_accesso(pw, utenti):

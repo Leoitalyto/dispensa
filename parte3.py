@@ -25,16 +25,23 @@ def leggi_utenti():
 
 
 def esci():
+    try:
+        dimentica_codice(st.query_params.get("k"))       # questo telefono non resta più ricordato
+    except Exception:
+        pass
     for k in ("sess", "percorso", "k_provato", "pw_mostrata"):
         st.session_state.pop(k, None)
     st.query_params.clear()
 
 
-def entra(accesso, ricorda_pw=None):
+def entra(accesso, ricorda=False):
     st.session_state["sess"] = accesso
     st.session_state["percorso"] = f"dispense/{accesso['uid']}.json"
-    if ricorda_pw:
-        st.query_params["k"] = ricorda_pw          # il link dell'app ricorda l'accesso su questo telefono
+    if ricorda and accesso.get("uid") != "prova":
+        try:                                            # nel link va un codice casuale, MAI la password
+            st.query_params["k"] = crea_codice_ricordami(accesso)
+        except Exception:
+            pass
     utenti = leggi_utenti() if accesso["uid"] != "prova" else []
     registra_accesso(accesso["uid"], utenti)
     # lingua: quella salvata dalla persona, altrimenti quella scelta da chi gestisce, altrimenti quella attuale
@@ -92,11 +99,16 @@ if not sess:
     if k and not st.session_state.get("k_provato"):
         st.session_state["k_provato"] = True
         if not troppi_tentativi():
-            accesso = cerca_accesso(k, leggi_utenti())
+            accesso = accesso_da_codice(k, leggi_utenti())
             if accesso:
                 entra(accesso)
                 st.rerun()
-            registro_errori().append(time.time())
+            if not str(k).startswith("t1."):            # link vecchio con la password dentro: entra una volta e lo sostituisce con un codice
+                accesso = cerca_accesso(k, leggi_utenti())
+                if accesso:
+                    entra(accesso, ricorda=True)
+                    st.rerun()
+            segna_errore()
         st.query_params.clear()
         st.warning(t("L'accesso salvato non è più valido: scrivi la tua password."))
     selettore_lingua("accesso")
@@ -111,9 +123,9 @@ if not sess:
         else:
             accesso = cerca_accesso(pw, leggi_utenti())
             if accesso:
-                entra(accesso, pw if ricorda else None)
+                entra(accesso, ricorda)
                 st.rerun()
-            registro_errori().append(time.time())
+            segna_errore()
             time.sleep(1)
             st.error(t("Password non corretta."))
     st.caption(t("Non hai una password? Chiedila a chi gestisce la dispensa."))
@@ -146,6 +158,13 @@ with st.sidebar:
     if st.button(t("Esci")):
         esci()
         st.rerun()
+    if sess.get("uid") != "prova" and st.button("📵 " + t("Esci da tutti i telefoni ricordati")):
+        try:                                               # se hai perso un telefono: nessuno entra più con il vecchio link
+            salva_file(ACCESSI_FILE, lambda d, u=sess["uid"]: d.__setitem__("t", {k: v for k, v in (d.get("t") or {}).items() if v.get("uid") != u}), "Accessi ricordati tolti")
+            st.query_params.pop("k", None)
+            st.toast(t("Fatto: dovrai scrivere di nuovo la password sugli altri telefoni."))
+        except Exception as e:
+            st.error(t("Non ci sono riuscito ({e}). Riprova.", e=type(e).__name__))
     if st.button("❓ " + t("Come si usa")):
         st.session_state["riapri_intro"] = True
         st.rerun()

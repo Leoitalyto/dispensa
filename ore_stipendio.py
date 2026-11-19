@@ -166,6 +166,8 @@ def ost_pagina(c):
                 _ca_scrivi_file(nid, nome, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", dati)
                 rif = {"id": nid, "nome": nome, "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "aggiornato": datetime.now().isoformat(timespec="minutes")}
                 _ca_salva(lambda cc, r=rif: cc.__setitem__("modulo_ore", r), "Lavoro: modulo ore")
+                if salvato.get("id") and salvato.get("id") != nid:
+                    _fa_cancella_files([salvato["id"]])               # il modulo vecchio non serve più: non resta a occupare spazio
                 st.session_state["messaggio"] = f"✅ Modulo «{nome}» salvato: ecco la previsione."
                 st.rerun()
     if "_ca_avvia_trasferimento" in globals():

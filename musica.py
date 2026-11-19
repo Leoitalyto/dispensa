@@ -264,7 +264,7 @@ def musica_attiva():
     """True se la radio è visibile (si spegne da Utilità → Aspetto dell'app)."""
     if "pn_musica" not in st.session_state:
         try:
-            d = carica_dati(crea_archivio(), st.session_state["percorso"])
+            d = carica_dati(crea_archivio(), percorso_mio())
             v = (d.get("impostazioni") or {}).get("musica", True)
         except Exception:
             v = True

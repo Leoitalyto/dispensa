@@ -408,6 +408,66 @@ def bk_ui_spazio(elenco, avviso):
     if st.button("🔄 Ricalcola lo spazio", key="bk_ricalcola"):
         st.session_state.pop("bk_elenco_mem", None)
         st.rerun()
+    bk_ui_orfani(elenco)
+
+
+def bk_cerca_orfani(elenco, uid):
+    """I miei file in documenti/ che nessun dato usa più (foto di prodotti eliminati, vecchie foto sostituite…). Si cerca il loro nome in TUTTI i dati dell'app
+    (anche degli altri, perché un file può essere condiviso) e nei file piccoli che fanno da elenco. Ritorna [(percorso, byte)]."""
+    arch = crea_archivio()
+    leggi_g = getattr(arch, "leggi_grezzo", arch.leggi)
+    miei = [(p, n) for p, n in elenco if p.startswith(f"documenti/{uid}/") and p.endswith(".json")]
+    testi = []
+    for p, n in elenco:
+        if not p.endswith(".json"):
+            continue
+        if p.startswith("documenti/") and n > 40000:
+            continue                                            # i file grandi sono foto o PDF: non contengono riferimenti
+        try:
+            testi.append(json.dumps(leggi_g(p), ensure_ascii=False))
+        except Exception:
+            return None                                         # se non riesco a leggere tutto, non segnalo niente (meglio non rischiare)
+    tutto = "\n".join(testi)
+    return [(p, n) for p, n in miei if p.rsplit("/", 1)[-1][:-5] not in tutto]
+
+
+def bk_ui_orfani(elenco):
+    uid = bk_uid()
+    st.markdown("**🧹 File non più usati**")
+    st.caption("Foto e documenti che l'app non usa più (per esempio la foto di un prodotto eliminato). Prima scarichi una copia, poi puoi eliminarli.")
+    if st.button("🔎 Cerca i file non più usati", key="bk_orf_cerca", width="stretch"):
+        with st.spinner("Controllo tutti i dati… (può volerci qualche secondo)"):
+            st.session_state["bk_orfani"] = bk_cerca_orfani(elenco, uid)
+        st.session_state["bk_orf_scaricati"] = False
+    orf = st.session_state.get("bk_orfani")
+    if orf is None and "bk_orfani" in st.session_state:
+        st.warning("Non sono riuscito a leggere tutti i dati: per sicurezza non ti segnalo niente. Riprova più tardi.")
+        return
+    if not orf:
+        if "bk_orfani" in st.session_state:
+            st.success("✅ Nessun file inutile: è tutto in ordine.")
+        return
+    peso = sum(n for _p, n in orf)
+    st.info(f"Ho trovato {len(orf)} file non più usati, per {bk_peso(peso)}.")
+    zip_b, _salt = bk_crea_zip("non_usati", orf, 1, 1)
+    st.download_button("⬇️ 1 · Scarica una copia di sicurezza (ZIP)", zip_b, file_name=f"vitamemo_file_non_usati_{datetime.now():%Y%m%d}.zip", mime="application/zip",
+                       key="bk_orf_zip", width="stretch", on_click=lambda: st.session_state.__setitem__("bk_orf_scaricati", True))
+    if not st.session_state.get("bk_orf_scaricati"):
+        st.caption("Dopo aver scaricato la copia compare il tasto per eliminarli.")
+        return
+    if st.button(f"🗑️ 2 · Elimina questi {len(orf)} file", key="bk_orf_elim", type="primary", width="stretch"):
+        barra = st.progress(0.0, text="Elimino…")
+        arch, fatti = crea_archivio(), 0
+        for i, (p, _n) in enumerate(orf):
+            try:
+                arch.elimina(p, "File non più usato")
+                fatti += 1
+            except Exception:
+                pass
+            barra.progress((i + 1) / len(orf), text=f"Elimino… {i + 1} di {len(orf)}")
+        st.session_state.pop("bk_orfani", None)
+        st.session_state.pop("bk_elenco_mem", None)
+        st.success(f"Fatto: eliminati {fatti} file ({bk_peso(peso)} liberati).")
 
 
 def bk_ui_cloud():
