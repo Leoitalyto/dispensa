@@ -166,6 +166,7 @@ GA_NOVITA = [
     ("nv_altro", "✍️", "Nomi a scelta", "Negli elenchi con «Altro»: scrivi il nome che vuoi"),
     ("nv_smista", "👥", "Di chi è il documento", "L'IA mette i documenti della mamma nelle sue cose: casa, salute, documenti"),
     ("nv_biglietto", "📇", "Biglietto da visita", "Numeri utili → ➕ Aggiungi → 📇 Fotografa un biglietto da visita"),
+    ("nv_spesa_smart", "🛒", "Spesa Smart", "Dispensa → 🛒 Spesa Smart: dove costa meno, offerte, spesa ottimizzata, scontrini"),
 ]
 GA_NOV_K = {}
 
