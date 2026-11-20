@@ -128,3 +128,6 @@ All pages are in the chosen language: new sentences translate by themselves the 
     "nv_wiki": ("What is it?", "Salute → Health documents and Medicines: simple explanation from Wikipedia"),
     "nv_altro": ("Names of your choice", "In the lists with «Other»: write the name you want"),
 })
+
+
+ga_traduci('en', {"l_festivita": ('📅 Holidays in the Hours check', "In **Work → 🧮 Hours check**, after loading the hours sheet and the payslip, there is **📅 Holidays**.\n\nThe app knows the **national holidays** by itself (also **Easter Monday**, which changes every year) and the **patron saint's day** of your town, which you choose once in **⛪ Patron saint's day and holidays of the year** (for Turin: Saint John, 24 June), then tap **💾 Remember the patron saint**.\n- **Red warning**: you worked on a holiday that in the sheet is **not marked as a holiday**. You see the days, the hours and an estimate of what you might lose (holiday work is paid 65%, normal overtime 20%). Mark «holiday» in the sheet and reload, or ask the payroll office.\n- **Yellow warning**: a day is marked as a holiday but is neither a holiday nor a Sunday: check it (a rule of your contract may apply).\n\nHolidays come from **Nager.Date** (free, no key); if it does not answer, the app calculates them.", 'holidays public holiday easter monday patron saint hours check payslip overtime')}, {})

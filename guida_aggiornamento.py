@@ -100,9 +100,18 @@ Il telefono ricorda l'**ultima lingua usata**: la volta dopo la pagina di access
 
 Tutte le pagine sono nella lingua scelta: le frasi nuove si traducono da sole la prima volta che una pagina si apre (ci vuole circa un minuto), poi restano salvate per tutti. Anche **l'assistente** risponde nella lingua scelta.""",
                  "lingua language inglese spagnolo francese tedesco rumeno arabo portoghese italiano cambiare lingua accesso traduzione"),
+    "l_festivita": ("📅 Giorni di festa nel Controllo ore",
+                    """In **Lavoro → 🧮 Controllo ore**, dopo aver caricato il foglio delle ore e la busta paga, c'è **📅 Giorni di festa**.
+
+L'app conosce da sola le **feste nazionali** (anche **Pasquetta**, che cambia ogni anno) e la **festa del patrono** della tua città, che scegli una volta in **⛪ Festa del patrono e feste dell'anno** (per Torino: San Giovanni, 24 giugno) e poi tocchi **💾 Ricorda il patrono**.
+- **Avviso rosso**: hai lavorato in un giorno di festa che nel foglio **non è segnato festivo**. Vedi i giorni, le ore e una stima di quanto potresti perdere (il festivo si paga 65%, lo straordinario normale 20%). Segna «festivo» nel foglio e ricarica, oppure chiedi all'ufficio paghe.
+- **Avviso giallo**: un giorno è segnato festivo ma non è una festa né domenica: controlla (potrebbe valere una regola del tuo contratto).
+
+Le feste vengono da **Nager.Date** (gratuito, senza chiave); se non risponde le calcola l'app.""",
+                    "festivi festa giorni di festa pasquetta patrono san giovanni controllo ore busta paga festivo 65% straordinario"),
 }
 GA_DOVE = {"x_diario": ("utilita",), "f_ia_documenti": ("farmacia",), "f_numeri_doc": ("farmacia", "documenti"), "f_gruppo": ("farmacia",), "f_wiki": ("farmacia",),
-           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa")}
+           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",)}
 
 GA_NOVITA = [
     ("nv_diario", "📖", "Diario dei ricordi", "Utilità → 🎂 Compleanni → bottone verde ⏻ nella scheda: foto, testi, icone, musica"),

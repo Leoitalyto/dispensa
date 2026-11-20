@@ -378,6 +378,8 @@ def cob_pagina():
         verso = "più alta" if saldo > 0 else "più bassa" if saldo < 0 else "uguale"
         st.caption(f"Totale delle 4 righe: busta {tot_busta:.2f} €, foglio {tot_atteso:.2f} € (busta {verso}).")
 
+    if "fs_controllo_ore" in globals():
+        fs_controllo_ore(df, paga)                                               # 📅 feste lavorate non segnate festive (festivita.py)
     st.markdown("##### Altri controlli")
     if busta["effettive"] is not None:
         d_ore = busta["effettive"] - lorde
