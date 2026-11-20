@@ -501,7 +501,7 @@ def _novita_recenti():
         oggi_ = oggi() if "oggi" in globals() else _d.today()
         tr = GUIDA_TR.get(_lingua_guida(), {}) if _lingua_guida() != "it" else {}
         out = []
-        for k, n in enumerate(_NOVITA, start=1):
+        for k, n in sorted(enumerate(_NOVITA, start=1), key=lambda kn: kn[1][0], reverse=True):     # le più recenti prima
             if (oggi_ - _d.fromisoformat(n[0])).days <= 14:
                 x = tr.get(f"nov{k}")
                 out.append({"i": n[1], "t": x[0] if x else n[2], "d": x[1] if x else n[3]})

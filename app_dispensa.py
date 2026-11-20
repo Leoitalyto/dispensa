@@ -450,6 +450,9 @@ for _nome in ("traduci_auto.py", "chiudi_ovunque.py", "contatti_comuni.py", "par
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica_sicuro(_percorso)
 _carica_sicuro(os.path.join(_cartella, "guida_completa.py"))   # guida e frasi nuove nelle 7 lingue: DOPO lingue*.py, che riscrivono i dizionari
+_carica_sicuro(os.path.join(_cartella, "guida_aggiornamento.py"))   # istruzioni e novità del 20/11 (italiano) …
+for _percorso in sorted(glob.glob(os.path.join(_cartella, "guida_agg_*.py"))):
+    _carica_sicuro(_percorso)                                      # … e le loro traduzioni nelle 7 lingue
 try:
     for _nome in ("voci_libere.py", "parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
         _carica_sicuro(os.path.join(_cartella, _nome))

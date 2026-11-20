@@ -40,7 +40,7 @@ _TESTO_WHATSAPP = """**Cosa serve:** WhatsApp sul telefono e due minuti. È **gr
 **Se la chiave non arriva:** controlla di aver scritto la frase giusta, senza errori, e riprova dopo 24 ore (a volte il servizio è occupato). **Ricorda:** è un servizio gratuito per uso personale: se un giorno si ferma, gli avvisi su WhatsApp si fermano, ma Telegram ed email continuano."""
 
 
-def _gx_aggiungi(sez, cid, titolo, corpo, chiavi, meta=None):
+def _gx_aggiungi(sez, cid, titolo, corpo, chiavi="", meta=None):
     """Aggiunge una scheda alla base unica (salta se esiste già). `chiavi` = parole con cui la si cerca (e l'assistente la trova)."""
     ids = _ID_GUIDA.setdefault(sez, [])
     lista = _GUIDE.setdefault(sez, [])
