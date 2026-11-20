@@ -836,10 +836,52 @@ def _il_con_controllo(fn, secondi):
     return (not t_.is_alive() and "v" in ris), ris.get("v")
 
 
-def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
+def il_da_controllare(p, tutti=False):
+    """I documenti con file che l'IA non ha ancora controllato (o tutti)."""
+    files = globals().get("_stt_files")
+    return [d for d in (p.get("docsan") or []) if (files(d) if files else d.get("file")) and (tutti or not (d.get("lettura_ia") or d.get("proposta_ia")))]
+
+
+def _il_riassunto_ia(ia):
+    ia = ia or {}
+    return {"fonti": ia.get("fonti"), "manoscritto": ia.get("manoscritto"), "limiti": ia.get("limiti"), "da_verificare": ia.get("da_verificare"), "riassunto": ia.get("riassunto")}
+
+
+def _il_salva_esito(percorso, pid, voce):
+    """Subito dopo aver letto un documento: lo segno nei dati. Senza cambi → «controllato»; con cambi → «proposta da confermare». Così il conto scende
+    a ogni documento e niente si perde se l'app si riavvia."""
+    if voce.get("errore") or not percorso:
+        return
+    ora = _il_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    def _m(d):
+        for pr in (d.get("farmacia") or {}).get("profili") or []:
+            if pr.get("id") != pid:
+                continue
+            for d_ in pr.get("docsan") or []:
+                if d_.get("id") != voce["id"]:
+                    continue
+                if voce.get("cambi"):
+                    d_["proposta_ia"] = {"cambi": {k: list(v) for k, v in voce["cambi"].items()}, "ia": _il_riassunto_ia(voce.get("ia")), "il": ora}
+                else:
+                    d_.pop("proposta_ia", None)
+                    d_["lettura_ia"] = dict(_il_riassunto_ia(voce.get("ia")), il=ora, nessun_cambio=True)
+    try:
+        crea_archivio().modifica(percorso, _m, "Salute: documento controllato con l'IA")   # in sottofondo: niente «Salvo…» a schermo
+    except Exception as e_:
+        lav = getattr(_IL_TL, "lavoro", None)
+        if lav is not None:
+            lav["errore_salva"] = f"{type(e_).__name__}: {e_}"[:160]
+    try:
+        carica_dati.clear()
+    except Exception:
+        pass
+
+
+def il_proposte_riclassifica(f, pid, progress=None, massimo=60, tutti=False):
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
     files = globals().get("_stt_files")
-    docs = [d for d in (p.get("docsan") or []) if (files(d) if files else d.get("file"))][:massimo]
+    docs = il_da_controllare(p, tutti)[:massimo]
     out = []
     lav = getattr(_IL_TL, "lavoro", None)
     for i, d in enumerate(docs):
@@ -855,6 +897,7 @@ def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
         _IL_TL.scadenza = _il_time.time() + IL_MAX_DOC
         finito, voce = _il_con_controllo(lambda d=d, titolo=titolo: _il_uno_doc(d, f, files, titolo), IL_MAX_DOC + 15)
         out.append(voce if finito and voce else {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "troppo lento, saltato"})
+        _il_salva_esito(lav.get("percorso"), pid, out[-1])
     _IL_TL.scadenza = None
     if lav is not None:
         lav["out"] = list(out)
@@ -864,8 +907,10 @@ def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
 
 
 def il_applica_riclassifica(pid, proposte, scelti):
+    """Applica i cambi scelti e segna come «controllati dall'IA» tutti i documenti letti bene (anche quelli senza cambi o non scelti), così non si rileggono più."""
     mappa = {x["id"]: x for x in proposte if x.get("cambi") and x["id"] in scelti}
-    if not mappa:
+    letti = {x["id"] for x in proposte if not x.get("errore")}
+    if not mappa and not letti:
         return 0
 
     def _fn(f):
@@ -875,6 +920,8 @@ def il_applica_riclassifica(pid, proposte, scelti):
             for d_ in pr.get("docsan") or []:
                 x = mappa.get(d_.get("id"))
                 if not x:
+                    if d_.get("id") in letti and not d_.get("lettura_ia"):
+                        d_["lettura_ia"] = {"il": _il_time.strftime("%Y-%m-%dT%H:%M:%S"), "nessun_cambio": True}
                     continue
                 vecchio_auto = sp_titolo_doc(d_) if "sp_titolo_doc" in globals() else ""
                 titolo_auto = not d_.get("titolo") or d_.get("titolo") == vecchio_auto
@@ -888,6 +935,36 @@ def il_applica_riclassifica(pid, proposte, scelti):
                     d_["titolo"] = sp_titolo_doc(d_)
     _fa_salva(_fn, "Salute: documenti riclassificati con l'IA")
     return len(mappa)
+
+
+def il_conferma_proposte(pid, scelti, tutte):
+    """Proposte salvate nei dati: applica quelle scelte, le altre restano come erano; tutte diventano «controllate»."""
+    scelti, tutte = set(scelti), set(tutte)
+
+    def _fn(f):
+        for pr in f.get("profili") or []:
+            if pr.get("id") != pid:
+                continue
+            for d_ in pr.get("docsan") or []:
+                pr_ = d_.get("proposta_ia")
+                if not pr_ or d_.get("id") not in tutte:
+                    continue
+                ora = _il_time.strftime("%Y-%m-%dT%H:%M:%S")
+                if d_.get("id") in scelti:
+                    vecchio_auto = sp_titolo_doc(d_) if "sp_titolo_doc" in globals() else ""
+                    titolo_auto = not d_.get("titolo") or d_.get("titolo") == vecchio_auto
+                    for k, v in (pr_.get("cambi") or {}).items():
+                        b = v[1] if isinstance(v, (list, tuple)) and len(v) == 2 else v
+                        d_[k] = b
+                        d_.setdefault("riconosciuto", {})[k] = b
+                    if titolo_auto and "sp_titolo_doc" in globals():
+                        d_["titolo"] = sp_titolo_doc(d_)
+                    d_["lettura_ia"] = dict(pr_.get("ia") or {}, il=ora)
+                else:
+                    d_["lettura_ia"] = dict(pr_.get("ia") or {}, il=ora, rifiutata=True)
+                d_.pop("proposta_ia", None)
+    _fa_salva(_fn, "Salute: proposte dell'IA confermate")
+    return len(scelti)
 
 
 _IL_ETICHETTE = {"tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione": "Prestazione", "esame": "Esame o visita", "esami_elenco": "Esami contenuti", "data": "Data",
@@ -911,11 +988,11 @@ def _il_chi():
         return "anonimo"
 
 
-def _il_avvia_lavoro(f, pid):
+def _il_avvia_lavoro(f, pid, tutti=False):
     """Fa partire la lettura in sottofondo: continua anche se il telefono passa ad altre app o lo schermo si spegne."""
     k = (_il_chi(), pid)
     perm = {p for p in IL_FORNITORI if _il_permesso(p)}
-    lav = {"stato": "corre", "i": 0, "n": 0, "inizio": _il_time.time(), "inizio_doc": _il_time.time(), "segnale": _il_time.time(), "servizio": "", "out": [], "stop": False}
+    lav = {"percorso": st.session_state.get("percorso"), "stato": "corre", "i": 0, "n": 0, "inizio": _il_time.time(), "inizio_doc": _il_time.time(), "segnale": _il_time.time(), "servizio": "", "out": [], "stop": False}
     with _IL_BLOCCO:
         for kk in [kk for kk, v in _IL_LAVORI.items() if v.get("stato") != "corre" and _il_time.time() - v.get("fine", 0) > 6 * 3600]:
             _IL_LAVORI.pop(kk, None)                                       # pulizia dei lavori vecchi
@@ -924,7 +1001,7 @@ def _il_avvia_lavoro(f, pid):
     def _corri():
         _IL_TL.lavoro, _IL_TL.permessi, _IL_TL.scadenza = lav, perm, None
         try:
-            lav["out"] = il_proposte_riclassifica(f, pid)
+            lav["out"] = il_proposte_riclassifica(f, pid, tutti=tutti)
             lav["stato"] = "fermato" if lav.get("stop") else "fatto"
         except Exception as e_:
             lav["stato"], lav["errore"] = "errore", f"{type(e_).__name__}: {e_}"[:200]
@@ -983,62 +1060,64 @@ def il_pannello_riclassifica(pid):
     """Dentro Documenti sanitari: prova e riclassificazione con l'IA."""
     f = _fa_dati()
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
-    files = globals().get("_stt_files")
-    n = sum(1 for d in (p.get("docsan") or []) if (files(d) if files else d.get("file")))
+    n = len(il_da_controllare(p, True))
     if not n:
         return
+    resta = len(il_da_controllare(p))
     disp = il_disponibili(IL_ORDINE_VISTA)
-    with st.expander(f"🤖 Riclassifica i documenti con l'IA ({n})"):
+    n_pend = sum(1 for d in (p.get("docsan") or []) if d.get("proposta_ia"))
+    with st.expander("🤖 Riclassifica i documenti con l'IA — " + (f"da controllare {resta} di {n}" if resta else f"tutti i {n} controllati ✅")
+                     + (f" · da confermare {n_pend}" if n_pend else "")):
         if not disp:
             st.info("Per usare l'IA serve almeno una chiave gratuita (Gemini, Groq, Mistral…). L'amministratore la mette in **Utilità → 🤖 Intelligenza artificiale**.")
             return
         st.caption("Faccio rileggere ogni documento dall'IA (" + ", ".join(IL_FORNITORI[x]["nome"] for x in disp[:3]) + "). Se è **scritto a mano** lo leggono più servizi e confronto le "
                    "letture. **Prima ti mostro cosa cambierebbe**; cambia solo quello che lasci spuntato e tocchi **Applica**. Quello che hai corretto tu a mano non si tocca.")
-        chiave = f"il_prop_{pid}"
         lav = _il_lavoro(pid)
         if lav and lav["stato"] == "corre":
             _il_mostra_avanzamento(pid)
             return
-        if lav and lav["stato"] in ("fatto", "fermato", "errore") and not lav.get("visto"):
-            lav["visto"] = True
+        if lav and lav["stato"] in ("fatto", "fermato", "errore"):
             if lav["stato"] == "errore":
-                st.warning("La lettura si è interrotta (" + str(lav.get("errore", "")) + "). Qui sotto quello che ha letto finora: tocca di nuovo «Prova» per ricominciare.")
-            st.session_state[chiave] = lav.get("out") or []
-        if st.button(f"🔍 Prova: leggi e classifica i {n} documenti", key=f"il_prova_{pid}", width="stretch"):
-            st.session_state.pop(chiave, None)
-            _il_avvia_lavoro(f, pid)
+                st.warning("La lettura si è interrotta (" + str(lav.get("errore", "")) + "): quello già letto è salvato. Tocca di nuovo «Prova» per continuare con i rimanenti.")
+            err = [x for x in (lav.get("out") or []) if x.get("errore")]
+            letti = len(lav.get("out") or []) - len(err)
+            st.caption(f"Ultima lettura: {letti} documenti controllati" + (f" · non letti {len(err)}: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:5]) if err else "")
+                       + (". Toccando «Prova» riprovo solo quelli rimasti." if err else ""))
+        pendenti = [d for d in (p.get("docsan") or []) if d.get("proposta_ia")]
+        tutti = st.checkbox(f"Rileggi anche quelli già controllati (tutti i {n})", key=f"il_tutti_{pid}", value=False)
+        quanti = n if tutti else resta
+        if st.button(f"🔍 Prova: leggi e classifica {quanti} document" + ("o" if quanti == 1 else "i"), key=f"il_prova_{pid}", width="stretch", disabled=not quanti):
+            _il_avvia_lavoro(f, pid, tutti)
             st.rerun()
-        prop = st.session_state.get(chiave)
-        if prop is None:
+        if not pendenti:
+            if lav and lav["stato"] != "corre" and not resta:
+                st.success("La classificazione è giusta per tutti i documenti controllati.")
             return
-        con = [x for x in prop if x.get("cambi")]
-        err = [x for x in prop if x.get("errore")]
-        mano = sum(1 for x in prop if (x.get("ia") or {}).get("manoscritto"))
-        st.markdown(f"**Letti {len(prop)} documenti** · da cambiare: **{len(con)}** · scritti a mano: {mano}" + (f" · non letti: {len(err)}" if err else ""))
+        st.markdown(f"**🟡 Proposte da confermare: {len(pendenti)}**")
         scelti = []
-        for x in con:
-            st.markdown(f"**📄 {x['titolo']}**")
-            for k, (a, b) in x["cambi"].items():
-                st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_IL_ETICHETTE.get(k, k)}: <s>{a or '—'}</s> → <b>{b}</b></div>", unsafe_allow_html=True)
-            ia = x.get("ia") or {}
+        for d in pendenti:
+            pr_ = d["proposta_ia"]
+            titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
+            st.markdown(f"**📄 {titolo}**")
+            for k, v in (pr_.get("cambi") or {}).items():
+                a, b = (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else ("", v)
+                st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_IL_ETICHETTE.get(k, k)}: <s>{_il_html.escape(str(a or '—'))}</s> → <b>{_il_html.escape(str(b))}</b></div>",
+                            unsafe_allow_html=True)
+            ia = pr_.get("ia") or {}
             if ia.get("limiti") or ia.get("da_verificare"):
-                st.caption("⚠️ " + "; ".join((ia.get("limiti") or [])[:2] + (ia.get("da_verificare") or [])[:2]))
-            if st.checkbox("Applica a questo documento", value=True, key=f"il_sc_{pid}_{x['id']}"):
-                scelti.append(x["id"])
-        if err:
-            st.caption("Non letti: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:6]))
-        if con:
-            c1, c2 = st.columns(2, gap="small")
-            if c1.button(f"✅ Applica ({len(scelti)})", key=f"il_app_{pid}", type="primary", width="stretch", disabled=not scelti):
-                n_ = il_applica_riclassifica(pid, prop, set(scelti))
-                st.session_state.pop(chiave, None)
-                st.toast(f"Riclassificati {n_} documenti")
-                st.rerun()
-            if c2.button("✖ Non applicare", key=f"il_no_{pid}", width="stretch"):
-                st.session_state.pop(chiave, None)
-                st.rerun()
-        elif not err:
-            st.success("La classificazione è già giusta per tutti i documenti.")
+                st.caption("⚠️ " + "; ".join([str(x) for x in (ia.get("limiti") or [])[:2] + (ia.get("da_verificare") or [])[:2]]))
+            if st.checkbox("Applica a questo documento", value=True, key=f"il_sc_{pid}_{d['id']}"):
+                scelti.append(d["id"])
+        c1, c2 = st.columns(2, gap="small")
+        ids = [d["id"] for d in pendenti]
+        if c1.button(f"✅ Applica ({len(scelti)})", key=f"il_app_{pid}", type="primary", width="stretch", disabled=not scelti):
+            n_ = il_conferma_proposte(pid, scelti, ids)
+            st.toast(f"Riclassificati {n_} documenti")
+            st.rerun()
+        if c2.button("✖ Non applicare", key=f"il_no_{pid}", width="stretch"):
+            il_conferma_proposte(pid, [], ids)
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------------------------------------------------

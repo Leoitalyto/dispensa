@@ -197,10 +197,32 @@ def sr_cambiamenti(doc, campi, nome_persona):
     return c
 
 
-def sr_proposte(f, pid, progress=None):
+SR_VERSIONE = 1                                   # se un giorno la lettura migliora ancora, si alza e tutti i documenti tornano «da rileggere»
+
+
+def sr_da_rileggere(p, tutti=False):
+    return [d for d in (p.get("docsan") or []) if _stt_files(d) and (tutti or d.get("riletto") != SR_VERSIONE)]
+
+
+def sr_segna_riletti(pid, ids):
+    """Segna i documenti come già riletti (non si ripropongono)."""
+    ids = set(ids)
+    if not ids:
+        return
+
+    def _fn(f_):
+        for pr in f_.get("profili", []):
+            if pr.get("id") == pid:
+                for d_ in pr.get("docsan", []):
+                    if d_.get("id") in ids:
+                        d_["riletto"] = SR_VERSIONE
+    _fa_salva(_fn, "Salute: documenti segnati come riletti")
+
+
+def sr_proposte(f, pid, progress=None, tutti=False):
     """Rilegge i documenti con file di una persona. Ritorna [{id, titolo_vecchio, titolo_nuovo, cambi, senza_testo}]."""
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
-    docs = [d for d in (p.get("docsan") or []) if _stt_files(d)]
+    docs = sr_da_rileggere(p, tutti)
     out = []
     for i, d in enumerate(docs):
         if progress:
@@ -228,6 +250,7 @@ def sr_proposte(f, pid, progress=None):
 def sr_applica(pid, proposte):
     """Applica le proposte (una sola scrittura)."""
     mappa = {x["id"]: x for x in proposte if x.get("cambi") or x.get("titolo_nuovo") != x.get("titolo_vecchio")}
+    letti = {x["id"] for x in proposte if not x.get("senza_testo")}
 
     def _fn(f_):
         for pr in f_.get("profili", []):
@@ -243,6 +266,9 @@ def sr_applica(pid, proposte):
                     d_[k] = b
                 if auto:
                     d_["titolo"] = sp_titolo_doc(d_)
+            for d_ in pr.get("docsan", []):
+                if d_.get("id") in letti:
+                    d_["riletto"] = SR_VERSIONE
     _fa_salva(_fn, "Salute: documenti sanitari riletti (titoli ed esami migliorati)")
     return len(mappa)
 
@@ -255,16 +281,19 @@ def sr_pannello(pid):
     """La finestra «Rileggi i documenti già archiviati» (dentro Documenti sanitari)."""
     f = _fa_dati()
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
-    n = sum(1 for d in (p.get("docsan") or []) if _stt_files(d))
+    n = len(sr_da_rileggere(p, True))
     if not n:
         return
-    with st.expander(f"🔄 Rileggi i documenti già archiviati ({n}) — migliora titoli ed esami contenuti"):
+    resta = len(sr_da_rileggere(p))
+    with st.expander("🔄 Rileggi i documenti già archiviati — " + (f"da rileggere {resta} di {n}" if resta else f"tutti i {n} riletti ✅")):
         st.caption("Rileggo i file di questa persona con la lettura migliorata: riconosco **che esame è** (urine, emocromo…) dal contenuto, riempio **«Esami contenuti»** e sistemo medico, struttura "
                    "e conclusioni chiaramente sbagliati. **Prima ti mostro cosa cambierebbe**; cambia solo se tocchi **Applica**. Quello che hai scritto tu a mano non viene toccato.")
         chiave = f"sr_prop_{pid}"
-        if st.button("🔍 Controlla cosa posso migliorare", key=f"sr_ctrl_{pid}", width="stretch"):
+        tutti = st.checkbox(f"Rileggi anche quelli già riletti (tutti i {n})", key=f"sr_tutti_{pid}", value=not resta)
+        quanti = n if tutti else resta
+        if st.button(f"🔍 Controlla cosa posso migliorare ({quanti})", key=f"sr_ctrl_{pid}", width="stretch", disabled=not quanti):
             barra = st.progress(0.0, text="Rileggo i documenti…")
-            st.session_state[chiave] = sr_proposte(f, pid, lambda x, t_: barra.progress(min(1.0, x), text=t_))
+            st.session_state[chiave] = sr_proposte(f, pid, lambda x, t_: barra.progress(min(1.0, x), text=t_), tutti)
             barra.empty()
         prop = st.session_state.get(chiave)
         if prop is None:
@@ -289,10 +318,14 @@ def sr_pannello(pid):
                 st.toast(f"Aggiornati {n_} documenti")
                 st.rerun()
             if c2.button("✖ Non applicare", key=f"sr_no_{pid}", width="stretch"):
+                sr_segna_riletti(pid, [x["id"] for x in prop if not x["senza_testo"]])
                 st.session_state.pop(chiave, None)
                 st.rerun()
         else:
-            st.success("Non c'è niente da migliorare.")
+            sr_segna_riletti(pid, [x["id"] for x in prop if not x["senza_testo"]])
+            st.session_state.pop(chiave, None)
+            st.toast("Non c'è niente da migliorare: documenti segnati come riletti")
+            st.rerun()
 
 
 _sr_modulo_docsan_prima = sp_modulo_docsan
