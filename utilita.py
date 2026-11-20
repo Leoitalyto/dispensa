@@ -221,6 +221,9 @@ def schermata_utilita():
     with ut_riquadro("aspetto", "⚙️", "Aspetto e telefono", "Testi più grandi, radio, freccia «torna su», libera spazio sul telefono", "#0277bd"):
         _ut_chiama("pn_blocco_utilita")
     if _ut_admin():
+        with ut_riquadro("ia", "🤖", "Intelligenza artificiale", "Solo per l'amministratore: chiavi gratuite per leggere documenti, manoscritti e spie", "#6a1b9a"):
+            _ut_chiama("il_blocco_utilita")
+    if _ut_admin():
         with ut_riquadro("tecnico", "🩺", "Controllo tecnico", "Solo per l'amministratore: l'app funziona bene?", "#546e7a"):
             _ut_chiama("ct_blocco_utilita")
 

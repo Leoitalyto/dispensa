@@ -55,13 +55,15 @@ def ai_attivo():
         spento = str(st.secrets.get("ASSISTENTE_AI", "")).strip().lower() in ("no", "off", "0", "false", "spento")
     except Exception:
         spento = False
-    return bool(_ai_chiave()) and not spento
+    gratis = "il_disponibili" in globals() and bool(il_disponibili(IL_ORDINE_TESTO))      # anche con le chiavi gratuite (ia_lettura.py)
+    return (bool(_ai_chiave()) or gratis) and not spento
 
 
 def ai_config():
     """Cosa dire al codice dell'assistente (JavaScript)."""
-    return {"attivo": ai_attivo(), "timeout": AI_TIMEOUT_MS, "nota": AI_NOTA, "pensando": "Sto pensando…",
-            "attendi": "Un attimo, cerco la risposta migliore per te.", "titolo": "La risposta"}
+    _t = (lambda s: ta_frase(s)) if "ta_frase" in globals() else (lambda s: s)
+    return {"attivo": ai_attivo(), "timeout": AI_TIMEOUT_MS, "nota": _t(AI_NOTA), "pensando": _t("Sto pensando…"),
+            "attendi": _t("Un attimo, cerco la risposta migliore per te."), "titolo": _t("La risposta")}
 
 
 @st.cache_resource
@@ -112,7 +114,14 @@ def ai_guida_testo():
 
 def ai_sistema(contesto):
     pagina = {"": "la pagina principale", "farmacia": "Salute", "documenti": "I miei documenti", "utilita": "Utilità", "archivio": "Archivio"}.get((contesto or "").split(":")[0], contesto or "")
-    return f"{_AI_REGOLE}\n\nPAGINA IN CUI SI TROVA L'UTENTE: {pagina}.\n\nGUIDA DELL'APP\n{ai_guida_testo()}"
+    try:
+        lg = lingua()
+    except Exception:
+        lg = "it"
+    nomi = {"it": "italiano", "en": "inglese", "es": "spagnolo", "fr": "francese", "de": "tedesco", "pt": "portoghese", "ro": "rumeno", "ar": "arabo"}
+    lingua_r = (f"\n\nLINGUA: l'utente usa l'app in {nomi.get(lg, lg)}. RISPONDI SEMPRE IN {nomi.get(lg, lg).upper()} (anche se la guida qui sotto è in italiano; "
+                "i nomi dei pulsanti traducili come li vede l'utente).") if lg != "it" else ""
+    return f"{_AI_REGOLE}{lingua_r}\n\nPAGINA IN CUI SI TROVA L'UTENTE: {pagina}.\n\nGUIDA DELL'APP\n{ai_guida_testo()}"
 
 
 def ai_messaggi(domanda, storia):
@@ -137,8 +146,14 @@ def ai_messaggi(domanda, storia):
 def ai_chiedi(domanda, storia=None, contesto=""):
     """La risposta del modello (testo) oppure None se non si può (nessuna chiave, rete, errore, rifiuto)."""
     chiave = _ai_chiave()
-    if not chiave or not (domanda or "").strip():
+    if not (domanda or "").strip():
         return None
+    if not chiave:                                           # nessuna chiave Claude: le chiavi gratuite (Groq, Gemini, Mistral…)
+        if "il_testo" not in globals():
+            return None
+        storia_txt = "\n".join(f"{'Utente' if m['role'] == 'user' else 'Assistente'}: {m['content']}" for m in ai_messaggi(domanda, storia)[:-1])
+        r, _p = il_testo(ai_sistema(contesto), (("CONVERSAZIONE PRECEDENTE:\n" + storia_txt + "\n\n") if storia_txt else "") + "DOMANDA: " + domanda.strip()[:AI_MAX_DOMANDA], max_tokens=700)
+        return (r or "").strip()[:2500] or None
     try:
         import requests
         try:

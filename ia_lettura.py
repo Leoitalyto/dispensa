@@ -1,0 +1,735 @@
+# -*- coding: utf-8 -*-
+"""🤖 INTELLIGENZA ARTIFICIALE CON CHIAVI GRATUITE (e DeepSeek, se c'è la sua chiave) — un solo punto per tutta l'app.
+
+• FORNITORI (tutti con lo stesso «linguaggio» compatibile OpenAI): DeepSeek, Google Gemini, Mistral, Groq, OpenRouter (modelli :free), NVIDIA NIM, Cloudflare Workers AI, Cohere.
+  Le chiavi stanno SOLO nei Secrets di Streamlit (DEEPSEEK_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, NVIDIA_API_KEY,
+  CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, COHERE_API_KEY). Senza nessuna chiave l'app funziona come prima (lettura locale).
+• I nomi dei modelli cambiano spesso: l'app chiede a ogni servizio l'elenco dei modelli e sceglie da sola quello giusto (si può forzare con IA_MODELLO_<SERVIZIO>).
+  Se un servizio risponde «troppe richieste» o «chiave sbagliata», per un po' si passa al successivo.
+• DOCUMENTI SANITARI (il_leggi_sanitario): il primo servizio disponibile (DeepSeek, poi Gemini, Mistral, Groq…) legge la foto o il PDF e li CLASSIFICA con regole precise.
+  Se il documento è SCRITTO A MANO o la lettura è incerta, lo fanno leggere anche altri 1–2 servizi; poi un «arbitro» confronta le letture e scrive UNA descrizione coerente con il tema
+  medico, dichiarando i LIMITI della lettura e cosa VERIFICARE. Niente si salva senza la conferma della persona.
+• il_consenso_immagine: lo stesso metodo (più letture + arbitro) per altre foto, per esempio le spie dell'auto.
+• il_testo: una domanda di solo testo al primo servizio libero (serve anche per le traduzioni).
+Prefisso: il_"""
+import base64 as _il_b64
+import hashlib as _il_hl
+import io as _il_io
+import json as _il_json
+import re as _il_re
+import threading as _il_thr
+import time as _il_time
+
+import requests as _il_req
+import streamlit as st
+
+IL_FORNITORI = {
+    "deepseek": {"nome": "DeepSeek", "base": "https://api.deepseek.com/v1", "secret": ["DEEPSEEK_API_KEY"], "vista": ["deepseek-v4-flash-vision-exp"],
+                 "testo": ["deepseek-chat", "deepseek-v4-flash"], "link": "https://platform.deepseek.com/api_keys",
+                 "costo": "a pagamento: ricarica minima di pochi dollari, ogni documento costa meno di un centesimo", "dati": "server in Cina; i dati non servono ad addestrare (secondo le condizioni)"},
+    "gemini": {"nome": "Google Gemini", "base": "https://generativelanguage.googleapis.com/v1beta/openai", "secret": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+               "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-2.5-flash"], "testo": ["gemini-flash-latest", "gemini-2.5-flash"],
+               "link": "https://aistudio.google.com/apikey", "costo": "gratis, con un tetto di richieste al minuto e al giorno",
+               "dati": "con la chiave gratuita Google può usare i testi per migliorare i modelli"},
+    "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True,
+                "vista": ["mistral-medium-latest", "mistral-small-latest", "pixtral-large-latest"], "testo": ["mistral-small-latest", "mistral-medium-latest"],
+                "link": "https://console.mistral.ai/api-keys", "costo": "gratis (piano «Experiment»: 1 richiesta al secondo), serve il numero di telefono",
+                "dati": "nel piano gratuito i dati possono servire ad addestrare i modelli"},
+    "groq": {"nome": "Groq", "base": "https://api.groq.com/openai/v1", "secret": ["GROQ_API_KEY"],
+             "vista": ["qwen/qwen3.8-27b", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"],
+             "testo": ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"], "link": "https://console.groq.com/keys",
+             "costo": "gratis, con tetti al minuto e al giorno", "dati": "i dati non servono ad addestrare (secondo le condizioni)"},
+    "openrouter": {"nome": "OpenRouter (modelli :free)", "base": "https://openrouter.ai/api/v1", "secret": ["OPENROUTER_API_KEY"], "vista_openrouter": True,
+                   "vista": ["openrouter/free"], "testo": ["deepseek/deepseek-chat-v3.1:free", "openrouter/free"], "link": "https://openrouter.ai/keys",
+                   "costo": "gratis con i modelli «:free» (circa 50 richieste al giorno)", "dati": "dipende dal modello gratuito: alcuni possono usare i dati"},
+    "nvidia": {"nome": "NVIDIA NIM", "base": "https://integrate.api.nvidia.com/v1", "secret": ["NVIDIA_API_KEY"],
+               "vista": ["meta/llama-4-maverick-17b-128e-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"],
+               "testo": ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-v3.1"], "link": "https://build.nvidia.com/settings/api-keys",
+               "costo": "gratis per prove (circa 40 richieste al minuto), serve il numero di telefono", "dati": "servizio per sviluppatori"},
+    "cloudflare": {"nome": "Cloudflare Workers AI", "base": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1", "secret": ["CLOUDFLARE_API_TOKEN"], "secret2": "CLOUDFLARE_ACCOUNT_ID",
+                   "vista": ["@cf/meta/llama-4-scout-17b-16e-instruct", "@cf/meta/llama-3.2-11b-vision-instruct"], "testo": ["@cf/meta/llama-3.3-70b-instruct-fp8-fast"],
+                   "link": "https://dash.cloudflare.com/profile/api-tokens", "costo": "gratis fino a 10.000 «neuroni» al giorno", "dati": "i dati non servono ad addestrare"},
+    "cohere": {"nome": "Cohere", "base": "https://api.cohere.ai/compatibility/v1", "secret": ["COHERE_API_KEY"], "vista": ["command-a-vision-07-2025"], "testo": ["command-a-03-2025"],
+               "link": "https://dashboard.cohere.com/api-keys", "costo": "chiave di prova gratuita: 1.000 richieste al mese, solo uso personale", "dati": "chiave di prova"},
+}
+IL_ORDINE_VISTA = ["deepseek", "gemini", "mistral", "groq", "openrouter", "nvidia", "cloudflare", "cohere"]       # documenti e manoscritti: DeepSeek primo, poi i migliori
+IL_ORDINE_TESTO = ["groq", "gemini", "mistral", "deepseek", "cloudflare", "nvidia", "openrouter", "cohere"]       # solo testo (arbitro, traduzioni): i più veloci prima
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# chiavi, pause dopo gli errori, scelta del modello
+# ---------------------------------------------------------------------------------------------------------------------
+def _il_secret(nome):
+    if "_ad_secret" in globals():
+        return _ad_secret(nome)
+    try:
+        return str(st.secrets.get(nome, "") or "").strip()
+    except Exception:
+        return ""
+
+
+def il_chiave(prov):
+    cfg = IL_FORNITORI[prov]
+    k = next((v for v in (_il_secret(s) for s in cfg["secret"]) if v), "")
+    if not k:
+        return ""
+    if cfg.get("secret2") and not _il_secret(cfg["secret2"]):
+        return ""
+    return k
+
+
+def il_base(prov):
+    cfg = IL_FORNITORI[prov]
+    return cfg["base"].replace("{account}", _il_secret(cfg.get("secret2", "")) if cfg.get("secret2") else "")
+
+
+@st.cache_resource
+def _il_stato_globale():
+    return {"pausa": {}, "modello": {}, "usi": {}}, _il_thr.Lock()
+
+
+_IL_STATO, _IL_BLOCCO = _il_stato_globale()
+
+
+def _il_in_pausa(prov):
+    with _IL_BLOCCO:
+        p = _IL_STATO["pausa"].get(prov)
+    return bool(p and p[0] > _il_time.time() and p[1] == _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8])
+
+
+def _il_metti_pausa(prov, secondi, motivo):
+    with _IL_BLOCCO:
+        _IL_STATO["pausa"][prov] = (_il_time.time() + secondi, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8], motivo)
+
+
+def il_disponibili(ordine=None):
+    """I servizi con la chiave e non in pausa, nell'ordine voluto."""
+    return [p for p in (ordine or IL_ORDINE_VISTA) if p in IL_FORNITORI and il_chiave(p) and not _il_in_pausa(p)]
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def _il_elenco_modelli(prov, _impronta_chiave):
+    """[{id, vista}] dal servizio; [] se non risponde."""
+    try:
+        r = _il_req.get(il_base(prov) + "/models", headers={"Authorization": f"Bearer {il_chiave(prov)}"}, timeout=12)
+        if r.status_code != 200:
+            return []
+        dati = r.json()
+        lista = dati.get("data") if isinstance(dati, dict) else dati
+        out = []
+        for m in lista or []:
+            mid = str(m.get("id") or m.get("name") or "").replace("models/", "")
+            if mid:
+                cap = m.get("capabilities") or {}
+                out.append({"id": mid, "vista": bool(cap.get("vision")) if isinstance(cap, dict) else False})
+        return out
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def _il_openrouter_vista_gratis():
+    try:
+        r = _il_req.get("https://openrouter.ai/api/v1/models", timeout=10)
+        out = []
+        for m in r.json().get("data", []):
+            prezzi = m.get("pricing") or {}
+            gratis = all(str(prezzi.get(k, "0")) in ("0", "0.0", "0.00") for k in ("prompt", "completion"))
+            if gratis and "image" in ((m.get("architecture") or {}).get("input_modalities") or []) and not str(m.get("id", "")).startswith("openrouter/"):
+                out.append(m["id"])
+        return out[:6]
+    except Exception:
+        return []
+
+
+def il_modelli(prov, vista=True):
+    """I modelli da provare, in ordine (il primo è quello buono; se dice «non esiste» si passa al successivo)."""
+    cfg = IL_FORNITORI[prov]
+    forzato = _il_secret(f"IA_MODELLO_{prov.upper()}" + ("" if vista else "_TESTO"))
+    if forzato:
+        return [forzato]
+    base = list(cfg["vista"] if vista else cfg["testo"])
+    elenco = _il_elenco_modelli(prov, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8])
+    ids = [m["id"] for m in elenco]
+    scelti = []
+    if cfg.get("vista_re") and ids:
+        cand = []
+        for i in ids:
+            m = _il_re.match(cfg["vista_re"], i)
+            if m:
+                try:
+                    cand.append((float(m.group(1)), "latest" not in i, i))
+                except ValueError:
+                    pass
+        scelti += [i for _v, _l, i in sorted(cand, reverse=True)][:2]
+    if vista and cfg.get("vista_cap") and elenco:
+        pref = [m["id"] for m in elenco if m["vista"] and _il_re.search(r"medium|small|large|pixtral", m["id"]) and "latest" in m["id"]]
+        scelti += pref[:2]
+    if vista and cfg.get("vista_openrouter"):
+        scelti += _il_openrouter_vista_gratis()[:3]
+    if ids:
+        scelti += [m for m in base if m in ids]
+    scelti += base
+    visti, out = set(), []
+    for m in scelti:
+        if m and m not in visti:
+            visti.add(m)
+            out.append(m)
+    with _IL_BLOCCO:
+        buono = _IL_STATO["modello"].get((prov, vista))
+    if buono in out:
+        out.remove(buono)
+        out.insert(0, buono)
+    return out[:5]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# la chiamata (compatibile OpenAI)
+# ---------------------------------------------------------------------------------------------------------------------
+def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120):
+    """(risposta, errore). immagini = elenco di JPEG (byte). errore: 'chiave', 'limite', 'modello', 'rete', 'servizio', ''."""
+    key = il_chiave(prov)
+    if not key:
+        return "", "chiave"
+    contenuto = [{"type": "text", "text": testo}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + _il_b64.b64encode(im).decode()}} for im in immagini]
+    messaggi = [{"role": "system", "content": istruzioni}, {"role": "user", "content": contenuto if immagini else testo}]
+    ultimo = "modello"
+    for modello in il_modelli(prov, vista=bool(immagini)):
+        corpo = {"model": modello, "messages": messaggi, "temperature": 0.1, "max_tokens": max_tokens}
+        try:
+            r = _il_req.post(il_base(prov) + "/chat/completions", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                                                          "HTTP-Referer": "https://vitamemo.streamlit.app", "X-Title": "VitaMemo"},
+                             json=corpo, timeout=timeout)
+        except Exception:
+            ultimo = "rete"
+            continue
+        if r.status_code == 200:
+            try:
+                j = r.json()
+                risposta = (((j.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+                if isinstance(risposta, list):
+                    risposta = "".join(x.get("text", "") for x in risposta if isinstance(x, dict))
+            except Exception:
+                ultimo = "servizio"
+                continue
+            if risposta.strip():
+                with _IL_BLOCCO:
+                    _IL_STATO["modello"][(prov, bool(immagini))] = modello
+                    oggi = _il_time.strftime("%Y-%m-%d")
+                    _IL_STATO["usi"][(prov, oggi)] = _IL_STATO["usi"].get((prov, oggi), 0) + 1
+                return risposta, ""
+            ultimo = "servizio"
+            continue
+        if r.status_code in (401, 403):
+            _il_metti_pausa(prov, 6 * 3600, "chiave non valida")
+            return "", "chiave"
+        if r.status_code == 429:
+            _il_metti_pausa(prov, 20 * 60, "troppe richieste")
+            return "", "limite"
+        if r.status_code in (402,):
+            _il_metti_pausa(prov, 6 * 3600, "credito finito")
+            return "", "limite"
+        ultimo = "modello" if r.status_code in (400, 404, 422) else "servizio"
+    return "", ultimo
+
+
+def il_json(testo):
+    """Il primo oggetto JSON dentro la risposta (anche se c'è testo intorno o ```json)."""
+    if not testo:
+        return None
+    t = _il_re.sub(r"```(?:json)?", "", testo)
+    i = t.find("{")
+    while i != -1:
+        livello = 0
+        for j in range(i, len(t)):
+            if t[j] == "{":
+                livello += 1
+            elif t[j] == "}":
+                livello -= 1
+                if livello == 0:
+                    try:
+                        return _il_json.loads(t[i:j + 1])
+                    except Exception:
+                        break
+        i = t.find("{", i + 1)
+    return None
+
+
+def il_testo(istruzioni, testo, max_tokens=2000, ordine=None):
+    """Una domanda di solo testo al primo servizio libero. (risposta, servizio) oppure ('', '')."""
+    for prov in il_disponibili(ordine or IL_ORDINE_TESTO):
+        r, err = il_chiama(prov, istruzioni, testo, max_tokens=max_tokens, timeout=60)
+        if r:
+            return r, prov
+    return "", ""
+
+
+def il_immagini(nome, mime, dati, max_pagine=3, lato=1700):
+    """Le pagine del documento come JPEG (foto o PDF)."""
+    out = []
+    try:
+        if (mime or "").endswith("pdf") or str(nome).lower().endswith(".pdf"):
+            try:
+                import pymupdf as fitz
+            except ImportError:
+                import fitz
+            doc = fitz.open(stream=dati, filetype="pdf")
+            for i, pag in enumerate(doc):
+                if i >= max_pagine:
+                    break
+                zoom = min(3.0, lato / max(1.0, max(pag.rect.width, pag.rect.height)))
+                pix = pag.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                try:
+                    out.append(pix.tobytes("jpeg", jpg_quality=85))
+                except Exception:
+                    from PIL import Image
+                    b = _il_io.BytesIO()
+                    Image.open(_il_io.BytesIO(pix.tobytes("png"))).convert("RGB").save(b, "JPEG", quality=85)
+                    out.append(b.getvalue())
+        else:
+            from PIL import Image, ImageOps
+            im = ImageOps.exif_transpose(Image.open(_il_io.BytesIO(dati))).convert("RGB")
+            im.thumbnail((lato, lato))
+            b = _il_io.BytesIO()
+            im.save(b, "JPEG", quality=86)
+            out.append(b.getvalue())
+    except Exception:
+        return out
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# più letture + arbitro (manoscritti, foto incerte)
+# ---------------------------------------------------------------------------------------------------------------------
+_IL_ARBITRO = """Sei un arbitro molto attento. Ricevi 2 o 3 LETTURE INDIPENDENTI della STESSA immagine, fatte da servizi diversi, in JSON con lo stesso schema.
+Il tuo compito: scrivere UNA lettura finale, la più vicina alla realtà e coerente con il TEMA del documento.
+REGOLE
+- Per ogni campo scegli il valore su cui le letture concordano. Se discordano, scegli quello più plausibile per il contesto (termini del settore, date possibili, nomi coerenti) e metti il campo in "da_verificare" con le alternative.
+- Non inventare nulla che nessuna lettura riporta. Se nessuna lettura è affidabile lascia il campo vuoto.
+- Nella "trascrizione" unisci le letture: le parole incerte segnale con [?], quelle illeggibili con [illeggibile].
+- "limiti": elenca i limiti della lettura (scrittura poco chiara, sigle ambigue, date incerte, parti tagliate o sfocate…), in italiano semplice.
+- "da_verificare": cose dedotte per intuizione o con letture diverse, da controllare sul documento originale.
+- "accordo": "alto" se le letture coincidono quasi del tutto, "medio" se differiscono in qualche dettaglio, "basso" se differiscono molto.
+Rispondi SOLO con un oggetto JSON con lo stesso schema delle letture, più "limiti" (lista), "da_verificare" (lista) e "accordo"."""
+
+
+def il_consenso(letture, schema_txt="", ordine_testo=None):
+    """letture = [(servizio, dict)]. Ritorna (dict finale, servizio arbitro). Senza arbitro: voto campo per campo."""
+    validi = [(p, d) for p, d in letture if isinstance(d, dict)]
+    if not validi:
+        return None, ""
+    if len(validi) == 1:
+        d = dict(validi[0][1])
+        d.setdefault("limiti", [])
+        d.setdefault("da_verificare", [])
+        d.setdefault("accordo", "una sola lettura")
+        return d, ""
+    corpo = "\n\n".join(f"LETTURA {i + 1} ({IL_FORNITORI.get(p, {}).get('nome', p)}):\n{_il_json.dumps(d, ensure_ascii=False)[:9000]}" for i, (p, d) in enumerate(validi))
+    risp, arbitro = il_testo(_IL_ARBITRO + ("\n\nSCHEMA E REGOLE DEL DOCUMENTO:\n" + schema_txt if schema_txt else ""), corpo, max_tokens=3500, ordine=ordine_testo)
+    fin = il_json(risp)
+    if isinstance(fin, dict):
+        return fin, arbitro
+    # nessun arbitro libero: voto semplice
+    fin, dubbi = {}, []
+    chiavi = {k for _p, d in validi for k in d}
+    for k in chiavi:
+        valori = [d.get(k) for _p, d in validi if d.get(k) not in (None, "", [])]
+        if not valori:
+            fin[k] = ""
+            continue
+        conta = {}
+        for v in valori:
+            conta[_il_json.dumps(v, ensure_ascii=False, sort_keys=True).lower()] = conta.get(_il_json.dumps(v, ensure_ascii=False, sort_keys=True).lower(), 0) + 1
+        migliore = max(valori, key=lambda v: conta[_il_json.dumps(v, ensure_ascii=False, sort_keys=True).lower()])
+        fin[k] = migliore
+        if len(conta) > 1 and k not in ("trascrizione", "riassunto", "confidenza"):
+            dubbi.append(f"{k}: " + " / ".join(str(v)[:60] for v in valori))
+    fin["limiti"] = ["Le letture dei servizi non coincidono del tutto: controlla i campi indicati."] if dubbi else []
+    fin["da_verificare"] = dubbi
+    fin["accordo"] = "medio" if dubbi else "alto"
+    return fin, ""
+
+
+def il_consenso_immagine(istruzioni, testo, immagini, quante=3, sempre=False, incerta=None, schema_txt=""):
+    """Legge con il primo servizio; se la lettura è incerta (incerta(dict) → True) o sempre=True, chiede anche ad altri (fino a «quante»), poi l'arbitro.
+    Ritorna {"risultato", "fonti", "arbitro", "errori"}."""
+    letture, errori = [], {}
+    for prov in il_disponibili(IL_ORDINE_VISTA):
+        r, err = il_chiama(prov, istruzioni, testo, immagini)
+        d = il_json(r)
+        if isinstance(d, dict):
+            letture.append((prov, d))
+        else:
+            errori[prov] = err or "formato"
+        if letture and len(letture) >= quante:
+            break
+        if len(letture) == 1 and not sempre and not (incerta and incerta(letture[0][1])):
+            break
+    fin, arbitro = il_consenso(letture, schema_txt)
+    return {"risultato": fin, "fonti": [p for p, _d in letture], "arbitro": arbitro, "errori": errori}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# DOCUMENTI SANITARI: il modulo di classificazione
+# ---------------------------------------------------------------------------------------------------------------------
+def _il_tipi():
+    return list(globals().get("_SP_TIPI_DOC") or ["Esame di laboratorio", "Diagnostica per immagini", "Referto di visita", "Ricetta medica", "Ricovero e dimissione",
+                                                   "Certificato medico", "Vaccinazione", "Piano terapeutico", "Esenzione o invalidità", "Altro"])
+
+
+def il_regole_sanitarie():
+    aree = list(globals().get("CAT_AREE") or [])
+    prest = list(globals().get("CAT_TIPI") or ["Visita specialistica", "Esame diagnostico", "Prestazione terapeutica", "Screening", "Controllo di follow-up", "Altro"])
+    return f"""Sei un esperto di documentazione sanitaria italiana (referti, ricette, analisi, lettere di dimissione, certificati), anche SCRITTA A MANO dai medici.
+Leggi le immagini del documento (una o più pagine) e compila la scheda. Scrivi in italiano.
+
+CLASSIFICAZIONE — "tipo" è UNO di questi (scegli seguendo le regole, nell'ordine):
+{_il_json.dumps(_il_tipi(), ensure_ascii=False)}
+1. "Diagnostica per immagini": radiografia (RX), ecografia, ecocolordoppler, TAC, risonanza (RM), mammografia, MOC/densitometria, scintigrafia, PET, OCT, angiografia, ecocardiogramma — anche se il foglio si chiama «referto».
+2. "Esame di laboratorio": analisi di sangue, urine, feci, tamponi, colture, esami istologici e citologici (pap test), con valori e intervalli di riferimento.
+3. "Ricetta medica": ricetta rossa o bianca, ricetta dematerializzata o il suo PROMEMORIA (NRE, codice autenticazione), prescrizione di farmaci o di esami da prenotare.
+4. "Piano terapeutico": SOLO il piano terapeutico formale (AIFA o regionale) di un farmaco, con centro prescrittore, posologia e durata. NON i preventivi del dentista e NON gli schemi di colliri dopo un intervento.
+5. "Ricovero e dimissione": lettera di dimissione, verbale di pronto soccorso, cartella di ricovero, verbale operatorio o descrizione di un intervento chirurgico.
+6. "Certificato medico": certificati (malattia, idoneità, gruppo sanguigno, sana e robusta costituzione…).
+7. "Vaccinazione": certificati o libretti vaccinali, attestati di vaccinazione.
+8. "Esenzione o invalidità": esenzioni ticket, verbali di invalidità, legge 104.
+9. "Referto di visita": esito di una visita (specialistica o del medico di famiglia): anamnesi, esame obiettivo, diagnosi, terapia consigliata; comprese le INDICAZIONI SCRITTE A MANO dal medico,
+   gli schemi di terapia dopo una visita o un intervento, i programmi di cure proposte (per esempio intervento di cataratta, laser), i piani di cura del dentista.
+10. "Altro": solo se nessuna regola sopra va bene (per esempio fatture e ricevute).
+"specialita" (area medica): scegli dall'elenco {_il_json.dumps(aree, ensure_ascii=False)} (scrivi il nome ESATTO); se nessuna va bene, scrivi la specialità in italiano.
+"tipo_prestazione": uno di {_il_json.dumps(prest, ensure_ascii=False)}.
+"esame": il nome dell'esame o della visita principale (es. «Mammografia bilaterale», «Visita oculistica», «Emocromo»), mai il nome dell'ospedale o della Regione.
+"esami_elenco": per le analisi, i nomi degli esami contenuti (es. ["Emocromo", "Glicemia"]).
+
+DATE (formato AAAA-MM-GG, vuoto se non c'è):
+- "data" = il giorno in cui è stata fatta la visita o l'esame (prelievo, esecuzione); "data_referto" = il giorno in cui è stato scritto il referto, se diverso.
+- "prossimo_controllo" = SOLO se è scritta una data precisa di controllo; se è scritto «controllo tra 6 mesi» mettilo in "controllo_indicato" e lascia vuota la data.
+- Per le ricette: "codice_ricetta" (NRE) e "valida_fino" se scritti.
+
+PERSONE E LUOGHI: "paziente" (nome e cognome come scritti), "codice_fiscale" (se si legge), "medico" (solo il nome del medico, con Dott./Dott.ssa), "struttura" (ospedale, studio, laboratorio).
+"conclusioni": l'esito o la diagnosi, copiati quasi alla lettera (massimo 400 caratteri), senza intestazioni di tabelle.
+
+SCRITTO A MANO: "manoscritto": true se il testo importante è scritto a mano. Leggi con attenzione le grafie mediche, le abbreviazioni (OD occhio destro, OS occhio sinistro, cp compresse,
+gtt gocce, die al giorno, bid due volte al giorno, FACO facoemulsificazione, IOL lente intraoculare…) e sciogli le abbreviazioni solo nella "trascrizione_chiara".
+"trascrizione": il testo come scritto (parole incerte con [?], illeggibili con [illeggibile]). "trascrizione_chiara": lo stesso contenuto riscritto in italiano chiaro e completo.
+"leggibilita": "alta" | "media" | "bassa". "confidenza": {{"tipo": 0-1, "data": 0-1, "esame": 0-1}}.
+"riassunto": 2-3 frasi semplici su cosa dice il documento. "parole_incerte": elenco delle parole di cui non sei sicuro.
+NON INVENTARE: se un dato non c'è o non si legge, lascia la stringa vuota.
+Rispondi SOLO con un oggetto JSON con queste chiavi:
+manoscritto, leggibilita, tipo, specialita, tipo_prestazione, esame, esami_elenco, data, data_referto, struttura, medico, paziente, codice_fiscale, codice_ricetta, valida_fino,
+conclusioni, controllo_indicato, prossimo_controllo, trascrizione, trascrizione_chiara, riassunto, parole_incerte, confidenza"""
+
+
+def _il_incerta(d):
+    try:
+        conf = float((d.get("confidenza") or {}).get("tipo", 1))
+    except Exception:
+        conf = 1.0
+    return bool(d.get("manoscritto")) or str(d.get("leggibilita", "")).lower() in ("media", "bassa") or conf < 0.65
+
+
+def _il_data_ok(x):
+    x = str(x or "").strip()
+    return x if _il_re.fullmatch(r"\d{4}-\d{2}-\d{2}", x) else ""
+
+
+def _il_scegli(valore, ammessi):
+    """Il valore ammesso più vicino (senza maiuscole/accenti); '' se nessuno."""
+    import unicodedata
+    n = lambda s: unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower().strip()
+    v = n(valore)
+    if not v:
+        return ""
+    for a in ammessi:
+        if n(a) == v:
+            return a
+    for a in ammessi:
+        if v in n(a) or n(a) in v:
+            return a
+    return ""
+
+
+def il_leggi_sanitario(nome, mime, dati, f=None):
+    """Legge e classifica un documento sanitario con l'IA. Ritorna None (nessun servizio) oppure
+    {"campi": {campo: {"valore","affidabilita","fonte"}}, "fonti", "arbitro", "manoscritto", "limiti", "da_verificare", "riassunto", "trascrizione", "errori"}."""
+    if not il_disponibili(IL_ORDINE_VISTA):
+        return None
+    immagini = il_immagini(nome, mime, dati)
+    if not immagini:
+        return None
+    regole = il_regole_sanitarie()
+    esito = il_consenso_immagine(regole, f"Documento: {nome}. Leggilo e compila la scheda.", immagini, quante=3, incerta=_il_incerta, schema_txt=regole)
+    d = esito["risultato"]
+    if not isinstance(d, dict):
+        return {"campi": {}, "fonti": [], "arbitro": "", "manoscritto": False, "limiti": [], "da_verificare": [], "riassunto": "", "trascrizione": "", "errori": esito["errori"]}
+    fonti = " + ".join(IL_FORNITORI[p]["nome"] for p in esito["fonti"])
+    accordo = str(d.get("accordo", "")).lower()
+    try:
+        conf = d.get("confidenza") or {}
+    except Exception:
+        conf = {}
+
+    def aff(k):
+        try:
+            c = float(conf.get(k)) if isinstance(conf, dict) and conf.get(k) is not None else None
+        except Exception:
+            c = None
+        if accordo == "basso" or str(d.get("leggibilita", "")).lower() == "bassa":
+            return "bassa"
+        if c is not None:
+            return "alta" if c >= 0.8 else "media" if c >= 0.55 else "bassa"
+        return "alta" if accordo in ("alto", "una sola lettura") and len(esito["fonti"]) >= 2 else "media"
+    campi = {}
+
+    def metti(k, v):
+        if v not in (None, "", []):
+            campi[k] = {"valore": v, "affidabilita": aff(k), "fonte": "IA: " + fonti}
+    metti("tipo", _il_scegli(d.get("tipo"), _il_tipi()) or "Altro")
+    aree = list(globals().get("CAT_AREE") or [])
+    metti("specialita", _il_scegli(d.get("specialita"), aree) or str(d.get("specialita") or "").strip())
+    metti("tipo_prestazione", _il_scegli(d.get("tipo_prestazione"), list(globals().get("CAT_TIPI") or [])))
+    metti("esame", str(d.get("esame") or "").strip()[:120])
+    el = d.get("esami_elenco")
+    metti("esami_elenco", ", ".join(str(x) for x in el) if isinstance(el, list) else str(el or "").strip())
+    for k in ("data", "data_referto", "prossimo_controllo", "valida_fino"):
+        metti(k, _il_data_ok(d.get(k)))
+    for k, k2 in (("struttura", "struttura"), ("medico", "medico"), ("conclusioni", "conclusioni"), ("controllo_indicato", "controllo_indicato"), ("codice", "codice_ricetta")):
+        metti(k, str(d.get(k2) or "").strip()[:400])
+    if f is not None and "sp_proponi_profilo" in globals():
+        try:
+            pid, motivo = sp_proponi_profilo(f, str(d.get("paziente") or ""), str(d.get("codice_fiscale") or "").upper().replace(" ", ""))
+            if pid:
+                campi["profilo"] = {"valore": pid, "affidabilita": "alta" if motivo == "codice fiscale" else "media", "fonte": "IA: " + motivo}
+        except Exception:
+            pass
+    lim = d.get("limiti") or []
+    ver = d.get("da_verificare") or []
+    return {"campi": campi, "fonti": esito["fonti"], "arbitro": esito["arbitro"], "manoscritto": bool(d.get("manoscritto")),
+            "limiti": [str(x) for x in (lim if isinstance(lim, list) else [lim]) if x], "da_verificare": [str(x) for x in (ver if isinstance(ver, list) else [ver]) if x],
+            "riassunto": str(d.get("riassunto") or ""), "trascrizione": str(d.get("trascrizione_chiara") or d.get("trascrizione") or ""), "errori": esito["errori"],
+            "parole_incerte": [str(x) for x in (d.get("parole_incerte") or []) if x] if isinstance(d.get("parole_incerte"), list) else []}
+
+
+def il_unisci(locale, ia):
+    """La lettura dell'IA ha la precedenza; quello che l'IA non ha trovato resta dalla lettura locale."""
+    out = dict(locale or {})
+    for k, v in ((ia or {}).get("campi") or {}).items():
+        out[k] = v
+    if ia:
+        out["_ia"] = {"valore": {k: ia.get(k) for k in ("fonti", "arbitro", "manoscritto", "limiti", "da_verificare", "riassunto", "trascrizione", "parole_incerte")}}
+    return out
+
+
+def il_mostra_lettura(riconosciuto):
+    """Il riquadro «chi ha letto il documento, limiti, cosa verificare»."""
+    ia = ((riconosciuto or {}).get("_ia") or {}).get("valore")
+    if not ia:
+        return
+    import html as _h
+    fonti = " + ".join(IL_FORNITORI.get(p, {}).get("nome", p) for p in ia.get("fonti") or [])
+    righe = [f"🤖 <b>Letto da:</b> {_h.escape(fonti)}" + (f" · <b>confronto finale:</b> {_h.escape(IL_FORNITORI.get(ia['arbitro'], {}).get('nome', ia['arbitro']))}" if ia.get("arbitro") else "")]
+    if ia.get("manoscritto"):
+        righe.append("✍️ <b>Documento scritto a mano</b>: l'ho fatto leggere a più servizi e ho confrontato le letture.")
+    if ia.get("riassunto"):
+        righe.append("📝 " + _h.escape(ia["riassunto"]))
+    if ia.get("limiti"):
+        righe.append("⚠️ <b>Limiti della lettura:</b> " + _h.escape("; ".join(ia["limiti"][:6])))
+    if ia.get("da_verificare"):
+        righe.append("🔍 <b>Da verificare sul foglio:</b> " + _h.escape("; ".join(ia["da_verificare"][:6])))
+    st.markdown("<div style='border:1px solid rgba(120,200,255,.45);border-radius:14px;padding:10px 12px;margin:6px 0;background:rgba(20,60,110,.25);line-height:1.45'>"
+                + "<br>".join(righe) + "</div>", unsafe_allow_html=True)
+    if ia.get("trascrizione"):
+        with st.expander("📄 Testo letto (trascrizione)"):
+            st.text(ia["trascrizione"][:6000])
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# riclassificare i documenti già archiviati con l'IA
+# ---------------------------------------------------------------------------------------------------------------------
+_IL_CAMPI_RICLASSIFICA = ["tipo", "specialita", "tipo_prestazione", "esame", "esami_elenco", "data", "data_referto", "medico", "struttura", "conclusioni", "controllo_indicato", "prossimo_controllo"]
+
+
+def il_cambiamenti(doc, campi):
+    """{campo: (vecchio, nuovo)}. Non tocca i campi che la persona ha corretto a mano (diversi da quello che l'app aveva letto la prima volta)."""
+    letto_prima = doc.get("riconosciuto") or {}
+    c = {}
+    for k in _IL_CAMPI_RICLASSIFICA:
+        nuovo = (campi.get(k) or {}).get("valore")
+        if nuovo in (None, ""):
+            continue
+        att = doc.get(k) or ""
+        if att and letto_prima and k in letto_prima and str(letto_prima.get(k) or "") != str(att):
+            continue                                              # l'ha scritto la persona: non si tocca
+        if str(att).strip().lower() != str(nuovo).strip().lower():
+            if (campi.get(k) or {}).get("affidabilita") == "bassa" and att:
+                continue                                          # lettura poco sicura: non cambio un valore che c'è già
+            c[k] = (att, nuovo)
+    return c
+
+
+def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
+    p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
+    files = globals().get("_stt_files")
+    docs = [d for d in (p.get("docsan") or []) if (files(d) if files else d.get("file"))][:massimo]
+    out = []
+    for i, d in enumerate(docs):
+        titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
+        if progress:
+            progress(i / max(1, len(docs)), f"Leggo con l'IA {i + 1} di {len(docs)}: {titolo}"[:90])
+        refs = files(d) if files else [d["file"]]
+        try:
+            nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
+        except Exception:
+            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"})
+            continue
+        ia = il_leggi_sanitario(nome, mime, dati, f)
+        if not ia or not ia.get("campi"):
+            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "nessun servizio ha risposto" if ia is None else "lettura non riuscita", "ia": ia})
+            continue
+        out.append({"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]), "ia": ia, "errore": ""})
+    if progress:
+        progress(1.0, "Fatto")
+    return out
+
+
+def il_applica_riclassifica(pid, proposte, scelti):
+    mappa = {x["id"]: x for x in proposte if x.get("cambi") and x["id"] in scelti}
+    if not mappa:
+        return 0
+
+    def _fn(f):
+        for pr in f.get("profili") or []:
+            if pr.get("id") != pid:
+                continue
+            for d_ in pr.get("docsan") or []:
+                x = mappa.get(d_.get("id"))
+                if not x:
+                    continue
+                vecchio_auto = sp_titolo_doc(d_) if "sp_titolo_doc" in globals() else ""
+                titolo_auto = not d_.get("titolo") or d_.get("titolo") == vecchio_auto
+                for k, (_a, b) in x["cambi"].items():
+                    d_[k] = b
+                    d_.setdefault("riconosciuto", {})[k] = b
+                ia = x.get("ia") or {}
+                d_["lettura_ia"] = {"fonti": ia.get("fonti"), "manoscritto": ia.get("manoscritto"), "limiti": ia.get("limiti"), "da_verificare": ia.get("da_verificare"),
+                                    "riassunto": ia.get("riassunto"), "il": _il_time.strftime("%Y-%m-%dT%H:%M:%S")}
+                if titolo_auto and "sp_titolo_doc" in globals():
+                    d_["titolo"] = sp_titolo_doc(d_)
+    _fa_salva(_fn, "Salute: documenti riclassificati con l'IA")
+    return len(mappa)
+
+
+_IL_ETICHETTE = {"tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione": "Prestazione", "esame": "Esame o visita", "esami_elenco": "Esami contenuti", "data": "Data",
+                 "data_referto": "Data del referto", "medico": "Medico", "struttura": "Struttura", "conclusioni": "Conclusioni", "controllo_indicato": "Controllo indicato",
+                 "prossimo_controllo": "Prossimo controllo"}
+
+
+def il_pannello_riclassifica(pid):
+    """Dentro Documenti sanitari: prova e riclassificazione con l'IA."""
+    f = _fa_dati()
+    p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
+    files = globals().get("_stt_files")
+    n = sum(1 for d in (p.get("docsan") or []) if (files(d) if files else d.get("file")))
+    if not n:
+        return
+    disp = il_disponibili(IL_ORDINE_VISTA)
+    with st.expander(f"🤖 Riclassifica i documenti con l'IA ({n})"):
+        if not disp:
+            st.info("Per usare l'IA serve almeno una chiave gratuita (Gemini, Groq, Mistral…). L'amministratore la mette in **Utilità → 🤖 Intelligenza artificiale**.")
+            return
+        st.caption("Faccio rileggere ogni documento dall'IA (" + ", ".join(IL_FORNITORI[x]["nome"] for x in disp[:3]) + "). Se è **scritto a mano** lo leggono più servizi e confronto le "
+                   "letture. **Prima ti mostro cosa cambierebbe**; cambia solo quello che lasci spuntato e tocchi **Applica**. Quello che hai corretto tu a mano non si tocca.")
+        chiave = f"il_prop_{pid}"
+        if st.button(f"🔍 Prova: leggi e classifica i {n} documenti", key=f"il_prova_{pid}", width="stretch"):
+            barra = st.progress(0.0, text="Comincio…")
+            st.session_state[chiave] = il_proposte_riclassifica(f, pid, lambda x, t_: barra.progress(min(1.0, x), text=t_))
+            barra.empty()
+        prop = st.session_state.get(chiave)
+        if prop is None:
+            return
+        con = [x for x in prop if x.get("cambi")]
+        err = [x for x in prop if x.get("errore")]
+        mano = sum(1 for x in prop if (x.get("ia") or {}).get("manoscritto"))
+        st.markdown(f"**Letti {len(prop)} documenti** · da cambiare: **{len(con)}** · scritti a mano: {mano}" + (f" · non letti: {len(err)}" if err else ""))
+        scelti = []
+        for x in con:
+            st.markdown(f"**📄 {x['titolo']}**")
+            for k, (a, b) in x["cambi"].items():
+                st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_IL_ETICHETTE.get(k, k)}: <s>{a or '—'}</s> → <b>{b}</b></div>", unsafe_allow_html=True)
+            ia = x.get("ia") or {}
+            if ia.get("limiti") or ia.get("da_verificare"):
+                st.caption("⚠️ " + "; ".join((ia.get("limiti") or [])[:2] + (ia.get("da_verificare") or [])[:2]))
+            if st.checkbox("Applica a questo documento", value=True, key=f"il_sc_{pid}_{x['id']}"):
+                scelti.append(x["id"])
+        if err:
+            st.caption("Non letti: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:6]))
+        if con:
+            c1, c2 = st.columns(2, gap="small")
+            if c1.button(f"✅ Applica ({len(scelti)})", key=f"il_app_{pid}", type="primary", width="stretch", disabled=not scelti):
+                n_ = il_applica_riclassifica(pid, prop, set(scelti))
+                st.session_state.pop(chiave, None)
+                st.toast(f"Riclassificati {n_} documenti")
+                st.rerun()
+            if c2.button("✖ Non applicare", key=f"il_no_{pid}", width="stretch"):
+                st.session_state.pop(chiave, None)
+                st.rerun()
+        elif not err:
+            st.success("La classificazione è già giusta per tutti i documenti.")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Utilità → 🤖 Intelligenza artificiale: quali chiavi ci sono e come crearle
+# ---------------------------------------------------------------------------------------------------------------------
+_IL_GUIDE = {
+    "gemini": ["Apri il link qui sotto e accedi con il tuo account Google.", "Tocca **Create API key** (crea chiave API) e poi **Create API key in new project** (in un nuovo progetto).",
+               "Tocca **Copy** (copia).", "In Streamlit: **Manage app → Settings → Secrets** e scrivi una riga: `GEMINI_API_KEY = \"la-chiave-copiata\"`, poi **Save** (salva)."],
+    "groq": ["Apri il link e accedi (anche con Google).", "Tocca **Create API Key** (crea chiave), scrivi un nome qualsiasi (es. vitamemo) e tocca **Submit** (invia).",
+             "Tocca **Copy** (copia): la chiave si vede una volta sola.", "Nei Secrets di Streamlit: `GROQ_API_KEY = \"la-chiave-copiata\"` e **Save**."],
+    "mistral": ["Apri il link e crea l'account (serve il numero di telefono).", "Scegli il piano **Experiment** (gratuito).", "Tocca **Create new key** (crea nuova chiave) e poi **Copy**.",
+                "Nei Secrets: `MISTRAL_API_KEY = \"la-chiave-copiata\"` e **Save**."],
+    "openrouter": ["Apri il link e accedi (anche con Google).", "Tocca **Create Key** (crea chiave), metti un nome e lascia vuoto il «Credit limit» (limite di credito).",
+                   "Copia la chiave.", "Nei Secrets: `OPENROUTER_API_KEY = \"la-chiave-copiata\"` e **Save**."],
+    "nvidia": ["Apri il link e accedi o crea l'account NVIDIA (serve il numero di telefono).", "Tocca **Generate API Key** (genera chiave) e poi **Copy**.",
+               "Nei Secrets: `NVIDIA_API_KEY = \"la-chiave-copiata\"` e **Save**."],
+    "cloudflare": ["Crea l'account Cloudflare gratuito e apri il link.", "Tocca **Create Token** (crea token) → modello **Workers AI** → **Continue to summary** → **Create Token**, poi copialo.",
+                   "Il numero dell'account (Account ID) lo trovi nella pagina principale di Cloudflare, a destra.",
+                   "Nei Secrets due righe: `CLOUDFLARE_API_TOKEN = \"il-token\"` e `CLOUDFLARE_ACCOUNT_ID = \"il-numero-account\"`, poi **Save**."],
+    "cohere": ["Apri il link e crea l'account.", "Nella pagina delle chiavi c'è già una **Trial key** (chiave di prova): tocca **Copy**.", "Nei Secrets: `COHERE_API_KEY = \"la-chiave\"` e **Save**."],
+    "deepseek": ["Apri il link e crea l'account.", "DeepSeek è a pagamento: in **Top up** (ricarica) metti pochi dollari.", "In **API keys** tocca **Create new API key**, poi copiala.",
+                 "Nei Secrets: `DEEPSEEK_API_KEY = \"la-chiave\"` e **Save**."],
+}
+
+
+def il_blocco_utilita():
+    """Il riquadro dell'amministratore: stato delle chiavi, prova, guida passo passo."""
+    st.caption("Più chiavi metti, più l'app è affidabile: se un servizio ha finito le richieste del giorno, passa da sola al successivo. Le chiavi non escono mai dai Secrets.")
+    if st.button("🔄 Ricontrolla le chiavi", key="il_ricontrolla", width="stretch"):
+        _il_elenco_modelli.clear()
+        with _IL_BLOCCO:
+            _IL_STATO["pausa"].clear()
+            _IL_STATO["modello"].clear()
+        st.rerun()
+    oggi = _il_time.strftime("%Y-%m-%d")
+    for prov in IL_ORDINE_VISTA:
+        cfg = IL_FORNITORI[prov]
+        ha = bool(il_chiave(prov))
+        with _IL_BLOCCO:
+            pausa = _IL_STATO["pausa"].get(prov)
+            usi = _IL_STATO["usi"].get((prov, oggi), 0)
+        stato = ("🟢 chiave presente" if ha else "⚪ nessuna chiave") + (f" · ⏸️ in pausa ({pausa[2]})" if ha and pausa and pausa[0] > _il_time.time() else "") + (f" · usata {usi} volte oggi" if usi else "")
+        with st.expander(f"{cfg['nome']} — {stato}"):
+            st.markdown(f"**Costo:** {cfg['costo']}  \n**Dati:** {cfg['dati']}")
+            if ha:
+                if st.button("🧪 Prova questa chiave", key=f"il_prova_{prov}", width="stretch"):
+                    with st.spinner("Provo…"):
+                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=10, timeout=40)
+                    if r:
+                        st.success(f"Funziona ✅ (modello: {il_modelli(prov, False)[0]})")
+                    else:
+                        st.error({"chiave": "La chiave non è valida: ricopiala nei Secrets.", "limite": "Richieste finite per ora: riprova più tardi.",
+                                  "modello": "Il servizio non ha trovato il modello: scrivimelo e lo aggiorno.", "rete": "Il servizio non risponde: riprova."}.get(err, "Non ha funzionato: riprova."))
+            else:
+                st.markdown("**Come avere la chiave (dal telefono):**")
+                for i, passo in enumerate(_IL_GUIDE.get(prov, []), 1):
+                    st.markdown(f"{i}. {passo}")
+                st.link_button("🔑 Apri la pagina per la chiave", cfg["link"], width="stretch")

@@ -56,7 +56,7 @@ Non dare istruzioni su impianti ad alta tensione (cavi arancioni) né su interve
 # ---------------------------------------------------------------------------------------------------------------------
 AD_PROVIDER = {
     "anthropic": {"nome": "Claude (Anthropic)", "secret": "ANTHROPIC_API_KEY", "modello": AD_MODELLO, "chiave_link": "https://console.anthropic.com/", "gratis": "a pagamento (si paga a consumo)"},
-    "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-2.0-flash", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
+    "gemini": {"nome": "Google Gemini", "secret": "GEMINI_API_KEY", "modello": "gemini-flash-latest", "chiave_link": "https://aistudio.google.com/apikey", "gratis": "ha una fascia gratuita con limiti (la chiave è gratuita)"},
     "openai": {"nome": "ChatGPT (OpenAI)", "secret": "OPENAI_API_KEY", "modello": "gpt-4o-mini", "url": "https://api.openai.com/v1/chat/completions", "chiave_link": "https://platform.openai.com/api-keys", "gratis": "a pagamento (si paga a consumo)"},
     "openrouter": {"nome": "OpenRouter (anche modelli gratuiti)", "secret": "OPENROUTER_API_KEY", "modello": "openrouter/free", "url": "https://openrouter.ai/api/v1/chat/completions", "chiave_link": "https://openrouter.ai/keys",
                    "gratis": "gratuita solo con i modelli che finiscono con «:free» (limiti: 20 richieste al minuto e 50 al giorno); gli altri modelli si pagano con i crediti"},
@@ -172,6 +172,8 @@ def ad_attivo():
         return False
     prov = ad_provider_scelto()
     cfg = ad_cfg(prov)
+    if "il_disponibili" in globals() and il_disponibili():
+        return True                                                       # ci sono chiavi gratuite (ia_lettura.py)
     return bool(cfg["key"]) and (prov != "altra" or bool(cfg["url"] and cfg["modello"]))
 
 
@@ -458,17 +460,49 @@ def ad_analizza(jpeg, mezzo):
     """Manda la foto al fornitore scelto. Ritorna il risultato (dict) oppure {'errore': motivo}."""
     prov = ad_provider_scelto()
     cfg = ad_cfg(prov)
+    con_il = "il_disponibili" in globals() and bool(il_disponibili())
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
-        return {"errore": "chiave"}
+        return _ad_con_il(jpeg, mezzo, []) if con_il else {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
         st.session_state["_ad_dettaglio"] = f"Richiesta non partita: motivo «{st.session_state.get('_ad_stop')}» (utente = analisi gratuite di oggi finite; giorno/ora = tetti dell'app)."
         return {"errore": ad_errore_stop()}
     st.session_state.pop("_ad_dettaglio", None)
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE, [("u", _ad_messaggio_utente(mezzo))], jpeg, 1800, json_out=True)
     if err:
-        return {"errore": err}
+        return _ad_con_il(jpeg, mezzo, []) if con_il else {"errore": err}
     ris = _ad_parse(testo)
-    return ris if ris is not None else {"errore": "formato", "testo": (testo or "")[:1500]}
+    if ris is None:
+        return _ad_con_il(jpeg, mezzo, []) if con_il else {"errore": "formato", "testo": (testo or "")[:1500]}
+    if con_il and (ris.get("confidenza") != "alta" or not ris.get("riconosciuta")):
+        return _ad_con_il(jpeg, mezzo, [(prov, ris)])                    # lettura incerta: la fanno anche altri servizi e si confrontano
+    return ris
+
+
+def _ad_con_il(jpeg, mezzo, letture):
+    """Più letture della foto con i servizi gratuiti (ia_lettura.py) e un «arbitro» che le confronta: risultato unico con limiti e cose da verificare."""
+    letture = list(letture)
+    msg = _ad_messaggio_utente(mezzo)
+    for p in il_disponibili(IL_ORDINE_VISTA):
+        if len(letture) >= 3:
+            break
+        r, _err = il_chiama(p, _AD_REGOLE, msg, [jpeg], max_tokens=1800)
+        d = _ad_parse(r) if r else None
+        if isinstance(d, dict):
+            letture.append((p, d))
+            if len(letture) == 1 and d.get("confidenza") == "alta" and d.get("riconosciuta"):
+                break                                                     # una lettura sicura basta
+    if not letture:
+        return {"errore": "servizio"}
+    fin, arbitro = il_consenso(letture, _AD_REGOLE)
+    ris = _ad_parse(json.dumps(fin, ensure_ascii=False)) if isinstance(fin, dict) else None
+    if ris is None:
+        ris = letture[0][1]
+    nomi = lambda p: (IL_FORNITORI.get(p) or AD_PROVIDER.get(p) or {}).get("nome", p)
+    ris["_fonti"] = [nomi(p) for p, _d in letture]
+    ris["_arbitro"] = nomi(arbitro) if arbitro else ""
+    ris["_limiti"] = [str(x) for x in (fin or {}).get("limiti") or []][:5] if isinstance(fin, dict) else []
+    ris["_verifica"] = [str(x) for x in (fin or {}).get("da_verificare") or []][:5] if isinstance(fin, dict) else []
+    return ris
 
 
 _AD_REGOLE_TESTO = _AD_REGOLE.replace("Ti viene mostrata la FOTO di un cruscotto con una o più spie accese.", "Ti viene descritta A PAROLE una spia del cruscotto o un guasto del mezzo (non c'è la foto).")
@@ -478,8 +512,9 @@ def ad_analizza_testo(domanda, mezzo):
     """Come ad_analizza, ma da una descrizione scritta (spia o guasto), senza foto. Ritorna il risultato (dict) oppure {'errore': motivo}."""
     prov = ad_provider_scelto()
     cfg = ad_cfg(prov)
+    con_il = "il_disponibili" in globals() and bool(il_disponibili())
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
-        return {"errore": "chiave"}
+        return _ad_con_il(jpeg, mezzo, []) if con_il else {"errore": "chiave"}
     if cfg["fonte"] == "app" and not ad_puo():
         return {"errore": ad_errore_stop()}
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", _ad_messaggio_utente(mezzo, domanda))], None, 1800, json_out=True)
@@ -798,6 +833,12 @@ def _ad_risultato(ris, v, mezzo, sha, jpeg):
         st.link_button("📖 Cerca nel manuale", _ad_manuale_url(v, mezzo, s["nome"]), width="stretch")
     conf = ris.get("confidenza", "bassa")
     st.caption(f"Affidabilità dell'analisi: **{conf}**. L'IA può sbagliare: se la spia è **ROSSA** fermati comunque, e per il tuo mezzo vale il manuale.")
+    if ris.get("_fonti"):
+        st.caption("🤖 Letta da: " + " + ".join(ris["_fonti"]) + (f" · confronto finale: {ris['_arbitro']}" if ris.get("_arbitro") else ""))
+    if ris.get("_limiti"):
+        st.caption("⚠️ Limiti: " + "; ".join(ris["_limiti"]))
+    if ris.get("_verifica"):
+        st.caption("🔍 Da verificare: " + "; ".join(ris["_verifica"]))
     if ris.get("note"):
         st.info("💡 " + ris["note"])
 

@@ -359,7 +359,7 @@ _JS_ASSISTENTE = r"""
     var A = D.ai, n0 = ' ' + norm(testo) + ' ';
     var speciale = !testo || (haParola(n0, T('i_off')) && haParola(n0, T('i_ass'))) || haParola(n0, T('i_silenzio')) || haParola(n0, T('i_novita')) || haParola(n0, T('i_giro')) ||
       (n0.trim().split(' ').length <= 3 && haParola(n0, T('i_saluto')));
-    var inp = A && A.attivo && /^it/i.test(D.lang || 'it') && !speciale ? doc.querySelector('input[aria-label="asst-llm-q"]') : null;
+    var inp = A && A.attivo && !speciale ? doc.querySelector('input[aria-label="asst-llm-q"]') : null;
     if (!inp) { chiediLocale(testo); ricorda(testo, elTitolo.textContent + '. ' + elTesto.textContent); return; }
     var it = rileva(testo); if (it.az) memoria.az = it.az; if (it.og) memoria.og = it.og;      /* la guida ricorda l'argomento anche se risponde il modello */
     var id = String(Date.now()) + String(Math.floor(Math.random() * 1000));
@@ -513,8 +513,8 @@ def _novita_recenti():
 def _config_assistente(contesto, completo, cmd):
     sezione = contesto.split(":")[0]
     cfg = {"ctx": contesto, "sezione": sezione, "novita": _novita_recenti()}
-    if "ai_config" in globals() and _lingua_guida() == "it":
-        cfg["ai"] = ai_config()                            # l'intelligenza artificiale è facoltativa, solo in italiano
+    if "ai_config" in globals():
+        cfg["ai"] = ai_config()                            # l'intelligenza artificiale è facoltativa e risponde nella lingua scelta
     if cmd:
         cfg["cmd"] = {"id": str(__import__("time").time()), "az": cmd}
     if completo:

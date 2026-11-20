@@ -182,6 +182,15 @@ Premi **💾 Salva** per tenere le scelte.
     a("utilita", "x_interruttori", "💡 Selettori a interruttore",
       """In tutta l'app i selettori a pillola (per scegliere persona, casa, veicolo…) funzionano come **interruttori**: quello **attivo è azzurro neon e pulsa**, gli altri sembrano **spenti**.""")
 
+    a("utilita", "x_ia", "🤖 Intelligenza artificiale gratuita: documenti, scritte a mano, spie, lingue",
+      """Con le **chiavi gratuite** dei servizi di intelligenza artificiale (Google Gemini, Groq, Mistral, OpenRouter, NVIDIA, Cloudflare, Cohere; DeepSeek se hai la sua chiave a pagamento) l'app:
+- **legge e classifica i documenti sanitari** (che documento è, area medica, esame, date, medico, struttura, conclusioni). Se è **scritto a mano**, lo fanno leggere **più servizi** e un «arbitro» confronta le letture: vedi **chi l'ha letto**, i **limiti** della lettura e **cosa verificare** sul foglio. Niente si salva senza la tua conferma;
+- in **Salute → Documenti sanitari → 🤖 Riclassifica i documenti con l'IA** prova la lettura sui documenti già archiviati e ti mostra cosa cambierebbe: cambi solo quello che lasci spuntato. Quello che hai corretto tu a mano non si tocca;
+- **riconosce le spie dell'auto** confrontando più letture quando la foto è incerta;
+- **traduce tutte le pagine** nella lingua scelta (una frase alla volta, la prima volta; poi resta per sempre);
+- fa rispondere **l'assistente** nella lingua scelta.
+Le chiavi le mette l'amministratore in **Utilità → 🤖 Intelligenza artificiale**, con la guida passo passo. Attenzione: con le chiavi gratuite di **Google** e **Mistral** i testi possono essere usati per migliorare i loro modelli.""")
+
     # ================= i compleanni (Utilità)
     a("utilita", "x_compleanni", "🎂 Compleanni: le schede delle persone",
       """In **Utilità → 🎂 Compleanni** tocca il **badge «Buon compleanno»** per aprire l'elenco (toccalo di nuovo per chiuderlo).

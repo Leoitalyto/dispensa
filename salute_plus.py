@@ -1550,10 +1550,20 @@ def _sp_docsan_corpo(f, p, pid, utente, coda, finestra):
                 testo, info = ca_estrai_testo(c["nome"], mime, c["dati"]) if "ca_estrai_testo" in globals() else ("", {})
             except Exception:
                 testo, info = "", {}
-            st.session_state[chiave_lettura] = (sp_leggi_doc(testo, f, c["nome"]) if testo.strip() else {}, bool(testo.strip()))
+            locale = sp_leggi_doc(testo, f, c["nome"]) if testo.strip() else {}
+            ia = None
+            if "il_leggi_sanitario" in globals():                          # 🤖 l'IA legge e classifica (anche i manoscritti, con più servizi e confronto)
+                try:
+                    with st.spinner("🤖 L'intelligenza artificiale legge e classifica il documento…"):
+                        ia = il_leggi_sanitario(c["nome"], mime, c["dati"], f)
+                except Exception:
+                    ia = None
+            st.session_state[chiave_lettura] = ((il_unisci(locale, ia) if ia and ia.get("campi") else locale), bool(testo.strip()) or bool(ia and ia.get("campi")))
     riconosciuto, letto = st.session_state[chiave_lettura]
     if letto:
         st.success("Ho letto il documento. I pallini: 🟢 sicuro, 🟡 abbastanza, 🟠 poco. **Controlla e correggi** quello che serve.")
+        if "il_mostra_lettura" in globals():
+            il_mostra_lettura(riconosciuto)
         perche = (riconosciuto.get("specialita") or {}).get("fonte") or ""
         if perche.startswith("parole:"):
             st.caption("🔎 Area medica riconosciuta da " + perche[8:] + ((" · potrebbe essere anche: " + riconosciuto["_alternative"]["valore"]) if riconosciuto.get("_alternative") else ""))

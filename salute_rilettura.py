@@ -304,3 +304,8 @@ def sp_modulo_docsan(pid):                                                      
         sr_pannello(pid)
     except Exception as ex:
         st.caption(f"(la rilettura non è disponibile adesso: {type(ex).__name__})")
+    if "il_pannello_riclassifica" in globals():
+        try:
+            il_pannello_riclassifica(pid)
+        except Exception as ex:
+            st.caption(f"(la riclassificazione con l'IA non è disponibile adesso: {type(ex).__name__})")

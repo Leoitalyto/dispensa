@@ -280,6 +280,8 @@ if "_sc_nav_prima" not in globals() and "nav_pagine" in globals():
         r = _sc_nav_prima(corrente)
         if "ts_installa" in globals():
             ts_installa()                                              # tocco sicuro sul telefono (tocco_sicuro.py)
+        if "ta_attesa" in globals():
+            ta_attesa()                                                # pagine tradotte in automatico (traduci_auto.py)
         try:
             sc_barra(corrente)
         except Exception as _e:
