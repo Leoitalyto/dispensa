@@ -28,7 +28,7 @@ IL_FORNITORI = {
                  "testo": ["deepseek-chat", "deepseek-v4-flash"], "link": "https://platform.deepseek.com/api_keys",
                  "costo": "a pagamento: ricarica minima di pochi dollari, ogni documento costa meno di un centesimo", "dati": "server in Cina; i dati non servono ad addestrare (secondo le condizioni)"},
     "gemini": {"nome": "Google Gemini", "base": "https://generativelanguage.googleapis.com/v1beta/openai", "secret": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-               "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-2.5-flash"], "testo": ["gemini-flash-latest", "gemini-2.5-flash"],
+               "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-2.5-flash"], "testo": ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"],
                "link": "https://aistudio.google.com/apikey", "costo": "gratis, con un tetto di richieste al minuto e al giorno",
                "dati": "con la chiave gratuita Google può usare i testi per migliorare i modelli"},
     "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True, "pref_testo": [r"mistral-small-latest", r"mistral-medium-latest", r"mistral-large-latest"],
@@ -154,7 +154,7 @@ def il_modelli(prov, vista=True):
     elenco = _il_elenco_modelli(prov, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8])
     ids = [m["id"] for m in elenco]
     scelti = []
-    if cfg.get("vista_re") and ids:
+    if cfg.get("vista_re") and ids and vista:
         cand = []
         for i in ids:
             m = _il_re.match(cfg["vista_re"], i)
@@ -199,6 +199,8 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
     contenuto = [{"type": "text", "text": testo}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + _il_b64.b64encode(im).decode()}} for im in immagini]
     messaggi = [{"role": "system", "content": istruzioni}, {"role": "user", "content": contenuto if immagini else testo}]
     ultimo = "modello"
+    if prov == "gemini":                                                     # Gemini: il suo collegamento «nativo» (più affidabile del compatibile OpenAI)
+        return _il_gemini(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max)
     for modello in il_modelli(prov, vista=bool(immagini))[:modelli_max]:
         corpo = {"model": modello, "messages": messaggi, "temperature": 0.1, "max_tokens": max(max_tokens, 400)}
         if prov == "gemini" or (prov == "groq" and "gpt-oss" in modello):
@@ -258,6 +260,62 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
                         return str(risposta), ""
             except Exception:
                 pass
+    return "", ultimo
+
+
+def _il_gemini(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max):
+    """Google Gemini con l'API generateContent. Pensiero ridotto al minimo (prima i modelli «pensavano» e non rispondevano in tempo)."""
+    parti = [{"text": testo}] + [{"inline_data": {"mime_type": "image/jpeg", "data": _il_b64.b64encode(im).decode()}} for im in immagini]
+    ultimo = "modello"
+    for modello in il_modelli("gemini", vista=bool(immagini))[:modelli_max]:
+        pensiero = {"thinkingBudget": 0} if _il_re.search(r"2\.5-flash|flash-latest|flash-lite", modello) else {"thinkingLevel": "low"} if _il_re.search(r"gemini-3", modello) else None
+        corpo = {"systemInstruction": {"parts": [{"text": istruzioni}]}, "contents": [{"role": "user", "parts": parti}],
+                 "generationConfig": {"temperature": 0.1, "maxOutputTokens": max(max_tokens, 400)}}
+        for tentativo in (0, 1):
+            if pensiero and tentativo == 0:
+                corpo["generationConfig"]["thinkingConfig"] = pensiero
+            else:
+                corpo["generationConfig"].pop("thinkingConfig", None)
+            try:
+                r = _il_req.post(f"https://generativelanguage.googleapis.com/v1beta/models/{modello}:generateContent",
+                                 headers={"x-goog-api-key": key, "Content-Type": "application/json"}, json=corpo, timeout=timeout)
+            except Exception as e_:
+                ultimo = "rete"
+                with _IL_BLOCCO:
+                    _IL_STATO.setdefault("errori", {})["gemini"] = f"{modello}: {type(e_).__name__} (nessuna risposta in {timeout} s)"
+                break
+            if r.status_code == 200:
+                try:
+                    cand = (r.json().get("candidates") or [{}])[0]
+                    risposta = "".join(p.get("text", "") for p in ((cand.get("content") or {}).get("parts") or []) if not p.get("thought"))
+                except Exception:
+                    risposta = ""
+                if risposta.strip():
+                    with _IL_BLOCCO:
+                        _IL_STATO["modello"][("gemini", bool(immagini))] = modello
+                        oggi = _il_time.strftime("%Y-%m-%d")
+                        _IL_STATO["usi"][("gemini", oggi)] = _IL_STATO["usi"].get(("gemini", oggi), 0) + 1
+                    return risposta, ""
+                with _IL_BLOCCO:
+                    _IL_STATO.setdefault("errori", {})["gemini"] = f"{modello}: risposta vuota ({str(cand.get('finishReason', ''))})"
+                ultimo = "servizio"
+                break
+            try:
+                dett = f"{modello}: {r.status_code} {r.text[:220]}"
+            except Exception:
+                dett = f"{modello}: {r.status_code}"
+            with _IL_BLOCCO:
+                _IL_STATO.setdefault("errori", {})["gemini"] = dett
+            if r.status_code in (401, 403):
+                _il_metti_pausa("gemini", 6 * 3600, "chiave non valida")
+                return "", "chiave"
+            if r.status_code == 429:
+                _il_metti_pausa("gemini", 20 * 60, "troppe richieste")
+                return "", "limite"
+            if r.status_code == 400 and tentativo == 0 and pensiero:
+                continue                                                  # non accetta il «pensiero ridotto»: riprovo senza
+            ultimo = "modello" if r.status_code in (400, 404) else "servizio"
+            break
     return "", ultimo
 
 
@@ -750,7 +808,7 @@ def il_blocco_utilita():
             if ha:
                 if st.button("🧪 Prova questa chiave", key=f"il_prova_{prov}", width="stretch"):
                     with st.spinner("Provo… (al massimo un minuto)"):
-                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=400, timeout=25, modelli_max=2)
+                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=400, timeout=30, modelli_max=2)
                     if r:
                         st.success(f"Funziona ✅ (modello: {il_modelli(prov, False)[0]})")
                     else:
