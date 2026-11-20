@@ -770,6 +770,72 @@ def ss_esauriti_con_offerta(ss, d_disp, oggi_=None, offerte_volantini=None):
 
 
 # =====================================================================================================================
+# 11-bis. LISTE CONDIVISE CON PERSONE SCELTE (file comune famiglia/liste_spesa.json)
+#   {liste: [{id, nome, proprietario, persone[uid], creata_il, stato, righe: [{id, nome, marca, ean, formato_valore, formato_unita,
+#             quantita, priorita, stato, aggiunto_da, preso_da, preso_il}]}]}
+#   Le vede e le modifica SOLO chi le ha create e le persone scelte; le liste private restano nel file personale.
+# =====================================================================================================================
+SS_LC = "famiglia/liste_spesa.json"
+
+
+def ss_lc_mie(dati, uid):
+    return [l for l in (dati or {}).get("liste") or [] if isinstance(l, dict) and l.get("stato") != "chiusa"
+            and (l.get("proprietario") == uid or uid in (l.get("persone") or []))]
+
+
+def ss_lc_puo(lista, uid):
+    return bool(lista) and (lista.get("proprietario") == uid or uid in (lista.get("persone") or []))
+
+
+def ss_lc_nuova(dati, nome, proprietario, persone):
+    nome = str(nome or "").strip()
+    if not nome:
+        raise ValueError("Scrivi il nome della lista.")
+    l = {"id": ss_id(), "nome": nome, "proprietario": proprietario, "persone": [p for p in dict.fromkeys(persone or []) if p and p != proprietario],
+         "creata_il": ss_ora(), "stato": "aperta", "righe": []}
+    dati.setdefault("liste", []).append(l)
+    dati["versione"] = int(dati.get("versione") or 0) + 1
+    return l
+
+
+def ss_lc_aggiungi(lista, p, quantita, chi):
+    """Aggiunge il prodotto; se c'è già da comprare (stesso codice o stesso nome e marca) somma la quantità: niente doppioni. Ritorna (riga, nuova?)."""
+    ean, nn, mm = str(p.get("ean") or p.get("barcode") or "").strip(), ss_norm(p.get("nome")), ss_norm(p.get("marca"))
+    q = ss_num(quantita, 1) or 1
+    for r in lista.setdefault("righe", []):
+        if r.get("stato") == "preso":
+            continue
+        if (ean and str(r.get("ean") or "") == ean) or (ss_norm(r.get("nome")) == nn and (not mm or not r.get("marca") or ss_norm(r.get("marca")) == mm)):
+            r["quantita"] = (ss_num(r.get("quantita"), 1) or 1) + q
+            return r, False
+    r = {"id": ss_id(), "nome": p.get("nome", ""), "marca": p.get("marca", ""), "ean": ean, "formato_valore": p.get("formato_valore"),
+         "formato_unita": p.get("formato_unita") or "", "quantita": q, "priorita": "Normale", "stato": "da comprare", "aggiunto_da": chi, "preso_da": "", "preso_il": ""}
+    lista["righe"].append(r)
+    return r, True
+
+
+def ss_lc_applica(lista, cambi, chi):
+    """cambi = {riga_id: {preso?, quantita?, priorita?, togli?}} — solo quello che QUESTA persona ha cambiato (le modifiche degli altri restano)."""
+    nuove = []
+    for r in lista.get("righe") or []:
+        c = cambi.get(r.get("id"))
+        if c:
+            if c.get("togli"):
+                continue
+            if "preso" in c:
+                if c["preso"] and r.get("stato") != "preso":
+                    r.update(stato="preso", preso_da=chi, preso_il=ss_ora())
+                elif not c["preso"] and r.get("stato") == "preso":
+                    r.update(stato="da comprare", preso_da="", preso_il="")
+            if "quantita" in c:
+                r["quantita"] = max(ss_num(c["quantita"], 1) or 1, 1)
+            if "priorita" in c and c["priorita"] in ("Alta", "Normale", "Bassa"):
+                r["priorita"] = c["priorita"]
+        nuove.append(r)
+    lista["righe"] = nuove
+
+
+# =====================================================================================================================
 # 12. LETTURA DELLO SCONTRINO (IA con la foto; si conferma SEMPRE prima di salvare)
 # =====================================================================================================================
 SS_ISTR_SCONTRINO = ("Leggi lo SCONTRINO italiano nella foto e rispondi SOLO con JSON: "
@@ -1324,22 +1390,74 @@ _SS_LISTA_DISP = "__dispensa__"
 _SS_PRIORITA = ["Alta", "Normale", "Bassa"]
 
 
+def _ss_uid():
+    return str((st.session_state.get("sess") or {}).get("uid") or "")
+
+
+def _ss_lc_leggi():
+    """Il file delle liste condivise, sempre fresco (non dalla memoria di 60 secondi)."""
+    try:
+        a_ = crea_archivio()
+        return (a_.leggi_grezzo(SS_LC) if hasattr(a_, "leggi_grezzo") else a_.leggi(SS_LC)) or {}
+    except Exception:
+        return {}
+
+
+def _ss_persone():
+    """[(uid, nome)] delle persone dell'app (tranne me)."""
+    try:
+        tutte = [("admin", fd_nome_di("admin") if "fd_nome_di" in globals() else "Amministratore")] + [(u["id"], u["nome"]) for u in leggi_utenti() if u.get("attivo", True)]
+    except Exception:
+        tutte = []
+    return [(i, n) for i, n in tutte if i != _ss_uid()]
+
+
+def _ss_nome_uid(uid):
+    try:
+        return fd_nome_di(uid) if "fd_nome_di" in globals() else uid
+    except Exception:
+        return uid
+
+
 def _ss_scegli_lista(ss, k):
     liste = [l for l in ss["liste"] if l.get("stato") != "chiusa"]
-    opz = [_SS_LISTA_DISP] + [l["id"] for l in liste]
+    comuni = ss_lc_mie(_ss_lc_leggi(), _ss_uid())
+    opz = [_SS_LISTA_DISP] + ["c:" + l["id"] for l in comuni] + [l["id"] for l in liste]
     nomi = {_SS_LISTA_DISP: "🏠 Lista della Dispensa (condivisa)"} | {l["id"]: "🔒 " + (l.get("nome") or "Lista") for l in liste}
+    for l in comuni:
+        altri = [_ss_nome_uid(u) for u in [l.get("proprietario")] + list(l.get("persone") or []) if u != _ss_uid()]
+        nomi["c:" + l["id"]] = "👥 " + (l.get("nome") or "Lista") + (" (con " + ", ".join(altri[:3]) + ("…" if len(altri) > 3 else "") + ")" if altri else "")
+    nxt = st.session_state.pop(k + "_prossima", None)
+    if nxt in opz:
+        st.session_state[k] = nxt
+    if st.session_state.get(k) not in opz:
+        st.session_state.pop(k, None)
     return st.selectbox("Quale lista", opz, format_func=lambda i: nomi.get(i, "?"), key=k)
 
 
 def _ss_v_lista(ss, disp):
     st.markdown("#### 📝 Lista della spesa")
     lid = _ss_scegli_lista(ss, "ss_lista_sel")
+    persone = _ss_persone()
+    if persone:
+        with st.popover("👥 Nuova lista condivisa con persone scelte", width="stretch"):
+            nome_c = st.text_input("Nome della lista", key="ss_nc_nome", placeholder="es. Spesa per la mamma")
+            chi = st.multiselect("Con chi la condividi", [i for i, _n in persone], format_func=dict(persone).get, key="ss_nc_chi")
+            st.caption("La vedono e la modificano **solo** queste persone e tu. Si aggiorna da sola ogni 10 secondi; quando uno spunta un prodotto, gli altri vedono «preso da…».")
+            if st.button("Crea", key="ss_nc_ok", type="primary", width="stretch"):
+                if not nome_c.strip() or not chi:
+                    st.warning("Scrivi il nome e scegli almeno una persona.")
+                else:
+                    esito = {}
+                    salva_file(SS_LC, lambda d: esito.__setitem__("l", ss_lc_nuova(d, nome_c, _ss_uid(), chi)), "Spesa Smart: nuova lista condivisa")
+                    st.session_state["ss_lista_sel_prossima"] = "c:" + esito["l"]["id"]
+                    st.rerun()
     with st.popover("➕ Nuova lista privata", width="stretch"):
         nome = st.text_input("Nome della lista", key="ss_nl_nome", placeholder="es. Spesa grande del mese")
         if st.button("Crea", key="ss_nl_ok", type="primary", width="stretch") and nome.strip():
             nid = ss_id()
             _ss_salva(lambda s_: s_["liste"].append({"id": nid, "nome": nome.strip(), "creata_il": ss_ora(), "proprietario": _ss_utente(), "stato": "aperta"}), "nuova lista")
-            st.session_state["ss_lista_sel"] = nid
+            st.session_state["ss_lista_sel_prossima"] = nid
             st.rerun()
     cat = ss_catalogo(ss, disp)
     per_id = {p["id"]: p for p in cat}
@@ -1361,6 +1479,9 @@ def _ss_v_lista(ss, disp):
             st.rerun()
         if "scheda_spesa" in globals():
             scheda_spesa()                                                 # la lista vera, con le sue spunte, quantità e «Metti in dispensa»
+        return
+    if str(lid).startswith("c:"):
+        _ss_lc_vista(lid[2:], per_id)
         return
     lista = ss_trova(ss, "liste", lid)
     if not lista:
@@ -1419,17 +1540,114 @@ def _ss_v_lista(ss, disp):
     with st.expander("⚙️ Lista"):
         if st.button("✅ Chiudi la lista (spesa fatta)", key="ss_lp_chiudi", width="stretch"):
             _ss_salva(lambda s_: ss_trova(s_, "liste", lid).__setitem__("stato", "chiusa"), "lista chiusa")
-            st.session_state.pop("ss_lista_sel", None)
+            st.session_state["ss_lista_sel_prossima"] = "__dispensa__"
             st.rerun()
         if st.button("🗑️ Elimina la lista", key="ss_lp_del", width="stretch"):
             _ss_salva(lambda s_: ss_elimina(s_, "liste", lid), "lista eliminata")
-            st.session_state.pop("ss_lista_sel", None)
+            st.session_state["ss_lista_sel_prossima"] = "__dispensa__"
             st.rerun()
+
+
+def _ss_lc_corpo(lc_id, per_id):
+    """Una lista condivisa: si ridisegna da sola ogni 10 secondi (modifiche degli altri)."""
+    uid, chi = _ss_uid(), _ss_utente()
+    dati = _ss_lc_leggi()
+    lista = next((l for l in dati.get("liste") or [] if l.get("id") == lc_id), None)
+    if not lista or not ss_lc_puo(lista, uid):
+        st.warning("Questa lista non c'è più o non è condivisa con te.")
+        return
+    persone = [_ss_nome_uid(u) for u in [lista.get("proprietario")] + list(lista.get("persone") or [])]
+    st.caption("👥 Condivisa tra: **" + ", ".join(persone) + "** · si aggiorna da sola ogni 10 secondi")
+    c1, c2, c3 = st.columns([4, 1.4, 1.6], gap="small")
+    pid = c1.selectbox("Prodotto", list(per_id), index=None, format_func=lambda i: _ss_etich_prodotto(per_id[i]), key="ss_lc_p_" + lc_id, placeholder="Scrivi per cercare…")
+    q = c2.number_input("Quanti", min_value=1, value=1, step=1, key="ss_lc_q_" + lc_id)
+    libero = st.text_input("…oppure scrivi un prodotto che non è in archivio", key="ss_lc_lib_" + lc_id, placeholder="es. pane fresco")
+    if c3.button("➕ Aggiungi", key="ss_lc_ok_" + lc_id, width="stretch") and (pid or libero.strip()):
+        p = per_id[pid] if pid else {"nome": libero.strip()}
+        esito = {}
+
+        def _fn(d):
+            l = next((x for x in d.get("liste") or [] if x.get("id") == lc_id), None)
+            if not ss_lc_puo(l, uid):
+                raise PermissionError("lista non condivisa con te")
+            esito["r"] = ss_lc_aggiungi(l, p, q, chi)
+            d["versione"] = int(d.get("versione") or 0) + 1
+        salva_file(SS_LC, _fn, "Spesa Smart: lista condivisa")
+        if not esito["r"][1]:
+            st.toast(f"«{p.get('nome')}» era già in lista: ho aumentato la quantità.")
+        st.session_state.pop("ss_lc_lib_" + lc_id, None)
+        st.rerun(scope="fragment")
+    righe = lista.get("righe") or []
+    if not righe:
+        st.info("La lista è vuota.")
+        return
+    import pandas as _pd
+    df = _pd.DataFrame([{"id": r["id"], "Preso": r.get("stato") == "preso", "Prodotto": " · ".join(x for x in (r.get("nome"), r.get("marca")) if x),
+                         "Quanti": float(ss_num(r.get("quantita"), 1) or 1), "Priorità": r.get("priorita") or "Normale",
+                         "Chi": ("✅ " + r["preso_da"]) if r.get("stato") == "preso" and r.get("preso_da") else ("➕ " + (r.get("aggiunto_da") or "")),
+                         "🗑️": False} for r in righe]).set_index("id")
+    ver = int(dati.get("versione") or 0)
+    mod = st.data_editor(df, key=f"ss_lc_ed_{lc_id}_{ver}", width="stretch", disabled=["Prodotto", "Chi"], hide_index=True,
+                         column_config={"Preso": st.column_config.CheckboxColumn("Preso", width="small"), "Quanti": st.column_config.NumberColumn("Quanti", min_value=1.0, step=1.0, width="small"),
+                                        "Priorità": st.column_config.SelectboxColumn("Priorità", options=_SS_PRIORITA, width="small"), "Chi": st.column_config.TextColumn("Chi", width="small"),
+                                        "🗑️": st.column_config.CheckboxColumn("🗑️", width="small")})
+    cambi = {}
+    for i in df.index:
+        c = {}
+        if bool(mod.loc[i, "Preso"]) != bool(df.loc[i, "Preso"]):
+            c["preso"] = bool(mod.loc[i, "Preso"])
+        if float(mod.loc[i, "Quanti"] or 1) != float(df.loc[i, "Quanti"]):
+            c["quantita"] = float(mod.loc[i, "Quanti"] or 1)
+        if mod.loc[i, "Priorità"] != df.loc[i, "Priorità"]:
+            c["priorita"] = mod.loc[i, "Priorità"]
+        if bool(mod.loc[i, "🗑️"]):
+            c["togli"] = True
+        if c:
+            cambi[i] = c
+    if st.button("💾 Salva" + ((" (1 cambio)" if len(cambi) == 1 else f" ({len(cambi)} cambi)") if cambi else ""), key="ss_lc_salva_" + lc_id, type="primary", width="stretch", disabled=not cambi):
+        def _fn(d):
+            l = next((x for x in d.get("liste") or [] if x.get("id") == lc_id), None)
+            if not ss_lc_puo(l, uid):
+                raise PermissionError("lista non condivisa con te")
+            ss_lc_applica(l, cambi, chi)
+            d["versione"] = int(d.get("versione") or 0) + 1
+        salva_file(SS_LC, _fn, "Spesa Smart: lista condivisa")
+        st.rerun(scope="fragment")
+    presi = [r for r in righe if r.get("stato") == "preso" and r.get("preso_da") == chi]
+    if presi and st.button(f"📦 Metti in Dispensa quelli che ho preso io ({len(presi)})", key="ss_lc_disp_" + lc_id, width="stretch"):
+        st.session_state["ss_in_disp"] = [{"prodotto": {"nome": r.get("nome"), "marca": r.get("marca"), "ean": r.get("ean"), "formato_valore": r.get("formato_valore"),
+                                                        "formato_unita": r.get("formato_unita")}, "quantita": r.get("quantita")} for r in presi]
+        st.rerun()
+    if lista.get("proprietario") == uid:
+        with st.expander("⚙️ Lista condivisa"):
+            persone_tutte = _ss_persone()
+            nuove = st.multiselect("Con chi è condivisa", [i for i, _n in persone_tutte], default=[u for u in lista.get("persone") or [] if u in dict(persone_tutte)],
+                                   format_func=dict(persone_tutte).get, key="ss_lc_chi_" + lc_id)
+            if st.button("💾 Salva le persone", key="ss_lc_chi_ok_" + lc_id, width="stretch") and nuove:
+                salva_file(SS_LC, lambda d: next(x for x in d["liste"] if x["id"] == lc_id).__setitem__("persone", list(nuove)), "Spesa Smart: persone della lista")
+                st.rerun()
+            if st.button("✅ Chiudi la lista (spesa fatta)", key="ss_lc_chiudi_" + lc_id, width="stretch"):
+                salva_file(SS_LC, lambda d: next(x for x in d["liste"] if x["id"] == lc_id).__setitem__("stato", "chiusa"), "Spesa Smart: lista chiusa")
+                st.session_state["ss_lista_sel_prossima"] = "__dispensa__"
+                st.rerun()
+
+
+def _ss_lc_vista(lc_id, per_id):
+    f = st.fragment(run_every=10)(_ss_lc_corpo) if hasattr(st, "fragment") else _ss_lc_corpo
+    f(lc_id, per_id)
 
 
 def _ss_righe_lista(ss, disp, lid):
     """Le righe da comprare della lista scelta, con il prodotto collegato (o None se non c'è ancora una scheda)."""
     out = []
+    if str(lid).startswith("c:"):
+        l = next((x for x in _ss_lc_leggi().get("liste") or [] if x.get("id") == lid[2:]), None) or {}
+        for r in l.get("righe") or []:
+            if r.get("stato") == "preso":
+                continue
+            p = ss_prodotto_per_riga_disp(ss, {"barcode": r.get("ean"), "nome": r.get("nome"), "marca": r.get("marca")})
+            out.append({"prodotto_id": p["id"] if p else None, "quantita": ss_num(r.get("quantita"), 1) or 1, "nome": r.get("nome", "")})
+        return out
     if lid == _SS_LISTA_DISP:
         for r in disp.get("spesa", []):
             if r.get("preso"):
