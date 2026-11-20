@@ -31,11 +31,12 @@ IL_FORNITORI = {
                "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-2.5-flash"], "testo": ["gemini-flash-latest", "gemini-2.5-flash"],
                "link": "https://aistudio.google.com/apikey", "costo": "gratis, con un tetto di richieste al minuto e al giorno",
                "dati": "con la chiave gratuita Google può usare i testi per migliorare i modelli"},
-    "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True,
+    "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True, "pref_testo": [r"mistral-small-latest", r"mistral-medium-latest", r"mistral-large-latest"],
                 "vista": ["mistral-medium-latest", "mistral-small-latest", "pixtral-large-latest"], "testo": ["mistral-small-latest", "mistral-medium-latest"],
                 "link": "https://console.mistral.ai/api-keys", "costo": "gratis (piano «Experiment»: 1 richiesta al secondo), serve il numero di telefono",
                 "dati": "nel piano gratuito i dati possono servire ad addestrare i modelli"},
     "groq": {"nome": "Groq", "base": "https://api.groq.com/openai/v1", "secret": ["GROQ_API_KEY"],
+             "pref_vista": [r"llama-4-scout", r"llama-4-maverick", r"qwen.*(vl|vision|3\.\d+-\d+b)", r"vision"], "pref_testo": [r"gpt-oss-120b", r"llama-4-maverick", r"llama-3\.3-70b", r"kimi-k2", r"qwen3", r"gpt-oss-20b", r"llama-3\.1-8b"],
              "vista": ["qwen/qwen3.8-27b", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"],
              "testo": ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"], "link": "https://console.groq.com/keys",
              "costo": "gratis, con tetti al minuto e al giorno", "dati": "i dati non servono ad addestrare (secondo le condizioni)"},
@@ -43,6 +44,7 @@ IL_FORNITORI = {
                    "vista": ["openrouter/free"], "testo": ["deepseek/deepseek-chat-v3.1:free", "openrouter/free"], "link": "https://openrouter.ai/keys",
                    "costo": "gratis con i modelli «:free» (circa 50 richieste al giorno)", "dati": "dipende dal modello gratuito: alcuni possono usare i dati"},
     "nvidia": {"nome": "NVIDIA NIM", "base": "https://integrate.api.nvidia.com/v1", "secret": ["NVIDIA_API_KEY"],
+               "pref_vista": [r"llama-4-maverick", r"llama-3\.2-90b-vision", r"vl", r"vision"], "pref_testo": [r"llama-3\.3-70b", r"deepseek-v3", r"gpt-oss-120b", r"llama-4-maverick"],
                "vista": ["meta/llama-4-maverick-17b-128e-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"],
                "testo": ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-v3.1"], "link": "https://build.nvidia.com/settings/api-keys",
                "costo": "gratis per prove (circa 40 richieste al minuto), serve il numero di telefono", "dati": "servizio per sviluppatori"},
@@ -169,6 +171,9 @@ def il_modelli(prov, vista=True):
         scelti += _il_openrouter_vista_gratis()[:3]
     if ids:
         scelti += [m for m in base if m in ids]
+        for rx in cfg.get("pref_vista" if vista else "pref_testo") or []:          # dall'elenco VERO del servizio (i nomi cambiano spesso)
+            scelti += [i for i in ids if _il_re.search(rx, i, _il_re.I) and not _il_re.search(r"guard|whisper|tts|embed|orpheus|prompt", i, _il_re.I)][:1]
+        scelti = [m for m in scelti if m in ids] + [m for m in scelti if m not in ids]   # prima quelli che esistono davvero
     scelti += base
     visti, out = set(), []
     for m in scelti:
@@ -186,7 +191,7 @@ def il_modelli(prov, vista=True):
 # ---------------------------------------------------------------------------------------------------------------------
 # la chiamata (compatibile OpenAI)
 # ---------------------------------------------------------------------------------------------------------------------
-def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120):
+def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120, modelli_max=5):
     """(risposta, errore). immagini = elenco di JPEG (byte). errore: 'chiave', 'limite', 'modello', 'rete', 'servizio', ''."""
     key = il_chiave(prov)
     if not key:
@@ -194,8 +199,10 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
     contenuto = [{"type": "text", "text": testo}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + _il_b64.b64encode(im).decode()}} for im in immagini]
     messaggi = [{"role": "system", "content": istruzioni}, {"role": "user", "content": contenuto if immagini else testo}]
     ultimo = "modello"
-    for modello in il_modelli(prov, vista=bool(immagini)):
-        corpo = {"model": modello, "messages": messaggi, "temperature": 0.1, "max_tokens": max_tokens}
+    for modello in il_modelli(prov, vista=bool(immagini))[:modelli_max]:
+        corpo = {"model": modello, "messages": messaggi, "temperature": 0.1, "max_tokens": max(max_tokens, 400)}
+        if prov == "gemini" or (prov == "groq" and "gpt-oss" in modello):
+            corpo["reasoning_effort"] = "low"                                # i modelli «che pensano» rispondono subito
         try:
             r = _il_req.post(il_base(prov) + "/chat/completions", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
                                                                           "HTTP-Referer": "https://vitamemo.streamlit.app", "X-Title": "VitaMemo"},
@@ -212,6 +219,9 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
             except Exception:
                 ultimo = "servizio"
                 continue
+            if not risposta.strip():
+                with _IL_BLOCCO:
+                    _IL_STATO.setdefault("errori", {})[prov] = f"{modello}: risposta vuota"
             if risposta.strip():
                 with _IL_BLOCCO:
                     _IL_STATO["modello"][(prov, bool(immagini))] = modello
@@ -230,6 +240,24 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
             _il_metti_pausa(prov, 6 * 3600, "credito finito")
             return "", "limite"
         ultimo = "modello" if r.status_code in (400, 404, 422) else "servizio"
+        try:
+            dett = f"{modello}: {r.status_code} {r.text[:220]}"
+        except Exception:
+            dett = f"{modello}: {r.status_code}"
+        with _IL_BLOCCO:
+            _IL_STATO.setdefault("errori", {})[prov] = dett
+        if r.status_code == 400 and corpo.get("reasoning_effort"):          # il modello non accetta «reasoning_effort»: riprovo senza
+            corpo.pop("reasoning_effort", None)
+            try:
+                r2 = _il_req.post(il_base(prov) + "/chat/completions", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=corpo, timeout=timeout)
+                if r2.status_code == 200:
+                    risposta = (((r2.json().get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+                    if str(risposta).strip():
+                        with _IL_BLOCCO:
+                            _IL_STATO["modello"][(prov, bool(immagini))] = modello
+                        return str(risposta), ""
+            except Exception:
+                pass
     return "", ultimo
 
 
@@ -721,13 +749,19 @@ def il_blocco_utilita():
             st.markdown(f"**Costo:** {cfg['costo']}  \n**Dati:** {cfg['dati']}")
             if ha:
                 if st.button("🧪 Prova questa chiave", key=f"il_prova_{prov}", width="stretch"):
-                    with st.spinner("Provo…"):
-                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=10, timeout=40)
+                    with st.spinner("Provo… (al massimo un minuto)"):
+                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=400, timeout=25, modelli_max=2)
                     if r:
                         st.success(f"Funziona ✅ (modello: {il_modelli(prov, False)[0]})")
                     else:
                         st.error({"chiave": "La chiave non è valida: ricopiala nei Secrets.", "limite": "Richieste finite per ora: riprova più tardi.",
                                   "modello": "Il servizio non ha trovato il modello: scrivimelo e lo aggiorno.", "rete": "Il servizio non risponde: riprova."}.get(err, "Non ha funzionato: riprova."))
+                        with _IL_BLOCCO:
+                            dett = (_IL_STATO.get("errori") or {}).get(prov)
+                        if dett:
+                            st.caption("Dettaglio per Claude (mandami una foto di questa riga): " + dett)
+                        elenco_ = _il_elenco_modelli(prov, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8])
+                        st.caption("Modelli che il servizio dice di avere: " + (", ".join(m["id"] for m in elenco_[:25]) or "nessun elenco ricevuto"))
             else:
                 st.markdown("**Come avere la chiave (dal telefono):**")
                 for i, passo in enumerate(_IL_GUIDE.get(prov, []), 1):
