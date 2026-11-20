@@ -341,10 +341,24 @@ def _lu_parole(x):
     return {w for w in _lu_re.sub(r"[^a-z ]", " ", t).split() if len(w) >= 2 and w not in _LU_NON_NOMI}
 
 
+def _lu_in_sottofondo():
+    """Siamo nel lavoro in sottofondo? Lì NON si tocca st.session_state (se la pagina si ridisegna, Streamlit ferma il filo)."""
+    return getattr(globals().get("_IL_TL"), "lavoro", None) is not None
+
+
+def _lu_nome_sessione():
+    if _lu_in_sottofondo():
+        return "Io"
+    try:
+        return (st.session_state.get("sess") or {}).get("nome", "Io")
+    except Exception:
+        return "Io"
+
+
 def lu_persone(d):
     """[{id, nome, nomi, cf}]: le persone della famiglia (i profili della Salute)."""
     f = d.get("farmacia") or {}
-    prof = f.get("profili") or [{"id": "p0", "nome": (st.session_state.get("sess") or {}).get("nome", "Io")}]
+    prof = f.get("profili") or [{"id": "p0", "nome": _lu_nome_sessione()}]
     out = []
     for p in prof:
         if not isinstance(p, dict) or not p.get("id"):
@@ -437,6 +451,13 @@ def lu_destinazione(sez, x, letto, d):
         else:
             cambi["sezione"] = [LU_SEZ_NOMI[sez], f"{LU_SEZ_NOMI[dove]} di {_lu_nome_persona(d, per)}"]
         return cambi, dest
+    if dove == "auto" and sez in ("casa", "documenti") and len(_lu_file_refs(sez, x)) >= 1:
+        vid = _lu_veicolo_per(d, x, letto)
+        if vid:
+            dest.update(sezione="auto", veicolo=vid)
+            return {"sezione": [LU_SEZ_NOMI[sez], f"{LU_SEZ_NOMI['auto']} › {_lu_nome_veicolo(d, vid)}"]}, dest
+    if dove and dove != sez and dove in LU_SEZ_NOMI and not (sez == "casa" and dove == "lavoro" and x.get("tipo") in ("Busta paga", "Certificazione Unica (CU)", "Documento INPS")):
+        dest["segnala"] = dove                                           # non si sposta da solo: lo segnalo («📌 forse sta nella sezione sbagliata»)
     if not p:
         return cambi, dest
     if sez == "documenti" and p["id"] != (x.get("profilo") or "p0"):
@@ -447,6 +468,24 @@ def lu_destinazione(sez, x, letto, d):
             dest["casa_id"] = case[0]
             cambi["casa_id"] = [_lu_nome_casa(d, x.get("casa_id") or ""), f"{_lu_nome_casa(d, case[0])} ({p['nome']})"]
     return cambi, dest
+
+
+def _lu_veicolo_per(d, x, letto=None):
+    """Il veicolo del documento: quello con la targa scritta nel documento, oppure l'unico veicolo."""
+    veic = [v for v in ((d.get("auto") or {}).get("veicoli") or []) if isinstance(v, dict) and v.get("id")]
+    if not veic:
+        return None
+    testo = _lu_re.sub(r"\s+", "", (_lu_testo_doc(x) + " " + str((letto or {}).get("campi") or "")).upper())
+    for v in veic:
+        t_ = _lu_re.sub(r"\s+", "", str(v.get("targa") or "")).upper()
+        if len(t_) >= 5 and t_ in testo:
+            return v["id"]
+    return veic[0]["id"] if len(veic) == 1 else None
+
+
+def _lu_nome_veicolo(d, vid):
+    v = next((v for v in ((d.get("auto") or {}).get("veicoli") or []) if v.get("id") == vid), {})
+    return " ".join(str(v.get(k) or "") for k in ("marca", "modello") if v.get(k)).strip() + (f" ({v['targa']})" if v.get("targa") else "") or "Veicolo"
 
 
 def _lu_data_di(x):
@@ -481,6 +520,15 @@ def _lu_sposta(d, sez, x, dest):
                                               "numero": str(x.get("numero") or x.get("numero_doc") or ""), "ente": str(x.get("ente") or ""), "rilascio": x.get("rilascio") or x.get("data_doc") or None,
                                               "scadenza": x.get("scadenza") or x.get("scadenza_doc") or None, "note": (str(x.get("note") or "") + ("\n" if x.get("note") else "") + titolo).strip(),
                                               "allegati": [{"id": r["id"], "nome": r.get("nome"), "mime": r.get("mime"), "sha": r.get("sha") or r.get("sha256")} for r in refs], "spostato_da": sez})
+    elif dove == "auto":
+        v = next((v for v in ((d.get("auto") or {}).get("veicoli") or []) if v.get("id") == dest.get("veicolo")), None)
+        if v is None:
+            return False
+        tipi = set(globals().get("_AU_DOC_TIPI") or [])
+        v.setdefault("documenti", []).append({"id": _lu_uuid.uuid4().hex[:10], "tipo": x.get("tipo") if x.get("tipo") in tipi else "Altro", "titolo": titolo,
+                                             "data": _lu_data_di(x) or None, "scadenza": x.get("scadenza") or x.get("scadenza_doc") or None, "importo": x.get("importo"),
+                                             "note": str(x.get("note") or ""), "files": [{"id": r["id"], "nome": r.get("nome"), "mime": r.get("mime"), "sha": r.get("sha") or r.get("sha256")} for r in refs],
+                                             "spostato_da": sez})
     elif dove == "casa":
         c = d.setdefault("casa", {})
         tipi = set(globals().get("CA_TIPI") or [])
@@ -609,7 +657,11 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
                     _IL_TL.scadenza = _lu_time.time() + LU_MAX_DOC
                     _IL_TL.doc_i = i
                 ris = {}
-                fn = (lambda x=x: _uno(x))
+                def fn(x=x):
+                    try:
+                        return _uno(x)
+                    except Exception as e_:                                # un errore vero si dice (non «troppo lento»)
+                        return {"errore": f"errore {type(e_).__name__}: {str(e_)[:80]}"}
                 if "_il_con_controllo" in globals():
                     finito, ris = _il_con_controllo(fn, LU_MAX_DOC + 20)
                     ris = ris if finito and ris else {"errore": "troppo lento, saltato"}
@@ -669,10 +721,11 @@ _lu_sp_proponi_vecchio = globals().get("sp_proponi_profilo")
 def sp_proponi_profilo(f, paziente, cf):                                   # noqa: F811 — anche «nome e cognome come sui documenti» e codice fiscale delle persone
     try:
         dd = {"farmacia": f}
-        try:
-            dd["anagrafica"] = carica_dati(crea_archivio(), percorso_mio()).get("anagrafica") or {}
-        except Exception:
-            pass
+        if not _lu_in_sottofondo():                                    # in sottofondo niente session_state (vedi _lu_in_sottofondo)
+            try:
+                dd["anagrafica"] = carica_dati(crea_archivio(), percorso_mio()).get("anagrafica") or {}
+            except Exception:
+                pass
         p = lu_chi_e(dd, paziente, cf)
         if p:
             return p["id"], ("codice fiscale" if cf and p["cf"] == _lu_re.sub(r"\s+", "", str(cf)).upper() else "nome")
@@ -935,6 +988,27 @@ def lu_ricerca_ui(chiave):
                     st.download_button("⬇️ " + str(nome)[:40], dati, file_name=nome or "documento", mime=mime or "application/octet-stream", key=f"lu_qd_{chiave}_{i}_{j}", width="stretch")
 
 
+def _lu_segnalati_ui(sez, tutti_docs):
+    """📌 Documenti che l'IA pensa siano nella sezione sbagliata (Auto con più veicoli, Animali, Lavoro…): li segnala, si sistemano a mano."""
+    seg = [x for x in tutti_docs if ((x.get("lettura_lu") or {}).get("dest") or {}).get("segnala") and not (x.get("lettura_lu") or {}).get("segnala_ok")]
+    if not seg:
+        return
+    with st.container(border=True, key=f"lu_seg_{sez}"):
+        st.markdown(f"**📌 Forse nella sezione sbagliata: {len(seg)}**")
+        st.caption("L'IA pensa che questi documenti stiano meglio in un'altra sezione. Aprili da lì e caricali di nuovo (oppure tocca «Va bene qui»).")
+        for x in seg[:15]:
+            dove = x["lettura_lu"]["dest"]["segnala"]
+            c1, c2 = st.columns([4, 2], gap="small")
+            c1.markdown(f"📄 {_lu_html.escape(_lu_titolo(x))} → **{LU_SEZ_NOMI.get(dove, dove)}**")
+            if c2.button("Va bene qui", key=f"lu_segok_{sez}_{x['id']}", width="stretch"):
+                def _m(d, i=x["id"]):
+                    for y in LU_SEZIONI[sez]["docs"](d):
+                        if isinstance(y, dict) and y.get("id") == i and isinstance(y.get("lettura_lu"), dict):
+                            y["lettura_lu"]["segnala_ok"] = True
+                salva(_m, f"{LU_SEZIONI[sez]['nome']}: documento lasciato dov'è")
+                st.rerun()
+
+
 def lu_pannello(sez):
     """Il riquadro «🤖 Rileggi e ricataloga con l'IA» in fondo alla sezione."""
     if sez not in LU_SEZIONI:
@@ -999,6 +1073,7 @@ def lu_pannello(sez):
                 if c2.button("✖ Non applicare", key=f"lu_no_{sez}", width="stretch"):
                     _lu_salva_conferma(sez, [], ids, {"_rifiuta_tipo": rifiuta_tipo} if rifiuta_tipo else None)
                     st.rerun()
+    _lu_segnalati_ui(sez, tutti_docs)
     lu_ricerca_ui(sez)
     with st.expander("🤖 Rileggi e ricataloga con l'IA"):
         if not lu_attivo():
