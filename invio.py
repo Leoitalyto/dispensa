@@ -107,12 +107,40 @@ def inv_pdf(titolo, sottotitolo, pagine, nota=""):
             storia += [P(riga, s_p, 900), Spacer(1, 1.5 * mm)]
         for t_, intest, righe in pg["tabelle"]:
             storia.append(P(t_, s_h3))
+            if righe and intest and intest[0] == "N°":
+                storia.append(P("Per chiedere dei documenti basta indicare il loro N° (per esempio: «portami il 4, il 12 e il 17»).", s_v))
             if not righe:
                 storia.append(P("Nessun dato inserito.", s_v))
                 continue
             pesi = [max(len(_pdf_txt(h)), min(32, max(len(_pdf_txt(r[i])) if i < len(r) else 0 for r in righe))) + 3 for i, h in enumerate(intest)]
             larg = [doc.width * p_ / sum(pesi) for p_ in pesi]
-            dati = [[P(h, s_ch) for h in intest]] + [[P(r[i] if i < len(r) else "", s_c) for i in range(len(intest))] for r in righe]
+            # nessuna parola spezzata: ogni colonna è larga almeno quanto la sua parola più lunga (le DATE restano su una riga: «22/03/2017»)
+            try:
+                from reportlab.pdfbase.pdfmetrics import stringWidth
+                minimi = []
+                for i, h in enumerate(intest):
+                    parole = [w for r in righe if i < len(r) for w in _pdf_txt(r[i]).split()] + _pdf_txt(h).split()
+                    lw = max([stringWidth(w, "Helvetica", 7.4) for w in parole[:4000]] + [stringWidth(w, "Helvetica-Bold", 7.4) for w in _pdf_txt(h).split()] + [8])
+                    minimi.append(min(lw + 8, doc.width * .22))
+                for _giro in range(4):
+                    sotto = [i for i in range(len(larg)) if larg[i] < minimi[i]]
+                    if not sotto:
+                        break
+                    manca = sum(minimi[i] - larg[i] for i in sotto)
+                    for i in sotto:
+                        larg[i] = minimi[i]
+                    altri = [i for i in range(len(larg)) if i not in sotto and larg[i] > minimi[i]]
+                    margine = sum(larg[i] - minimi[i] for i in altri)
+                    if margine <= 0:
+                        break
+                    for i in altri:
+                        larg[i] -= manca * (larg[i] - minimi[i]) / margine
+                tot = sum(larg)
+                larg = [w * doc.width / tot for w in larg]
+            except Exception:
+                pass
+            s_n = ParagraphStyle("n", parent=s_c, fontName="Helvetica-Bold", fontSize=9, leading=11)
+            dati = [[P(h, s_ch) for h in intest]] + [[P(r[i] if i < len(r) else "", s_n if (i == 0 and intest[0] == "N°") else s_c) for i in range(len(intest))] for r in righe]
             tab = Table(dati, colWidths=larg, repeatRows=1)
             tab.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), verde), ("GRID", (0, 0), (-1, -1), .3, colors.HexColor("#999999")),
                                      ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f7f6")]),

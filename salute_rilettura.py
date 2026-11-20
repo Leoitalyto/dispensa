@@ -333,6 +333,8 @@ _sr_modulo_docsan_prima = sp_modulo_docsan
 
 
 def sp_modulo_docsan(pid):                                                           # noqa: F811
+    if "stt_numeri_salva" in globals():
+        stt_numeri_salva(pid)                                                        # ogni documento ha il suo N° fisso (lo stesso del riepilogo PDF)
     _sr_modulo_docsan_prima(pid)
     try:
         sr_pannello(pid)

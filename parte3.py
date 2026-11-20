@@ -101,6 +101,8 @@ if not sess:
         if not troppi_tentativi():
             accesso = accesso_da_codice(k, leggi_utenti())
             if accesso:
+                if st.session_state.get("_vmi_da_telefono"):
+                    st.session_state["_vmi_scelta"] = True      # accesso automatico: vale l'ultima lingua usata su questo telefono
                 entra(accesso)
                 st.rerun()
             if not str(k).startswith("t1."):            # link vecchio con la password dentro: entra una volta e lo sostituisce con un codice
@@ -123,8 +125,7 @@ if not sess:
         else:
             accesso = cerca_accesso(pw, leggi_utenti())
             if accesso:
-                if st.session_state.get("_vmi_da_telefono"):
-                    st.session_state["_vmi_scelta"] = True      # telefono già usato: la lingua che si vede nella pagina di accesso è quella con cui si entra (e si salva)
+                st.session_state["_vmi_scelta"] = True          # la lingua che si vede nella pagina di accesso è quella con cui si entra (e si salva)
                 entra(accesso, ricorda)
                 st.rerun()
             segna_errore()
