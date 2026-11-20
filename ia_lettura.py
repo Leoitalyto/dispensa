@@ -14,6 +14,7 @@
 Prefisso: il_"""
 import base64 as _il_b64
 import hashlib as _il_hl
+import html as _il_html
 import io as _il_io
 import json as _il_json
 import os as _il_os
@@ -121,7 +122,7 @@ def _il_tempo(t):
 
 def _il_segna(prov, modello):
     lav = getattr(_IL_TL, "lavoro", None)
-    if lav is not None:
+    if lav is not None and getattr(_IL_TL, "doc_i", lav.get("i")) == lav.get("i"):     # un documento già abbandonato non scrive più
         lav["servizio"] = f"{IL_FORNITORI.get(prov, {}).get('nome', prov)} · {modello.split('/')[-1]}"
         lav["segnale"] = _il_time.time()
 
@@ -778,6 +779,63 @@ def il_cambiamenti(doc, campi):
     return c
 
 
+def _il_fase(testo):
+    lav = getattr(_IL_TL, "lavoro", None)
+    if lav is not None and getattr(_IL_TL, "doc_i", lav.get("i")) == lav.get("i"):
+        lav["servizio"], lav["segnale"] = testo, _il_time.time()
+
+
+def _il_uno_doc(d, f, files, titolo):
+    """Legge e classifica UN documento → voce delle proposte."""
+    refs = files(d) if files else [d["file"]]
+    if _il_os.environ.get("VM_IL_PROVA_LENTA"):                              # solo per le prove automatiche: lettura finta e lenta
+        lenta = float(_il_os.environ["VM_IL_PROVA_LENTA"])
+        if str(d.get("titolo", "")).startswith("BLOCCA"):
+            lenta = 10 ** 6                                                  # documento che non finisce mai: deve intervenire il controllo
+        t0 = _il_time.time()
+        while _il_time.time() - t0 < lenta:
+            _il_segna("groq", "prova-lenta")
+            _il_time.sleep(0.2)
+        return {"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")}, "ia": {"campi": {}}, "errore": ""}
+    _il_fase("apro il file…")
+    try:
+        nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
+    except Exception:
+        return {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"}
+    _il_fase("preparo le pagine del documento…")
+    try:
+        ia = il_leggi_sanitario(nome, mime, dati, f)
+    except Exception as e_:
+        ia = {"errore_interno": f"{type(e_).__name__}"}
+    if not ia or not ia.get("campi"):
+        errore = "troppo lento, saltato" if _il_scaduto() else "nessun servizio ha risposto" if ia is None else "lettura non riuscita"
+        return {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": errore, "ia": ia}
+    return {"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]), "ia": ia, "errore": ""}
+
+
+def _il_con_controllo(fn, secondi):
+    """Esegue fn() in un filo a parte e non aspetta più di «secondi»: se si blocca (rete, file, servizio) si va avanti lo stesso. (finito, risultato)."""
+    lav_ = getattr(_IL_TL, "lavoro", None)
+    ris, tl = {}, (lav_, getattr(_IL_TL, "permessi", None), getattr(_IL_TL, "scadenza", None), (lav_ or {}).get("i"))
+
+    def _corri():
+        _IL_TL.lavoro, _IL_TL.permessi, _IL_TL.scadenza, _IL_TL.doc_i = tl
+        try:
+            ris["v"] = fn()
+        except Exception as e_:
+            ris["e"] = e_
+
+    t_ = _il_thr.Thread(target=_corri, daemon=True)
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        add_script_run_ctx(t_, get_script_run_ctx())
+    except Exception:
+        pass
+    t_.start()
+    t_.join(secondi)
+    return (not t_.is_alive() and "v" in ris), ris.get("v")
+
+
 def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
     files = globals().get("_stt_files")
@@ -785,36 +843,18 @@ def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
     out = []
     lav = getattr(_IL_TL, "lavoro", None)
     for i, d in enumerate(docs):
-        if lav is not None:
-            if lav.get("stop"):
-                break
-            lav.update(i=i, n=len(docs), inizio_doc=_il_time.time(), servizio="", segnale=_il_time.time(), out=list(out))
-            _IL_TL.scadenza = _il_time.time() + IL_MAX_DOC
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
         if progress:
             progress(i / max(1, len(docs)), f"Leggo con l'IA {i + 1} di {len(docs)}: {titolo}"[:90])
-        refs = files(d) if files else [d["file"]]
-        if _il_os.environ.get("VM_IL_PROVA_LENTA"):                          # solo per le prove automatiche: lettura finta e lenta
-            for _k in range(int(_il_os.environ["VM_IL_PROVA_LENTA"]) * 5):
-                if lav is not None:
-                    _il_segna("groq", "prova-lenta")
-                _il_time.sleep(0.2)
-            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")}, "ia": {"campi": {}}, "errore": ""})
+        if lav is None:
+            out.append(_il_uno_doc(d, f, files, titolo))
             continue
-        try:
-            nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
-        except Exception:
-            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"})
-            continue
-        try:
-            ia = il_leggi_sanitario(nome, mime, dati, f)
-        except Exception:
-            ia = {}
-        if not ia or not ia.get("campi"):
-            errore = "troppo lento, saltato" if _il_scaduto() else "nessun servizio ha risposto" if ia is None else "lettura non riuscita"
-            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": errore, "ia": ia})
-            continue
-        out.append({"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]), "ia": ia, "errore": ""})
+        if lav.get("stop"):
+            break
+        lav.update(i=i, n=len(docs), inizio_doc=_il_time.time(), servizio="", segnale=_il_time.time(), out=list(out), titolo=titolo)
+        _IL_TL.scadenza = _il_time.time() + IL_MAX_DOC
+        finito, voce = _il_con_controllo(lambda d=d, titolo=titolo: _il_uno_doc(d, f, files, titolo), IL_MAX_DOC + 15)
+        out.append(voce if finito and voce else {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "troppo lento, saltato"})
     _IL_TL.scadenza = None
     if lav is not None:
         lav["out"] = list(out)
@@ -855,7 +895,7 @@ _IL_ETICHETTE = {"tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione"
                  "prossimo_controllo": "Prossimo controllo"}
 
 
-IL_MAX_DOC = 110                         # secondi al massimo per un documento (poi passa al successivo)
+IL_MAX_DOC = int(_il_os.environ.get("VM_IL_MAX_DOC", "110"))                        # secondi al massimo per un documento (poi passa al successivo)
 @st.cache_resource
 def _il_lavori_globali():
     return {}
@@ -912,9 +952,11 @@ def _il_mostra_avanzamento(pid):
         lav = _il_lavoro(pid)
         if not lav:
             return
+        ora = _il_time.time()
+        if lav["stato"] == "corre" and ora - lav.get("segnale", ora) > IL_MAX_DOC + 90:   # il lavoro non dà più segni (es. il server è ripartito)
+            lav.update(stato="errore", errore="la lettura non rispondeva più", fine=ora)
         if lav["stato"] != "corre":
             st.rerun()                                                     # finito: mostro le proposte
-        ora = _il_time.time()
         i, n = lav.get("i", 0), max(1, lav.get("n", 0) or 1)
         su_doc = int(ora - lav.get("inizio_doc", ora))
         totale = int(ora - lav.get("inizio", ora))
@@ -924,7 +966,7 @@ def _il_mostra_avanzamento(pid):
         punti = "●" * (1 + totale % 4) + "○" * (3 - totale % 4)
         st.markdown(f"<div style='border:1px solid #38bdf8;border-radius:14px;padding:10px 12px;margin:6px 0'>"
                     f"<b>🤖 Lettura in corso {punti}</b><br>"
-                    f"📄 Documento <b>{min(i + 1, n)} di {n}</b><br>"
+                    f"📄 Documento <b>{min(i + 1, n)} di {n}</b>" + (f": {_il_html.escape(str(lav.get('titolo', ''))[:70])}" if lav.get("titolo") else "") + "<br>"
                     f"⏱️ Su questo documento da <b>{su_doc} s</b> (al massimo {IL_MAX_DOC} s, poi passo al prossimo)<br>"
                     f"🔄 Sto chiedendo a: <b>{lav.get('servizio') or 'preparo il documento…'}</b><br>"
                     f"✅ Letti finora: <b>{len(fatti)}</b> · da cambiare: <b>{sum(1 for x in fatti if x.get('cambi'))}</b><br>"
@@ -960,7 +1002,7 @@ def il_pannello_riclassifica(pid):
         if lav and lav["stato"] in ("fatto", "fermato", "errore") and not lav.get("visto"):
             lav["visto"] = True
             if lav["stato"] == "errore":
-                st.error("La lettura si è interrotta: " + str(lav.get("errore", "")) + ". Riprova.")
+                st.warning("La lettura si è interrotta (" + str(lav.get("errore", "")) + "). Qui sotto quello che ha letto finora: tocca di nuovo «Prova» per ricominciare.")
             st.session_state[chiave] = lav.get("out") or []
         if st.button(f"🔍 Prova: leggi e classifica i {n} documenti", key=f"il_prova_{pid}", width="stretch"):
             st.session_state.pop(chiave, None)
