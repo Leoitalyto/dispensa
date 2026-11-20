@@ -206,6 +206,10 @@ LU_CHI_REGOLE = ("Il destinatario di una lettera o bolletta è di solito nel riq
                  "Scrivi il nome come è scritto, senza titoli (Sig., Sig.ra, Dott.).")
 
 
+LU_RIASSUNTO_CAMPI = {"riassunto": "in 1-2 frasi semplici in italiano: che documento è, chi lo manda, a chi, di cosa parla, date e importi principali",
+                      "parole_chiave": "6-12 parole utili per ritrovarlo con una ricerca (nomi, ditte, luoghi, oggetti, periodi), separate da virgola"}
+
+
 def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
     """files = [(nome, mime, byte)] (fronte, retro, pagine). → {tipo, campi, problemi, fonti, dubbi} oppure {} se l'IA non è disponibile."""
     if not lu_attivo():
@@ -226,8 +230,10 @@ def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
     # secondo tempo: la scheda su misura
     campi_s, regole = _lu_scheda(tipo, sezione)
     critici = [k for k in ("numero", "scadenza", "data_doc", "importo", "competenza", "data", "netto") if k in campi_s][:3]
+    campi_s = dict(campi_s, **LU_RIASSUNTO_CAMPI)
     c2, f2 = il_leggi_campi(f"{contesto}. È un documento di tipo «{tipo or 'non chiaro'}»", campi_s, testo=testo, immagini=immagini, quante=2, critici=critici, regole=(regole or "") + (("\n" + memoria) if memoria else ""))
     dubbi = c2.pop("_dubbi", [])
+    riassunto = {k: str(c2.pop(k, "") or "").strip()[:400] for k in LU_RIASSUNTO_CAMPI}
     campi = {k: v for k, v in c2.items() if not k.startswith("_")}
     for k in ("numero", "targa", "telaio", "cf"):
         if campi.get(k):
@@ -239,7 +245,8 @@ def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
         chi["cf_intestatario"] = ""
     if not chi.get("cf_intestatario") and lu_cf_valido(campi.get("cf") or ""):
         chi["cf_intestatario"] = campi["cf"]
-    return {"tipo": tipo, "campi": campi, "problemi": lu_controlla(tipo, campi), "fonti": fonti, "dubbi": dubbi, "chi": chi}
+    return {"tipo": tipo, "campi": campi, "problemi": lu_controlla(tipo, campi), "fonti": fonti, "dubbi": dubbi, "chi": chi,
+            "riassunto": riassunto.get("riassunto", ""), "parole": riassunto.get("parole_chiave", "")}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -534,7 +541,7 @@ def _lu_salva_esito(percorso, sez, did, voce):
         for x in LU_SEZIONI[sez]["docs"](d):
             if isinstance(x, dict) and x.get("id") == did:
                 info = {"tipo": voce.get("tipo"), "problemi": voce.get("problemi"), "fonti": voce.get("fonti"), "dubbi": voce.get("dubbi"), "il": ora,
-                        "dest": voce.get("dest") or {}, "chi": voce.get("chi") or {}}
+                        "dest": voce.get("dest") or {}, "chi": voce.get("chi") or {}, "riassunto": voce.get("riassunto") or "", "parole": voce.get("parole") or ""}
                 if voce.get("cambi"):
                     x["proposta_lu"] = dict(info, cambi=voce["cambi"])
                 else:
@@ -576,6 +583,8 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
         if _lu_os.environ.get("VM_LU_FINTO"):                              # solo per le prove automatiche: lettura finta
             _lu_time.sleep(float(_lu_os.environ["VM_LU_FINTO"]))
             letto = {"tipo": x.get("tipo") or tipi[0], "campi": {"scadenza": "2031-07-15", "numero": "CA12345AB", "scadenza_doc": "2026-12-31", "data": "2026-01-10"}, "problemi": {}, "fonti": ["groq"], "dubbi": []}
+            letto["riassunto"] = "Documento di prova letto dall'IA: " + _lu_titolo(x)
+            letto["parole"] = "prova, " + str(x.get("tipo") or "")
             if _lu_os.environ.get("VM_LU_CHI"):                            # prova: intestatario e sezione finti («nome|cf|sezione»)
                 n_, c_, s_ = (_lu_os.environ["VM_LU_CHI"].split("|") + ["", "", ""])[:3]
                 letto["chi"] = {"intestatario": n_, "cf_intestatario": c_, "sezione": s_}
@@ -828,6 +837,104 @@ def _lu_nuovi_in_automatico(sez, d, tutti_docs):
     return True
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# 9. RIASSUNTO E RICERCA IN TUTTI I DOCUMENTI (anche dentro: riassunto e parole chiave dell'IA, dati letti)
+# ---------------------------------------------------------------------------------------------------------------------
+LU_NOMI_SEZ = {"documenti": "🪪 I miei documenti", "casa": "🏠 Casa", "lavoro": "💼 Lavoro", "auto": "🚗 Auto", "animali": "🐾 Animali", "salute": "🩺 Salute"}
+
+
+def _lu_testo_doc(x):
+    pezzi = []
+
+    def _raccogli(v, prof=0):
+        if prof > 4:
+            return
+        if isinstance(v, str):
+            if len(v) < 600 and not v.startswith(("data:", "http", "vmimg:")):
+                pezzi.append(v)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            pezzi.append(str(v))
+        elif isinstance(v, dict):
+            for k2, v2 in v.items():
+                if k2 not in ("file", "files", "allegati", "conferma", "dest", "fonti", "id", "sha", "sha256"):
+                    _raccogli(v2, prof + 1)
+        elif isinstance(v, list):
+            for v2 in v[:30]:
+                _raccogli(v2, prof + 1)
+    _raccogli(x)
+    return " ".join(pezzi)
+
+
+def _lu_riassunto_di(x):
+    for k in ("lettura_lu", "proposta_lu", "lettura_ia", "proposta_ia"):
+        r = (x.get(k) or {}) if isinstance(x.get(k), dict) else {}
+        if r.get("riassunto"):
+            return str(r["riassunto"])
+        ia = r.get("ia") if isinstance(r.get("ia"), dict) else {}
+        if ia.get("riassunto"):
+            return str(ia["riassunto"])
+    return str(x.get("riassunto") or x.get("conclusioni") or "")
+
+
+def lu_cerca(d, domanda, massimo=40):
+    """[(sezione, documento, riassunto, punteggio)]: tutte le parole cercate devono esserci (senza accenti, maiuscole/minuscole uguali)."""
+    parole = [w for w in _lu_parole(domanda) if len(w) >= 2] or [w for w in _lu_re.findall(r"\d+", str(domanda or ""))]
+    num = _lu_re.findall(r"\d{2,}", str(domanda or ""))
+    if not parole and not num:
+        return []
+    out = []
+    fonti = [(s_, x) for s_ in ("documenti", "casa", "lavoro", "auto", "animali") for x in LU_SEZIONI[s_]["docs"](d) if isinstance(x, dict)]
+    for p in ((d.get("farmacia") or {}).get("profili") or []):
+        for x in p.get("docsan") or []:
+            if isinstance(x, dict):
+                fonti.append(("salute", dict(x, _persona=p.get("nome", ""))))
+    for s_, x in fonti:
+        testo = _lu_testo_doc(x)
+        t_parole = _lu_parole(testo)
+        t_norm = " ".join(sorted(t_parole))
+        ok = all(any(w == tw or (len(w) >= 4 and tw.startswith(w)) for tw in t_parole) for w in parole) and all(n in testo.replace(" ", "") for n in num)
+        if not ok:
+            continue
+        ri = _lu_riassunto_di(x)
+        punti = sum(3 for w in parole if w in _lu_parole(_lu_titolo(x) if s_ != "salute" else str(x.get("titolo") or x.get("tipo") or ""))) + len(parole) + (1 if ri else 0)
+        out.append((s_, x, ri, punti, len(t_norm)))
+    out.sort(key=lambda r: (-r[3], -len(r[2])))
+    return [(a, b, c, e) for a, b, c, e, _f in out[:massimo]]
+
+
+def lu_ricerca_ui(chiave):
+    """🔎 Cerca in tutti i documenti (anche dentro): risultato con sezione, titolo, riassunto e il file da vedere."""
+    with st.expander("🔎 Cerca in tutti i documenti (anche dentro)"):
+        q = st.text_input("Cosa cerchi?", key=f"lu_q_{chiave}", placeholder="es. enel luglio, revisione, vaccino gatto, condominio 2025")
+        st.caption("Cerco in **tutte le sezioni**: titoli, tipi, numeri, chi l'ha emesso e anche nel **riassunto** e nelle **parole chiave** scritte dall'IA quando ha letto il documento.")
+        if not q.strip():
+            return
+        try:
+            d = carica_dati(crea_archivio(), st.session_state.get("percorso") or percorso_mio())
+        except Exception:
+            return
+        ris = lu_cerca(d, q)
+        if not ris:
+            st.info("Non ho trovato niente. Prova con meno parole o con una parola diversa. (I documenti non ancora letti dall'IA si trovano solo per titolo e dati.)")
+            return
+        st.caption(f"Trovati: {len(ris)}")
+        for i, (s_, x, ri, _p) in enumerate(ris):
+            titolo = (str(x.get("titolo") or x.get("tipo") or "Documento") + (f" · {x['_persona']}" if x.get("_persona") else "")) if s_ == "salute" else _lu_titolo(x)
+            st.markdown(f"**{LU_NOMI_SEZ.get(s_, s_)} › {_lu_html.escape(titolo)}**" + (f"<br><span style='font-size:.88rem;opacity:.9'>📝 {_lu_html.escape(ri)}</span>" if ri else ""),
+                        unsafe_allow_html=True)
+            if st.toggle("👁️ Vedi il file", key=f"lu_qv_{chiave}_{i}"):
+                try:
+                    files = _lu_file_fa([x["file"]]) if s_ == "salute" and x.get("file") else LU_SEZIONI[s_]["file"](x)
+                except Exception:
+                    files = []
+                if not files:
+                    st.caption("Nessun file collegato.")
+                for j, (nome, mime, dati) in enumerate(files[:3]):
+                    if str(mime).startswith("image/"):
+                        st.image(dati, caption=nome, width="stretch")
+                    st.download_button("⬇️ " + str(nome)[:40], dati, file_name=nome or "documento", mime=mime or "application/octet-stream", key=f"lu_qd_{chiave}_{i}_{j}", width="stretch")
+
+
 def lu_pannello(sez):
     """Il riquadro «🤖 Rileggi e ricataloga con l'IA» in fondo alla sezione."""
     if sez not in LU_SEZIONI:
@@ -892,6 +999,7 @@ def lu_pannello(sez):
                 if c2.button("✖ Non applicare", key=f"lu_no_{sez}", width="stretch"):
                     _lu_salva_conferma(sez, [], ids, {"_rifiuta_tipo": rifiuta_tipo} if rifiuta_tipo else None)
                     st.rerun()
+    lu_ricerca_ui(sez)
     with st.expander("🤖 Rileggi e ricataloga con l'IA"):
         if not lu_attivo():
             st.info("Serve almeno una chiave dei servizi di intelligenza artificiale: l'amministratore la mette in **Utilità → 🤖 Intelligenza artificiale**.")

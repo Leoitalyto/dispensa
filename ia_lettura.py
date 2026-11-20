@@ -1236,6 +1236,8 @@ def il_pannello_riclassifica(pid):
             letti = len(lav.get("out") or []) - len(err)
             st.caption(f"Ultima lettura: {letti} documenti controllati" + (f" · non letti {len(err)}: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:5]) if err else "")
                        + (". Toccando «Prova» riprovo solo quelli rimasti." if err else ""))
+        if "lu_ricerca_ui" in globals():
+            lu_ricerca_ui("salute_" + str(pid))                            # 🔎 cerca in tutti i documenti (anche dentro)
         if "lu_ui_persone" in globals():
             lu_ui_persone()                                                 # nome e cognome sui documenti: i referti di un'altra persona vanno nella sua cartella
         tutti = st.checkbox(f"Rileggi anche quelli già controllati (tutti i {n})", key=f"il_tutti_{pid}", value=False)
