@@ -137,6 +137,17 @@ def il_disponibili(ordine=None):
     return [p for p in (ordine or IL_ORDINE_VISTA) if p in IL_FORNITORI and il_chiave(p) and not _il_in_pausa(p) and _il_permesso(p)]
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _il_credito_deepseek(_impronta):
+    """Credito rimasto su DeepSeek, es. «9.87 USD»; "" se non risponde."""
+    try:
+        r = _il_req.get("https://api.deepseek.com/user/balance", headers={"Authorization": "Bearer " + il_chiave("deepseek")}, timeout=10)
+        info = (r.json().get("balance_infos") or [{}])[0]
+        return f"{float(info.get('total_balance', 0)):.2f} {info.get('currency', 'USD')}" if r.status_code == 200 else ""
+    except Exception:
+        return ""
+
+
 def _il_ui_permessi(prov):
     """Riquadro dell'amministratore: chi può usare il servizio a pagamento."""
     try:
@@ -876,9 +887,12 @@ def il_blocco_utilita():
         with _IL_BLOCCO:
             pausa = _IL_STATO["pausa"].get(prov)
             usi = _IL_STATO["usi"].get((prov, oggi), 0)
-        stato = ("🟢 chiave presente" if ha else "⚪ nessuna chiave") + (f" · ⏸️ in pausa ({pausa[2]})" if ha and pausa and pausa[0] > _il_time.time() else "") + (f" · usata {usi} volte oggi" if usi else "")
+        credito = _il_credito_deepseek(_il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8]) if ha and prov == "deepseek" else ""
+        stato = ("🟢 chiave presente" if ha else "⚪ nessuna chiave") + (f" · 💰 credito {credito}" if credito else "") + (f" · ⏸️ in pausa ({pausa[2]})" if ha and pausa and pausa[0] > _il_time.time() else "") + (f" · usata {usi} volte oggi" if usi else "")
         with st.expander(f"{cfg['nome']} — {stato}"):
             st.markdown(f"**Costo:** {cfg['costo']}  \n**Dati:** {cfg['dati']}")
+            if prov == "deepseek" and ha:
+                st.link_button("💰 Vedi il credito rimasto" + (f" ({credito})" if credito else ""), "https://platform.deepseek.com/usage", width="stretch")
             if prov in IL_RISERVATI:
                 _il_ui_permessi(prov)
             if ha:
