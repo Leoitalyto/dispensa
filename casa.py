@@ -2271,13 +2271,19 @@ def _ca_form_documento(chiave, d, beni, riconosciuto=None, proposta_bene=None, m
         etic = {"__nuovo__": "➕ Crea un nuovo bene con questi dati", "": "— Non collegare a nessun bene —"}
         bene = st.selectbox("Collega a un bene dell'inventario (facoltativo)" + (f" ({', '.join(motivi)})" if motivi and not d and proposta_bene else ""), opz, index=opz.index(corrente) if corrente in opz else 1,
                             format_func=lambda x: etic.get(x) or nomi.get(x, x), help="Le bollette di solito non vanno collegate a un bene: restano nel loro argomento.")
+        with st.expander("✏️ Il nome del bene ha un errore? Correggilo qui"):
+            st.caption("Vale per il bene scelto qui sopra (o per quello nuovo). Scrivi solo quello che va corretto; le caselle vuote restano come sono. Puoi anche: Casa → 🏠 Beni → apri il bene → ✏️ Modifica i dati.")
+            bn_nome = st.text_input("Nome del bene corretto", key=f"{chiave}_bn_nome", placeholder="es. Giradischi Philips TAV9000")
+            q1, q2 = st.columns(2)
+            bn_marca = q1.text_input("Marca corretta", key=f"{chiave}_bn_marca")
+            bn_mod = q2.text_input("Modello corretto", key=f"{chiave}_bn_mod")
         titolo = st.text_input("Titolo", value=(d or {}).get("titolo", "") if d else "", placeholder="se lo lasci vuoto lo scrivo io (argomento, ente, numero, data, importo)")
         link = st.text_input("Link al documento online (facoltativo)", value=(d or {}).get("link", "") if d else "")
         note = st.text_input("Note (facoltative)", value=(d or {}).get("note", "") if d else "")
         ok = st.form_submit_button("✅ Conferma e archivia" if not d else "💾 Salva le correzioni", type="primary", width="stretch")
     return ok, {"argomento": "Buste paga" if tipo == "Busta paga" else argomento, "tipo": tipo, "ente": ente, "data_doc": data_doc, "lingua": lingua, "numero_doc": numero_doc, "importo": _ca_importo_da_testo(importo), "periodo_da": periodo_da,
                 "periodo_a": periodo_a, "scadenza_doc": scadenza_doc, "modo_pagamento": modo_pagamento, "consumo": consumo, "unita_consumo": unita_consumo, "codice_cliente": codice_cliente, "codice_fornitura": codice_fornitura, "categoria": cat, "sottocategoria": sotto,
-                "marca": marca, "modello": modello, "seriale": seriale, "bene_id": bene, "collegato_a": collegato_a, "pagata_il": pagata_il, "titolo": titolo, "link": link, "note": note,
+                "marca": marca, "modello": modello, "seriale": seriale, "bene_id": bene, "bene_correzione": {"nome": bn_nome.strip(), "marca": bn_marca.strip(), "modello": bn_mod.strip()}, "collegato_a": collegato_a, "pagata_il": pagata_il, "titolo": titolo, "link": link, "note": note,
                     "competenza": f"{int(anno_c):04d}-{int(mese_c):02d}" if tipo == "Busta paga" else "", "mensilita": mensilita if tipo == "Busta paga" else "",
                     "netto": _ca_importo_da_testo(netto) if tipo == "Busta paga" else "", "lordo": _ca_importo_da_testo(lordo) if tipo == "Busta paga" else "",
                     "trattenute": _ca_importo_da_testo(trattenute) if tipo == "Busta paga" else "", "voci": _ca_voci_da_testo(voci_t) if tipo == "Busta paga" else []}
@@ -3163,6 +3169,17 @@ def _ca_val_da_ric(ric, **extra):
     return v
 
 
+def _ca_correggi_bene(cc, v):
+    """Toglie da v le correzioni del bene e le applica al bene collegato (solo le caselle scritte)."""
+    corr = {k: x for k, x in (v.pop("bene_correzione", None) or {}).items() if x}
+    if not corr or not v.get("bene_id") or v["bene_id"] == "__nuovo__":
+        return corr
+    b_ = next((x for x in cc.get("beni", []) if x.get("id") == v["bene_id"]), None)
+    if b_ is not None:
+        b_.update(corr)
+    return corr
+
+
 def _ca_archivia(sorgente, sha, ric, bozza, val, n):
     """Archivia il documento (originale intatto + dati letti + classificazione + conferma). Ritorna il messaggio da mostrare. Se il file viene dalla posta è già nell'archivio: non si ricopia."""
     nid = sorgente.get("file_id") or uuid.uuid4().hex[:12]
@@ -3175,9 +3192,10 @@ def _ca_archivia(sorgente, sha, ric, bozza, val, n):
 
     def _fn(cc, val=val, ora=ora, utente=utente, rif=rif, proposta=proposta, ric=ric, sorg=sorgente):
         v = dict(val)
+        corr = _ca_correggi_bene(cc, v)
         if v.get("bene_id") == "__nuovo__":                                                          # nuovo bene dai dati confermati
-            nb = ca_nuovo_bene(cc, {"nome": " ".join(x for x in (v["sottocategoria"], v["marca"], v["modello"]) if x) or v["titolo"] or "Nuovo bene", "categoria": v["categoria"],
-                                    "sottocategoria": v["sottocategoria"], "marca": v["marca"], "modello": v["modello"], "seriale": v["seriale"]}, ora)
+            nb = ca_nuovo_bene(cc, {"nome": corr.get("nome") or " ".join(x for x in (v["sottocategoria"], v["marca"], v["modello"]) if x) or v["titolo"] or "Nuovo bene", "categoria": v["categoria"],
+                                    "sottocategoria": v["sottocategoria"], "marca": corr.get("marca") or v["marca"], "modello": corr.get("modello") or v["modello"], "seriale": v["seriale"]}, ora)
             v["bene_id"] = nb["id"]
         v["link"] = v.get("link") or sorg.get("link", "")
         ca_aggiungi_documento(cc, rif, ric, proposta, v, utente, ora)
@@ -3512,7 +3530,10 @@ def _ca_correzione(c, beni):
                 st.rerun()
             if ok:
                 try:
-                    _ca_salva(lambda cc: ca_correggi_documento(cc, cid, val, (st.session_state.get("sess") or {}).get("nome", ""), _ca_ora()), "Casa: documento corretto")
+                    def _cor(cc, val=dict(val)):
+                        _ca_correggi_bene(cc, val)
+                        ca_correggi_documento(cc, cid, val, (st.session_state.get("sess") or {}).get("nome", ""), _ca_ora())
+                    _ca_salva(_cor, "Casa: documento corretto")
                     st.session_state.pop("ca_correggi", None)
                     st.rerun()
                 except Exception as e:
