@@ -22,8 +22,8 @@ import time as _ta_time
 import streamlit as st
 
 TA_NOMI_LINGUE = {"en": "English", "es": "Spanish (Spain)", "fr": "French", "de": "German", "pt": "Portuguese", "ro": "Romanian", "ar": "Arabic"}
-TA_ORDINE = ["mistral", "gemini", "groq", "cloudflare", "nvidia", "openrouter", "deepseek", "cohere"]       # più veloci per tanti testi prima
-TA_GRUPPO = 40
+TA_ORDINE = ["cloudflare", "openrouter", "nvidia", "cohere", "mistral", "groq", "gemini"]       # prima quelli che non servono ai documenti; mai quelli a pagamento
+TA_GRUPPO = 20
 _TA_LOC = _ta_thr.local()
 
 
@@ -186,16 +186,26 @@ def _ta_lavora():
                     _TA_M["pausa"] = _ta_time.time() + 600
                 return
             ingresso = {str(i): g for i, g in enumerate(gruppo)}
+            fatte, prov_ok, errori = None, "", []
             if _ta_os.environ.get("VM_TRADUZIONE_FINTA"):                   # solo per le prove automatiche (nessun servizio vero)
                 _ta_time.sleep(0.5)
                 fatte = {i: f"[{lg.upper()}] {g}" for i, g in ingresso.items()}
-                risp = _ta_json.dumps(fatte)
             else:
-                risp, _prov = il_testo(_TA_ISTR.format(lingua=TA_NOMI_LINGUE[lg]), _ta_json.dumps(ingresso, ensure_ascii=False), max_tokens=6000, ordine=TA_ORDINE)
-            fatte = il_json(risp) if "il_json" in globals() else None
+                istr = _TA_ISTR.format(lingua=TA_NOMI_LINGUE[lg])
+                for prov in il_disponibili(TA_ORDINE):                       # provo un servizio dopo l'altro finché uno risponde bene
+                    if prov in globals().get("IL_RISERVATI", ()):
+                        continue
+                    r, err = il_chiama(prov, istr, _ta_json.dumps(ingresso, ensure_ascii=False), max_tokens=3500, timeout=50, modelli_max=2)
+                    d = il_json(r) if r else None
+                    if isinstance(d, dict) and sum(1 for i in ingresso if isinstance(d.get(i), str) and d[i].strip()) >= max(1, len(ingresso) // 2):
+                        fatte, prov_ok = d, prov
+                        break
+                    errori.append(f"{prov}: {err or 'risposta non valida'}")
+            with _TA_B:
+                _TA_M["ultimo"] = {"quando": _ta_time.time(), "lingua": lg, "servizio": prov_ok, "errori": errori[-4:], "ok": bool(fatte)}
             if not isinstance(fatte, dict):
                 with _TA_B:
-                    _TA_M["pausa"] = _ta_time.time() + 300                  # nessun servizio libero: riprovo fra 5 minuti
+                    _TA_M["pausa"] = _ta_time.time() + 90                   # nessun servizio libero: riprovo fra un minuto e mezzo
                 return
             nuove = {}
             for i, it_ in ingresso.items():
@@ -222,8 +232,30 @@ def _ta_lavora():
             _TA_M["lavora"] = False
 
 
+def ta_stato_ui():
+    """Utilità → 🤖: a che punto sono le traduzioni automatiche (per capire subito se qualcosa non va)."""
+    with _TA_B:
+        coda = {l_: len(c) for l_, c in _TA_M["coda"].items() if c}
+        fatte = {l_: len(v) for l_, v in _TA_M["tr"].items() if v}
+        ult = dict(_TA_M.get("ultimo") or {})
+        pausa = _TA_M["pausa"] - _ta_time.time()
+        lavora = _TA_M["lavora"]
+    st.markdown("**🌐 Traduzioni automatiche delle pagine**")
+    st.caption("Frasi già tradotte: " + (", ".join(f"{TA_NOMI_LINGUE.get(l_, l_)} {n}" for l_, n in fatte.items()) or "nessuna ancora")
+               + " · in attesa: " + (", ".join(f"{TA_NOMI_LINGUE.get(l_, l_)} {n}" for l_, n in coda.items()) or "nessuna")
+               + (" · ⏳ sto traducendo adesso" if lavora else "") + (f" · ⏸️ riprovo fra {int(pausa)} s" if pausa > 0 else ""))
+    if ult:
+        st.caption(("✅ ultimo gruppo tradotto con " + IL_FORNITORI.get(ult.get("servizio"), {}).get("nome", ult.get("servizio", "")) if ult.get("ok") else "❌ ultimo gruppo non tradotto")
+                   + (" · Dettaglio per Claude: " + "; ".join(ult.get("errori") or []) if ult.get("errori") else ""))
+    if coda and st.button("▶️ Riprendi subito le traduzioni", key="ta_riprendi", width="stretch"):
+        with _TA_B:
+            _TA_M["pausa"] = 0.0
+        _ta_avvia()
+        st.toast("Riparto con le traduzioni")
+
+
 def ta_attesa():
-    """Da chiamare in alto in ogni pagina: se ci sono frasi in traduzione, appena pronte la pagina si ridisegna da sola (una volta, nei primi 2 minuti)."""
+    """Da chiamare in alto in ogni pagina: se ci sono frasi in traduzione, appena pronte la pagina si ridisegna da sola (nei primi 10 minuti)."""
     if _ta_lingua() == "it":
         return
     ss = st.session_state
@@ -234,7 +266,7 @@ def ta_attesa():
     if not attese and not ss.get("_ta_attese"):
         return
     ss.setdefault("_ta_t0", _ta_time.time())
-    if _ta_time.time() - ss["_ta_t0"] > 120:
+    if _ta_time.time() - ss["_ta_t0"] > 600:
         ss.pop("_ta_t0", None)
         ss["_ta_attese"] = False
         return

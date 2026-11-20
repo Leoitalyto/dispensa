@@ -16,6 +16,7 @@ import base64 as _il_b64
 import hashlib as _il_hl
 import io as _il_io
 import json as _il_json
+import os as _il_os
 import re as _il_re
 import threading as _il_thr
 import time as _il_time
@@ -104,6 +105,27 @@ def _il_metti_pausa(prov, secondi, motivo):
         _IL_STATO["pausa"][prov] = (_il_time.time() + secondi, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8], motivo)
 
 
+_IL_TL = _il_thr.local()                 # per il lavoro in sottofondo: scadenza del documento, servizio in uso, permessi di chi l'ha avviato
+
+
+def _il_scaduto():
+    sc = getattr(_IL_TL, "scadenza", None)
+    return bool(sc and _il_time.time() >= sc)
+
+
+def _il_tempo(t):
+    """Attesa massima per una richiesta: mai oltre la scadenza del documento."""
+    sc = getattr(_IL_TL, "scadenza", None)
+    return t if not sc else max(5, min(t, sc - _il_time.time()))
+
+
+def _il_segna(prov, modello):
+    lav = getattr(_IL_TL, "lavoro", None)
+    if lav is not None:
+        lav["servizio"] = f"{IL_FORNITORI.get(prov, {}).get('nome', prov)} · {modello.split('/')[-1]}"
+        lav["segnale"] = _il_time.time()
+
+
 IL_RISERVATI = ("deepseek",)          # servizi A PAGAMENTO: li usa solo chi l'amministratore ha scelto (l'amministratore sempre)
 IL_PERMESSI_FILE = "ia_permessi.json"
 
@@ -121,6 +143,9 @@ def _il_permesso(prov):
     """Vero se la persona che sta usando l'app può usare questo servizio. Fuori da una sessione (lavori in sottofondo) i servizi a pagamento non si usano mai."""
     if prov not in IL_RISERVATI:
         return True
+    perm = getattr(_IL_TL, "permessi", None)
+    if perm is not None:
+        return prov in perm
     try:
         s_ = st.session_state.get("sess") or {}
     except Exception:
@@ -134,6 +159,8 @@ def _il_permesso(prov):
 
 def il_disponibili(ordine=None):
     """I servizi con la chiave, non in pausa e permessi a chi sta usando l'app, nell'ordine voluto."""
+    if _il_os.environ.get("VM_IL_PROVA_LENTA"):
+        return ["groq"]
     return [p for p in (ordine or IL_ORDINE_VISTA) if p in IL_FORNITORI and il_chiave(p) and not _il_in_pausa(p) and _il_permesso(p)]
 
 
@@ -268,6 +295,10 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
     if prov == "gemini":                                                     # Gemini: il suo collegamento «nativo» (più affidabile del compatibile OpenAI)
         return _il_gemini(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max)
     for modello in il_modelli(prov, vista=bool(immagini))[:modelli_max]:
+        if _il_scaduto():
+            return "", "tempo"
+        _il_segna(prov, modello)
+        timeout = _il_tempo(timeout)
         corpo = {"model": modello, "messages": messaggi, "temperature": 0.1, "max_tokens": max(max_tokens, 400)}
         if prov == "gemini" or (prov == "groq" and "gpt-oss" in modello):
             corpo["reasoning_effort"] = "low"                                # i modelli «che pensano» rispondono subito
@@ -344,6 +375,10 @@ def _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modell
     parti = [{"text": testo}] + [{"inline_data": {"mime_type": "image/jpeg", "data": _il_b64.b64encode(im).decode()}} for im in immagini]
     ultimo = "modello"
     for modello in il_modelli("gemini", vista=bool(immagini))[:modelli_max]:
+        if _il_scaduto():
+            return "", "tempo"
+        _il_segna("gemini", modello)
+        timeout = _il_tempo(timeout)
         pensiero = {"thinkingBudget": 0} if _il_re.search(r"2\.5-flash|flash-latest|flash-lite", modello) else {"thinkingLevel": "low"} if _il_re.search(r"gemini-3", modello) else None
         corpo = {"systemInstruction": {"parts": [{"text": istruzioni}]}, "contents": [{"role": "user", "parts": parti}],
                  "generationConfig": {"temperature": 0.1, "maxOutputTokens": max(max_tokens, 400)}}
@@ -526,6 +561,11 @@ def il_consenso_immagine(istruzioni, testo, immagini, quante=3, sempre=False, in
     Ritorna {"risultato", "fonti", "arbitro", "errori"}."""
     letture, errori = [], {}
     for prov in il_disponibili(IL_ORDINE_VISTA):
+        sc = getattr(_IL_TL, "scadenza", None)
+        if sc and letture and sc - _il_time.time() < 35:
+            break                                                          # poco tempo rimasto: tengo le letture che ho e lascio lavorare l'arbitro
+        if _il_scaduto():
+            break
         r, err = il_chiama(prov, istruzioni, testo, immagini)
         d = il_json(r)
         if isinstance(d, dict):
@@ -743,21 +783,41 @@ def il_proposte_riclassifica(f, pid, progress=None, massimo=60):
     files = globals().get("_stt_files")
     docs = [d for d in (p.get("docsan") or []) if (files(d) if files else d.get("file"))][:massimo]
     out = []
+    lav = getattr(_IL_TL, "lavoro", None)
     for i, d in enumerate(docs):
+        if lav is not None:
+            if lav.get("stop"):
+                break
+            lav.update(i=i, n=len(docs), inizio_doc=_il_time.time(), servizio="", segnale=_il_time.time(), out=list(out))
+            _IL_TL.scadenza = _il_time.time() + IL_MAX_DOC
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
         if progress:
             progress(i / max(1, len(docs)), f"Leggo con l'IA {i + 1} di {len(docs)}: {titolo}"[:90])
         refs = files(d) if files else [d["file"]]
+        if _il_os.environ.get("VM_IL_PROVA_LENTA"):                          # solo per le prove automatiche: lettura finta e lenta
+            for _k in range(int(_il_os.environ["VM_IL_PROVA_LENTA"]) * 5):
+                if lav is not None:
+                    _il_segna("groq", "prova-lenta")
+                _il_time.sleep(0.2)
+            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")}, "ia": {"campi": {}}, "errore": ""})
+            continue
         try:
             nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
         except Exception:
             out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"})
             continue
-        ia = il_leggi_sanitario(nome, mime, dati, f)
+        try:
+            ia = il_leggi_sanitario(nome, mime, dati, f)
+        except Exception:
+            ia = {}
         if not ia or not ia.get("campi"):
-            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "nessun servizio ha risposto" if ia is None else "lettura non riuscita", "ia": ia})
+            errore = "troppo lento, saltato" if _il_scaduto() else "nessun servizio ha risposto" if ia is None else "lettura non riuscita"
+            out.append({"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": errore, "ia": ia})
             continue
         out.append({"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]), "ia": ia, "errore": ""})
+    _IL_TL.scadenza = None
+    if lav is not None:
+        lav["out"] = list(out)
     if progress:
         progress(1.0, "Fatto")
     return out
@@ -795,6 +855,88 @@ _IL_ETICHETTE = {"tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione"
                  "prossimo_controllo": "Prossimo controllo"}
 
 
+IL_MAX_DOC = 110                         # secondi al massimo per un documento (poi passa al successivo)
+@st.cache_resource
+def _il_lavori_globali():
+    return {}
+
+
+_IL_LAVORI = _il_lavori_globali()          # i lavori restano anche se la pagina si ricarica o il telefono si riconnette
+
+
+def _il_chi():
+    try:
+        return str((st.session_state.get("sess") or {}).get("uid") or "anonimo")
+    except Exception:
+        return "anonimo"
+
+
+def _il_avvia_lavoro(f, pid):
+    """Fa partire la lettura in sottofondo: continua anche se il telefono passa ad altre app o lo schermo si spegne."""
+    k = (_il_chi(), pid)
+    perm = {p for p in IL_FORNITORI if _il_permesso(p)}
+    lav = {"stato": "corre", "i": 0, "n": 0, "inizio": _il_time.time(), "inizio_doc": _il_time.time(), "segnale": _il_time.time(), "servizio": "", "out": [], "stop": False}
+    with _IL_BLOCCO:
+        for kk in [kk for kk, v in _IL_LAVORI.items() if v.get("stato") != "corre" and _il_time.time() - v.get("fine", 0) > 6 * 3600]:
+            _IL_LAVORI.pop(kk, None)                                       # pulizia dei lavori vecchi
+        _IL_LAVORI[k] = lav
+
+    def _corri():
+        _IL_TL.lavoro, _IL_TL.permessi, _IL_TL.scadenza = lav, perm, None
+        try:
+            lav["out"] = il_proposte_riclassifica(f, pid)
+            lav["stato"] = "fermato" if lav.get("stop") else "fatto"
+        except Exception as e_:
+            lav["stato"], lav["errore"] = "errore", f"{type(e_).__name__}: {e_}"[:200]
+        finally:
+            lav["fine"] = _il_time.time()
+            _IL_TL.lavoro = _IL_TL.permessi = _IL_TL.scadenza = None
+
+    t_ = _il_thr.Thread(target=_corri, daemon=True, name=f"il_riclassifica_{pid}")
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        add_script_run_ctx(t_, get_script_run_ctx())
+    except Exception:
+        pass
+    t_.start()
+
+
+def _il_lavoro(pid):
+    return _IL_LAVORI.get((_il_chi(), pid))
+
+
+def _il_mostra_avanzamento(pid):
+    """Riquadro che si aggiorna da solo ogni 2 secondi mentre l'IA legge."""
+    @st.fragment(run_every=2)
+    def _vivo():
+        lav = _il_lavoro(pid)
+        if not lav:
+            return
+        if lav["stato"] != "corre":
+            st.rerun()                                                     # finito: mostro le proposte
+        ora = _il_time.time()
+        i, n = lav.get("i", 0), max(1, lav.get("n", 0) or 1)
+        su_doc = int(ora - lav.get("inizio_doc", ora))
+        totale = int(ora - lav.get("inizio", ora))
+        fatti = lav.get("out") or []
+        media = (totale - su_doc) / i if i else 60
+        resto = max(0, int(media * (n - i) - su_doc))
+        punti = "●" * (1 + totale % 4) + "○" * (3 - totale % 4)
+        st.markdown(f"<div style='border:1px solid #38bdf8;border-radius:14px;padding:10px 12px;margin:6px 0'>"
+                    f"<b>🤖 Lettura in corso {punti}</b><br>"
+                    f"📄 Documento <b>{min(i + 1, n)} di {n}</b><br>"
+                    f"⏱️ Su questo documento da <b>{su_doc} s</b> (al massimo {IL_MAX_DOC} s, poi passo al prossimo)<br>"
+                    f"🔄 Sto chiedendo a: <b>{lav.get('servizio') or 'preparo il documento…'}</b><br>"
+                    f"✅ Letti finora: <b>{len(fatti)}</b> · da cambiare: <b>{sum(1 for x in fatti if x.get('cambi'))}</b><br>"
+                    f"⌛ Tempo passato: {totale // 60} min {totale % 60} s · manca circa: <b>{resto // 60} min</b></div>", unsafe_allow_html=True)
+        st.progress(min(1.0, (i + min(0.95, su_doc / IL_MAX_DOC)) / n))
+        st.caption("📱 Puoi usare altre app o spegnere lo schermo: la lettura continua da sola. Quando torni qui trovi il punto a cui è arrivata o le proposte pronte.")
+        if st.button("⏹ Ferma la lettura (tengo quelli già letti)", key=f"il_stop_{pid}", width="stretch"):
+            lav["stop"] = True
+            st.toast("Mi fermo dopo il documento che sto leggendo")
+    _vivo()
+
+
 def il_pannello_riclassifica(pid):
     """Dentro Documenti sanitari: prova e riclassificazione con l'IA."""
     f = _fa_dati()
@@ -811,10 +953,19 @@ def il_pannello_riclassifica(pid):
         st.caption("Faccio rileggere ogni documento dall'IA (" + ", ".join(IL_FORNITORI[x]["nome"] for x in disp[:3]) + "). Se è **scritto a mano** lo leggono più servizi e confronto le "
                    "letture. **Prima ti mostro cosa cambierebbe**; cambia solo quello che lasci spuntato e tocchi **Applica**. Quello che hai corretto tu a mano non si tocca.")
         chiave = f"il_prop_{pid}"
+        lav = _il_lavoro(pid)
+        if lav and lav["stato"] == "corre":
+            _il_mostra_avanzamento(pid)
+            return
+        if lav and lav["stato"] in ("fatto", "fermato", "errore") and not lav.get("visto"):
+            lav["visto"] = True
+            if lav["stato"] == "errore":
+                st.error("La lettura si è interrotta: " + str(lav.get("errore", "")) + ". Riprova.")
+            st.session_state[chiave] = lav.get("out") or []
         if st.button(f"🔍 Prova: leggi e classifica i {n} documenti", key=f"il_prova_{pid}", width="stretch"):
-            barra = st.progress(0.0, text="Comincio…")
-            st.session_state[chiave] = il_proposte_riclassifica(f, pid, lambda x, t_: barra.progress(min(1.0, x), text=t_))
-            barra.empty()
+            st.session_state.pop(chiave, None)
+            _il_avvia_lavoro(f, pid)
+            st.rerun()
         prop = st.session_state.get(chiave)
         if prop is None:
             return
@@ -880,6 +1031,11 @@ def il_blocco_utilita():
             _IL_STATO["pausa"].clear()
             _IL_STATO["modello"].clear()
         st.rerun()
+    if "ta_stato_ui" in globals():
+        try:
+            ta_stato_ui()
+        except Exception:
+            pass
     oggi = _il_time.strftime("%Y-%m-%d")
     for prov in IL_ORDINE_VISTA:
         cfg = IL_FORNITORI[prov]
