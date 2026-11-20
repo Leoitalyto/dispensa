@@ -143,6 +143,30 @@ I documenti **nuovi** si leggono **da soli** appena li carichi (in sottofondo): 
 
 Nella scheda trovi i tasti per contattarlo subito: **📞 Chiama, 💬 WhatsApp, ✉️ Email, ✈️ Telegram, 💬 SMS** (il +39 si aggiunge da solo).""",
                     "biglietto da visita foto numeri utili contatti telefono whatsapp email telegram sms già usato lavori fatti quando note artigiano"),
+    "x_ricerca_doc": ("🔎 Cercare in tutti i documenti (anche dentro)",
+                      """In fondo a **I miei documenti**, **Casa**, **Lavoro**, **Auto**, **Animali** e in **Salute → 🤖 Riclassifica** c'è **🔎 Cerca in tutti i documenti (anche dentro)**.
+Scrivi una o più parole (es. «enel luglio», «revisione», «colesterolo», un numero): cerco in **tutte le sezioni** nei titoli, nei tipi, nei numeri, in chi ha emesso il documento e anche nel **riassunto** e nelle **parole chiave** che l'IA scrive quando legge il documento.
+Per ogni risultato vedi la sezione, il titolo e il riassunto; con **👁️ Vedi il file** lo apri o lo scarichi.""",
+                      "cercare ricerca documenti dentro riassunto parole chiave tutte le sezioni trovare file"),
+    "x_correggi_ia": ("✏️ Correggere l'IA (e lei impara)",
+                      """Quando l'IA propone dei cambiamenti (🟡 Proposte da confermare), sotto ogni documento c'è **✏️ Correggi prima di applicare (l'IA impara)**.
+Scrivi il valore giusto (per esempio il numero esatto della carta d'identità) e tocca **✅ Applica**: si salva il tuo valore e l'app **se lo ricorda**: nelle letture dopo l'IA riceve le tue correzioni e non ripete lo stesso errore.
+Se il **tipo** proposto è sbagliato spunta «non propormelo più per documenti così».""",
+                      "correggere ia sbaglia impara correzioni ricorda proposte applica tipo sbagliato"),
+    "x_foto_ia": ("📸 Foto migliori per la lettura",
+                  """Quando fotografi un documento, l'app **raddrizza e ritaglia il foglio** e lo rende più leggibile prima di darlo all'IA.
+Se la foto è **mossa**, **buia**, con un **riflesso** o **troppo piccola** te lo dice subito, con il consiglio per rifarla: tieni fermo il telefono, tocca lo schermo sul foglio per mettere a fuoco, cerca la luce, niente flash sul foglio lucido.""",
+                  "foto mossa buia riflesso sfocata rifare raddrizzare ritagliare documento lettura"),
+    "x_segnalati": ("📌 Documenti forse nella sezione sbagliata",
+                    """Quando l'IA legge un documento capisce anche **in quale sezione dovrebbe stare**.
+- Se è un documento **dell'auto** finito in Casa o in I miei documenti, propone di spostarlo nel **veicolo giusto** (quello con la targa scritta sul documento, o l'unico che hai).
+- Se dovrebbe stare in **Animali** o **Lavoro**, lo segnala nel riquadro **📌 Forse nella sezione sbagliata**: aprilo da lì e caricalo nella sezione giusta, oppure tocca **Va bene qui**.""",
+                    "sezione sbagliata spostare auto veicolo targa animali lavoro segnalati"),
+    "x_liste_condivise": ("👥 Liste della spesa condivise con persone scelte",
+                          """In **🛒 Spesa Smart → 📝 Lista della spesa** tocca **👥 Nuova lista condivisa con persone scelte**: scrivi il nome e scegli con chi condividerla.
+La vedono e la modificano **solo** quelle persone e tu. Si **aggiorna da sola ogni 10 secondi**; se aggiungi un prodotto che c'è già si somma la quantità (niente doppioni); quando uno spunta «Preso» gli altri vedono **✅ chi l'ha preso**, così nessuno lo compra due volte.
+Chi ha creato la lista può cambiare le persone o chiuderla in **⚙️ Lista condivisa**. Le **liste private** (🔒) restano solo tue.""",
+                          "lista spesa condivisa persone scelte famiglia preso da doppioni aggiornamento privata"),
     "l_festivita": ("📅 Giorni di festa nel Controllo ore",
                     """In **Lavoro → 🧮 Controllo ore**, dopo aver caricato il foglio delle ore e la busta paga, c'è **📅 Giorni di festa**.
 
@@ -155,7 +179,9 @@ Le feste vengono da **Nager.Date** (gratuito, senza chiave); se non risponde le 
 }
 GA_DOVE = {"x_diario": ("utilita",), "f_ia_documenti": ("farmacia",), "f_numeri_doc": ("farmacia", "documenti"), "f_gruppo": ("farmacia",), "f_wiki": ("farmacia",),
            "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",), "x_lettore": ("documenti", "casa", "lavoro", "auto", "utilita"),
-           "x_smistamento": ("documenti", "casa", "farmacia", "utilita"), "x_biglietto": ("casa", "farmacia", "lavoro", "auto", "animali", "utilita")}
+           "x_smistamento": ("documenti", "casa", "farmacia", "utilita"),
+           "x_ricerca_doc": ("documenti", "casa", "farmacia", "lavoro", "auto", "utilita"), "x_correggi_ia": ("documenti", "casa", "lavoro", "auto", "utilita"),
+           "x_foto_ia": ("documenti", "casa", "farmacia", "auto", "utilita"), "x_segnalati": ("documenti", "casa", "utilita"), "x_liste_condivise": ("spesa_smart", "dispensa"), "x_biglietto": ("casa", "farmacia", "lavoro", "auto", "animali", "utilita")}
 
 GA_NOVITA = [
     ("nv_diario", "📖", "Diario dei ricordi", "Utilità → 🎂 Compleanni → bottone verde ⏻ nella scheda: foto, testi, icone, musica"),
@@ -166,6 +192,7 @@ GA_NOVITA = [
     ("nv_altro", "✍️", "Nomi a scelta", "Negli elenchi con «Altro»: scrivi il nome che vuoi"),
     ("nv_smista", "👥", "Di chi è il documento", "L'IA mette i documenti della mamma nelle sue cose: casa, salute, documenti"),
     ("nv_biglietto", "📇", "Biglietto da visita", "Numeri utili → ➕ Aggiungi → 📇 Fotografa un biglietto da visita"),
+    ("nv_cerca_doc", "🔎", "Cerca in tutti i documenti", "In fondo a ogni sezione: cerca anche dentro i documenti, nel riassunto dell'IA"),
     ("nv_spesa_smart", "🛒", "Spesa Smart", "Dispensa → 🛒 Spesa Smart: dove costa meno, offerte, spesa ottimizzata, scontrini"),
 ]
 GA_NOV_K = {}
