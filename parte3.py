@@ -123,6 +123,8 @@ if not sess:
         else:
             accesso = cerca_accesso(pw, leggi_utenti())
             if accesso:
+                if st.session_state.get("_vmi_da_telefono"):
+                    st.session_state["_vmi_scelta"] = True      # telefono già usato: la lingua che si vede nella pagina di accesso è quella con cui si entra (e si salva)
                 entra(accesso, ricorda)
                 st.rerun()
             segna_errore()

@@ -55,11 +55,44 @@ def _vmi_lingua_browser():
         return None
 
 
+def _vmi_lingua_telefono():
+    """L'ultima lingua usata su QUESTO telefono (biscottino «vm_lang»), così la pagina di accesso si apre già in quella lingua."""
+    try:
+        lg = (st.context.cookies or {}).get("vm_lang")
+        return lg if lg in VMI_LINGUE else None
+    except Exception:
+        return None
+
+
 if "lang" not in st.session_state and not st.session_state.get("_vmi_lingua_auto"):
     st.session_state["_vmi_lingua_auto"] = True
-    _vmi_l0 = _vmi_lingua_browser()
+    _vmi_tel = _vmi_lingua_telefono()
+    _vmi_l0 = _vmi_tel or _vmi_lingua_browser()
     if _vmi_l0:
         st.session_state["lang"] = _vmi_l0
+    if _vmi_tel:
+        st.session_state["_vmi_da_telefono"] = True                  # questo telefono ricorda l'ultima lingua usata: è quella che si vede e con cui si entra
+
+
+def _vmi_ricorda_lingua_telefono():
+    """Scrive sul telefono la lingua in uso (vale un anno). Se non si può, resta la lingua del telefono."""
+    lg = st.session_state.get("lang")
+    if lg not in VMI_LINGUE:
+        return
+    try:
+        cod = ("<!doctype html><html><body><script>try{window.parent.document.cookie='vm_lang=" + lg + ";path=/;max-age=31536000;SameSite=Lax';}catch(e){}</script></body></html>")
+        with st.container(key="nascosti_vmi_lang"):
+            if hasattr(st, "iframe"):
+                st.iframe(cod, height=1)
+            else:
+                import streamlit.components.v1 as _c_vmi
+                _c_vmi.html(cod, height=1)
+        st.markdown("<style>[class*='st-key-nascosti_vmi_lang']{display:none !important}</style>", unsafe_allow_html=True)
+    except Exception:
+        pass
+
+
+_vmi_ricorda_lingua_telefono()                                       # a ogni pagina (accesso compreso): l'ultima lingua usata resta su questo telefono
 
 
 def _vmi_lg():

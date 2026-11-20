@@ -341,19 +341,24 @@ def _dn_css_badge():
         return ""
     img, w, h = b
     larg = 120 if w / h > 4 else 112
+    alt = round(larg * h / w, 1)
+    # misure FISSE (larghezza e altezza in px) per il riquadro e per gli anelli: durante il cambio di pagina il contenitore può allungarsi un attimo
+    # e gli anelli, se seguono il contenitore, si deformano. Così restano sempre della forma del bottone.
+    dim = f"width:{larg}px;height:{alt}px;"
     return ("<style>"
-            ".st-key-dn_badge{position:fixed !important;top:11px;left:46px;z-index:999995;width:" + str(larg) + "px;margin:0 !important;padding:0 !important}"
-            ".st-key-dn_badge [data-testid='stElementContainer'],.st-key-dn_badge [data-testid='stButton'],.st-key-dn_badge .stButton{width:100% !important;max-width:100% !important;margin:0 !important}"
-            ".st-key-dn_badge button{position:relative;z-index:2;display:block !important;width:100% !important;min-height:0 !important;height:auto !important;aspect-ratio:" + f"{w}/{h}" + ";"
+            ".st-key-dn_badge{position:fixed !important;top:11px;left:46px;z-index:999995;" + dim + "max-height:" + str(alt) + "px;overflow:visible !important;margin:0 !important;padding:0 !important;gap:0 !important}"
+            ".st-key-dn_badge [data-testid='stElementContainer'],.st-key-dn_badge [data-testid='stButton'],.st-key-dn_badge .stButton{width:" + str(larg) + "px !important;max-width:" + str(larg) + "px !important;height:" + str(alt) + "px !important;margin:0 !important}"
+            ".st-key-dn_badge button{position:relative;z-index:2;display:block !important;" + dim + "min-height:0 !important;max-height:" + str(alt) + "px;"
             "padding:0 !important;margin:0 !important;border:0 !important;border-radius:999px !important;background:url('data:image/webp;base64," + img + "') center/100% 100% no-repeat !important;"
             "color:transparent !important;box-shadow:0 0 10px 1px rgba(255,196,57,.55) !important;cursor:pointer;animation:dn-luce 3.2s ease-in-out infinite;-webkit-tap-highlight-color:transparent}"
             ".st-key-dn_badge button p,.st-key-dn_badge button div{font-size:0 !important;color:transparent !important}"
             ".st-key-dn_badge button:active{transform:scale(.94);animation:none}"
             # le onde: anelli che partono dal contorno e si allargano svanendo, uno dopo l'altro, come i cerchi di un sasso nell'acqua
-            ".st-key-dn_badge::before,.st-key-dn_badge::after{content:'';position:absolute;left:0;right:0;top:0;bottom:0;border-radius:999px;pointer-events:none;z-index:1;"
+            ".st-key-dn_badge::before,.st-key-dn_badge::after{content:'';position:absolute;left:0;top:0;" + dim + "box-sizing:border-box;border-radius:999px;pointer-events:none;z-index:1;"
             "border:2px solid rgba(255,206,70,.95);box-shadow:0 0 8px 2px rgba(255,206,70,.55),inset 0 0 6px rgba(255,206,70,.4);opacity:0;animation:dn-onda 3s cubic-bezier(.2,.6,.3,1) infinite}"
             ".st-key-dn_badge::after{animation-delay:1.5s}"
-            ".st-key-dn_badge [data-testid='stButton']::before{content:'';position:absolute;left:0;right:0;top:0;bottom:0;border-radius:999px;pointer-events:none;z-index:1;"
+            ".st-key-dn_badge [data-testid='stButton']{position:relative}"
+            ".st-key-dn_badge [data-testid='stButton']::before{content:'';position:absolute;left:0;top:0;" + dim + "box-sizing:border-box;border-radius:999px;pointer-events:none;z-index:1;"
             "border:1.5px solid rgba(255,230,140,.9);opacity:0;animation:dn-onda 3s cubic-bezier(.2,.6,.3,1) infinite;animation-delay:.75s}"
             "@keyframes dn-onda{0%{transform:scale(1);opacity:.95}70%{opacity:.25}100%{transform:scale(1.5,2.5);opacity:0}}"
             "@keyframes dn-luce{0%,100%{box-shadow:0 0 8px 0 rgba(255,196,57,.45)}50%{box-shadow:0 0 16px 4px rgba(255,214,102,.8)}}"
