@@ -285,7 +285,8 @@ def sr_pannello(pid):
     if not n:
         return
     resta = len(sr_da_rileggere(p))
-    with st.expander("🔄 Rileggi i documenti già archiviati — " + (f"da rileggere {resta} di {n}" if resta else f"tutti i {n} riletti ✅")):
+    with st.expander("🔄 Rileggi i documenti già archiviati — migliora titoli ed esami contenuti"):
+        st.markdown(f"**Da rileggere: {resta} di {n}**" + (" · tutti riletti ✅" if not resta else ""))
         st.caption("Rileggo i file di questa persona con la lettura migliorata: riconosco **che esame è** (urine, emocromo…) dal contenuto, riempio **«Esami contenuti»** e sistemo medico, struttura "
                    "e conclusioni chiaramente sbagliati. **Prima ti mostro cosa cambierebbe**; cambia solo se tocchi **Applica**. Quello che hai scritto tu a mano non viene toccato.")
         chiave = f"sr_prop_{pid}"

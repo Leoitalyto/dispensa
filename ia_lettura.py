@@ -1056,26 +1056,62 @@ def _il_mostra_avanzamento(pid):
     _vivo()
 
 
+def _il_blocco_proposte(pid, pendenti):
+    st.markdown(f"<div style='font-weight:700;font-size:1.05rem;margin:8px 0 4px'>🟡 Proposte dell'IA da confermare: {len(pendenti)}</div>", unsafe_allow_html=True)
+    scelti = []
+    for d in pendenti:
+        pr_ = d["proposta_ia"]
+        titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
+        st.markdown(f"**📄 {titolo}**")
+        for k, v in (pr_.get("cambi") or {}).items():
+            a, b = (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else ("", v)
+            st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_IL_ETICHETTE.get(k, k)}: <s>{_il_html.escape(str(a or '—'))}</s> → <b>{_il_html.escape(str(b))}</b></div>",
+                        unsafe_allow_html=True)
+        ia = pr_.get("ia") or {}
+        if ia.get("limiti") or ia.get("da_verificare"):
+            st.caption("⚠️ " + "; ".join([str(x) for x in (ia.get("limiti") or [])[:2] + (ia.get("da_verificare") or [])[:2]]))
+        if st.checkbox("Applica a questo documento", value=True, key=f"il_sc_{pid}_{d['id']}"):
+            scelti.append(d["id"])
+    c1, c2 = st.columns(2, gap="small")
+    ids = [d["id"] for d in pendenti]
+    if c1.button(f"✅ Applica ({len(scelti)})", key=f"il_app_{pid}", type="primary", width="stretch", disabled=not scelti):
+        n_ = il_conferma_proposte(pid, scelti, ids)
+        st.toast(f"Riclassificati {n_} documenti")
+        st.rerun()
+    if c2.button("✖ Non applicare", key=f"il_no_{pid}", width="stretch"):
+        il_conferma_proposte(pid, [], ids)
+        st.rerun()
+
+
 def il_pannello_riclassifica(pid):
-    """Dentro Documenti sanitari: prova e riclassificazione con l'IA."""
+    """Dentro Documenti sanitari: prova e riclassificazione con l'IA.
+    La lettura in corso e le proposte da confermare stanno FUORI dalla tendina, sempre in vista: così non si chiude nulla mentre l'IA lavora."""
     f = _fa_dati()
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
     n = len(il_da_controllare(p, True))
     if not n:
         return
     resta = len(il_da_controllare(p))
+    pendenti = [d for d in (p.get("docsan") or []) if d.get("proposta_ia")]
     disp = il_disponibili(IL_ORDINE_VISTA)
-    n_pend = sum(1 for d in (p.get("docsan") or []) if d.get("proposta_ia"))
-    with st.expander("🤖 Riclassifica i documenti con l'IA — " + (f"da controllare {resta} di {n}" if resta else f"tutti i {n} controllati ✅")
-                     + (f" · da confermare {n_pend}" if n_pend else "")):
+    lav = _il_lavoro(pid)
+    corre = bool(lav and lav["stato"] == "corre")
+    if corre or pendenti:
+        with st.container(border=True, key=f"il_vista_{pid}"):
+            st.markdown("<div style='font-weight:700'>🤖 Riclassifica con l'IA</div>", unsafe_allow_html=True)
+            if corre:
+                _il_mostra_avanzamento(pid)
+            if pendenti:
+                _il_blocco_proposte(pid, pendenti)
+    with st.expander("🤖 Riclassifica i documenti con l'IA"):
         if not disp:
             st.info("Per usare l'IA serve almeno una chiave gratuita (Gemini, Groq, Mistral…). L'amministratore la mette in **Utilità → 🤖 Intelligenza artificiale**.")
             return
         st.caption("Faccio rileggere ogni documento dall'IA (" + ", ".join(IL_FORNITORI[x]["nome"] for x in disp[:3]) + "). Se è **scritto a mano** lo leggono più servizi e confronto le "
                    "letture. **Prima ti mostro cosa cambierebbe**; cambia solo quello che lasci spuntato e tocchi **Applica**. Quello che hai corretto tu a mano non si tocca.")
-        lav = _il_lavoro(pid)
-        if lav and lav["stato"] == "corre":
-            _il_mostra_avanzamento(pid)
+        st.markdown(f"**Da controllare: {resta} di {n}**" + (f" · da confermare: {len(pendenti)} (qui sopra)" if pendenti else "") + (" · tutti controllati ✅" if not resta and not pendenti else ""))
+        if corre:
+            st.caption("La lettura è in corso: la vedi qui sopra.")
             return
         if lav and lav["stato"] in ("fatto", "fermato", "errore"):
             if lav["stato"] == "errore":
@@ -1084,39 +1120,10 @@ def il_pannello_riclassifica(pid):
             letti = len(lav.get("out") or []) - len(err)
             st.caption(f"Ultima lettura: {letti} documenti controllati" + (f" · non letti {len(err)}: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:5]) if err else "")
                        + (". Toccando «Prova» riprovo solo quelli rimasti." if err else ""))
-        pendenti = [d for d in (p.get("docsan") or []) if d.get("proposta_ia")]
         tutti = st.checkbox(f"Rileggi anche quelli già controllati (tutti i {n})", key=f"il_tutti_{pid}", value=False)
         quanti = n if tutti else resta
         if st.button(f"🔍 Prova: leggi e classifica {quanti} document" + ("o" if quanti == 1 else "i"), key=f"il_prova_{pid}", width="stretch", disabled=not quanti):
             _il_avvia_lavoro(f, pid, tutti)
-            st.rerun()
-        if not pendenti:
-            if lav and lav["stato"] != "corre" and not resta:
-                st.success("La classificazione è giusta per tutti i documenti controllati.")
-            return
-        st.markdown(f"**🟡 Proposte da confermare: {len(pendenti)}**")
-        scelti = []
-        for d in pendenti:
-            pr_ = d["proposta_ia"]
-            titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
-            st.markdown(f"**📄 {titolo}**")
-            for k, v in (pr_.get("cambi") or {}).items():
-                a, b = (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else ("", v)
-                st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_IL_ETICHETTE.get(k, k)}: <s>{_il_html.escape(str(a or '—'))}</s> → <b>{_il_html.escape(str(b))}</b></div>",
-                            unsafe_allow_html=True)
-            ia = pr_.get("ia") or {}
-            if ia.get("limiti") or ia.get("da_verificare"):
-                st.caption("⚠️ " + "; ".join([str(x) for x in (ia.get("limiti") or [])[:2] + (ia.get("da_verificare") or [])[:2]]))
-            if st.checkbox("Applica a questo documento", value=True, key=f"il_sc_{pid}_{d['id']}"):
-                scelti.append(d["id"])
-        c1, c2 = st.columns(2, gap="small")
-        ids = [d["id"] for d in pendenti]
-        if c1.button(f"✅ Applica ({len(scelti)})", key=f"il_app_{pid}", type="primary", width="stretch", disabled=not scelti):
-            n_ = il_conferma_proposte(pid, scelti, ids)
-            st.toast(f"Riclassificati {n_} documenti")
-            st.rerun()
-        if c2.button("✖ Non applicare", key=f"il_no_{pid}", width="stretch"):
-            il_conferma_proposte(pid, [], ids)
             st.rerun()
 
 
