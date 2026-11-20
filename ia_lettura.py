@@ -33,7 +33,7 @@ IL_FORNITORI = {
                "dati": "con la chiave gratuita Google può usare i testi per migliorare i modelli"},
     "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True, "pref_testo": [r"mistral-small-latest", r"mistral-medium-latest", r"mistral-large-latest"],
                 "vista": ["mistral-medium-latest", "mistral-small-latest", "pixtral-large-latest"], "testo": ["mistral-small-latest", "mistral-medium-latest"],
-                "link": "https://console.mistral.ai/api-keys", "costo": "gratis (piano «Experiment»: 1 richiesta al secondo), serve il numero di telefono",
+                "link": "https://console.mistral.ai/api-keys", "costo": "ATTENZIONE: da novembre 2026 con il piano gratuito («Free») le chiavi non funzionano, serve un piano a pagamento (facoltativo)",
                 "dati": "nel piano gratuito i dati possono servire ad addestrare i modelli"},
     "groq": {"nome": "Groq", "base": "https://api.groq.com/openai/v1", "secret": ["GROQ_API_KEY"],
              "pref_vista": [r"llama-4-scout", r"llama-4-maverick", r"qwen.*(vl|vision|3\.\d+-\d+b)", r"vision"], "pref_testo": [r"gpt-oss-120b", r"llama-4-maverick", r"llama-3\.3-70b", r"kimi-k2", r"qwen3", r"gpt-oss-20b", r"llama-3\.1-8b"],
