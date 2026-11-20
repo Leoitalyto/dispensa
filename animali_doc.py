@@ -626,12 +626,19 @@ if "_an_leggi_prima" not in globals():
                 return p
             poco = len(str(p.get("testo") or "").strip()) < 300 or float(p.get("qualita") or 0) < 0.55
             imm = il_immagini(nome or "doc", mime or "", dati, max_pagine=2) if poco and dati else None
-            ia, fonti = il_leggi_campi("un documento VETERINARIO di un animale domestico (vaccinazioni, passaporto, referto, ricetta, fattura del veterinario…)",
-                                       {"tipo": "uno di: " + " | ".join(AN_TIPI_DOC), "data": "data del documento AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG",
-                                        "richiamo": "data del prossimo richiamo del vaccino AAAA-MM-GG", "controllo": "data del prossimo controllo AAAA-MM-GG",
-                                        "microchip": "numero del microchip (15 cifre)", "veterinario": "nome del veterinario", "clinica": "nome della clinica o ambulatorio",
-                                        "importo": "importo totale se è una fattura, es. 45,00"},
-                                       testo=p.get("testo") or "", immagini=imm, quante=2 if imm else 1, critici=("tipo", "data"))
+            r_lu = lu_leggi([(nome or "doc", mime or "", dati)], "animali", list(AN_TIPI_DOC), "un documento VETERINARIO di un animale domestico", testo=p.get("testo") or "") if "lu_leggi" in globals() and dati else {}
+            if r_lu:
+                ia = {k: v for k, v in (r_lu.get("campi") or {}).items() if k not in (r_lu.get("problemi") or {})}
+                if r_lu.get("tipo"):
+                    ia["tipo"] = r_lu["tipo"]
+                fonti = r_lu.get("fonti") or []
+            else:
+                ia, fonti = il_leggi_campi("un documento VETERINARIO di un animale domestico (vaccinazioni, passaporto, referto, ricetta, fattura del veterinario…)",
+                                           {"tipo": "uno di: " + " | ".join(AN_TIPI_DOC), "data": "data del documento AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG",
+                                            "richiamo": "data del prossimo richiamo del vaccino AAAA-MM-GG", "controllo": "data del prossimo controllo AAAA-MM-GG",
+                                            "microchip": "numero del microchip (15 cifre)", "veterinario": "nome del veterinario", "clinica": "nome della clinica o ambulatorio",
+                                            "importo": "importo totale se è una fattura, es. 45,00"},
+                                           testo=p.get("testo") or "", immagini=imm, quante=2 if imm else 1, critici=("tipo", "data"))
             if not ia:
                 return p
             if ia.get("tipo") in AN_TIPI_DOC and (not p.get("tipo_sicuro") or p.get("tipo") in ("Altro", "Fotografia")):

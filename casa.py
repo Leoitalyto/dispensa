@@ -1551,6 +1551,15 @@ CA_AI_CAMPI = ("tipo", "argomento", "categoria", "sottocategoria", "marca", "mod
 def ca_ai_classifica(testo, base=None, sorgente=None):
     """Migliora la lettura con l'intelligenza artificiale: i servizi gratuiti (ia_lettura.py, con le foto se il documento è una scansione) oppure la chiave
     dell'assistente. Ritorna un dizionario o None."""
+    if "lu_leggi" in globals() and lu_attivo() and (sorgente or {}).get("dati"):    # il lettore unico: tipo → scheda su misura → controlli
+        r = lu_leggi([(sorgente.get("nome") or "doc", sorgente.get("mime") or "", sorgente["dati"])], "casa", [t for t in CA_TIPI if t not in _CA_TIPI_LAVORO],
+                     LU_SEZIONI["casa"]["contesto"], testo=testo)
+        if r:
+            d = {k: v for k, v in (r.get("campi") or {}).items() if k not in (r.get("problemi") or {})}
+            if r.get("tipo"):
+                d["tipo"] = r["tipo"]
+            d["_fonte"] = "IA: " + (il_nomi_fonti(r.get("fonti") or []) if "il_nomi_fonti" in globals() else "")
+            return d
     if "il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA):
         sorg = sorgente or {}
         scansione = bool(((base or {}).get("info") or {}).get("scansione") or "OCR" in str(((base or {}).get("info") or {}).get("metodo") or "")) or len((testo or "").strip()) < 300

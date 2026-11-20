@@ -4663,6 +4663,24 @@ def _doc_ia_leggi(testo, uris, validi):
     imgs = [j for u in uris if u for j in _doc_uri_jpeg(u)]
     if not imgs:
         return {}, []
+    if "lu_leggi" in globals():                                       # il lettore unico: tipo → scheda su misura → controlli
+        files = []
+        for u in uris:
+            if u:
+                try:
+                    import base64 as _b64
+                    testa, corpo = str(u).split(",", 1)
+                    files.append(("foto.jpg", testa.split(":", 1)[1].split(";", 1)[0] if ":" in testa else "image/jpeg", _b64.b64decode(corpo)))
+                except Exception:
+                    pass
+        with st.spinner("🤖 Leggo il documento con l'intelligenza artificiale…"):
+            r = lu_leggi(files, "documenti", list(validi), "un DOCUMENTO PERSONALE italiano fotografato fronte e retro", testo=testo)
+        if r:
+            ia = {k: v for k, v in (r.get("campi") or {}).items() if k not in (r.get("problemi") or {})}
+            if r.get("tipo"):
+                ia["tipo"] = r["tipo"]
+            ia["_dubbi"] = [f"{k}: {m}" for k, m in (r.get("problemi") or {}).items()] + list(r.get("dubbi") or [])
+            return ia, r.get("fonti") or []
     with st.spinner("🤖 Leggo il documento con l'intelligenza artificiale…"):
         ia, fonti = il_leggi_campi("un DOCUMENTO PERSONALE italiano (carta d'identità, patente, passaporto, tessera sanitaria…) fotografato fronte e retro",
                                    {"tipo": "uno di: " + " | ".join(validi), "numero": "numero del documento", "ente": "chi l'ha rilasciato",

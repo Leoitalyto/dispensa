@@ -146,6 +146,14 @@ def _au_corpo(coda):
                     if not modo.startswith("libretto") and "il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA):
                         try:                                                    # l'IA completa e corregge (con la foto se il testo è poco)
                             imm = il_immagini(c["nome"], mime, c["dati"], max_pagine=2) if len((testo or "").strip()) < 300 else None
+                            r_lu = lu_leggi([(c["nome"], mime, c["dati"])], "auto", list(_AU_DOC_TIPI), LU_SEZIONI["auto"]["contesto"], testo=testo) if "lu_leggi" in globals() else {}
+                            if r_lu:
+                                for k_, v_ in (r_lu.get("campi") or {}).items():
+                                    if k_ in ("titolo", "data", "scadenza", "importo") and v_ and k_ not in (r_lu.get("problemi") or {}):
+                                        ric_[k_] = {"valore": v_, "affidabilita": "media"}
+                                if r_lu.get("tipo"):
+                                    ric_["tipo"] = {"valore": r_lu["tipo"], "affidabilita": "media"}
+                                raise StopIteration                                     # fatto col lettore unico
                             ia_, fonti_ = il_leggi_campi("un documento di un VEICOLO (polizza assicurativa, bollo, multa, fattura dell'officina, revisione…)",
                                                          {"compagnia": "compagnia assicurativa o ente", "titolo": "titolo breve, es. Polizza 12345 o Bollo 2026",
                                                           "importo": "importo totale, es. 412,50", "data": "data di emissione AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG"},
@@ -153,6 +161,8 @@ def _au_corpo(coda):
                             for k_, v_ in ia_.items():
                                 if not k_.startswith("_") and v_ and (k_ not in ric_ or (ric_.get(k_) or {}).get("affidabilita") == "bassa" or k_ in ("data", "scadenza")):
                                     ric_[k_] = {"valore": v_, "affidabilita": "media"}
+                        except StopIteration:
+                            pass
                         except Exception:
                             pass
                     st.session_state[chiave_l] = (ric_, bool((testo or "").strip()) or bool(ric_))

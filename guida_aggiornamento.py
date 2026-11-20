@@ -109,6 +109,17 @@ Tutte le pagine sono nella lingua scelta: le frasi nuove si traducono da sole la
 - Il tasto **🔔 Avvisi della badante** ti avvisa **3 giorni prima** e **l'ultimo giorno** (puoi cambiare i giorni).
 - Ci sono anche **contatti della badante** e **note**.""",
                   "badante ore tariffa venuta non è venuta soldi madre avvisi conti automatico"),
+    "x_lettore": ("🤖 Rileggi e ricataloga i documenti con l'IA (tutte le sezioni)",
+                  """In fondo a **I miei documenti**, **Casa** (scheda 📚 Documenti), **Lavoro**, **Auto** e **Animali** c'è **🤖 Rileggi e ricataloga con l'IA** (in Salute c'è «🤖 Riclassifica i documenti con l'IA»).
+
+**Come legge:** in **due tempi**: prima capisce **che documento è**, poi legge i dati con la **scheda giusta per quel tipo** (per la carta d'identità: numero, emissione, scadenza; per la bolletta: periodo, importo, scadenza, POD/PDR…). Poi **controlla** i dati: codice fiscale, numero della carta d'identità o del passaporto, targa, telaio, IBAN, date (la scadenza dopo il rilascio, mai la data di nascita al posto di un'altra). Un dato che non passa i controlli resta **🟠 da verificare** e non viene proposto.
+
+1. Apri la tendina: vedi **«Da controllare: X di Y»**. Tocca **🔍 Leggi e cataloga**.
+2. Compare il **riquadro dal vivo**: puoi usare altre app, la lettura continua; ogni documento è salvato appena letto.
+3. Le **🟡 Proposte da confermare** mostrano cosa cambierebbe: lascia spuntato quello che va bene e tocca **✅ Applica**; **✖ Non applicare** lascia tutto com'è.
+
+Anche i documenti **nuovi** (foto della carta d'identità, bollette, polizze, documenti del veterinario) si leggono con lo stesso metodo.""",
+                  "rileggi ricataloga documenti ia intelligenza artificiale controlli codice fiscale numero date proposte applica casa auto animali lavoro documenti"),
     "l_festivita": ("📅 Giorni di festa nel Controllo ore",
                     """In **Lavoro → 🧮 Controllo ore**, dopo aver caricato il foglio delle ore e la busta paga, c'è **📅 Giorni di festa**.
 
@@ -120,7 +131,7 @@ Le feste vengono da **Nager.Date** (gratuito, senza chiave); se non risponde le 
                     "festivi festa giorni di festa pasquetta patrono san giovanni controllo ore busta paga festivo 65% straordinario"),
 }
 GA_DOVE = {"x_diario": ("utilita",), "f_ia_documenti": ("farmacia",), "f_numeri_doc": ("farmacia", "documenti"), "f_gruppo": ("farmacia",), "f_wiki": ("farmacia",),
-           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",)}
+           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",), "x_lettore": ("documenti", "casa", "lavoro", "auto", "utilita")}
 
 GA_NOVITA = [
     ("nv_diario", "📖", "Diario dei ricordi", "Utilità → 🎂 Compleanni → bottone verde ⏻ nella scheda: foto, testi, icone, musica"),
