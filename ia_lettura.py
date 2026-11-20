@@ -325,7 +325,8 @@ def _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modell
                 return "", "limite"
             if r.status_code == 400 and tentativo == 0 and pensiero:
                 continue                                                  # non accetta il «pensiero ridotto»: riprovo senza
-            m_sugg = _il_re.search(r"models/(gemini-[\w.\-]+)", r.text or "") if r.status_code == 404 else None
+            _sugg = [x for x in _il_re.findall(r"models/(gemini-[\w.\-]*\w)", r.text or "") if x != modello] if r.status_code == 404 else []
+            m_sugg = _il_re.match(r"(.+)", _sugg[-1]) if _sugg else None          # il modello che Google consiglia (l'ultimo nominato)
             if m_sugg and m_sugg.group(1) != modello:                       # Google dice quale modello usare al suo posto: lo uso subito
                 with _IL_BLOCCO:
                     _IL_STATO["modello"][("gemini", bool(immagini))] = m_sugg.group(1)
