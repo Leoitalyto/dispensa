@@ -142,7 +142,20 @@ def _au_corpo(coda):
                         testo, _info = ca_estrai_testo(c["nome"], mime, c["dati"])
                     except Exception:
                         testo = ""
-                    st.session_state[chiave_l] = ((au_leggi_libretto(testo) if modo.startswith("libretto") else au_leggi_doc(testo)) if (testo or "").strip() else {}, bool((testo or "").strip()))
+                    ric_ = (au_leggi_libretto(testo) if modo.startswith("libretto") else au_leggi_doc(testo)) if (testo or "").strip() else {}
+                    if not modo.startswith("libretto") and "il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA):
+                        try:                                                    # l'IA completa e corregge (con la foto se il testo è poco)
+                            imm = il_immagini(c["nome"], mime, c["dati"], max_pagine=2) if len((testo or "").strip()) < 300 else None
+                            ia_, fonti_ = il_leggi_campi("un documento di un VEICOLO (polizza assicurativa, bollo, multa, fattura dell'officina, revisione…)",
+                                                         {"compagnia": "compagnia assicurativa o ente", "titolo": "titolo breve, es. Polizza 12345 o Bollo 2026",
+                                                          "importo": "importo totale, es. 412,50", "data": "data di emissione AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG"},
+                                                         testo=testo, immagini=imm, quante=2 if imm else 1, critici=("scadenza",))
+                            for k_, v_ in ia_.items():
+                                if not k_.startswith("_") and v_ and (k_ not in ric_ or (ric_.get(k_) or {}).get("affidabilita") == "bassa" or k_ in ("data", "scadenza")):
+                                    ric_[k_] = {"valore": v_, "affidabilita": "media"}
+                        except Exception:
+                            pass
+                    st.session_state[chiave_l] = (ric_, bool((testo or "").strip()) or bool(ric_))
         ric, letto = st.session_state[chiave_l]
         if st.session_state.get(chiave_l + "_lb"):
             _au_mostra_lettura_libretto(c, chiave_l, mime)

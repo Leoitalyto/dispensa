@@ -4625,23 +4625,92 @@ def _doc_analizza(testo, validi):
     return esito
 
 
+_DOC_REGOLE_IA = ("REGOLE DEI DOCUMENTI ITALIANI. Carta d'identità elettronica (CIE): il NUMERO è in alto a destra, formato 2 lettere + 5 cifre + 2 lettere (es. CA21222IJ); "
+                  "«EMISSIONE / ISSUING» è la data di RILASCIO, «SCADENZA / EXPIRY» è la data di scadenza (di solito il giorno del compleanno, 5 o 10 anni dopo l'emissione); "
+                  "«COMUNE DI …» è chi l'ha rilasciata (ente = Comune di …; se non si vede: Ministero dell'Interno). Carta d'identità cartacea: numero tipo AX 1234567. "
+                  "Patente: campo 4a = rilascio, 4b = scadenza, 4c = ente (es. MIT-UCO), campo 5 = numero. Passaporto: numero 2 lettere + 7 cifre, «Data di rilascio», «Scadenza», autorità (Questura/Ministero degli Affari Esteri). "
+                  "Tessera sanitaria: numero di identificazione della tessera (20 cifre, sul retro), data di scadenza, codice fiscale (16 caratteri). "
+                  "La data di nascita NON è mai rilascio né scadenza. La scadenza viene sempre DOPO il rilascio.")
+
+
+def _doc_uri_jpeg(uri):
+    try:
+        import base64 as _b64
+        testa, corpo = str(uri).split(",", 1)
+        dati = _b64.b64decode(corpo)
+        mime = testa.split(":", 1)[1].split(";", 1)[0] if ":" in testa else "image/jpeg"
+        return il_immagini("doc", mime, dati, max_pagine=1)
+    except Exception:
+        return []
+
+
+def _doc_con_ia(esito, testo, uris, validi):
+    """Rilegge le foto con l'IA (due servizi se il primo non è sicuro o mancano numero e scadenza) e completa/corregge la lettura automatica."""
+    cache = st.session_state.setdefault("_doc_ia_cache", {})
+    chiave = hash(tuple(str(u or "") for u in uris))
+    if chiave in cache:
+        ia, fonti = cache[chiave]
+    else:
+        ia, fonti = _doc_ia_leggi(testo, uris, validi)
+        if ia:
+            cache[chiave] = (ia, fonti)                                # letto bene: non si rilegge a ogni tocco
+    if not ia:
+        return esito
+    return _doc_ia_unisci(esito, ia, fonti, validi)
+
+
+def _doc_ia_leggi(testo, uris, validi):
+    imgs = [j for u in uris if u for j in _doc_uri_jpeg(u)]
+    if not imgs:
+        return {}, []
+    with st.spinner("🤖 Leggo il documento con l'intelligenza artificiale…"):
+        ia, fonti = il_leggi_campi("un DOCUMENTO PERSONALE italiano (carta d'identità, patente, passaporto, tessera sanitaria…) fotografato fronte e retro",
+                                   {"tipo": "uno di: " + " | ".join(validi), "numero": "numero del documento", "ente": "chi l'ha rilasciato",
+                                    "rilascio": "data di emissione/rilascio AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG", "cf": "codice fiscale se c'è"},
+                                   testo=testo, immagini=imgs, quante=2, critici=("numero", "scadenza", "rilascio"), regole=_DOC_REGOLE_IA)
+    return ia, fonti
+
+
+def _doc_ia_unisci(esito, ia, fonti, validi):
+    out = dict(esito or {})
+    for k in ("tipo", "numero", "ente", "rilascio", "scadenza", "cf"):
+        v = ia.get(k)
+        if not v:
+            continue
+        if k == "tipo" and v not in validi:
+            continue
+        if k == "numero":
+            v = re.sub(r"\s+", "", v).upper()
+        out[k] = v                                                     # l'IA legge le etichette delle date: vale più della lettura automatica
+    if out.get("rilascio") and out.get("scadenza") and out["scadenza"] < out["rilascio"]:
+        out["rilascio"], out["scadenza"] = out["scadenza"], out["rilascio"]
+    out["_fonti"] = il_nomi_fonti(fonti) if "il_nomi_fonti" in globals() else ", ".join(fonti)
+    if ia.get("_dubbi"):
+        out["_dubbi"] = ia["_dubbi"]
+    return out
+
+
 def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
     """Legge le foto (fronte e retro), mostra cosa ha capito e ritorna i valori da proporre nei campi del modulo."""
     lingue = _doc_ocr_lingue()
+    ia_ok = "il_leggi_campi" in globals() and bool(il_disponibili(IL_ORDINE_VISTA))
     st.markdown("**🔎 Lettura automatica del documento**")
-    if not lingue:
+    if not lingue and not ia_ok:
         st.info("La lettura automatica non è ancora attiva (manca il file packages.txt nel repository, vedi le istruzioni). "
                 "Intanto compila i campi qui sotto a mano.")
         return {}
-    with st.spinner("Sto leggendo il documento… (qualche secondo)"):
-        testo = ""
-        for uri in (foto_fronte, foto_retro):
-            if uri:
-                try:
-                    testo += "\n" + _doc_ocr_testo(uri, validi)
-                except Exception:
-                    pass
+    testo = ""
+    if lingue:
+        with st.spinner("Sto leggendo il documento… (qualche secondo)"):
+            for uri in (foto_fronte, foto_retro):
+                if uri:
+                    try:
+                        testo += "\n" + _doc_ocr_testo(uri, validi)
+                    except Exception:
+                        pass
     esito = _doc_analizza(testo, validi) if testo.strip() else {}
+    if ia_ok:
+        esito = _doc_con_ia(esito, testo, (foto_fronte, foto_retro), validi)
     if esito and not esito.get("numero") and esito.get("cf"):          # ripiego: senza numero della tessera, il codice fiscale
         esito["numero"] = esito["cf"]
     if esito.get("cf") and esito.get("numero") != esito["cf"]:          # il codice fiscale letto finisce nelle note
@@ -4663,6 +4732,10 @@ def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
             righe.append(f"**Scadenza:** {data_it(esito['scadenza'])}")
         if esito.get("note"):
             righe.append(f"**Note:** {esito['note']}")
+        if esito.get("_fonti"):
+            righe.append(f"🤖 Letto con l'IA: {esito['_fonti']}")
+        if esito.get("_dubbi"):
+            righe.append("⚠️ Da controllare: " + "; ".join(esito["_dubbi"]))
         st.success("✅ Ho letto questi dati e li ho scritti nei campi qui sotto. **Controllali e correggi se serve:**\n\n"
                    + "  \n".join(righe))
     if testo.strip():

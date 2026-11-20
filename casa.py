@@ -1545,8 +1545,29 @@ def ca_proponi_bene(beni, campi):
     return (migliore, punti_m, motivi_m) if punti_m >= 4 else (None, 0, [])
 
 
-def ca_ai_classifica(testo, base=None):
-    """Facoltativo: se nei Secrets c'è la chiave dell'assistente intelligente, chiede al modello di migliorare la lettura. Ritorna un dizionario o None."""
+CA_AI_CAMPI = ("tipo", "argomento", "categoria", "sottocategoria", "marca", "modello", "seriale", "lingua", "data_doc", "ente", "numero_doc", "importo", "scadenza_doc", "periodo_da", "periodo_a")
+
+
+def ca_ai_classifica(testo, base=None, sorgente=None):
+    """Migliora la lettura con l'intelligenza artificiale: i servizi gratuiti (ia_lettura.py, con le foto se il documento è una scansione) oppure la chiave
+    dell'assistente. Ritorna un dizionario o None."""
+    if "il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA):
+        sorg = sorgente or {}
+        scansione = bool(((base or {}).get("info") or {}).get("scansione") or "OCR" in str(((base or {}).get("info") or {}).get("metodo") or "")) or len((testo or "").strip()) < 300
+        immagini = il_immagini(sorg.get("nome") or "doc", sorg.get("mime") or "", sorg["dati"], max_pagine=2) if scansione and sorg.get("dati") else None
+        if not (testo or "").strip() and not immagini:
+            return None
+        campi = {"tipo": "uno di: " + " | ".join(CA_TIPI), "argomento": "uno di: " + " | ".join(CA_ARGOMENTI), "categoria": "categoria dell'apparecchio se è un manuale (es. Elettrodomestici)",
+                 "sottocategoria": "che apparecchio è (es. Lavatrice)", "marca": "marca", "modello": "modello esatto", "seriale": "numero di serie", "lingua": "it|en|de|fr|es",
+                 "data_doc": "data del documento AAAA-MM-GG", "ente": "chi lo ha emesso (azienda, ente, negozio)", "numero_doc": "numero della fattura/bolletta/polizza",
+                 "importo": "importo totale da pagare, es. 85,40", "scadenza_doc": "data di scadenza del pagamento AAAA-MM-GG", "periodo_da": "inizio periodo fatturato AAAA-MM-GG",
+                 "periodo_a": "fine periodo fatturato AAAA-MM-GG"}
+        d, fonti = il_leggi_campi("un documento di CASA (bolletta, fattura, manuale d'uso, garanzia, polizza, contratto, ricevuta…)", campi, testo=testo, immagini=immagini,
+                                  quante=2 if immagini else 1, critici=("tipo",))
+        if d:
+            d.pop("_dubbi", None)
+            d["_fonte"] = "IA: " + (il_nomi_fonti(fonti) if "il_nomi_fonti" in globals() else ", ".join(fonti))
+            return d
     if not (testo or "").strip() or "ai_attivo" not in globals() or not ai_attivo():
         return None
     import json
@@ -3369,11 +3390,19 @@ def _ca_flusso_documento_corpo(c, beni, n, up, bol_att=None, man_att=None, lavor
                     elif lavoro and modo_l == "busta":
                         ric["campi"]["tipo"] = {"valore": "Busta paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
                         ric["campi"]["argomento"] = {"valore": "Buste paga", "affidabilita": "alta", "fonte": "sezione Lavoro"}
-                    ai = ca_ai_classifica(testo, ric) if not lavoro else None
-                    if ai:                                                              # se l'assistente intelligente è acceso, completa i dati che mancano
+                    ai = ca_ai_classifica(testo, ric, sorgente) if not lavoro else None
+                    if ai:                                                              # l'IA completa i dati che mancano e corregge quelli poco sicuri
+                        fonte_ai = ai.pop("_fonte", "assistente intelligente")
                         for k, v in ai.items():
-                            if k in ("tipo", "categoria", "sottocategoria", "marca", "modello", "seriale", "lingua", "data_doc") and v and k not in ric["campi"]:
-                                ric["campi"][k] = {"valore": v, "affidabilita": "media", "fonte": "assistente intelligente"}
+                            if k not in CA_AI_CAMPI or not v:
+                                continue
+                            if k == "tipo" and v not in CA_TIPI or k == "argomento" and v not in CA_ARGOMENTI:
+                                continue
+                            att = ric["campi"].get(k) or {}
+                            if not att.get("valore") or att.get("affidabilita") == "bassa":
+                                ric["campi"][k] = {"valore": v, "affidabilita": "media", "fonte": fonte_ai}
+                            elif str(att.get("valore")).strip().lower() == str(v).strip().lower():
+                                ric["campi"][k] = dict(att, affidabilita="alta")      # lettura e IA concordano
                     bene_id, punti, motivi = ca_proponi_bene(beni, ric["campi"])
                     bol_id, motivi_b = ca_proponi_bolletta(c.get("documenti", []), ric["campi"]) if (ric["campi"].get("tipo") or {}).get("valore") == "Ricevuta di pagamento" else (None, [])
                 bozza = {"sha": sha, "ric": ric, "bene": bene_id, "motivi": motivi, "bolletta": bol_id, "motivi_b": motivi_b}

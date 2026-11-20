@@ -619,7 +619,15 @@ _SYS_LIBRETTO = ("Sei un assistente che legge la CARTA DI CIRCOLAZIONE italiana 
 
 
 def lb_ia(pagine_jpeg):
-    """Lettura con l'IA scelta (se attiva e se c'è ancora la quota). Ritorna (dizionario | None, errore | None)."""
+    """Lettura con l'IA scelta (se attiva e se c'è ancora la quota). Ritorna (dizionario | None, errore | None).
+    Prima i servizi di ia_lettura.py (due letture confrontate dall'arbitro), poi il servizio della diagnosi spie."""
+    if "il_consenso_immagine" in globals() and il_disponibili(IL_ORDINE_VISTA) and pagine_jpeg:
+        try:
+            es = il_consenso_immagine(_SYS_LIBRETTO, "Leggi questa carta di circolazione.", list(pagine_jpeg)[:3], quante=2, sempre=True)
+            if isinstance(es.get("risultato"), dict) and any(es["risultato"].get(k) for k in ("targa", "telaio", "marca")):
+                return es["risultato"], None
+        except Exception:
+            pass
     if "ad_attivo" not in globals() or not ad_attivo():
         return None, "assente"
     prov = ad_provider_scelto()

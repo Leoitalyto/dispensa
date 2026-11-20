@@ -1214,3 +1214,80 @@ def il_blocco_utilita():
                 for i, passo in enumerate(_IL_GUIDE.get(prov, []), 1):
                     st.markdown(f"{i}. {passo}")
                 st.link_button("🔑 Apri la pagina per la chiave", cfg["link"], width="stretch")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# LETTURA GENERALE CON L'IA: per tutti i documenti dell'app (identità, Casa, Auto, Animali, carta di circolazione…)
+# ---------------------------------------------------------------------------------------------------------------------
+_IL_DATA_RE = _il_re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def _il_data_iso(v):
+    """«27/03/2031», «2031-03-27», «27.03.2031» → «2031-03-27»; altrimenti ''."""
+    s = str(v or "").strip()
+    if _IL_DATA_RE.match(s):
+        return s
+    m = _il_re.match(r"^(\d{1,2})[./\-\s](\d{1,2})[./\-\s](\d{2,4})$", s)
+    if m:
+        g, me, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        a = a + 2000 if a < 100 else a
+        if 1 <= g <= 31 and 1 <= me <= 12:
+            return f"{a:04d}-{me:02d}-{g:02d}"
+    return ""
+
+
+def il_leggi_campi(contesto, campi, testo="", nome=None, mime=None, dati=None, immagini=None, quante=2, sempre=False, critici=(), regole=""):
+    """Legge un documento con l'IA e ritorna ({campo: valore}, [servizi]).
+    campi = {chiave: descrizione}. Le chiavi che finiscono con «data», «scadenza», «rilascio», «nascita», «emissione» sono date (AAAA-MM-GG).
+    Con le immagini: il primo servizio; se mancano i campi «critici» o la sicurezza è bassa (o sempre=True), altri servizi e l'arbitro.
+    Senza chiavi o se nessun servizio risponde: ({}, [])."""
+    try:
+        if not il_disponibili(IL_ORDINE_VISTA):
+            return {}, []
+        imgs = list(immagini or [])
+        if not imgs and dati and (str(mime or "").startswith("image/") or str(mime or "").endswith("pdf") or str(nome or "").lower().endswith(".pdf")):
+            imgs = il_immagini(nome or "doc", mime or "", dati, max_pagine=3)
+        schema = ", ".join(f'"{k}": "{d}"' for k, d in campi.items())
+        istr = (f"Sei un assistente esperto che legge {contesto}. Leggi con la massima attenzione e rispondi SOLO con un oggetto JSON, senza altro testo, con queste chiavi: "
+                f"{{{schema}, \"sicurezza\": \"numero da 0 a 1: quanto sei sicuro\", \"dubbi\": [\"cosa non si legge bene\"]}}. "
+                "Le date sempre in formato AAAA-MM-GG. Non scambiare MAI la data di nascita, la data di emissione/rilascio e la data di scadenza: leggi l'etichetta scritta accanto a ogni data. "
+                "Se un dato non si legge con sicurezza lascialo vuoto (stringa vuota): NON inventare. " + (regole or ""))
+        utente = ("Testo letto con la lettura automatica (può contenere errori, usalo solo come aiuto):\n" + str(testo)[:6000]) if str(testo or "").strip() else "Leggi il documento nell'immagine."
+        if imgs:
+            def _incerta(d):
+                try:
+                    poco = float(d.get("sicurezza") or 0) < 0.75
+                except Exception:
+                    poco = True
+                return poco or any(not str(d.get(k) or "").strip() for k in critici)
+            esito = il_consenso_immagine(istr, utente, imgs[:3], quante=quante, sempre=sempre, incerta=_incerta, schema_txt=schema)
+            d, fonti = esito.get("risultato"), esito.get("fonti") or []
+        else:
+            if not str(testo or "").strip():
+                return {}, []
+            r, prov = il_testo(istr, utente, max_tokens=1200)
+            d, fonti = il_json(r), ([prov] if prov else [])
+        if not isinstance(d, dict):
+            return {}, fonti
+        out = {}
+        for k in campi:
+            v = d.get(k)
+            if isinstance(v, (int, float)):
+                v = str(v)
+            if not isinstance(v, str) or not v.strip():
+                continue
+            v = v.strip()
+            if _il_re.search(r"(data|scadenza|rilascio|nascita|emissione|richiamo|controllo|_da|_a)$", k):
+                v = _il_data_iso(v)
+                if not v:
+                    continue
+            out[k] = v
+        if d.get("dubbi"):
+            out["_dubbi"] = [str(x) for x in (d.get("dubbi") or []) if x][:4]
+        return out, fonti
+    except Exception:
+        return {}, []
+
+
+def il_nomi_fonti(fonti):
+    return ", ".join(IL_FORNITORI.get(p, {}).get("nome", p) for p in fonti if p)

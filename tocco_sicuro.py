@@ -28,11 +28,35 @@ document.addEventListener('touchend',function(e){var s=st;st=null;
  setTimeout(function(){if(document.body.contains(s.b)&&!s.b.disabled){occupa(s.b);s.b.click();}},180);},{passive:false,capture:true});
 document.addEventListener('click',function(e){var b=bottone(e.target);if(b&&!b.disabled&&!b.classList.contains('ts-occ'))occupa(b);},true);
 })();
+(function(){
+// CAMBIO DI PAGINA PULITO: mentre la pagina nuova si disegna, la pagina vecchia (sbiadita, «stale») resta sotto e scivola giù a pezzi: sembra che la schermata «coli».
+// Quando si tocca un bottone che cambia pagina, i pezzi vecchi spariscono subito; la pagina nuova compare dall'alto, pulita. Tornano normali appena la pagina è pronta.
+// Il bottone PayPal: le sue copie vecchie non si vedono mai (prima, per un attimo, comparivano una sotto l'altra).
+if(window.__tsNav)return;window.__tsNav=1;
+var css=document.createElement('style');
+css.textContent='body.vm-cambio [data-testid="stElementContainer"][data-stale="true"]{display:none !important}'
+ +'[data-testid="stElementContainer"][data-stale="true"]:has([class*="st-key-dn_badge"]),[class*="st-key-dn_badge"] [data-stale="true"]{display:none !important}'
+ +'[data-testid="stElementContainer"]{transition:none !important}';
+document.head.appendChild(css);
+function fine(){document.body.classList.remove('vm-cambio');}
+function pagina(b){return !!(b.closest&&b.closest('[class*="st-key-vmh_"],[class*="st-key-navp_"],[class*="st-key-navpa_"],[class*="st-key-vm_torna"],[class*="st-key-nav_pagine"],[class*="st-key-sezh_"],[class*="st-key-lv_hub"],[class*="st-key-an_b_"]'));}
+document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('button'):null;
+ if(!b||!pagina(b))return;
+ document.body.classList.add('vm-cambio');
+ var app=document.querySelector('[data-test-script-state]'),visto=false,t0=Date.now();
+ var iv=setInterval(function(){var s=app?app.getAttribute('data-test-script-state'):'';
+  if(s==='running')visto=true;
+  if((visto&&s!=='running')||Date.now()-t0>9000){clearInterval(iv);setTimeout(fine,120);}},80);},true);
+})();
 """
 
 
 def ts_installa():
-    """Si chiama a ogni pagina: lo script si installa una volta sola."""
+    """Si chiama a ogni pagina: lo script si installa una volta sola (e una sola volta per ridisegnata)."""
+    giro = st.session_state.get("_vm_run")
+    if giro is not None and st.session_state.get("_ts_fatto") == giro:
+        return
+    st.session_state["_ts_fatto"] = giro
     try:
         cod = ("<!doctype html><html><body><script>(function(){try{var P=window.parent;if(P.__tsOK)return;var s=P.document.createElement('script');s.textContent="
                + _ts_json.dumps(TS_JS).replace("</", "<\\/") + ";P.document.head.appendChild(s);}catch(e){}})();</script></body></html>")
@@ -47,3 +71,9 @@ def ts_installa():
         st.markdown("<style>[class*='st-key-nascosti_ts_js']{display:none !important}</style>", unsafe_allow_html=True)
     except Exception:
         pass
+
+
+try:
+    ts_installa()                    # anche nella Home e nella pagina di accesso (prima solo nelle sezioni)
+except Exception:
+    pass
