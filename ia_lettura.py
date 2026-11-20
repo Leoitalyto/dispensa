@@ -55,9 +55,19 @@ IL_FORNITORI = {
                    "link": "https://dash.cloudflare.com/profile/api-tokens", "costo": "gratis fino a 10.000 «neuroni» al giorno", "dati": "i dati non servono ad addestrare"},
     "cohere": {"nome": "Cohere", "base": "https://api.cohere.ai/compatibility/v1", "secret": ["COHERE_API_KEY"], "vista": ["command-a-vision-07-2025"], "testo": ["command-a-03-2025"],
                "link": "https://dashboard.cohere.com/api-keys", "costo": "chiave di prova gratuita: 1.000 richieste al mese, solo uso personale", "dati": "chiave di prova"},
+    "sambanova": {"nome": "SambaNova Cloud", "base": "https://api.sambanova.ai/v1", "secret": ["SAMBANOVA_API_KEY"],
+                  "pref_vista": [r"llama-4-maverick", r"vision", r"-vl"], "pref_testo": [r"deepseek-v3", r"llama-3\.3-70b", r"gpt-oss-120b", r"qwen3-32b", r"llama-4-maverick"],
+                  "vista": ["Llama-4-Maverick-17B-128E-Instruct"], "testo": ["DeepSeek-V3.1", "Meta-Llama-3.3-70B-Instruct", "gpt-oss-120b"],
+                  "link": "https://cloud.sambanova.ai/apis", "costo": "credito di prova gratuito (circa 5 dollari, vale circa 3 mesi), poi a pagamento: si ferma da solo quando finisce",
+                  "dati": "servizio per sviluppatori"},
+    "huggingface": {"nome": "Hugging Face", "base": "https://router.huggingface.co/v1", "secret": ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
+                    "pref_vista": [r"qwen.*vl", r"gemma-3-27b", r"llama-4", r"vision"], "pref_testo": [r"llama-3\.3-70b", r"qwen3", r"gpt-oss-120b", r"gemma-3-27b"],
+                    "vista": ["Qwen/Qwen2.5-VL-7B-Instruct", "google/gemma-3-27b-it"], "testo": ["meta-llama/Llama-3.3-70B-Instruct", "openai/gpt-oss-120b"],
+                    "link": "https://huggingface.co/settings/tokens", "costo": "gratis con un piccolo credito mensile (finisce in fretta): serve come riserva",
+                    "dati": "le richieste passano a fornitori diversi secondo il modello"},
 }
-IL_ORDINE_VISTA = ["deepseek", "gemini", "mistral", "groq", "openrouter", "nvidia", "cloudflare", "cohere"]       # documenti e manoscritti: DeepSeek primo, poi i migliori
-IL_ORDINE_TESTO = ["groq", "gemini", "mistral", "deepseek", "cloudflare", "nvidia", "openrouter", "cohere"]       # solo testo (arbitro, traduzioni): i più veloci prima
+IL_ORDINE_VISTA = ["deepseek", "gemini", "mistral", "groq", "openrouter", "nvidia", "cloudflare", "cohere", "sambanova", "huggingface"]       # documenti e manoscritti: DeepSeek primo, poi i migliori
+IL_ORDINE_TESTO = ["groq", "gemini", "mistral", "deepseek", "cloudflare", "nvidia", "openrouter", "cohere", "sambanova", "huggingface"]       # solo testo (arbitro, traduzioni): i più veloci prima
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1145,6 +1155,11 @@ _IL_GUIDE = {
                    "Il numero dell'account (Account ID) lo trovi nella pagina principale di Cloudflare, a destra.",
                    "Nei Secrets due righe: `CLOUDFLARE_API_TOKEN = \"il-token\"` e `CLOUDFLARE_ACCOUNT_ID = \"il-numero-account\"`, poi **Save**."],
     "cohere": ["Apri il link e crea l'account.", "Nella pagina delle chiavi c'è già una **Trial key** (chiave di prova): tocca **Copy**.", "Nei Secrets: `COHERE_API_KEY = \"la-chiave\"` e **Save**."],
+    "sambanova": ["Apri il link e crea l'account gratuito (anche con Google): ricevi un credito di prova.", "Tocca **Create API Key** (crea chiave), scrivi un nome e poi **Copy** (copia).",
+                  "Nei Secrets: `SAMBANOVA_API_KEY = \"la-chiave\"` e **Save**. Non mettere la carta: quando il credito di prova finisce, l'app usa gli altri servizi."],
+    "huggingface": ["Apri il link e crea l'account gratuito (anche con Google).", "Tocca **+ Create new token** (crea un nuovo token) e scegli **Fine-grained**.",
+                    "Scrivi un nome (es. vitamemo) e spunta **Make calls to Inference Providers** (fare richieste ai fornitori di IA); in fondo tocca **Create token** e poi **Copy**.",
+                    "Nei Secrets: `HF_TOKEN = \"la-chiave\"` e **Save**."],
     "deepseek": ["Apri il link e crea l'account.", "DeepSeek è a pagamento: in **Top up** (ricarica) metti pochi dollari.", "In **API keys** tocca **Create new API key**, poi copiala.",
                  "Nei Secrets: `DEEPSEEK_API_KEY = \"la-chiave\"` e **Save**."],
 }

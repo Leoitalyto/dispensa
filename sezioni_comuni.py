@@ -286,4 +286,9 @@ if "_sc_nav_prima" not in globals() and "nav_pagine" in globals():
             sc_barra(corrente)
         except Exception as _e:
             st.caption(f"(bottoni numeri utili/appuntamenti non disponibili: {type(_e).__name__})")
+        if "mt_mostra" in globals():
+            try:
+                mt_mostra(corrente)                                    # avvisi meteo utili (meteo_avvisi.py): solo Salute, Auto, Animali e solo se servono
+            except Exception:
+                pass
         return r

@@ -22,7 +22,7 @@ import time as _ta_time
 import streamlit as st
 
 TA_NOMI_LINGUE = {"en": "English", "es": "Spanish (Spain)", "fr": "French", "de": "German", "pt": "Portuguese", "ro": "Romanian", "ar": "Arabic"}
-TA_ORDINE = ["cloudflare", "openrouter", "nvidia", "cohere", "mistral", "groq", "gemini"]       # prima quelli che non servono ai documenti; mai quelli a pagamento
+TA_ORDINE = ["cloudflare", "openrouter", "nvidia", "cohere", "mistral", "groq", "gemini", "sambanova", "huggingface"]       # prima quelli che non servono ai documenti; mai quelli a pagamento
 TA_GRUPPO = 20
 _TA_LOC = _ta_thr.local()
 

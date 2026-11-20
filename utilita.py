@@ -220,6 +220,8 @@ def schermata_utilita():
         _ut_chiama("sc_blocco_utilita")
     with ut_riquadro("aspetto", "⚙️", "Aspetto e telefono", "Testi più grandi, radio, freccia «torna su», libera spazio sul telefono", "#0277bd"):
         _ut_chiama("pn_blocco_utilita")
+    with ut_riquadro("meteo", "🌦️", "Avvisi meteo", "Caldo, gelo, pioggia e vento: avvisi utili in Salute, Auto e Animali", "#f59e0b"):
+        _ut_chiama("mt_blocco_utilita")
     if _ut_admin():
         with ut_riquadro("ia", "🤖", "Intelligenza artificiale", "Solo per l'amministratore: chiavi gratuite per leggere documenti, manoscritti e spie", "#6a1b9a"):
             _ut_chiama("il_blocco_utilita")
