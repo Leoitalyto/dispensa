@@ -401,7 +401,7 @@ def lu_chi_e(d, nome, cf=""):
 def lu_case_di(d, pid):
     """Le case collegate a quella persona (id; «» = la casa principale)."""
     c = d.get("casa") or {}
-    ids = [x["id"] for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id") and x.get("persona") == pid]
+    ids = [x["id"] for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id") and (x.get("profilo") or x.get("persona")) == pid]
     if (c.get("persona_principale") or "p0") == pid:
         ids.insert(0, "")
     return ids
@@ -760,7 +760,7 @@ def lu_ui_persone():
         cc = d.get("casa") or {}
         scelte = {}
         for x in case:
-            att = (cc.get("persona_principale") or ("p0" if "p0" in nomi else "")) if not x["id"] else (x.get("persona") or "")
+            att = (cc.get("persona_principale") or ("p0" if "p0" in nomi else "")) if not x["id"] else (x.get("profilo") or x.get("persona") or "")
             scelte[x["id"]] = st.selectbox(x.get("nome") or "Casa", list(nomi), index=list(nomi).index(att) if att in nomi else 0, format_func=lambda i: nomi[i], key=f"lu_pc_{x['id'] or 'princ'}")
         cattivi = [p_ for p_, (_n, c_) in nuovi.items() if c_ and not lu_cf_valido(c_)]
         if cattivi:
@@ -778,6 +778,7 @@ def lu_ui_persone():
                         for x in c_.get("case") or []:
                             if x.get("id") == cid:
                                 x["persona"] = pid
+                                x["profilo"] = pid
             salva(_m, "Persone e case per i documenti")
             st.toast("Salvato ✅")
             st.rerun()

@@ -207,6 +207,9 @@ def _sz_card(v, adesso, sz):
     c = _SZ_COL_STATO.get(v["stato"], "#69f0ae")
     cat_i, cat_n = SZ_CATEGORIE.get(v["categoria"], ("📌", "Altro"))
     tags = [f"<span class='tag'>{cat_i} {_sz_e(v.get('categoria_pers') or cat_n)}</span>"]
+    sc_ = st.session_state.get("_sz_profili_scelti") or []
+    if v.get("profilo") and (len(sc_) > 1 or (sc_ and v["profilo"] != sc_[0])):
+        tags.append(f"<span class='tag' style='background:#e3f2fd;color:#0d47a1'>👤 {_sz_e(st.session_state.get('_sz_nomi_p', {}).get(v['profilo'], ''))}</span>")
     if v.get("sezione") and v["sezione"] != "scadenziario":
         tags.append(f"<span class='tag'>↗ {_sz_e(SZ_SEZIONI.get(v['sezione'], v['sezione']))}</span>")
     if v.get("priorita") == "Alta":
@@ -228,7 +231,7 @@ def _sz_card(v, adesso, sz):
 def _sz_stato_sezione(sz, v, stato):
     """Completata/annullata per un'attività delle sezioni: vale SOLO per questa data (se la data cambia, torna da fare)."""
     sz["stati"][v["chiave"]] = {"stato": stato, "data_rif": v["data"].isoformat(), "il": _szdt.now().isoformat(timespec="seconds"), "titolo": v["titolo"],
-                                "categoria": v["categoria"], "sezione": v.get("sezione")}
+                                "categoria": v["categoria"], "sezione": v.get("sezione"), "profilo": v.get("profilo")}
     sz_log(sz, stato, v["chiave"], v["titolo"])
 
 
@@ -399,6 +402,12 @@ def _sz_modulo(sz, pid):
         cat_s = c3.selectbox("Categoria", cats + ["✍️ Un'altra…"], index=(cats.index(p["categoria"]) if p.get("categoria") in cats else cats.index("Personale")), key=k + "_cat")
         cat = c3.text_input("Nuova categoria", key=k + "_catn", placeholder="es. Scuola") if cat_s == "✍️ Un'altra…" else cat_s
         pr = c4.selectbox("Priorità", SZ_PRIORITA, index=SZ_PRIORITA.index(p.get("priorita")) if p.get("priorita") in SZ_PRIORITA else 1, key=k + "_pr")
+        profili = st.session_state.get("_sz_nomi_p") or {}
+        per_chi = ""
+        if len(profili) > 1:
+            ids = list(profili)
+            dflt = p.get("profilo") or (st.session_state.get("_sz_profili_scelti") or ids)[0]
+            per_chi = st.selectbox("👤 Per chi è", ids, index=ids.index(dflt) if dflt in ids else 0, format_func=profili.get, key=k + "_chi")
         importo = st.number_input("💶 Importo (facoltativo)", min_value=0.0, value=sz_num(p.get("importo")), step=1.0, format="%.2f", key=k + "_imp", placeholder="es. 35,00")
         ric0 = p.get("ricorrenza") or {}
         c5, c6 = st.columns([2, 1], gap="small")
@@ -414,7 +423,7 @@ def _sz_modulo(sz, pid):
         b1, b2 = st.columns(2, gap="small")
         if b1.button("💾 Salva", key=k + "_ok", type="primary", width="stretch"):
             rec = {"titolo": titolo, "descrizione": descr, "data": data.isoformat() if data else "", "ora": ora.strftime("%H:%M") if ora else "", "categoria": (cat or "Personale").strip(),
-                   "priorita": pr, "importo": importo, "ricorrenza": {"tipo": rt, "ogni": int(ogni)}, "avvisi": avvisi}
+                   "priorita": pr, "importo": importo, "ricorrenza": {"tipo": rt, "ogni": int(ogni)}, "avvisi": avvisi, "profilo": per_chi}
             err = sz_valida_personale(rec)
             if err:
                 for e in err:
@@ -522,6 +531,11 @@ def _sz_impostazioni(sz, voci, adesso):
 # ---------------------------------------------------------------------------------------------------------------------
 # la pagina
 # ---------------------------------------------------------------------------------------------------------------------
+def _sz_prof_cb(princ):
+    if not st.session_state.get("sz_prof_w"):
+        st.session_state["sz_prof_w"] = [princ]                           # almeno uno resta sempre acceso
+
+
 def _sz_imposta_periodo(p):
     st.session_state["sz_periodo"] = None if st.session_state.get("sz_periodo") == p else p
 
@@ -546,6 +560,31 @@ def schermata_scadenziario():
     except Exception as e:
         st.error(f"Non riesco a leggere le scadenze: {type(e).__name__}: {e}")
         return
+    d_pers, _x = _sz_dati()
+    profili = sz_profili(d_pers)
+    nomi_p = dict(profili)
+    princ = profili[0][0]
+    if len(profili) > 1:
+        st.markdown("<div style='font-weight:800;margin:2px 0 4px'>👥 Di chi vuoi vedere le scadenze</div>", unsafe_allow_html=True)
+        if not st.session_state.get("sz_prof_w"):
+            st.session_state["sz_prof_w"] = [princ]                       # si parte sempre dal profilo principale
+        st.markdown("<style>.st-key-sz_prof button[aria-pressed='false']{background:#0a0e18 !important;border:1px solid rgba(255,255,255,.14) !important;"
+                    "box-shadow:inset 0 3px 7px rgba(0,0,0,.75) !important;opacity:.62;filter:grayscale(.55)}"
+                    ".st-key-sz_prof button[aria-pressed='false'] p{color:#7d8798 !important}"
+                    ".st-key-sz_prof button[aria-pressed='true']{background:rgba(255,92,138,.18) !important;border:2px solid #ff5c8a !important;"
+                    "box-shadow:0 0 8px #ff5c8a,0 0 18px rgba(255,92,138,.75),inset 0 0 10px rgba(255,92,138,.45) !important;animation:sz-neon 1.7s ease-in-out infinite}"
+                    ".st-key-sz_prof button[aria-pressed='true'] p{color:#ffe3ec !important;font-weight:800 !important;text-shadow:0 0 8px #ff5c8a}"
+                    "@keyframes sz-neon{0%,100%{box-shadow:0 0 6px #ff5c8a,0 0 14px rgba(255,92,138,.6)}50%{box-shadow:0 0 12px #ff9ab8,0 0 28px rgba(255,92,138,.95)}}"
+                    "@media (prefers-reduced-motion:reduce){.st-key-sz_prof button{animation:none !important}}</style>", unsafe_allow_html=True)
+        _box_prof = st.container(key="sz_prof")
+        scelti = _box_prof.pills("Di chi", [i for i, _n in profili], selection_mode="multi", format_func=lambda i: ("👤 " if i == princ else "👥 ") + nomi_p.get(i, "?"),
+                          key="sz_prof_w", label_visibility="collapsed", on_change=_sz_prof_cb, args=(princ,)) or [princ]
+        st.caption("Tocca i nomi per seguire anche le scadenze delle persone che segui (più nomi insieme si sommano). Quando rientri si riparte da **" + _sz_e(nomi_p[princ]) + "**.")
+    else:
+        scelti = [princ]
+    st.session_state["_sz_profili_scelti"] = list(scelti)
+    st.session_state["_sz_nomi_p"] = nomi_p
+    voci = [v for v in voci if v.get("profilo") in scelti]
     rie = sz_riepilogo(voci, adesso)
     per = st.session_state.get("sz_periodo")
     with st.container(key="sz_tiles"):
@@ -682,6 +721,8 @@ if "nav_pagine" in globals() and "_sz_nav_prima" not in globals():
     _sz_nav_prima = nav_pagine
 
     def nav_pagine(corrente):                                        # noqa: F811
+        if corrente != "scadenziario":
+            st.session_state.pop("sz_prof_w", None)                    # rientrando nello Scadenziario si riparte dal profilo principale
         r = _sz_nav_prima(corrente)
         try:
             (st.fragment(run_every=60)(_sz_avvisi_app) if hasattr(st, "fragment") else _sz_avvisi_app)()

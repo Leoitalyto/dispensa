@@ -134,13 +134,13 @@ def sz_quando(data, ora, ora_avvisi="09:00"):
     return _sz_dt.combine(data, _sz_time(int(o[:2]), int(o[3:5])))
 
 
-def _sz_voce(chiave, titolo, data, categoria, sezione, descrizione="", ora="", importo=None, priorita="", ricorrente="", rif=None, nav=None):
+def _sz_voce(chiave, titolo, data, categoria, sezione, descrizione="", ora="", importo=None, priorita="", ricorrente="", rif=None, nav=None, profilo=None):
     d = sz_d(data)
     if not d:
         return None
     return {"chiave": chiave, "titolo": str(titolo or "Attività").strip()[:120], "descrizione": str(descrizione or "").strip()[:300], "data": d, "ora": sz_ora(ora),
             "categoria": categoria if categoria in SZ_CATEGORIE else "personali", "sezione": sezione, "importo": sz_num(importo), "priorita": priorita,
-            "ricorrente": ricorrente, "rif": rif or {}, "nav": nav or {"sezione": sezione}, "personale": False}
+            "ricorrente": ricorrente, "rif": rif or {}, "nav": nav or {"sezione": sezione}, "personale": False, "profilo": profilo}
 
 
 # =====================================================================================================================
@@ -169,28 +169,28 @@ def _sz_f_salute(d, oggi):
     for m in f.get("medicinali") or []:
         if m.get("scadenza") and m.get("id"):
             out.append(_sz_voce(f"salute:med:{m['id']}", f"💊 {m.get('nome') or 'Medicinale'} scade" + per(m.get("profilo")), m["scadenza"], "salute", "salute",
-                             descrizione=str(m.get("dosaggio") or "")))
+                             descrizione=str(m.get("dosaggio") or ""), profilo=m.get("profilo")))
     for x in f.get("prescrizioni") or []:
         if x.get("valida_fino") and x.get("stato") != "Usata" and x.get("id"):
             out.append(_sz_voce(f"salute:presc:{x['id']}", f"📝 Prescrizione {str(x.get('tipo') or '').lower()} da usare entro" + per(x.get("profilo")), x["valida_fino"], "salute", "salute",
-                             descrizione=str(x.get("farmaco") or x.get("descrizione") or x.get("note") or "")))
+                             descrizione=str(x.get("farmaco") or x.get("descrizione") or x.get("note") or ""), profilo=x.get("profilo")))
     for x in f.get("visite") or []:
         if not x.get("id"):
             continue
         dv = sz_d(x.get("data"))
         if dv and dv >= oggi - _sz_td(days=1):
             out.append(_sz_voce(f"salute:visita:{x['id']}", f"🩺 Visita: {x.get('categoria') or 'visita'}" + per(x.get("profilo")), dv, "visite", "salute", ora=x.get("ora"),
-                             descrizione=" · ".join(y for y in (x.get("medico"), x.get("motivo")) if y)))
+                             descrizione=" · ".join(y for y in (x.get("medico"), x.get("motivo")) if y), profilo=x.get("profilo")))
         if x.get("prossimo"):
             out.append(_sz_voce(f"salute:visita_pross:{x['id']}", f"🩺 Prossimo controllo: {x.get('categoria') or 'visita'}" + per(x.get("profilo")), x["prossimo"], "visite", "salute",
-                             descrizione=str(x.get("medico") or "")))
+                             descrizione=str(x.get("medico") or ""), profilo=x.get("profilo")))
     for x in f.get("vaccinazioni") or []:
         if x.get("richiamo") and x.get("id"):
-            out.append(_sz_voce(f"salute:vacc:{x['id']}", f"💉 Richiamo {x.get('nome') or 'vaccino'}" + per(x.get("profilo")), x["richiamo"], "salute", "salute"))
+            out.append(_sz_voce(f"salute:vacc:{x['id']}", f"💉 Richiamo {x.get('nome') or 'vaccino'}" + per(x.get("profilo")), x["richiamo"], "salute", "salute", profilo=x.get("profilo")))
     for t in f.get("terapie") or []:
         if t.get("fine") and t.get("id") and t.get("stato", "attiva") == "attiva":
             out.append(_sz_voce(f"salute:ter:{t['id']}", f"💊 Fine terapia {t.get('nome_med') or ''}".strip() + per(t.get("profilo")), t["fine"], "salute", "salute",
-                             descrizione=", ".join(t.get("orari") or [])))
+                             descrizione=", ".join(t.get("orari") or []), profilo=t.get("profilo")))
     for p in f.get("profili") or []:
         nome = f" ({p.get('nome', '')})" if len(f.get("profili") or []) > 1 else ""
         for c in p.get("controlli") or []:
@@ -200,16 +200,16 @@ def _sz_f_salute(d, oggi):
                 pr = sz_aggiungi_mesi(u, int(sz_num(c["ogni_mesi"]))) if u else None
             if pr and c.get("id"):
                 out.append(_sz_voce(f"salute:contr:{p.get('id')}:{c['id']}", f"⏰ {c.get('nome') or 'Controllo periodico'}{nome}", pr, "salute", "salute",
-                                 ricorrente=(f"ogni {int(sz_num(c.get('ogni_mesi')))} mesi" if sz_num(c.get("ogni_mesi")) else "")))
+                                 ricorrente=(f"ogni {int(sz_num(c.get('ogni_mesi')))} mesi" if sz_num(c.get("ogni_mesi")) else ""), profilo=p.get("id")))
         for e in p.get("esenzioni") or []:
             if e.get("permanente") or not e.get("id"):
                 continue
             cand = [x for x in (sz_d(e.get("valida_fino")), sz_d(e.get("revisione"))) if x]
             if cand:
-                out.append(_sz_voce(f"salute:esen:{p.get('id')}:{e['id']}", f"🪪 Esenzione/invalidità {e.get('codice') or e.get('nome') or ''}".strip() + nome, min(cand), "documenti", "salute"))
+                out.append(_sz_voce(f"salute:esen:{p.get('id')}:{e['id']}", f"🪪 Esenzione/invalidità {e.get('codice') or e.get('nome') or ''}".strip() + nome, min(cand), "documenti", "salute", profilo=p.get("id")))
         for x in p.get("docsan") or []:
             if x.get("prossimo_controllo") and x.get("id"):
-                out.append(_sz_voce(f"salute:docsan:{x['id']}", f"🩺 Controllo indicato: {x.get('titolo') or x.get('tipo') or 'referto'}{nome}", x["prossimo_controllo"], "visite", "salute"))
+                out.append(_sz_voce(f"salute:docsan:{x['id']}", f"🩺 Controllo indicato: {x.get('titolo') or x.get('tipo') or 'referto'}{nome}", x["prossimo_controllo"], "visite", "salute", profilo=p.get("id")))
     return out
 
 
@@ -220,7 +220,7 @@ def _sz_f_documenti(d, oggi):
         if x.get("scadenza") and not x.get("senza_scadenza") and x.get("id"):
             nome = _sz_nome_prof(f, x.get("profilo"))
             out.append(_sz_voce(f"documenti:{x['id']}", f"🪪 {x.get('tipo') or 'Documento'} scade" + (f" ({nome})" if nome else ""), x["scadenza"], "documenti", "documenti",
-                             descrizione=str(x.get("numero") or "")))
+                             descrizione=str(x.get("numero") or ""), profilo=x.get("profilo")))
     return out
 
 
@@ -340,7 +340,7 @@ def _sz_f_appuntamenti(d, oggi):
                 cat = "lavoro" if base == "lavoro" else "visite"
                 out.append(_sz_voce(f"app:{sez}:{x['id']}", f"📅 {x.get('nome') or 'Appuntamento'}" + (f" ({x['funzione']})" if x.get("funzione") else ""), x["data"], cat,
                                  base if base in SZ_SEZIONI else "salute", ora=x.get("ora"), descrizione=" · ".join(y for y in (x.get("motivazione"), x.get("telefono")) if y),
-                                 nav={"sezione": base, "appuntamenti": sez}))
+                                 nav={"sezione": base, "appuntamenti": sez}, profilo=(str(sez).split("@", 1)[1] if "@" in str(sez) else None)))
     return out
 
 
@@ -451,7 +451,7 @@ def sz_nuova_personale(sz, p):
         raise ValueError(" ".join(err))
     ora = _sz_dt.now().isoformat(timespec="seconds")
     x = {"id": sz_id(), "titolo": str(p["titolo"]).strip(), "descrizione": str(p.get("descrizione") or "").strip(), "data": sz_d(p["data"]).isoformat(),
-         "ora": sz_ora(p.get("ora")), "categoria": str(p.get("categoria") or "Personale").strip(), "priorita": p.get("priorita") if p.get("priorita") in SZ_PRIORITA else "Media",
+         "ora": sz_ora(p.get("ora")), "categoria": str(p.get("categoria") or "Personale").strip(), "profilo": p.get("profilo") or "", "priorita": p.get("priorita") if p.get("priorita") in SZ_PRIORITA else "Media",
          "importo": sz_num(p.get("importo")), "files": list(p.get("files") or []), "ricorrenza": dict(p.get("ricorrenza") or {"tipo": ""}, giorno=sz_d(p["data"]).day),
          "avvisi": dict(SZ_AVVISI_BASE, **(p.get("avvisi") or {})), "stato": "da fare", "completata_il": "", "creato_il": ora, "modificato_il": ora}
     sz["personali"].append(x)
@@ -527,6 +527,38 @@ def sz_stato(voce, adesso, sz=None):
     return "Da fare"
 
 
+def sz_profili(d):
+    """[(id, nome)] delle persone seguite (i profili di Salute: il primo è il principale)."""
+    prof = [(p.get("id"), p.get("nome") or "?") for p in ((d.get("farmacia") or {}).get("profili") or []) if isinstance(p, dict) and p.get("id")]
+    return prof or [("p0", "Io")]
+
+
+def sz_principale(d):
+    return sz_profili(d)[0][0]
+
+
+def _sz_assegna_profili(d, voci):
+    """Di chi è ogni attività: quella scritta nella scheda; per Casa la persona della casa (casa_id); altrimenti il profilo principale."""
+    ids = [i for i, _n in sz_profili(d)]
+    princ = ids[0]
+    c = d.get("casa") or {}
+    case = {x.get("id"): (x.get("profilo") or x.get("persona")) for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id")}
+    case[""] = c.get("persona_principale") or princ
+    per_id = {}
+    for lista in ("documenti", "beni", "manutenzioni", "spese_amm"):
+        for x in c.get(lista) or []:
+            if isinstance(x, dict) and x.get("id"):
+                per_id[x["id"]] = case.get(x.get("casa_id") or "", princ)
+    for v in voci:
+        if v.get("profilo") in ids:
+            continue
+        if v.get("sezione") == "casa" and v["chiave"].startswith("casa:"):
+            pz = v["chiave"].split(":")
+            v["profilo"] = per_id.get(pz[2] if len(pz) > 2 else "", princ) if per_id.get(pz[2] if len(pz) > 2 else "") in ids else princ
+        else:
+            v["profilo"] = princ
+
+
 def sz_raccogli(d, adesso, d_extra=None, solo_aperte=False):
     """Tutte le attività: sezioni (lette ora dalle schede originali) + personali. Ogni voce ha 'stato'. Niente doppioni (chiave unica)."""
     oggi = adesso.date()
@@ -545,6 +577,7 @@ def sz_raccogli(d, adesso, d_extra=None, solo_aperte=False):
                 if v and v["chiave"] not in viste:
                     viste.add(v["chiave"])
                     voci.append(v)
+    _sz_assegna_profili(d, voci)
     stati = sz.get("stati") or {}
     for v in voci:
         st_ = stati.get(v["chiave"])
@@ -561,7 +594,7 @@ def sz_raccogli(d, adesso, d_extra=None, solo_aperte=False):
         v = {"chiave": "pers:" + p["id"], "titolo": p.get("titolo") or "Attività", "descrizione": p.get("descrizione") or "", "data": dp, "ora": sz_ora(p.get("ora")),
              "categoria": "personali", "categoria_pers": p.get("categoria") or "Personale", "sezione": "scadenziario", "importo": sz_num(p.get("importo")),
              "priorita": p.get("priorita") or "Media", "ricorrente": sz_descr_ricorrenza(p.get("ricorrenza")), "rif": {"id": p["id"]}, "nav": {"sezione": "scadenziario"},
-             "personale": True, "avvisi": p.get("avvisi") or {}, "files": p.get("files") or []}
+             "personale": True, "avvisi": p.get("avvisi") or {}, "files": p.get("files") or [], "profilo": p.get("profilo") or sz_principale(d)}
         if p.get("stato") == "completata":
             v["_stato_fisso"] = "Completata"
         elif p.get("stato") == "annullata":
@@ -577,7 +610,8 @@ def sz_raccogli(d, adesso, d_extra=None, solo_aperte=False):
         if st_.get("stato") in ("completata", "annullata") and k not in viste and sz_d(st_.get("data_rif")):
             voci.append({"chiave": k, "titolo": st_.get("titolo") or k, "descrizione": "", "data": sz_d(st_["data_rif"]), "ora": "", "categoria": st_.get("categoria") or "personali",
                          "sezione": st_.get("sezione") or "scadenziario", "importo": None, "priorita": "Bassa", "ricorrente": "", "rif": {}, "nav": {"sezione": st_.get("sezione") or "scadenziario"},
-                         "personale": False, "stato": "Completata" if st_["stato"] == "completata" else "Annullata", "solo_storico": True})
+                         "personale": False, "stato": "Completata" if st_["stato"] == "completata" else "Annullata", "solo_storico": True,
+                         "profilo": st_.get("profilo") or sz_principale(d)})
     if solo_aperte:
         voci = [v for v in voci if v["stato"] not in ("Completata", "Annullata")]
     voci.sort(key=lambda v: (v["data"], v.get("ora") or "99:99", v["titolo"]))
@@ -613,10 +647,12 @@ def sz_periodo(v, adesso):
     return "scadute" if v["stato"] == "Scaduta" else "oggi" if g == 0 else "7" if g <= 7 else "30" if g <= 30 else "future"
 
 
-def sz_filtra(voci, testo="", categorie=None, periodo="", stati=None, priorita=None, sezioni=None, solo_personali=False, adesso=None):
+def sz_filtra(voci, testo="", categorie=None, periodo="", stati=None, priorita=None, sezioni=None, solo_personali=False, adesso=None, profili=None):
     out = []
     parole = [w for w in _sz_re.sub(r"[^\w\s]", " ", str(testo or "").lower()).split() if w]
     for v in voci:
+        if profili and v.get("profilo") not in profili:
+            continue
         if categorie and v["categoria"] not in categorie:
             continue
         if stati and v["stato"] not in stati:
