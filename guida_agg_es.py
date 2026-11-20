@@ -35,7 +35,7 @@ Pulsa **💾 Guardar**. **Antes** escribe tus contactos (Telegram, email, WhatsA
                      "cuentas dinero banco cuenta corriente postepay ahorro bonos btp bot total subtotal persona"),
     "x_badante": ("👵 Cuidadora (solo administrador)", """En **Casa**, solo para el administrador, está **👵 Cuidadora**.
 - Fija la **tarifa** (normalmente 20 € por 2 horas), los días que viene y desde qué día contar.
-- Cada día toca **✅ Ha venido** o **❌ No ha venido**; si el importe cambia usa **«Otro día u otro importe»**.
+- **Cada día cuenta solo como «ha venido»** (2 horas, la tarifa habitual), desde el día de la primera entrega de dinero: toca **❌ No ha venido** solo si no vino; si se quedó más o menos horas usa **«Otro día u otro importe»**.
 - Con **«He dado dinero a mi madre»** anotas cuánto y cuándo.
 - La app calcula lo que queda y **hasta cuándo alcanza el dinero**.
 - **🔔 Avisos de la cuidadora** te avisa **3 días antes** y **el último día** (puedes cambiar los días).

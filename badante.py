@@ -16,12 +16,22 @@ def _bdt_d(x):
         return None
 
 
+def bdt_inizio(b):
+    """Da quando si contano le spese: la data scelta nelle Impostazioni, altrimenti il giorno della PRIMA consegna di soldi."""
+    ini = _bdt_d(b.get("inizio"))
+    if ini:
+        return ini
+    date_ = [_bdt_d(c.get("data")) for c in (b.get("consegne") or []) if isinstance(c, dict)]
+    date_ = [x for x in date_ if x]
+    return min(date_) if date_ else None
+
+
 def bdt_costo(b, giorno):
     """Quanto costa la badante in quel giorno: scelta del giorno, altrimenti la tariffa se è un giorno di lavoro."""
     ov = (b.get("giorni") or {}).get(giorno.isoformat())
     if isinstance(ov, dict):
         return float(ov.get("importo") or 0)
-    ini = _bdt_d(b.get("inizio"))
+    ini = bdt_inizio(b)
     if ini and giorno < ini:
         return 0.0
     if giorno.weekday() in (b.get("giorni_sett") if isinstance(b.get("giorni_sett"), list) else range(7)):
@@ -32,7 +42,7 @@ def bdt_costo(b, giorno):
 def bdt_calcolo(b, oggi):
     """→ {dato, speso, saldo, fine (ultimo giorno coperto o None), giorni_rimasti}"""
     dato = sum(float(c.get("importo") or 0) for c in (b.get("consegne") or []) if isinstance(c, dict) and (_bdt_d(c.get("data")) or oggi) <= oggi)
-    ini = _bdt_d(b.get("inizio"))
+    ini = bdt_inizio(b)                  # ogni giorno di lavoro conta da solo come «venuta» (tariffa e ore normali), salvo i giorni cambiati a mano
     speso = 0.0
     if ini:
         g = ini
@@ -81,8 +91,10 @@ def _bdt_corpo():
     oggi_ = sc_oggi()
     tariffa = float(b.get("tariffa", 20) or 0)
     ore = float(b.get("ore", 2) or 0)
-    if not b.get("inizio"):
-        st.info("Per cominciare scegli da che giorno conti le spese (qui sotto, «Impostazioni»), poi segna i soldi consegnati.")
+    if not bdt_inizio(b):
+        st.info("Per cominciare segna i soldi consegnati (qui sotto): da quel giorno l'app conta le spese da sola.")
+    elif not b.get("inizio"):
+        st.caption(f"Conto le spese dal {sc_data_scritta(bdt_inizio(b))}, giorno della prima consegna (si cambia in «⚙️ Impostazioni»).")
     r = bdt_calcolo(b, oggi_)
     colore = "#20e6ff" if r["saldo"] >= 0 else "#ff5c7a"
     if r["fine"] is not None and r["giorni_rimasti"] is not None:
@@ -100,7 +112,9 @@ def _bdt_corpo():
     st.markdown("### 📆 Oggi")
     ov = (b.get("giorni") or {}).get(oggi_.isoformat())
     costo_oggi = bdt_costo(b, oggi_)
-    st.caption(f"Oggi: {sc_euro(costo_oggi)}" + (f" ({ov.get('nota')})" if isinstance(ov, dict) and ov.get("nota") else "") + ". Cambia se è venuta più o meno ore.")
+    st.caption(f"Oggi: {sc_euro(costo_oggi)}" + (f" ({ov.get('nota')})" if isinstance(ov, dict) and ov.get("nota") else "")
+               + f". **Ogni giorno conta da solo come venuta** ({ore:g} h · {sc_euro(tariffa)}): tocca **❌ Non è venuta** solo se non è venuta, "
+               "oppure «Un altro giorno o un altro importo» se è rimasta più o meno ore.")
     c1, c2 = st.columns(2, gap="small")
     if c1.button(f"✅ Venuta ({ore:g} h · {sc_euro(tariffa)})", key="bdt_oggi_ok", width="stretch"):
         _bdt_salva(lambda bb: bb["giorni"].__setitem__(oggi_.isoformat(), {"importo": tariffa, "ore": ore, "nota": ""}), "Badante: oggi")
@@ -152,7 +166,7 @@ def _bdt_corpo():
         n_ore = s2.number_input("Ore al giorno", min_value=0.0, value=ore, step=0.5, key="bdt_oreset")
         att = b.get("giorni_sett") if isinstance(b.get("giorni_sett"), list) else list(range(7))
         sel = st.multiselect("Giorni in cui viene di solito", BDT_GIORNI, default=[BDT_GIORNI[i] for i in att if 0 <= i < 7], key="bdt_gs")
-        ini = st.date_input("Conto le spese dal giorno", value=_bdt_d(b.get("inizio")) or oggi_, format="DD/MM/YYYY", key="bdt_ini")
+        ini = st.date_input("Conto le spese dal giorno", value=bdt_inizio(b) or oggi_, format="DD/MM/YYYY", key="bdt_ini")
         if st.button("💾 Salva le impostazioni", key="bdt_set_ok", width="stretch"):
             _bdt_salva(lambda bb: bb.update({"tariffa": float(n_tar), "ore": float(n_ore), "giorni_sett": [BDT_GIORNI.index(x) for x in sel], "inizio": ini.isoformat()}), "Badante: impostazioni")
             st.toast("✅ Salvate")

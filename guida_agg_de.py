@@ -35,7 +35,7 @@ Dort können Sie ändern:
                      "konten geld bank girokonto postepay sparen anleihen btp bot summe zwischensumme person"),
     "x_badante": ("👵 Pflegekraft (nur Administrator)", """In **Haus** gibt es, nur für den Administrator, **👵 Pflegekraft**.
 - **Tarif** einstellen (meist 20 € für 2 Stunden), die Tage, an denen sie kommt, und ab welchem Tag gezählt wird.
-- Jeden Tag **✅ Gekommen** oder **❌ Nicht gekommen** tippen; ändert sich der Betrag, **„Ein anderer Tag oder Betrag“** verwenden.
+- **Jeder Tag zählt von selbst als „gekommen“** (2 Stunden, üblicher Tarif), ab dem Tag der ersten Geldübergabe: **❌ Nicht gekommen** nur tippen, wenn sie nicht kam; blieb sie länger oder kürzer, **„Ein anderer Tag oder Betrag“** verwenden.
 - Mit **„Ich habe meiner Mutter Geld gegeben“** notieren Sie wie viel und wann.
 - Die App berechnet, was übrig ist und **bis wann das Geld reicht**.
 - **🔔 Hinweise zur Pflegekraft** meldet sich **3 Tage vorher** und **am letzten Tag** (Tage änderbar).

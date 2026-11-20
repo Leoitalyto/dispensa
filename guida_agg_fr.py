@@ -35,7 +35,7 @@ Appuyez sur **💾 Enregistrer**. **D'abord**, écrivez vos coordonnées (Telegr
                      "comptes argent banque compte courant postepay épargne obligations btp bot total sous-total personne"),
     "x_badante": ("👵 Aide à domicile (administrateur seulement)", """Dans **Maison**, pour l'administrateur seulement, il y a **👵 Aide à domicile**.
 - Réglez le **tarif** (en général 20 € pour 2 heures), les jours où elle vient et à partir de quel jour compter.
-- Chaque jour touchez **✅ Venue** ou **❌ Pas venue** ; si le montant change utilisez **« Un autre jour ou un autre montant »**.
+- **Chaque jour compte tout seul comme « venue »** (2 heures, le tarif habituel), depuis le jour de la première remise d'argent : touchez **❌ Pas venue** seulement si elle n'est pas venue ; si elle est restée plus ou moins d'heures utilisez **« Un autre jour ou un autre montant »**.
 - Avec **« J'ai donné de l'argent à ma mère »** vous notez combien et quand.
 - L'app calcule ce qui reste et **jusqu'à quand l'argent suffit**.
 - **🔔 Alertes de l'aide à domicile** vous prévient **3 jours avant** et **le dernier jour** (jours modifiables).

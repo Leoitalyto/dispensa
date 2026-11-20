@@ -35,7 +35,7 @@ Carregue em **💾 Guardar**. **Antes**, escreva os seus contactos (Telegram, em
                      "contas dinheiro banco conta à ordem postepay poupança obrigações btp bot total subtotal pessoa"),
     "x_badante": ("👵 Cuidadora (só administrador)", """Em **Casa**, só para o administrador, há **👵 Cuidadora**.
 - Defina a **tarifa** (normalmente 20 € por 2 horas), os dias em que vem e a partir de que dia contar.
-- Todos os dias toque em **✅ Veio** ou **❌ Não veio**; se o valor mudar use **«Outro dia ou outro valor»**.
+- **Cada dia conta sozinho como «veio»** (2 horas, a tarifa habitual), desde o dia da primeira entrega de dinheiro: toque em **❌ Não veio** só se não veio; se ficou mais ou menos horas use **«Outro dia ou outro valor»**.
 - Com **«Dei dinheiro à minha mãe»** regista quanto e quando.
 - A app calcula o que falta e **até quando chega o dinheiro**.
 - **🔔 Avisos da cuidadora** avisa **3 dias antes** e **no último dia** (dias alteráveis).

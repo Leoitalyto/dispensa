@@ -35,7 +35,7 @@ Apasă **💾 Salvează**. **Mai întâi** scrie-ți contactele (Telegram, email
                      "conturi bani bancă cont curent postepay economii obligațiuni btp bot total subtotal persoană"),
     "x_badante": ("👵 Îngrijitoare (doar administrator)", """În **Casă**, doar pentru administrator, este **👵 Îngrijitoare**.
 - Setează **tariful** (de obicei 20 € pentru 2 ore), zilele în care vine și din ce zi se numără.
-- În fiecare zi atinge **✅ A venit** sau **❌ Nu a venit**; dacă suma se schimbă folosește **„Altă zi sau altă sumă”**.
+- **Fiecare zi contează singură ca „a venit”** (2 ore, tariful obișnuit), din ziua primei predări de bani: atinge **❌ Nu a venit** doar dacă nu a venit; dacă a stat mai multe sau mai puține ore folosește **„Altă zi sau altă sumă”**.
 - Cu **„I-am dat bani mamei mele”** notezi cât și când.
 - Aplicația calculează cât a rămas și **până când ajung banii**.
 - **🔔 Alertele îngrijitoarei** te anunță **cu 3 zile înainte** și **în ultima zi** (zilele se pot schimba).

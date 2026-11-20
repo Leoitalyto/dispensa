@@ -100,6 +100,15 @@ Il telefono ricorda l'**ultima lingua usata**: la volta dopo la pagina di access
 
 Tutte le pagine sono nella lingua scelta: le frasi nuove si traducono da sole la prima volta che una pagina si apre (ci vuole circa un minuto), poi restano salvate per tutti. Anche **l'assistente** risponde nella lingua scelta.""",
                  "lingua language inglese spagnolo francese tedesco rumeno arabo portoghese italiano cambiare lingua accesso traduzione"),
+    "x_badante": ("👵 Badante (solo amministratore)",
+                  """In **Casa**, solo per l'amministratore, c'è **👵 Badante**.
+- Imposta la **tariffa** (di solito 20 € per 2 ore) e i giorni in cui viene.
+- **Ogni giorno conta da solo come «venuta»** (2 ore, la tariffa di sempre), a partire dal giorno della prima consegna di soldi (si cambia in «⚙️ Impostazioni»): tocca **❌ Non è venuta** solo se non è venuta; se è rimasta più o meno ore usa **«Un altro giorno o un altro importo»** (con **↩️ Torna normale** annulli).
+- Con **«Ho dato dei soldi a mia madre»** segni quanto hai consegnato e quando.
+- L'app calcola quanto resta e **fino a quando bastano i soldi**.
+- Il tasto **🔔 Avvisi della badante** ti avvisa **3 giorni prima** e **l'ultimo giorno** (puoi cambiare i giorni).
+- Ci sono anche **contatti della badante** e **note**.""",
+                  "badante ore tariffa venuta non è venuta soldi madre avvisi conti automatico"),
     "l_festivita": ("📅 Giorni di festa nel Controllo ore",
                     """In **Lavoro → 🧮 Controllo ore**, dopo aver caricato il foglio delle ore e la busta paga, c'è **📅 Giorni di festa**.
 

@@ -35,7 +35,7 @@ Press **💾 Save** to keep your choices. **First** write your contacts (Telegra
                      "accounts money bank current account postepay savings bonds btp bot total subtotal person"),
     "x_badante": ("👵 Carer (administrator only)", """In **Casa**, for the administrator only, there is **👵 Carer**.
 - Set the **rate** (usually €20 for 2 hours), the days she comes and from which day to count.
-- Every day tap **✅ Came** or **❌ Did not come**; if the amount changes use **«Another day or another amount»**.
+- **Every day counts by itself as «came»** (2 hours, the usual rate), from the day of the first money handed over: tap **❌ Did not come** only if she did not come; if she stayed more or fewer hours use **«Another day or another amount»**.
 - With **«I gave money to my mother»** you record how much you handed over and when.
 - The app calculates what is left and **until when the money lasts**.
 - **🔔 Carer alerts** warns you **3 days before** and **on the last day** (you can change the days).

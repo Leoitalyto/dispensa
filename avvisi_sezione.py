@@ -88,7 +88,7 @@ def avs_eventi(sez, d, oggi_):
         for x in f.get("documenti", []):
             if not x.get("senza_scadenza"):
                 aggiungi("d" + str(x.get("id") or x.get("tipo")), f"📄 Scade: {x.get('tipo', 'Documento')}", _avs_data(x.get("scadenza")))
-    elif sez == "badante" and "bdt_calcolo" in globals() and (d.get("badante") or {}).get("inizio"):
+    elif sez == "badante" and "bdt_calcolo" in globals() and (bdt_inizio(d.get("badante") or {}) if "bdt_inizio" in globals() else (d.get("badante") or {}).get("inizio")):
         r_ = bdt_calcolo(d["badante"], oggi_)
         if r_["fine"] is not None:
             aggiungi("fine", "👵 Finiscono i soldi della badante", r_["fine"])
