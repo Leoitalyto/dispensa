@@ -935,6 +935,7 @@ def _fa_cancella_files(ids):
 def _fa_elimina_profilo(f, pid):
     ids = [a["id"] for v in f.get("visite", []) if v.get("profilo", "p0") == pid for a in v.get("allegati", [])]
     ids += [a["id"] for a in (f.get("vaccini_doc") or {}).get(pid, [])]
+    ids += [a["id"] for p_ in f.get("profili", []) if p_.get("id") == pid for a in (p_.get("gruppo_cert") or [])]
     ids += [m["foto_grande"]["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid and m.get("foto_grande")]
     ids += [a["id"] for m in f.get("medicinali", []) if m.get("profilo", "p0") == pid for a in m.get("foglio", [])]
     ids += [a["id"] for x in f.get("documenti", []) if x.get("profilo", "p0") == pid for a in x.get("allegati", [])]
@@ -966,11 +967,49 @@ def _fa_rimuovi_allegato(tipo, proprietario, did):
             for v in f.get("prescrizioni", []):
                 if v["id"] == proprietario:
                     v["allegati"] = [a for a in v.get("allegati", []) if a["id"] != did]
+        elif tipo == "gruppo":
+            for p in f.get("profili", []):
+                if p["id"] == proprietario:
+                    p["gruppo_cert"] = [a for a in p.get("gruppo_cert", []) if a["id"] != did]
         else:
             vd = f.setdefault("vaccini_doc", {})
             vd[proprietario] = [a for a in vd.get(proprietario, []) if a["id"] != did]
     _fa_salva(_m, "Salute: allegato eliminato")
     _fa_cancella_files([did])
+
+
+def _fa_certificato_gruppo(profilo, pid):
+    """📎 Il certificato del gruppo sanguigno (PDF o foto): si allega quando si vuole, anche dopo."""
+    cert = list(profilo.get("gruppo_cert") or [])
+    st.markdown("**📎 Certificato del gruppo sanguigno**")
+    if cert:
+        _fa_bottoni_allegati(cert, "gruppo", pid)
+    else:
+        st.caption("Nessun certificato allegato. Puoi aggiungere un PDF o una foto (anche più pagine).")
+    kup = f"fa_gcert_{pid}_{int(st.session_state.get('fa_gcert_n_' + pid, 0))}"         # chiave nuova dopo ogni salvataggio: il campo torna vuoto
+    caric = (ar_uploader("Allega il certificato (PDF o foto) — si salva da solo", type=TIPI_FILE, accept_multiple_files=True, key=kup)
+             if "ar_uploader" in globals() else st.file_uploader("Allega il certificato (PDF o foto) — si salva da solo", type=TIPI_FILE, accept_multiple_files=True, key=kup))
+    if caric:
+        firma = "|".join(sorted(str(getattr(c, "file_id", None) or getattr(c, "name", "")) for c in caric))
+        if st.session_state.get("fa_gcert_fatto_" + pid) != firma:
+            st.session_state["fa_gcert_fatto_" + pid] = firma
+            try:
+                nuovi = _fa_salva_files(caric, cert)
+            except ValueError as e_:
+                st.error(str(e_))
+                return
+            except Exception as e_:
+                st.error(f"Non sono riuscito a salvare il certificato ({type(e_).__name__}). Riprova.")
+                return
+            if nuovi:
+                def _m(f):
+                    for p in f.get("profili", []):
+                        if p["id"] == pid:
+                            p["gruppo_cert"] = list(p.get("gruppo_cert") or []) + nuovi
+                _fa_salva(_m, "Salute: certificato gruppo sanguigno")
+            st.session_state["fa_gcert_n_" + pid] = int(st.session_state.get("fa_gcert_n_" + pid, 0)) + 1
+            st.session_state["fa_msg"] = "✅ Certificato allegato."
+            st.rerun()
 
 
 @st.dialog("Documento", width="large")
@@ -3181,6 +3220,9 @@ def _fa_modulo_sanitario(pid):
             st.rerun()
         st.markdown("**✏️ Compila quello che ti serve** e tocca **Salva** in fondo. Tutto è facoltativo.")
         with st.form("fa_form_san_" + pid):
+            _opz_g = ["Non indicato"] + GRUPPI
+            gruppo_n = st.radio("🩸 Gruppo sanguigno", _opz_g, horizontal=True, key="fa_san_gruppo_" + pid,
+                                index=_opz_g.index(profilo.get("gruppo")) if profilo.get("gruppo") in GRUPPI else 0)
             patologie = st.text_area("🩺 Patologie (una per riga, con l'anno se vuoi)", value=san.get("patologie", ""),
                                      placeholder="es. Ipertensione (dal 2015)\nDiabete tipo 2", height=110)
             all_t = st.text_area("💊 Allergie e intolleranze ai farmaci (separate da virgola)", value=", ".join(allergie),
@@ -3203,6 +3245,7 @@ def _fa_modulo_sanitario(pid):
                 for p in f["profili"]:
                     if p["id"] == pid:
                         p["sanitario"] = nuovo
+                        p["gruppo"] = None if gruppo_n == "Non indicato" else gruppo_n
                 f.setdefault("allergie", {})[pid] = lista_all
             try:
                 _fa_salva(_scrivi, "Salute: scheda sanitaria")
@@ -3225,9 +3268,13 @@ def _fa_modulo_sanitario(pid):
         + (f"<img src='{uri}' alt='' style='height:90px'>" if uri else "<span style='font-size:2.4rem'>🩸</span>")
         + f"<div><b style='font-size:1.15rem'>{e(intestatario)}</b><br>Gruppo sanguigno: "
         + f"<b style='font-size:1.6rem;color:#b71c1c'>{e(gruppo or 'non indicato')}</b></div></div>", unsafe_allow_html=True)
+    if not gruppo and st.button("🩸 Inserisci il gruppo sanguigno", key="fa_san_gruppo_btn", width="stretch"):
+        st.session_state[chiave_mod] = True
+        st.rerun()
     if st.button("✏️ Modifica la scheda sanitaria", key="fa_san_modifica_btn", type="primary", width="stretch"):
         st.session_state[chiave_mod] = True
         st.rerun()
+    _fa_certificato_gruppo(profilo, pid)
     if dott.get("nome") or dott.get("telefono"):
         _fa_sezione("👩‍⚕️ Medico curante" if dott.get("tipo") == "Dottoressa" else "👨‍⚕️ Medico curante",
                     e(" · ".join(x for x in (dott.get("nome"), dott.get("telefono")) if x)))
