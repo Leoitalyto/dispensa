@@ -10,7 +10,7 @@ RICHIESTA (Leonardo): «aggiorna le spiegazioni dell'app e l'assistente in tutte
 L'assistente (scritto e vocale), la ricerca e il pulsante Informazioni leggono tutti questa stessa base (_GUIDE), quindi rispondono anche sulle novità.
 Caricato dopo guida_completa.py."""
 
-GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.2", "2026-11-20", "20/11/2026"
+GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.3", "2026-11-20", "20/11/2026"
 
 GA_SCHEDE = {
     "x_ia": ("🤖 Intelligenza artificiale: documenti, scritte a mano, spie, lingue",
@@ -193,6 +193,8 @@ GA_NOVITA = [
     ("nv_smista", "👥", "Di chi è il documento", "L'IA mette i documenti della mamma nelle sue cose: casa, salute, documenti"),
     ("nv_biglietto", "📇", "Biglietto da visita", "Numeri utili → ➕ Aggiungi → 📇 Fotografa un biglietto da visita"),
     ("nv_cerca_doc", "🔎", "Cerca in tutti i documenti", "In fondo a ogni sezione: cerca anche dentro i documenti, nel riassunto dell'IA"),
+    ("nv_scadenziario", "🗓️", "Scadenziario", "Pulsante lampone prima di Utilità: tutte le scadenze insieme, con avvisi"),
+    ("nv_presentazione", "📘", "Presentazione dell'app", "Pulsante rosso «Clicca per informazioni» → 📘 Presentazione completa"),
     ("nv_spesa_smart", "🛒", "Spesa Smart", "Dispensa → 🛒 Spesa Smart: dove costa meno, offerte, spesa ottimizzata, scontrini"),
 ]
 GA_NOV_K = {}

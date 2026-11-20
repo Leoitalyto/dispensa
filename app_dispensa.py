@@ -453,6 +453,8 @@ _carica_sicuro(os.path.join(_cartella, "guida_completa.py"))   # guida e frasi n
 _carica_sicuro(os.path.join(_cartella, "guida_aggiornamento.py"))   # istruzioni e novità del 20/11 (italiano) …
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "guida_agg_*.py"))):
     _carica_sicuro(_percorso)                                      # … e le loro traduzioni nelle 7 lingue
+_carica_sicuro(os.path.join(_cartella, "presentazione.py"))       # 📘 presentazione completa (pulsante rosso) e capitoli nuovi del giro …
+_carica_sicuro(os.path.join(_cartella, "presentazione_lingue.py"))  # … nelle 7 lingue
 try:
     for _nome in ("voci_libere.py", "parte3.py", "parte4.py", "avvisi.py", "voce.py", "fotocamera.py", "volantini_fine.py"):
         _carica_sicuro(os.path.join(_cartella, _nome))

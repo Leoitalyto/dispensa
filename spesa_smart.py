@@ -2052,6 +2052,10 @@ if "_vm_riepilogo" in globals() and "_ss_riep_prima" not in globals():
 
 if "_NOMI_SEZIONI" in globals():
     _NOMI_SEZIONI.setdefault("spesa_smart", "🛒 Spesa Smart")
+    if "_ID_GUIDA" in globals():
+        _ID_GUIDA.setdefault("spesa_smart", ["ss_cosa", "ss_prezzo", "ss_dcm", "ss_ott", "ss_scontrino", "ss_badge"])
+    if "UI_IT" in globals():
+        UI_IT.setdefault("sez_spesa_smart", "🛒 Spesa Smart")
     _GUIDE.setdefault("spesa_smart", [
         ("🛒 Cos'è Spesa Smart",
          """È la seconda parte della **Dispensa**: in alto scegli **📦 Scorte** (la dispensa di sempre) o **🛒 Spesa Smart**.

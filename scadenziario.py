@@ -744,6 +744,10 @@ if "_vm_riepilogo" in globals() and "_sz_riep_prima" not in globals():
 
 if "_NOMI_SEZIONI" in globals():
     _NOMI_SEZIONI.setdefault("scadenziario", "🗓️ Scadenziario")
+    if "_ID_GUIDA" in globals():
+        _ID_GUIDA.setdefault("scadenziario", ["sz_cosa", "sz_azioni", "sz_personali", "sz_avvisi", "sz_cerca"])
+    if "UI_IT" in globals():
+        UI_IT.setdefault("sez_scadenziario", "🗓️ Scadenziario")
     _GUIDE.setdefault("scadenziario", [
         ("🗓️ Cos'è lo Scadenziario",
          """È il **centro di controllo** di tutte le scadenze: si apre dal pulsante **🗓️ Scadenziario**, prima di Utilità.
