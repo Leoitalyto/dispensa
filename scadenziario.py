@@ -101,27 +101,49 @@ def _sz_quando(v, adesso):
 # suoni (WebAudio: nessun file da scaricare) e anteprima
 # ---------------------------------------------------------------------------------------------------------------------
 _SZ_JS_SUONI = r"""
-function vmSuono(nome, file){
-  try{ if(nome==='personale' && file){ new Audio(file).play(); return; } }catch(e){}
-  var C = window.AudioContext || window.webkitAudioContext; if(!C) return; var ac = new C(), t = ac.currentTime;
+function vmCtx(){
+  var w = window.parent || window, C = w.AudioContext || w.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
+  if (!C) return null;
+  if (!w.__vmAC || w.__vmAC.state === 'closed') { try { w.__vmAC = new C(); } catch (e) { return null; } }
+  return w.__vmAC;
+}
+(function sblocca(){                                   // il primo tocco sulla pagina «sblocca» l'audio (Android lo vuole), così anche gli avvisi suonano
+  var w = window.parent || window;
+  if (w.__vmSblocco) return; w.__vmSblocco = 1;
+  ['touchstart', 'pointerdown', 'click', 'keydown'].forEach(function (ev) {
+    try { w.document.addEventListener(ev, function () { var a = vmCtx(); if (a && a.state !== 'running' && a.resume) a.resume(); }, {passive: true, capture: true}); } catch (e) {}
+  });
+})();
+function vmSuona(ac, nome){
+  var t = ac.currentTime + 0.05;
   function nota(f, ini, dur, tipo, vol){ var o = ac.createOscillator(), g = ac.createGain(); o.type = tipo||'sine'; o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t+ini); g.gain.exponentialRampToValueAtTime(vol||0.35, t+ini+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+ini+dur);
+    g.gain.setValueAtTime(0.0001, t+ini); g.gain.exponentialRampToValueAtTime(vol||0.5, t+ini+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+ini+dur);
     o.connect(g); g.connect(ac.destination); o.start(t+ini); o.stop(t+ini+dur+0.05); }
   if(nome==='ding'){ nota(1046,0,1.2); }
   else if(nome==='dolce'){ nota(523,0,.5); nota(659,.18,.5); nota(784,.36,.8); }
-  else if(nome==='allarme'){ for(var i=0;i<3;i++){ nota(880,i*.32,.22,'square',.25); } }
-  else if(nome==='radar'){ for(var j=0;j<4;j++){ nota(1250,j*.22,.1,'sine',.4); } }
+  else if(nome==='allarme'){ for(var i=0;i<3;i++){ nota(880,i*.32,.22,'square',.3); } }
+  else if(nome==='radar'){ for(var j=0;j<4;j++){ nota(1250,j*.22,.1,'sine',.5); } }
   else { nota(880,0,.45); nota(660,.28,.7); }
+  try { (window.parent || window).__vmUltimoSuono = nome + '|' + ac.state; } catch (e) {}
+}
+function vmSuono(nome, file){
+  var w = window.parent || window;
+  if (nome === 'personale' && file) {
+    try { var A = new (w.Audio || Audio)(file); var p = A.play(); if (p && p.catch) p.catch(function () {}); w.__vmUltimoSuono = 'personale'; return; } catch (e) {}
+  }
+  var ac = vmCtx(); if (!ac) return;
+  var r = (ac.state !== 'running' && ac.resume) ? ac.resume() : null;
+  if (r && r.then) { r.then(function () { vmSuona(ac, nome); }, function () { vmSuona(ac, nome); }); } else { vmSuona(ac, nome); }
 }
 """
 
 
 def _sz_suono_html(nome, file_uri="", vibra=True, auto=False, etichetta="▶ Ascolta"):
-    return ("<html><body style='margin:0;background:transparent'><script>" + _SZ_JS_SUONI + "</script>"
-            + (f"<button onclick=\"vmSuono('{nome}', {_sz_json.dumps(file_uri)});{'if(navigator.vibrate)navigator.vibrate([250,120,250]);' if vibra else ''}\" "
-               "style='width:100%;height:40px;border-radius:12px;border:1.5px solid #ff5c8a;background:#1a0510;color:#fff;font-weight:800;font-size:15px'>" + etichetta + "</button>")
-            + (f"<script>try{{vmSuono('{nome}', {_sz_json.dumps(file_uri)});{'if(navigator.vibrate)navigator.vibrate([250,120,250]);' if vibra else ''}}}catch(e){{}}</script>" if auto else "")
-            + "</body></html>")
+    js = f"vmSuono({_sz_json.dumps(nome)}, {_sz_json.dumps(file_uri)});" + ("try{(window.parent.navigator||navigator).vibrate([250,120,250]);}catch(e){}" if vibra else "")
+    bottone = ("<button onclick=\"" + _sz_h.escape(js, quote=True) + "\" style='width:100%;height:40px;border-radius:12px;border:1.5px solid #ff5c8a;background:#1a0510;"
+               "color:#fff;font-weight:800;font-size:15px'>" + _sz_h.escape(etichetta) + "</button>")
+    return ("<html><body style='margin:0;background:transparent'><script>" + _SZ_JS_SUONI + "</script>" + bottone
+            + (f"<script>try{{{js}}}catch(e){{}}</script>" if auto else "") + "</body></html>")
 
 
 def _sz_file_suono(imp):
