@@ -1758,6 +1758,9 @@ def _ss_v_scontrino(ss, disp):
                "le righe incerte restano **senza spunta**.")
     giro = st.session_state.setdefault("ss_sc_giro", 0)
     files = st.file_uploader("Foto o PDF dello scontrino (anche più foto se è lungo)", type=["jpg", "jpeg", "png", "webp", "heic", "pdf"], accept_multiple_files=True, key=f"ss_sc_f{giro}")
+    for f_ in files or []:
+        if "il_mostra_avvisi_foto" in globals():
+            il_mostra_avvisi_foto(f_)
     if files and st.button("🔎 Leggi lo scontrino", type="primary", width="stretch", key=f"ss_sc_leggi{giro}"):
         with st.spinner("🤖 Leggo lo scontrino…"):
             letto = ss_leggi_scontrino(files)

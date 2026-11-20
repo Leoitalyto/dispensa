@@ -481,6 +481,83 @@ def il_testo(istruzioni, testo, max_tokens=2000, ordine=None):
     return "", ""
 
 
+def _il_quad(cnt, cv2, np):
+    peri = cv2.arcLength(cnt, True)
+    ap = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+    return ap.reshape(4, 2).astype("float32") if len(ap) == 4 and cv2.isContourConvex(ap) else None
+
+
+def il_migliora_foto(im):
+    """FOTO MIGLIORI per la lettura: se si vede il foglio intero lo raddrizza e lo ritaglia (prospettiva), poi aumenta un po' il contrasto
+    in modo uniforme (CLAHE). Se qualcosa non torna restituisce la foto com'era: non peggiora mai."""
+    try:
+        import cv2
+        import numpy as np
+        from PIL import Image
+        a = np.array(im)
+        h, w = a.shape[:2]
+        if min(h, w) < 300:
+            return im
+        s_ = 900.0 / max(h, w)
+        pic = cv2.resize(a, (int(w * s_), int(h * s_)), interpolation=cv2.INTER_AREA) if s_ < 1 else a.copy()
+        g = cv2.GaussianBlur(cv2.cvtColor(pic, cv2.COLOR_RGB2GRAY), (5, 5), 0)
+        bordi = cv2.dilate(cv2.Canny(g, 50, 150), np.ones((3, 3), np.uint8), iterations=2)
+        cnts, _h = cv2.findContours(bordi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        area_tot = pic.shape[0] * pic.shape[1]
+        quad = None
+        for c in sorted(cnts, key=cv2.contourArea, reverse=True)[:5]:
+            if cv2.contourArea(c) < 0.25 * area_tot:
+                break
+            quad = _il_quad(c, cv2, np)
+            if quad is not None:
+                break
+        if quad is not None and cv2.contourArea(quad) < 0.93 * area_tot:  # il foglio non riempie già tutta la foto: lo ritaglio
+            quad = quad / (s_ if s_ < 1 else 1.0)
+            somma, diff = quad.sum(1), np.diff(quad, axis=1).ravel()
+            tl, br, tr, bl = quad[np.argmin(somma)], quad[np.argmax(somma)], quad[np.argmin(diff)], quad[np.argmax(diff)]
+            W = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+            H = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+            if W > 200 and H > 200 and 0.2 < W / H < 5:
+                M = cv2.getPerspectiveTransform(np.array([tl, tr, br, bl], dtype="float32"), np.array([[0, 0], [W - 1, 0], [W - 1, H - 1], [0, H - 1]], dtype="float32"))
+                a = cv2.warpPerspective(a, M, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+        lab = cv2.cvtColor(a, cv2.COLOR_RGB2LAB)
+        l_, a_, b_ = cv2.split(lab)
+        l_ = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l_)
+        return Image.fromarray(cv2.cvtColor(cv2.merge((l_, a_, b_)), cv2.COLOR_LAB2RGB))
+    except Exception:
+        return im
+
+
+def il_avvisi_foto(dati, mime="", nome=""):
+    """Controlla la foto PRIMA di leggerla: mossa/sfocata, troppo buia, troppo chiara (riflesso), troppo piccola. Ritorna i consigli (vuoto se va bene)."""
+    if (mime or "").endswith("pdf") or str(nome).lower().endswith(".pdf"):
+        return []
+    try:
+        import cv2
+        import numpy as np
+        from PIL import Image, ImageOps
+        im = ImageOps.exif_transpose(Image.open(_il_io.BytesIO(dati))).convert("L")
+        a = np.array(im)
+        h, w = a.shape[:2]
+        avvisi = []
+        if max(h, w) < 700:
+            avvisi.append("📏 La foto è piccola: avvicinati al foglio o usa la qualità massima della fotocamera.")
+        s_ = 1000.0 / max(h, w)
+        g = cv2.resize(a, (max(1, int(w * s_)), max(1, int(h * s_)))) if s_ < 1 else a
+        nitidezza = cv2.Laplacian(g, cv2.CV_64F).var()
+        media = float(g.mean())
+        chiari = float((g >= 254).mean())
+        if nitidezza < 60:
+            avvisi.append("🌫️ La foto sembra mossa o sfocata: tieni fermo il telefono, tocca lo schermo sul foglio per mettere a fuoco e rifalla.")
+        if media < 70:
+            avvisi.append("🌑 La foto è buia: accendi la luce o avvicinati a una finestra.")
+        if chiari > 0.15:
+            avvisi.append("☀️ C'è un riflesso o troppa luce: inclina un po' il foglio o spegni il flash.")
+        return avvisi
+    except Exception:
+        return []
+
+
 def il_immagini(nome, mime, dati, max_pagine=3, lato=1700):
     """Le pagine del documento come JPEG (foto o PDF)."""
     out = []
@@ -506,6 +583,7 @@ def il_immagini(nome, mime, dati, max_pagine=3, lato=1700):
         else:
             from PIL import Image, ImageOps
             im = ImageOps.exif_transpose(Image.open(_il_io.BytesIO(dati))).convert("RGB")
+            im = il_migliora_foto(im)                                     # foto migliori: raddrizzata, ritagliata, più leggibile
             im.thumbnail((lato, lato))
             b = _il_io.BytesIO()
             im.save(b, "JPEG", quality=86)
@@ -1321,3 +1399,39 @@ def il_leggi_campi(contesto, campi, testo="", nome=None, mime=None, dati=None, i
 
 def il_nomi_fonti(fonti):
     return ", ".join(IL_FORNITORI.get(p, {}).get("nome", p) for p in fonti if p)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# FOTO MIGLIORI: consigli subito dopo aver scattato/scelto la foto (in tutti i caricamenti col pulsante arancione, scontrini, biglietti)
+# ---------------------------------------------------------------------------------------------------------------------
+def il_mostra_avvisi_foto(f):
+    """Se la foto è mossa, buia o con riflessi lo dice subito (una volta per foto), con il consiglio per rifarla."""
+    try:
+        if f is None:
+            return []
+        dati = f.getvalue() if hasattr(f, "getvalue") else (f.get("dati") if isinstance(f, dict) else None)
+        if not dati:
+            return []
+        nome = getattr(f, "name", "") or (f.get("nome") if isinstance(f, dict) else "")
+        mime = getattr(f, "type", "") or (f.get("mime") if isinstance(f, dict) else "")
+        firma = (nome, len(dati))
+        mem = st.session_state.setdefault("_il_foto_avvisi", {})
+        if firma not in mem:
+            mem[firma] = il_avvisi_foto(dati, mime, nome)
+            if len(mem) > 40:
+                mem.pop(next(iter(mem)))
+        for a in mem[firma]:
+            st.warning(a + " La lettura sarà più precisa con una foto migliore (puoi anche andare avanti così).")
+        return mem[firma]
+    except Exception:
+        return []
+
+
+if "_ca_pannello_caricamento" in globals() and "_il_pannello_prima" not in globals():
+    _il_pannello_prima = _ca_pannello_caricamento
+
+    def _ca_pannello_caricamento(n, multi=True):                     # noqa: F811
+        up = _il_pannello_prima(n, multi)
+        if up is not None:
+            il_mostra_avvisi_foto(up)
+        return up

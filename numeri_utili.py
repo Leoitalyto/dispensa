@@ -143,6 +143,9 @@ def _rbu_biglietto(k, voce):
     with st.expander("📇 Fotografa un biglietto da visita (compilo io i campi)"):
         st.caption("Scatta la foto del **biglietto da visita** (anche fronte e retro): leggo nome, mestiere, telefoni, email, sito e indirizzo e li scrivo qui sotto. **Controlla prima di salvare.**")
         foto = st.file_uploader("Foto del biglietto (fronte e, se c'è, retro)", type=["jpg", "jpeg", "png", "webp", "heic", "pdf"], accept_multiple_files=True, key=k + "_bv")
+        for f_ in foto or []:
+            if "il_mostra_avvisi_foto" in globals():
+                il_mostra_avvisi_foto(f_)
         if foto and st.button("🔎 Leggi il biglietto", key=k + "_bv_ok", type="primary", width="stretch"):
             letto, fonti, ia = None, [], ("il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA))
             if _rb_os.environ.get("VM_BV_FINTO"):                            # solo per le prove automatiche
