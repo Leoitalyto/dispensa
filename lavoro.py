@@ -151,7 +151,7 @@ def _lv_pdf(html_str):
 # ---------------------------------------------------------------------------------------------------------------------
 # il modulo «Controlla e conferma» per i documenti del Lavoro: i campi importanti sono sempre in vista
 # ---------------------------------------------------------------------------------------------------------------------
-_LV_INPS_TIPI = ["Estratto conto contributivo", "Certificazione Unica INPS", "Cedolino della pensione", "Domanda o pratica", "ISEE", "Disoccupazione (NASpI)", "Malattia o maternità", "Ricevuta", "Lettera o comunicazione", "Altro"]
+_LV_INPS_TIPI = ["Estratto conto contributivo", "ECOCERT (estratto conto certificativo)", "Certificazione Unica INPS", "Cedolino della pensione", "Domanda o pratica", "ISEE", "Disoccupazione (NASpI)", "Malattia o maternità", "Ricevuta", "Lettera o comunicazione", "Altro"]
 
 
 def _lv_form_documento(chiave, d, ric, modo):
@@ -202,7 +202,12 @@ def _lv_form_documento(chiave, d, ric, modo):
             v = {"tipo": "Certificazione Unica (CU)", "argomento": "Certificazioni Uniche", "ente": ente, "cu_anno": str(int(a_cu)), "cu_anno_imposta": str(int(a_imp)), "cu_reddito": _ca_importo_da_testo(red),
                  "cu_ritenute": _ca_importo_da_testo(rit), "cu_add_reg": _ca_importo_da_testo(a_reg), "cu_add_com": _ca_importo_da_testo(a_com)}
         else:
-            tipo_i = st.selectbox("Che documento INPS è", _LV_INPS_TIPI, index=_LV_INPS_TIPI.index(val("inps_tipo")) if val("inps_tipo") in _LV_INPS_TIPI else len(_LV_INPS_TIPI) - 1)
+            attuale = val("inps_tipo") or ""
+            proprio = attuale if attuale and attuale not in _LV_INPS_TIPI else ""          # un nome scritto a mano in passato
+            tipo_i = st.selectbox("Che documento INPS è", _LV_INPS_TIPI, index=_LV_INPS_TIPI.index(attuale) if attuale in _LV_INPS_TIPI else len(_LV_INPS_TIPI) - 1)
+            scritto = st.text_input("Non è nell'elenco? Scrivi qui il nome esatto (vale al posto di «Altro»)", value=proprio, placeholder="es. Ecocert, Estratto conto previdenziale…", max_chars=80)
+            if scritto.strip() and tipo_i == "Altro":
+                tipo_i = scritto.strip()
             v = {"tipo": "Documento INPS", "argomento": "INPS", "ente": "INPS", "inps_tipo": tipo_i}
         data_doc = st.date_input("Data del documento (facoltativa)" + aff("data_doc"), value=_data(val("data_doc")), format="DD/MM/YYYY")
         note = st.text_input("Note (facoltative)", value=(d or {}).get("note", "") if d else "")
