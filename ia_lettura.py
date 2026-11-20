@@ -104,9 +104,59 @@ def _il_metti_pausa(prov, secondi, motivo):
         _IL_STATO["pausa"][prov] = (_il_time.time() + secondi, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8], motivo)
 
 
+IL_RISERVATI = ("deepseek",)          # servizi A PAGAMENTO: li usa solo chi l'amministratore ha scelto (l'amministratore sempre)
+IL_PERMESSI_FILE = "ia_permessi.json"
+
+
+def il_permessi():
+    """{prov: [uid, …]} — chi può usare i servizi a pagamento."""
+    try:
+        d = carica_dati(crea_archivio(), IL_PERMESSI_FILE) or {}
+        return {k: [str(x) for x in (v or [])] for k, v in (d.get("riservati") or {}).items()}
+    except Exception:
+        return {}
+
+
+def _il_permesso(prov):
+    """Vero se la persona che sta usando l'app può usare questo servizio. Fuori da una sessione (lavori in sottofondo) i servizi a pagamento non si usano mai."""
+    if prov not in IL_RISERVATI:
+        return True
+    try:
+        s_ = st.session_state.get("sess") or {}
+    except Exception:
+        return False
+    if not s_.get("uid"):
+        return False
+    if s_.get("admin"):
+        return True
+    return str(s_["uid"]) in il_permessi().get(prov, [])
+
+
 def il_disponibili(ordine=None):
-    """I servizi con la chiave e non in pausa, nell'ordine voluto."""
-    return [p for p in (ordine or IL_ORDINE_VISTA) if p in IL_FORNITORI and il_chiave(p) and not _il_in_pausa(p)]
+    """I servizi con la chiave, non in pausa e permessi a chi sta usando l'app, nell'ordine voluto."""
+    return [p for p in (ordine or IL_ORDINE_VISTA) if p in IL_FORNITORI and il_chiave(p) and not _il_in_pausa(p) and _il_permesso(p)]
+
+
+def _il_ui_permessi(prov):
+    """Riquadro dell'amministratore: chi può usare il servizio a pagamento."""
+    try:
+        utenti = [(str(u["id"]), str(u["nome"])) for u in leggi_utenti() if u.get("attivo", True) and u.get("id") and u.get("nome")]
+    except Exception:
+        utenti = []
+    nomi = dict(utenti)
+    attuali = [u for u in il_permessi().get(prov, []) if u in nomi]
+    st.markdown("**🔒 Chi può usarlo** (è a pagamento: tu sempre, gli altri solo se li scegli qui)")
+    scelti = st.multiselect("Persone che possono usarlo", [u for u, _ in utenti], default=attuali,
+                            format_func=lambda u: nomi.get(u, u), key=f"il_perm_{prov}", placeholder="Solo io")
+    if sorted(scelti) != sorted(attuali):
+        if st.button("💾 Salva chi può usarlo", key=f"il_perm_salva_{prov}", width="stretch", type="primary"):
+            def _fn(d):
+                d.setdefault("riservati", {})[prov] = list(scelti)
+                return d
+            salva_file(IL_PERMESSI_FILE, _fn, "Permessi IA")
+            st.success("Salvato ✅")
+            st.rerun()
+    st.caption("Per tutti gli altri l'app usa solo i servizi gratuiti. Le traduzioni automatiche non usano mai i servizi a pagamento.")
 
 
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
@@ -829,6 +879,8 @@ def il_blocco_utilita():
         stato = ("🟢 chiave presente" if ha else "⚪ nessuna chiave") + (f" · ⏸️ in pausa ({pausa[2]})" if ha and pausa and pausa[0] > _il_time.time() else "") + (f" · usata {usi} volte oggi" if usi else "")
         with st.expander(f"{cfg['nome']} — {stato}"):
             st.markdown(f"**Costo:** {cfg['costo']}  \n**Dati:** {cfg['dati']}")
+            if prov in IL_RISERVATI:
+                _il_ui_permessi(prov)
             if ha:
                 if st.button("🧪 Prova questa chiave", key=f"il_prova_{prov}", width="stretch"):
                     with st.spinner("Provo… (al massimo un minuto)"):
