@@ -806,7 +806,8 @@ def _il_uno_doc(d, f, files, titolo):
         while _il_time.time() - t0 < lenta:
             _il_segna("groq", "prova-lenta")
             _il_time.sleep(0.2)
-        return {"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")}, "ia": {"campi": {}}, "errore": ""}
+        ia_f = {"campi": {"profilo": {"valore": _il_os.environ["VM_IL_PAZIENTE"]}}} if _il_os.environ.get("VM_IL_PAZIENTE") else {"campi": {}}
+        return {"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")} | _il_cambio_persona(d, f, ia_f), "ia": ia_f, "errore": ""}
     _il_fase("apro il file…")
     try:
         nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
@@ -820,7 +821,22 @@ def _il_uno_doc(d, f, files, titolo):
     if not ia or not ia.get("campi"):
         errore = "troppo lento, saltato" if _il_scaduto() else "nessun servizio ha risposto" if ia is None else "lettura non riuscita"
         return {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": errore, "ia": ia}
-    return {"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]), "ia": ia, "errore": ""}
+    return {"id": d.get("id"), "titolo": titolo, "cambi": il_cambiamenti(d, ia["campi"]) | _il_cambio_persona(d, f, ia), "ia": ia, "errore": ""}
+
+
+def _il_cambio_persona(d, f, ia):
+    """Il referto è di un'altra persona della famiglia (paziente o codice fiscale letti)? → {"profilo": (chi ora, chi è)}; l'id va in ia["sposta_a"]."""
+    try:
+        prof = (f or {}).get("profili") or []
+        ora_ = next((p for p in prof if any(x.get("id") == d.get("id") for x in (p.get("docsan") or []))), None)
+        nuovo = ((ia.get("campi") or {}).get("profilo") or {}).get("valore")
+        dopo = next((p for p in prof if p.get("id") == nuovo), None)
+        if ora_ and dopo and dopo["id"] != ora_["id"]:
+            ia["sposta_a"] = dopo["id"]
+            return {"profilo": (ora_.get("nome", "?"), dopo.get("nome", "?"))}
+    except Exception:
+        pass
+    return {}
 
 
 def _il_con_controllo(fn, secondi):
@@ -854,7 +870,8 @@ def il_da_controllare(p, tutti=False):
 
 def _il_riassunto_ia(ia):
     ia = ia or {}
-    return {"fonti": ia.get("fonti"), "manoscritto": ia.get("manoscritto"), "limiti": ia.get("limiti"), "da_verificare": ia.get("da_verificare"), "riassunto": ia.get("riassunto")}
+    return {"fonti": ia.get("fonti"), "manoscritto": ia.get("manoscritto"), "limiti": ia.get("limiti"), "da_verificare": ia.get("da_verificare"), "riassunto": ia.get("riassunto"),
+            **({"sposta_a": ia["sposta_a"]} if ia.get("sposta_a") else {})}
 
 
 def _il_salva_esito(percorso, pid, voce):
@@ -952,6 +969,7 @@ def il_conferma_proposte(pid, scelti, tutte):
     scelti, tutte = set(scelti), set(tutte)
 
     def _fn(f):
+        da_spostare = []
         for pr in f.get("profili") or []:
             if pr.get("id") != pid:
                 continue
@@ -963,7 +981,11 @@ def il_conferma_proposte(pid, scelti, tutte):
                 if d_.get("id") in scelti:
                     vecchio_auto = sp_titolo_doc(d_) if "sp_titolo_doc" in globals() else ""
                     titolo_auto = not d_.get("titolo") or d_.get("titolo") == vecchio_auto
+                    if "profilo" in (pr_.get("cambi") or {}) and (pr_.get("ia") or {}).get("sposta_a"):
+                        da_spostare.append((d_, pr_["ia"]["sposta_a"]))      # va nei documenti sanitari dell'altra persona
                     for k, v in (pr_.get("cambi") or {}).items():
+                        if k == "profilo":
+                            continue
                         b = v[1] if isinstance(v, (list, tuple)) and len(v) == 2 else v
                         d_[k] = b
                         d_.setdefault("riconosciuto", {})[k] = b
@@ -973,11 +995,17 @@ def il_conferma_proposte(pid, scelti, tutte):
                 else:
                     d_["lettura_ia"] = dict(pr_.get("ia") or {}, il=ora, rifiutata=True)
                 d_.pop("proposta_ia", None)
+        for d_, verso in da_spostare:
+            dest = next((p for p in f.get("profili") or [] if p.get("id") == verso), None)
+            orig = next((p for p in f.get("profili") or [] if p.get("id") == pid), None)
+            if dest is not None and orig is not None and dest is not orig:
+                orig["docsan"] = [x for x in orig.get("docsan") or [] if x is not d_]
+                dest.setdefault("docsan", []).append(d_)
     _fa_salva(_fn, "Salute: proposte dell'IA confermate")
     return len(scelti)
 
 
-_IL_ETICHETTE = {"tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione": "Prestazione", "esame": "Esame o visita", "esami_elenco": "Esami contenuti", "data": "Data",
+_IL_ETICHETTE = {"profilo": "👤 Di chi è (va nei suoi documenti sanitari)", "tipo": "Tipo", "specialita": "Area medica", "tipo_prestazione": "Prestazione", "esame": "Esame o visita", "esami_elenco": "Esami contenuti", "data": "Data",
                  "data_referto": "Data del referto", "medico": "Medico", "struttura": "Struttura", "conclusioni": "Conclusioni", "controllo_indicato": "Controllo indicato",
                  "prossimo_controllo": "Prossimo controllo"}
 
@@ -1130,6 +1158,8 @@ def il_pannello_riclassifica(pid):
             letti = len(lav.get("out") or []) - len(err)
             st.caption(f"Ultima lettura: {letti} documenti controllati" + (f" · non letti {len(err)}: " + "; ".join(f"{x['titolo']} ({x['errore']})" for x in err[:5]) if err else "")
                        + (". Toccando «Prova» riprovo solo quelli rimasti." if err else ""))
+        if "lu_ui_persone" in globals():
+            lu_ui_persone()                                                 # nome e cognome sui documenti: i referti di un'altra persona vanno nella sua cartella
         tutti = st.checkbox(f"Rileggi anche quelli già controllati (tutti i {n})", key=f"il_tutti_{pid}", value=False)
         quanti = n if tutti else resta
         if st.button(f"🔍 Prova: leggi e classifica {quanti} document" + ("o" if quanti == 1 else "i"), key=f"il_prova_{pid}", width="stretch", disabled=not quanti):

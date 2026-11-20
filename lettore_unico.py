@@ -15,6 +15,7 @@ import os as _lu_os
 import html as _lu_html
 import re as _lu_re
 import threading as _lu_thr
+import uuid as _lu_uuid
 import time as _lu_time
 
 import streamlit as st
@@ -195,6 +196,16 @@ def lu_attivo():
     return "il_leggi_campi" in globals() and bool(il_disponibili(IL_ORDINE_VISTA))
 
 
+LU_CHI_CAMPI = {"intestatario": "NOME E COGNOME della persona a cui il documento è intestato o indirizzato (destinatario della lettera, intestatario della bolletta o del contratto, "
+                                "titolare del documento, paziente, assicurato, condòmino). NON chi lo ha scritto o emesso. Vuoto se non c'è.",
+                "cf_intestatario": "codice fiscale di quella persona (16 caratteri) se si legge",
+                "sezione": "dove va nell'app: salute (referti, analisi, ricette, visite, certificati medici) | documenti (carta d'identità, patente, passaporto, tessera sanitaria, "
+                           "codice fiscale, certificati anagrafici) | casa (bollette, condominio e amministrazione, tasse della casa, contratti, manuali, garanzie, assicurazione casa, "
+                           "lettere su casa e utenze) | lavoro (busta paga, Certificazione Unica, INPS) | auto (veicoli: bollo, revisione, polizza auto, libretto) | animali (veterinario)"}
+LU_CHI_REGOLE = ("Il destinatario di una lettera o bolletta è di solito nel riquadro dell'indirizzo («Gentile Sig.ra…», «Spett.le…», «Intestatario», «Cliente», «Condòmino»). "
+                 "Scrivi il nome come è scritto, senza titoli (Sig., Sig.ra, Dott.).")
+
+
 def lu_leggi(files, sezione, tipi, contesto, testo=""):
     """files = [(nome, mime, byte)] (fronte, retro, pagine). → {tipo, campi, problemi, fonti, dubbi} oppure {} se l'IA non è disponibile."""
     if not lu_attivo():
@@ -209,7 +220,8 @@ def lu_leggi(files, sezione, tipi, contesto, testo=""):
     if not immagini and not testo.strip():
         return {}
     # primo tempo: che documento è
-    t1, f1 = il_leggi_campi(contesto, {"tipo": "uno di: " + " | ".join(tipi)}, testo=testo, immagini=immagini, quante=1)
+    t1, f1 = il_leggi_campi(contesto, {"tipo": "uno di: " + " | ".join(tipi), **LU_CHI_CAMPI}, testo=testo, immagini=immagini, quante=1,
+                            regole=LU_CHI_REGOLE)
     tipo = t1.get("tipo") if t1.get("tipo") in tipi else ""
     # secondo tempo: la scheda su misura
     campi_s, regole = _lu_scheda(tipo, sezione)
@@ -221,7 +233,13 @@ def lu_leggi(files, sezione, tipi, contesto, testo=""):
         if campi.get(k):
             campi[k] = _lu_re.sub(r"\s+", "", campi[k]).upper()
     fonti = list(dict.fromkeys((f1 or []) + (f2 or [])))
-    return {"tipo": tipo, "campi": campi, "problemi": lu_controlla(tipo, campi), "fonti": fonti, "dubbi": dubbi}
+    chi = {k: str(t1.get(k) or "").strip() for k in LU_CHI_CAMPI}
+    chi["cf_intestatario"] = _lu_re.sub(r"\s+", "", chi["cf_intestatario"]).upper()
+    if chi["cf_intestatario"] and not lu_cf_valido(chi["cf_intestatario"]):
+        chi["cf_intestatario"] = ""
+    if not chi.get("cf_intestatario") and lu_cf_valido(campi.get("cf") or ""):
+        chi["cf_intestatario"] = campi["cf"]
+    return {"tipo": tipo, "campi": campi, "problemi": lu_controlla(tipo, campi), "fonti": fonti, "dubbi": dubbi, "chi": chi}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -301,6 +319,181 @@ def lu_cambi(sez, x, letto):
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# 7. DI CHI È E DOVE VA (richiesta del 20 novembre: «se è diretto a mia madre va nelle cose di mia madre: amministrazione, salute…»)
+#    Le persone sono i profili della Salute (con «nome e cognome come sui documenti» e codice fiscale); ogni casa può avere la sua persona.
+# ---------------------------------------------------------------------------------------------------------------------
+LU_SEZ_NOMI = {"salute": "🩺 Salute", "documenti": "🪪 I miei documenti", "casa": "🏠 Casa", "lavoro": "💼 Lavoro", "auto": "🚗 Auto", "animali": "🐾 Animali"}
+LU_SPOSTABILI = {("casa", "salute"), ("casa", "documenti"), ("documenti", "salute"), ("documenti", "casa")}
+_LU_NON_NOMI = {"sig", "sigra", "signor", "signora", "sigg", "dott", "dottssa", "dottoressa", "spett", "spettle", "gentile", "gent", "egregio", "alla", "al", "per", "di", "de", "del", "della", "e"}
+
+
+def _lu_parole(x):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(x or "")).encode("ascii", "ignore").decode().lower()
+    return {w for w in _lu_re.sub(r"[^a-z ]", " ", t).split() if len(w) >= 2 and w not in _LU_NON_NOMI}
+
+
+def lu_persone(d):
+    """[{id, nome, nomi, cf}]: le persone della famiglia (i profili della Salute)."""
+    f = d.get("farmacia") or {}
+    prof = f.get("profili") or [{"id": "p0", "nome": (st.session_state.get("sess") or {}).get("nome", "Io")}]
+    out = []
+    for p in prof:
+        if not isinstance(p, dict) or not p.get("id"):
+            continue
+        nomi = [p.get("nome", ""), p.get("nome_doc", "")]
+        if p["id"] == "p0":
+            an = d.get("anagrafica") or {}
+            nomi.append(f"{an.get('nome', '')} {an.get('cognome', '')}")
+        cf = str(p.get("cf_doc") or "").upper().strip()
+        if not cf and "_fa_cf_del_profilo" in globals():
+            try:
+                cf = _fa_cf_del_profilo(f, p["id"]) or ""
+            except Exception:
+                cf = ""
+        out.append({"id": p["id"], "nome": p.get("nome") or "?", "nomi": [n for n in nomi if str(n).strip()], "cf": cf})
+    return out
+
+
+def lu_chi_e(d, nome, cf=""):
+    """La persona a cui è intestato il documento (codice fiscale prima, poi nome e cognome); None se non si capisce con sicurezza."""
+    pers = lu_persone(d)
+    cf = _lu_re.sub(r"\s+", "", str(cf or "")).upper()
+    if cf:
+        for p in pers:
+            if p["cf"] and p["cf"] == cf:
+                return p
+    parole = _lu_parole(nome)
+    if len(parole) < 2:
+        return None
+    trovati = []
+    for p in pers:
+        for n in p["nomi"]:
+            t = _lu_parole(n)
+            if len(t) >= 2 and (t <= parole or len(t & parole) >= 2):
+                trovati.append(p)
+                break
+    return trovati[0] if len(trovati) == 1 else None
+
+
+def lu_case_di(d, pid):
+    """Le case collegate a quella persona (id; «» = la casa principale)."""
+    c = d.get("casa") or {}
+    ids = [x["id"] for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id") and x.get("persona") == pid]
+    if (c.get("persona_principale") or "p0") == pid:
+        ids.insert(0, "")
+    return ids
+
+
+def _lu_nome_casa(d, cid):
+    if not cid:
+        return "Casa principale"
+    return next((x.get("nome") or "Casa" for x in ((d.get("casa") or {}).get("case") or []) if isinstance(x, dict) and x.get("id") == cid), "Casa")
+
+
+def _lu_nome_persona(d, pid):
+    return next((p["nome"] for p in lu_persone(d) if p["id"] == pid), "?")
+
+
+def _lu_file_refs(sez, x):
+    if sez == "documenti":
+        return [r for r in (x.get("allegati") or []) if isinstance(r, dict) and r.get("id")]
+    if sez == "casa":
+        return [x["file"]] if isinstance(x.get("file"), dict) and x["file"].get("id") else [r for r in (x.get("files") or []) if isinstance(r, dict) and r.get("id")]
+    return []
+
+
+def _lu_sezione_ia(testo):
+    t = str(testo or "").strip().lower()
+    for k in LU_SEZ_NOMI:
+        if t.startswith(k) or t == k:
+            return k
+    return ""
+
+
+def lu_destinazione(sez, x, letto, d):
+    """({campo: [prima, dopo]}, {persona, casa_id, sezione}): di chi è e dove va. Solo proposte (si applicano con ✅ Applica)."""
+    chi = letto.get("chi") or {}
+    p = lu_chi_e(d, chi.get("intestatario"), chi.get("cf_intestatario"))
+    dove = _lu_sezione_ia(chi.get("sezione"))
+    cambi, dest = {}, {}
+    if p:
+        dest["persona"] = p["id"]
+    if dove and dove != sez and (sez, dove) in LU_SPOSTABILI and not (dove == "salute" and len(_lu_file_refs(sez, x)) > 1):
+        per = p["id"] if p else (x.get("profilo") or "p0")
+        dest.update(sezione=dove, persona=per)
+        if dove == "casa":
+            case = lu_case_di(d, per)
+            dest["casa_id"] = case[0] if len(case) == 1 else ""
+            cambi["sezione"] = [LU_SEZ_NOMI[sez], f"{LU_SEZ_NOMI[dove]} › {_lu_nome_casa(d, dest['casa_id'])}"]
+        else:
+            cambi["sezione"] = [LU_SEZ_NOMI[sez], f"{LU_SEZ_NOMI[dove]} di {_lu_nome_persona(d, per)}"]
+        return cambi, dest
+    if not p:
+        return cambi, dest
+    if sez == "documenti" and p["id"] != (x.get("profilo") or "p0"):
+        cambi["profilo"] = [_lu_nome_persona(d, x.get("profilo") or "p0"), p["nome"]]
+    if sez == "casa":
+        case = lu_case_di(d, p["id"])
+        if len(case) == 1 and case[0] != (x.get("casa_id") or ""):
+            dest["casa_id"] = case[0]
+            cambi["casa_id"] = [_lu_nome_casa(d, x.get("casa_id") or ""), f"{_lu_nome_casa(d, case[0])} ({p['nome']})"]
+    return cambi, dest
+
+
+def _lu_data_di(x):
+    for k in ("data_doc", "data", "rilascio", "scadenza_doc", "scadenza"):
+        v = str(x.get(k) or "")
+        if _lu_re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+            return v
+    return ""
+
+
+def _lu_sposta(d, sez, x, dest):
+    """Sposta il documento (col suo file, che resta dov'è nell'archivio) nella sezione e nella persona giuste. True se fatto."""
+    refs = _lu_file_refs(sez, x)
+    if not refs:
+        return False
+    ora = _lu_time.strftime("%Y-%m-%dT%H:%M:%S")
+    titolo = _lu_titolo(x)
+    dove, pid = dest.get("sezione"), dest.get("persona") or "p0"
+    f = d.setdefault("farmacia", {})
+    if dove == "salute":
+        prof = f.get("profili") or []
+        if not prof:
+            prof = f["profili"] = [{"id": "p0", "nome": (st.session_state.get("sess") or {}).get("nome", "Io")}]
+        p = next((q for q in prof if q.get("id") == pid), prof[0])
+        r = refs[0]
+        p.setdefault("docsan", []).append({"id": _lu_uuid.uuid4().hex[:10], "tipo": "Altro", "titolo": titolo, "data": _lu_data_di(x), "struttura": str(x.get("ente") or ""),
+                                           "note": str(x.get("note") or ""), "file": {"id": r["id"], "nome": r.get("nome"), "mime": r.get("mime"), "sha": r.get("sha") or r.get("sha256")},
+                                           "creato_il": ora, "spostato_da": sez})
+    elif dove == "documenti":
+        tipi = set(_lu_tipi_documenti())
+        f.setdefault("documenti", []).append({"id": _lu_uuid.uuid4().hex[:10], "profilo": pid, "tipo": x.get("tipo") if x.get("tipo") in tipi else "Altro",
+                                              "numero": str(x.get("numero") or x.get("numero_doc") or ""), "ente": str(x.get("ente") or ""), "rilascio": x.get("rilascio") or x.get("data_doc") or None,
+                                              "scadenza": x.get("scadenza") or x.get("scadenza_doc") or None, "note": (str(x.get("note") or "") + ("\n" if x.get("note") else "") + titolo).strip(),
+                                              "allegati": [{"id": r["id"], "nome": r.get("nome"), "mime": r.get("mime"), "sha": r.get("sha") or r.get("sha256")} for r in refs], "spostato_da": sez})
+    elif dove == "casa":
+        c = d.setdefault("casa", {})
+        tipi = set(globals().get("CA_TIPI") or [])
+        r = refs[0]
+        doc = {"id": _lu_uuid.uuid4().hex[:10], "tipo": x.get("tipo") if x.get("tipo") in tipi else "Lettera o comunicazione", "argomento": "Altro", "titolo": titolo,
+               "ente": str(x.get("ente") or ""), "data_doc": _lu_data_di(x), "scadenza_doc": x.get("scadenza") or "", "note": str(x.get("note") or ""), "casa_id": dest.get("casa_id") or "",
+               "file": {"id": r["id"], "nome": r.get("nome"), "mime": r.get("mime"), "sha256": r.get("sha") or r.get("sha256"), "originale": True}, "creato_il": ora, "spostato_da": sez,
+               "conferma": {"stato": "confermato", "da": (st.session_state.get("sess") or {}).get("nome", ""), "il": ora, "modificati": [], "bene_proposto": ""}}
+        if len(refs) > 1:
+            doc["files"] = [dict(q, sha256=q.get("sha") or q.get("sha256")) for q in refs]
+        c.setdefault("documenti", []).append(doc)
+    else:
+        return False
+    if sez == "documenti":
+        f["documenti"] = [q for q in f.get("documenti", []) if q is not x]
+    elif sez == "casa":
+        d["casa"]["documenti"] = [q for q in d["casa"].get("documenti", []) if q is not x]
+    return True
+
+
 def _lu_doc_ok(x):
     return bool(x.get("lettura_lu") or x.get("proposta_lu"))
 
@@ -340,7 +533,8 @@ def _lu_salva_esito(percorso, sez, did, voce):
     def _m(d):
         for x in LU_SEZIONI[sez]["docs"](d):
             if isinstance(x, dict) and x.get("id") == did:
-                info = {"tipo": voce.get("tipo"), "problemi": voce.get("problemi"), "fonti": voce.get("fonti"), "dubbi": voce.get("dubbi"), "il": ora}
+                info = {"tipo": voce.get("tipo"), "problemi": voce.get("problemi"), "fonti": voce.get("fonti"), "dubbi": voce.get("dubbi"), "il": ora,
+                        "dest": voce.get("dest") or {}, "chi": voce.get("chi") or {}}
                 if voce.get("cambi"):
                     x["proposta_lu"] = dict(info, cambi=voce["cambi"])
                 else:
@@ -356,28 +550,42 @@ def _lu_salva_esito(percorso, sez, did, voce):
         pass
 
 
-def _lu_avvia(sez, d, tutti=False):
+def _lu_avvia(sez, d, tutti=False, solo=None):
     k = (_lu_chi(), sez)
     cfg = LU_SEZIONI[sez]
-    docs = [dict(x) for x in lu_da_controllare(sez, d, tutti)][:80]
+    docs = [dict(x) for x in lu_da_controllare(sez, d, tutti) if solo is None or x.get("id") in solo][:80]
     perm = {p for p in IL_FORNITORI if _il_permesso(p)} if "_il_permesso" in globals() else None
     lav = {"stato": "corre", "i": 0, "n": len(docs), "inizio": _lu_time.time(), "inizio_doc": _lu_time.time(), "segnale": _lu_time.time(), "servizio": "", "titolo": "",
            "fatti": 0, "cambi": 0, "errori": [], "stop": False, "percorso": st.session_state.get("percorso")}
     _LU_LAVORI[k] = lav
     tipi = cfg["tipi"]()
 
+    def _lu_con_dest(sez_, x, letto):
+        cambi = lu_cambi(sez_, x, letto)
+        try:
+            c2, dest = lu_destinazione(sez_, x, letto, d)
+        except Exception:
+            c2, dest = {}, {}
+        if c2.get("sezione"):                                              # va in un'altra sezione: gli altri cambi non servono
+            cambi = {}
+        cambi.update(c2)
+        return dict(letto, cambi=cambi, dest=dest)
+
     def _uno(x):
         if _lu_os.environ.get("VM_LU_FINTO"):                              # solo per le prove automatiche: lettura finta
             _lu_time.sleep(float(_lu_os.environ["VM_LU_FINTO"]))
             letto = {"tipo": x.get("tipo") or tipi[0], "campi": {"scadenza": "2031-07-15", "numero": "CA12345AB", "scadenza_doc": "2026-12-31", "data": "2026-01-10"}, "problemi": {}, "fonti": ["groq"], "dubbi": []}
-            return dict(letto, cambi=lu_cambi(sez, x, letto))
+            if _lu_os.environ.get("VM_LU_CHI"):                            # prova: intestatario e sezione finti («nome|cf|sezione»)
+                n_, c_, s_ = (_lu_os.environ["VM_LU_CHI"].split("|") + ["", "", ""])[:3]
+                letto["chi"] = {"intestatario": n_, "cf_intestatario": c_, "sezione": s_}
+            return _lu_con_dest(sez, x, letto)
         files = cfg["file"](x)
         if not files:
             return {"errore": "file non trovato"}
         letto = lu_leggi(files, sez, tipi, cfg["contesto"])
         if not letto:
             return {"errore": "nessun servizio ha risposto"}
-        return dict(letto, cambi=lu_cambi(sez, x, letto))
+        return _lu_con_dest(sez, x, letto)
 
     def _corri():
         try:
@@ -445,6 +653,76 @@ def _lu_vivo(sez):
     _f()
 
 
+_lu_sp_proponi_vecchio = globals().get("sp_proponi_profilo")
+
+
+def sp_proponi_profilo(f, paziente, cf):                                   # noqa: F811 — anche «nome e cognome come sui documenti» e codice fiscale delle persone
+    try:
+        dd = {"farmacia": f}
+        try:
+            dd["anagrafica"] = carica_dati(crea_archivio(), percorso_mio()).get("anagrafica") or {}
+        except Exception:
+            pass
+        p = lu_chi_e(dd, paziente, cf)
+        if p:
+            return p["id"], ("codice fiscale" if cf and p["cf"] == _lu_re.sub(r"\s+", "", str(cf)).upper() else "nome")
+    except Exception:
+        pass
+    return _lu_sp_proponi_vecchio(f, paziente, cf) if _lu_sp_proponi_vecchio else (None, "")
+
+
+def lu_ui_persone():
+    """👥 Le persone e le case: come si chiamano sui documenti e di chi è ogni casa. Serve all'IA per mettere ogni documento nelle cose giuste."""
+    try:
+        d = carica_dati(crea_archivio(), st.session_state["percorso"])
+    except Exception:
+        return
+    f = d.get("farmacia") or {}
+    prof = [p for p in (f.get("profili") or []) if isinstance(p, dict) and p.get("id")]
+    case = ca_case(d.get("casa") or {}) if "ca_case" in globals() else [{"id": "", "nome": "Casa principale"}]
+    with st.popover("👥 Di chi sono i documenti: persone e case", width="stretch"):
+        st.caption("L'IA legge **a chi è intestato** ogni documento (lettere, bollette, referti…) e lo propone nelle **cose di quella persona**: i suoi documenti, "
+                   "la sua Salute, la **sua casa** (con l'amministrazione). Scrivi qui **nome e cognome come sono scritti sui documenti** e, se lo sai, il **codice fiscale**.")
+        if not prof:
+            st.info("Le persone sono i profili della Salute: aggiungili in **Salute → 👥 Gestisci profili**.")
+        nuovi = {}
+        for p in prof:
+            st.markdown(f"**👤 {_lu_html.escape(p.get('nome') or '?')}**")
+            c1, c2 = st.columns([3, 2], gap="small")
+            nd = c1.text_input("Nome e cognome sui documenti", value=p.get("nome_doc", ""), key=f"lu_pp_n_{p['id']}", placeholder="es. Maria Teresa Rossi")
+            cf = c2.text_input("Codice fiscale", value=p.get("cf_doc", ""), key=f"lu_pp_c_{p['id']}", max_chars=16)
+            nuovi[p["id"]] = (nd.strip(), cf.strip().upper())
+        st.markdown("**🏠 Di chi è ogni casa**")
+        nomi = {"": "— nessuno —"} | {p["id"]: p.get("nome") or "?" for p in prof}
+        cc = d.get("casa") or {}
+        scelte = {}
+        for x in case:
+            att = (cc.get("persona_principale") or ("p0" if "p0" in nomi else "")) if not x["id"] else (x.get("persona") or "")
+            scelte[x["id"]] = st.selectbox(x.get("nome") or "Casa", list(nomi), index=list(nomi).index(att) if att in nomi else 0, format_func=lambda i: nomi[i], key=f"lu_pc_{x['id'] or 'princ'}")
+        cattivi = [p_ for p_, (_n, c_) in nuovi.items() if c_ and not lu_cf_valido(c_)]
+        if cattivi:
+            st.warning("🟠 Un codice fiscale non sembra giusto (controlla le 16 lettere e cifre).")
+        if st.button("💾 Salva", key="lu_pp_ok", type="primary", width="stretch", disabled=bool(cattivi)):
+            def _m(dd, nuovi=nuovi, scelte=scelte):
+                for p in (dd.get("farmacia") or {}).get("profili") or []:
+                    if p.get("id") in nuovi:
+                        p["nome_doc"], p["cf_doc"] = nuovi[p["id"]]
+                c_ = dd.setdefault("casa", {})
+                for cid, pid in scelte.items():
+                    if not cid:
+                        c_["persona_principale"] = pid
+                    else:
+                        for x in c_.get("case") or []:
+                            if x.get("id") == cid:
+                                x["persona"] = pid
+            salva(_m, "Persone e case per i documenti")
+            st.toast("Salvato ✅")
+            st.rerun()
+
+
+_LU_ETICH_DEST = {"profilo": "👤 Di chi è", "casa_id": "🏠 In quale casa", "sezione": "📦 Va spostato in"}
+
+
 def _lu_salva_conferma(sez, scelti, tutti_ids):
     """Applica le proposte scelte; tutte diventano «controllate»."""
     scelti, tutti_ids = set(scelti), set(tutti_ids)
@@ -452,12 +730,21 @@ def _lu_salva_conferma(sez, scelti, tutti_ids):
     campi_sez = LU_SEZIONI[sez]["campi"]
 
     def _m(d):
+        da_spostare = []
         for x in LU_SEZIONI[sez]["docs"](d):
             pr = x.get("proposta_lu") if isinstance(x, dict) else None
             if not pr or x.get("id") not in tutti_ids:
                 continue
             if x["id"] in scelti:
-                for k, (_a, b) in (pr.get("cambi") or {}).items():
+                dest = pr.get("dest") or {}
+                cam = pr.get("cambi") or {}
+                if "profilo" in cam and dest.get("persona"):
+                    x["profilo"] = dest["persona"]
+                if "casa_id" in cam and "casa_id" in dest:
+                    x["casa_id"] = dest["casa_id"]
+                if "sezione" in cam and dest.get("sezione"):
+                    da_spostare.append((x, dest))
+                for k, (_a, b) in cam.items():
                     if k not in campi_sez:
                         continue
                     if k not in x and isinstance(x.get("campi"), dict) and sez == "animali" and k not in ("tipo", "data", "scadenza"):
@@ -468,7 +755,26 @@ def _lu_salva_conferma(sez, scelti, tutti_ids):
             else:
                 x["lettura_lu"] = {k: v for k, v in pr.items() if k != "cambi"} | {"il": ora, "rifiutata": True}
             x.pop("proposta_lu", None)
+        for x, dest in da_spostare:
+            _lu_sposta(d, sez, x, dest)
     salva(_m, f"{LU_SEZIONI[sez]['nome']}: proposte dell'IA confermate")
+
+
+def _lu_nuovi_in_automatico(sez, d, tutti_docs):
+    """I documenti NUOVI (non visti l'ultima volta) si leggono da soli in sottofondo: l'IA propone di chi sono e dove vanno (si conferma con ✅ Applica)."""
+    ids = [x["id"] for x in tutti_docs]
+    visti = (d.get("lu_visti") or {}).get(sez)
+    if visti is not None and set(ids) <= set(visti):
+        return False
+    nuovi = [x["id"] for x in tutti_docs if visti is not None and x["id"] not in visti and not _lu_doc_ok(x)]
+    try:
+        salva(lambda dd, ids=ids: dd.setdefault("lu_visti", {}).__setitem__(sez, ids), "Documenti visti")
+    except Exception:
+        return False
+    if not nuovi or not lu_attivo() or ((d.get("impostazioni") or {}).get("lu_auto") is False):
+        return False
+    _lu_avvia(sez, d, False, solo=set(nuovi))
+    return True
 
 
 def lu_pannello(sez):
@@ -483,9 +789,12 @@ def lu_pannello(sez):
     if not tutti_docs:
         return
     n, resta = len(tutti_docs), len(lu_da_controllare(sez, d))
-    pend = [x for x in tutti_docs if x.get("proposta_lu")]
     lav = _LU_LAVORI.get((_lu_chi(), sez))
     corre = bool(lav and lav["stato"] == "corre")
+    if not corre and _lu_nuovi_in_automatico(sez, d, tutti_docs):         # documento appena caricato: l'IA lo legge da sola e propone dove va
+        lav = _LU_LAVORI.get((_lu_chi(), sez))
+        corre = bool(lav and lav["stato"] == "corre")
+    pend = [x for x in tutti_docs if x.get("proposta_lu")]
     if corre or pend:
         with st.container(border=True, key=f"lu_vista_{sez}"):
             st.markdown("<div style='font-weight:700'>🤖 Rileggi e ricataloga con l'IA</div>", unsafe_allow_html=True)
@@ -498,9 +807,11 @@ def lu_pannello(sez):
                     pr = x["proposta_lu"]
                     st.markdown(f"**📄 {_lu_html.escape(_lu_titolo(x))}**")
                     for k, (a, b) in (pr.get("cambi") or {}).items():
-                        st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{LU_SEZIONI[sez]['campi'].get(k, k)}: <s>{_lu_html.escape(str(a or '—'))}</s> → <b>{_lu_html.escape(str(b))}</b></div>",
+                        st.markdown(f"<div style='font-size:.88rem;margin-left:8px'>{_LU_ETICH_DEST.get(k) or LU_SEZIONI[sez]['campi'].get(k, k)}: <s>{_lu_html.escape(str(a or '—'))}</s> → <b>{_lu_html.escape(str(b))}</b></div>",
                                     unsafe_allow_html=True)
                     avvisi = [f"🟠 {LU_SEZIONI[sez]['campi'].get(k, k)}: {m}" for k, m in (pr.get("problemi") or {}).items()] + [f"⚠️ {x_}" for x_ in (pr.get("dubbi") or [])[:2]]
+                    if (pr.get("chi") or {}).get("intestatario"):
+                        avvisi.insert(0, "👤 Intestato a: " + str(pr["chi"]["intestatario"])[:60] + ("" if (pr.get("dest") or {}).get("persona") else " (non so chi è: scrivilo in «👥 Di chi sono i documenti»)"))
                     if avvisi:
                         st.caption(" · ".join(avvisi))
                     if st.checkbox("Applica a questo documento", value=True, key=f"lu_sc_{sez}_{x['id']}"):
@@ -527,6 +838,8 @@ def lu_pannello(sez):
         if lav and lav["stato"] != "corre":
             st.caption(f"Ultima lettura: {lav.get('fatti', 0)} documenti controllati" + (" · non letti: " + "; ".join(lav.get("errori", [])[:4]) if lav.get("errori") else "")
                        + (f" · interrotta ({lav.get('errore')})" if lav.get("errore") else ""))
+        if sez in ("documenti", "casa"):
+            lu_ui_persone()
         tutti = st.checkbox(f"Rileggi anche quelli già controllati (tutti i {n})", key=f"lu_tutti_{sez}")
         quanti = n if tutti else resta
         if st.button(f"🔍 Leggi e cataloga {quanti} document" + ("o" if quanti == 1 else "i"), key=f"lu_via_{sez}", width="stretch", disabled=not quanti):

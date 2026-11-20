@@ -4,6 +4,8 @@ Per ogni voce: nominativo, referente, mestiere/funzione, ambito, telefono (uffic
 PREVENTIVO (importo, stato, PDF/foto, data inizio e fine lavori), DOCUMENTI ricevuti, PAGAMENTI (acconti, rate, saldo) e note.
 I dati stanno in d["numeri_utili"][sezione] (una lista di voci con id). I file in documenti/<uid>/<id>.json (come i documenti)."""
 import datetime as _rb_dt
+import json as _rb_json
+import os as _rb_os
 
 import streamlit as st
 
@@ -92,6 +94,9 @@ def _rbu_card_html(v, oggi):
         if pagato or da_pagare:
             parti.append(f"pagato {sc_euro(pagato)} · da pagare {sc_euro(da_pagare)}")
         extra = "<div class='rbu-prev'>" + " · ".join(parti) + "</div>"
+    if v.get("gia_servito"):
+        q = sc_data(v.get("gia_quando"))
+        rr.append("✅ <b>Già usato</b>" + (f" il {sc_data_scritta(q, False)}" if q else "") + (f": {e(v['gia_cosa'])}" if v.get("gia_cosa") else ""))
     if v.get("note"):
         rr.append(f"<i>{e(v['note'])}</i>")
     return (f"<div class='rbu-card'><b class='rbu-nome'>{e(v.get('nome', '—'))}</b><div>{testa}</div>"
@@ -117,29 +122,91 @@ def _rbu_data_opz(k, etichetta, attuale):
     return st.date_input(etichetta, value=attuale or _rb_dt.date.today(), format="DD/MM/YYYY", key=k + "_d", label_visibility="collapsed")
 
 
+def _rbu_cell_int(n):
+    """Il numero con il prefisso internazionale (per Telegram, SMS, WhatsApp): 333 1234567 → 393331234567."""
+    c = "".join(ch for ch in str(n or "") if ch.isdigit())
+    if str(n or "").strip().startswith("00"):
+        c = c[2:]
+    elif len(c) in (9, 10) and c[0] in "03":                               # numero italiano senza prefisso
+        c = "39" + c
+    return c if len(c) >= 8 else ""
+
+
+RBU_BIGLIETTO = {"nome": "nome della ditta o della persona (il nome principale scritto in grande)", "referente": "nome e cognome della persona di riferimento",
+                 "mestiere": "mestiere o funzione (es. Idraulico, Elettricista, Avvocato, Veterinario, Carrozzeria)", "ambito": "di cosa si occupa, in poche parole",
+                 "telefono": "telefono fisso/ufficio", "cellulare": "cellulare", "email": "email", "sito": "sito web", "indirizzo": "indirizzo completo (via, numero, CAP, città)",
+                 "orari": "orari se scritti", "piva": "partita IVA se c'è"}
+
+
+def _rbu_biglietto(k, voce):
+    """📇 Fotografa un biglietto da visita: l'IA legge nome, mestiere, telefoni, email, sito, indirizzo e li mette nei campi (si controllano prima di salvare)."""
+    with st.expander("📇 Fotografa un biglietto da visita (compilo io i campi)"):
+        st.caption("Scatta la foto del **biglietto da visita** (anche fronte e retro): leggo nome, mestiere, telefoni, email, sito e indirizzo e li scrivo qui sotto. **Controlla prima di salvare.**")
+        foto = st.file_uploader("Foto del biglietto (fronte e, se c'è, retro)", type=["jpg", "jpeg", "png", "webp", "heic", "pdf"], accept_multiple_files=True, key=k + "_bv")
+        if foto and st.button("🔎 Leggi il biglietto", key=k + "_bv_ok", type="primary", width="stretch"):
+            letto, fonti, ia = None, [], ("il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA))
+            if _rb_os.environ.get("VM_BV_FINTO"):                            # solo per le prove automatiche
+                letto, fonti = _rb_json.loads(_rb_os.environ["VM_BV_FINTO"]), ["groq"]
+            elif not ia:
+                st.warning("Per leggere il biglietto serve una chiave di intelligenza artificiale (Utilità → 🤖). Intanto compila a mano.")
+            else:
+                imgs = [j for f in foto[:2] for j in il_immagini(f.name, f.type or "", f.getvalue(), max_pagine=1)]
+                with st.spinner("🤖 Leggo il biglietto da visita…"):
+                    letto, fonti = il_leggi_campi("un BIGLIETTO DA VISITA (di un artigiano, una ditta, un professionista, un medico, un veterinario…)", RBU_BIGLIETTO,
+                                                  immagini=imgs, quante=2, critici=("nome", "cellulare", "telefono"),
+                                                  regole="Separa bene telefono fisso (spesso inizia con 0) e cellulare (in Italia inizia con 3). Non inventare numeri: se una cifra non si legge lascia vuoto.")
+                if not letto:
+                    st.warning("Non sono riuscito a leggere il biglietto: prova con più luce e il biglietto ben dritto, oppure compila a mano.")
+            if letto:
+                pre = {kk: vv for kk, vv in letto.items() if not kk.startswith("_") and vv}
+                if pre.get("piva"):
+                    pre["note"] = ((voce.get("note") or "") + ("\n" if voce.get("note") else "") + "P. IVA " + pre.pop("piva")).strip()
+                st.session_state[k + "_pre"] = pre
+                st.session_state[k + "_giro"] = st.session_state.get(k + "_giro", 0) + 1   # i campi si riempiono di nuovo con i dati letti
+                st.session_state[k + "_bv_msg"] = "✅ Ho letto il biglietto con " + (il_nomi_fonti(fonti) if "il_nomi_fonti" in globals() else "l'IA") + ": controlla i campi qui sotto."
+                sc_rerun()
+    if st.session_state.get(k + "_bv_msg"):
+        st.success(st.session_state[k + "_bv_msg"])
+    pre = st.session_state.get(k + "_pre") or {}
+    if not pre:
+        return voce
+    v2 = dict(voce)
+    for kk, vv in pre.items():
+        if vv and not str(voce.get(kk) or "").strip():                     # non copre quello che c'era già
+            v2[kk] = vv
+    return v2
+
+
 def _rbu_modulo(sez, voce):
     k = "rbu_f_" + sez + "_" + (voce.get("id") or "nuovo")
     mest = RBU_MESTIERI.get(sez.split("@")[0], []) + [RBU_ALTRO]
     with st.container(border=True, key=k + "_box"):
         st.markdown("**" + ("✏️ Modifica" if voce.get("id") else "➕ Nuovo numero utile") + "**")
+        voce = _rbu_biglietto(k, voce)                                      # 📇 dalla foto del biglietto da visita
+        kc = k + "_g" + str(st.session_state.get(k + "_giro", 0))          # cambia dopo la lettura → i campi ripartono con i dati letti
+        if voce.get("mestiere") and voce["mestiere"] not in mest:          # «idraulico» letto dal biglietto → la voce dell'elenco
+            m0 = voce["mestiere"].strip().lower()
+            uguale = [m for m in mest[:-1] if m.lower() in m0 or m0 in m.lower() or m.lower().split(" ")[0] in m0]
+            if uguale:
+                voce = dict(voce, mestiere=uguale[0])
         # 1) chi è
         st.markdown("<b>1 · Chi è</b>", unsafe_allow_html=True)
-        nome = st.text_input("Nominativo o ditta *", value=voce.get("nome", ""), key=k + "_nome")
-        referente = st.text_input("Persona di riferimento", value=voce.get("referente", ""), key=k + "_ref")
+        nome = st.text_input("Nominativo o ditta *", value=voce.get("nome", ""), key=kc + "_nome")
+        referente = st.text_input("Persona di riferimento", value=voce.get("referente", ""), key=kc + "_ref")
         att = voce.get("mestiere", "")
         idx = mest.index(att) if att in mest else (len(mest) - 1 if att else None)
-        scelta = st.selectbox("Mestiere / funzione", mest, index=idx, placeholder="Scegli…", key=k + "_mes")
-        mestiere = st.text_input("Scrivi il mestiere o la funzione", value=(att if att not in mest else ""), key=k + "_mes2") if scelta == RBU_ALTRO else (scelta or "")
-        ambito = st.text_input("Ambito (per cosa lo chiamo)", value=voce.get("ambito", ""), key=k + "_amb", placeholder="es. perdite d'acqua, impianto elettrico, urgenze")
+        scelta = st.selectbox("Mestiere / funzione", mest, index=idx, placeholder="Scegli…", key=kc + "_mes")
+        mestiere = st.text_input("Scrivi il mestiere o la funzione", value=(att if att not in mest else ""), key=kc + "_mes2") if scelta == RBU_ALTRO else (scelta or "")
+        ambito = st.text_input("Ambito (per cosa lo chiamo)", value=voce.get("ambito", ""), key=kc + "_amb", placeholder="es. perdite d'acqua, impianto elettrico, urgenze")
         # 2) come si contatta
         st.markdown("<b>2 · Come lo trovo</b>", unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
-        tel = c1.text_input("📞 Telefono ufficio", value=voce.get("telefono", ""), key=k + "_tel")
-        cel = c2.text_input("📱 Cellulare", value=voce.get("cellulare", ""), key=k + "_cel")
-        email = st.text_input("✉️ Email", value=voce.get("email", ""), key=k + "_mail")
-        sito = cc_campo_sito(voce.get("sito", ""), k + "_sito")
-        indirizzo = st.text_input("📍 Indirizzo", value=voce.get("indirizzo", ""), key=k + "_ind")
-        orari = st.text_area("🕒 Orari (es. lun-ven 8-12 e 15-18; sabato 8-12)", value=voce.get("orari", ""), key=k + "_ora", height=80)
+        tel = c1.text_input("📞 Telefono ufficio", value=voce.get("telefono", ""), key=kc + "_tel")
+        cel = c2.text_input("📱 Cellulare", value=voce.get("cellulare", ""), key=kc + "_cel")
+        email = st.text_input("✉️ Email", value=voce.get("email", ""), key=kc + "_mail")
+        sito = cc_campo_sito(voce.get("sito", ""), kc + "_sito")
+        indirizzo = st.text_input("📍 Indirizzo", value=voce.get("indirizzo", ""), key=kc + "_ind")
+        orari = st.text_area("🕒 Orari (es. lun-ven 8-12 e 15-18; sabato 8-12)", value=voce.get("orari", ""), key=kc + "_ora", height=80)
         # 3) preventivo
         st.markdown("<b>3 · Preventivo e lavori</b>", unsafe_allow_html=True)
         ha_prev = st.checkbox("C'è un preventivo o un lavoro da seguire", value=bool(voce.get("ha_preventivo")), key=k + "_hp")
@@ -155,6 +222,11 @@ def _rbu_modulo(sez, voce):
                     togli_prev.append(r)
             nuovi_prev = ar_uploader("📎 Preventivo (PDF o foto)", type=RBU_FILE, accept_multiple_files=True, key=k + "_up_p") if "ar_uploader" in globals() \
                 else st.file_uploader("📎 Preventivo (PDF o foto)", type=RBU_FILE, accept_multiple_files=True, key=k + "_up_p")
+        gia = st.checkbox("✅ Abbiamo già usato le sue prestazioni (lavori già fatti, visite, consegne…)", value=bool(voce.get("gia_servito")), key=k + "_gia")
+        gia_quando, gia_cosa = sc_data(voce.get("gia_quando")), voce.get("gia_cosa", "")
+        if gia:
+            gia_quando = _rbu_data_opz(k + "_giaq", "Quando (l'ultima volta)", sc_data(voce.get("gia_quando")))
+            gia_cosa = st.text_input("Cosa ha fatto (e com'è andata)", value=voce.get("gia_cosa", ""), key=k + "_giac", placeholder="es. riparato lo scarico, lavoro pulito e veloce")
         # 4) documenti
         st.markdown("<b>4 · Documenti ricevuti</b>", unsafe_allow_html=True)
         docs, togli_doc = list(voce.get("documenti") or []), []
@@ -165,7 +237,7 @@ def _rbu_modulo(sez, voce):
             else st.file_uploader("📎 Aggiungi documenti", type=RBU_FILE, accept_multiple_files=True, key=k + "_up_d")
         # 5) note
         st.markdown("<b>5 · Note</b>", unsafe_allow_html=True)
-        note = st.text_area("📝 Note", value=voce.get("note", ""), key=k + "_note", height=100)
+        note = st.text_area("📝 Note", value=voce.get("note", ""), key=kc + "_note", height=100)
         st.caption("💶 Gli acconti, le rate e il saldo si segnano dalla scheda, col tasto «Apri preventivo, file e pagamenti».")
         b1, b2 = st.columns(2, gap="small")
         if b1.button("✅ Salva", type="primary", key=k + "_ok", width="stretch"):
@@ -174,7 +246,8 @@ def _rbu_modulo(sez, voce):
                 return
             rec = {**voce, "id": voce.get("id") or sc_id(), "nome": nome.strip(), "referente": referente.strip(), "mestiere": mestiere.strip(), "ambito": ambito.strip(),
                    "telefono": tel.strip(), "cellulare": cel.strip(), "email": email.strip(), "sito": (sito or "").strip(), "indirizzo": indirizzo.strip(),
-                   "orari": orari.strip(), "ha_preventivo": bool(ha_prev), "note": note.strip()}
+                   "orari": orari.strip(), "ha_preventivo": bool(ha_prev), "note": note.strip(),
+                   "gia_servito": bool(gia), "gia_quando": gia_quando.isoformat() if gia and gia_quando else "", "gia_cosa": (gia_cosa or "").strip() if gia else ""}
             if ha_prev:
                 rec.update({"stato": stato, "importo": float(importo or 0), "descrizione": descr.strip(), "lavori_inizio": ini.isoformat() if ini else "", "lavori_fine": fin.isoformat() if fin else ""})
             da_cancellare = list(togli_prev) + list(togli_doc)
@@ -187,11 +260,15 @@ def _rbu_modulo(sez, voce):
                 return
             _rbu_salva_voce(sez, rec)
             cp_file_cancella(da_cancellare)
+            for suff in ("_pre", "_bv_msg"):
+                st.session_state.pop(k + suff, None)
             st.session_state["rbu_mod"] = None
             st.toast("✅ Salvato")
             sc_rerun()
         if b2.button("Annulla", key=k + "_no", width="stretch"):
             st.session_state["rbu_mod"] = None
+            for suff in ("_pre", "_bv_msg"):
+                st.session_state.pop(k + suff, None)
             sc_rerun()
 
 
@@ -297,6 +374,10 @@ def _rbu_corpo(sez0):
             tasti.append(("💬 WhatsApp", sc_wa(v.get("cellulare") or v.get("telefono"))))
         if v.get("email"):
             tasti.append(("✉️ Scrivi", "mailto:" + v["email"]))
+        cel_ = _rbu_cell_int(v.get("cellulare") or v.get("telefono"))
+        if cel_:
+            tasti.append(("✈️ Telegram", "https://t.me/+" + cel_))
+            tasti.append(("💬 SMS", "sms:+" + cel_))
         if v.get("indirizzo"):
             tasti.append(("📍 Mappa", sc_maps(v["indirizzo"])))
         if cc_url(v.get("sito")):

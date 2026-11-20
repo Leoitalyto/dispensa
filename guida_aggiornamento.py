@@ -120,6 +120,29 @@ Tutte le pagine sono nella lingua scelta: le frasi nuove si traducono da sole la
 
 Anche i documenti **nuovi** (foto della carta d'identità, bollette, polizze, documenti del veterinario) si leggono con lo stesso metodo.""",
                   "rileggi ricataloga documenti ia intelligenza artificiale controlli codice fiscale numero date proposte applica casa auto animali lavoro documenti"),
+    "x_smistamento": ("👥 Di chi è il documento e dove va (la mamma, la sua casa, la sua salute)",
+                      """Quando l'IA legge un documento capisce anche **a chi è intestato** (destinatario della lettera, intestatario della bolletta, paziente del referto) e **in quale sezione va**.
+
+**Prima, una volta sola:** in **🤖 Rileggi e ricataloga con l'IA** (I miei documenti o Casa) o in **🤖 Riclassifica** (Salute) tocca **👥 Di chi sono i documenti: persone e case**:
+- per ogni persona scrivi **nome e cognome come sono scritti sui documenti** (es. per «Mamma»: Maria Teresa Ianniciello) e, se lo sai, il **codice fiscale**;
+- per ogni casa scegli **di chi è** (es. «Casa di mamma» → Mamma). Tocca **💾 Salva**.
+
+**Poi l'app propone da sola:**
+- 🏠 **In quale casa**: la lettera dell'amministratore intestata alla mamma va nella **casa della mamma** (con la sua amministrazione);
+- 👤 **Di chi è**: la carta d'identità della mamma va fra i **documenti della mamma**; il referto della mamma va nei **suoi documenti sanitari**;
+- 📦 **Va spostato in**: un referto finito in Casa o in I miei documenti va in **Salute** della persona giusta; un documento d'identità finito in Casa va in **I miei documenti**.
+
+I documenti **nuovi** si leggono **da soli** appena li carichi (in sottofondo): quando riapri la sezione trovi la proposta. Niente si sposta senza **✅ Applica**. Lo stesso vale per i tuoi documenti.""",
+                      "di chi è intestatario destinatario mamma madre persona casa amministrazione salute spostare sezione giusta codice fiscale nome cognome documenti proposta"),
+    "x_biglietto": ("📇 Biglietto da visita nei Numeri utili",
+                    """In **Casa, Salute, Lavoro, Auto e Animali → 📞 Numeri utili → ➕ Aggiungi** c'è **📇 Fotografa un biglietto da visita**.
+1. Scatta la foto (anche fronte e retro) e tocca **🔎 Leggi il biglietto**.
+2. L'IA scrive da sola **nome o ditta, persona di riferimento, mestiere, telefono, cellulare, email, sito, indirizzo, orari** (la partita IVA va nelle note). **Controlla** e correggi se serve.
+3. Se avete già usato le sue prestazioni spunta **✅ Abbiamo già usato le sue prestazioni** e scrivi **quando** e **cosa ha fatto** (e com'è andata). C'è anche il campo **📝 Note**.
+4. Tocca **✅ Salva**.
+
+Nella scheda trovi i tasti per contattarlo subito: **📞 Chiama, 💬 WhatsApp, ✉️ Email, ✈️ Telegram, 💬 SMS** (il +39 si aggiunge da solo).""",
+                    "biglietto da visita foto numeri utili contatti telefono whatsapp email telegram sms già usato lavori fatti quando note artigiano"),
     "l_festivita": ("📅 Giorni di festa nel Controllo ore",
                     """In **Lavoro → 🧮 Controllo ore**, dopo aver caricato il foglio delle ore e la busta paga, c'è **📅 Giorni di festa**.
 
@@ -131,7 +154,8 @@ Le feste vengono da **Nager.Date** (gratuito, senza chiave); se non risponde le 
                     "festivi festa giorni di festa pasquetta patrono san giovanni controllo ore busta paga festivo 65% straordinario"),
 }
 GA_DOVE = {"x_diario": ("utilita",), "f_ia_documenti": ("farmacia",), "f_numeri_doc": ("farmacia", "documenti"), "f_gruppo": ("farmacia",), "f_wiki": ("farmacia",),
-           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",), "x_lettore": ("documenti", "casa", "lavoro", "auto", "utilita")}
+           "x_meteo": ("farmacia", "auto", "utilita"), "x_voci_libere": ("utilita", "casa", "farmacia", "lavoro", "auto"), "x_lingua": ("utilita", "dispensa"), "l_festivita": ("lavoro",), "x_lettore": ("documenti", "casa", "lavoro", "auto", "utilita"),
+           "x_smistamento": ("documenti", "casa", "farmacia", "utilita"), "x_biglietto": ("casa", "farmacia", "lavoro", "auto", "animali", "utilita")}
 
 GA_NOVITA = [
     ("nv_diario", "📖", "Diario dei ricordi", "Utilità → 🎂 Compleanni → bottone verde ⏻ nella scheda: foto, testi, icone, musica"),
@@ -140,6 +164,8 @@ GA_NOVITA = [
     ("nv_meteo", "🌦️", "Avvisi meteo", "Utilità → 🌦️ Avvisi meteo: scegli la tua città"),
     ("nv_wiki", "📖", "Cos'è?", "Salute → Documenti sanitari e Medicinali: spiegazione semplice da Wikipedia"),
     ("nv_altro", "✍️", "Nomi a scelta", "Negli elenchi con «Altro»: scrivi il nome che vuoi"),
+    ("nv_smista", "👥", "Di chi è il documento", "L'IA mette i documenti della mamma nelle sue cose: casa, salute, documenti"),
+    ("nv_biglietto", "📇", "Biglietto da visita", "Numeri utili → ➕ Aggiungi → 📇 Fotografa un biglietto da visita"),
 ]
 GA_NOV_K = {}
 

@@ -176,6 +176,10 @@ def sc_tasti(voci, chiave):
 
 def sc_wa(n):
     c = (cc_cifre(n) if "cc_cifre" in globals() else "".join(ch for ch in str(n or "") if ch.isdigit() or ch == "+")).lstrip("+")
+    if c.startswith("00"):
+        c = c[2:]
+    elif len(c) in (9, 10) and c[:1] in ("0", "3") and not str(n or "").strip().startswith("+"):
+        c = "39" + c                                                       # numero italiano scritto senza +39
     return f"https://wa.me/{c}" if len(c) >= 6 else ""
 
 
