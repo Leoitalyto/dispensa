@@ -28,7 +28,7 @@ IL_FORNITORI = {
                  "testo": ["deepseek-chat", "deepseek-v4-flash"], "link": "https://platform.deepseek.com/api_keys",
                  "costo": "a pagamento: ricarica minima di pochi dollari, ogni documento costa meno di un centesimo", "dati": "server in Cina; i dati non servono ad addestrare (secondo le condizioni)"},
     "gemini": {"nome": "Google Gemini", "base": "https://generativelanguage.googleapis.com/v1beta/openai", "secret": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-               "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-2.5-flash"], "testo": ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"],
+               "vista_re": r"^gemini-(\d+(?:\.\d+)?)-flash(?:-latest)?$", "vista": ["gemini-flash-latest", "gemini-flash-lite-latest"], "testo": ["gemini-flash-latest", "gemini-flash-lite-latest"],
                "link": "https://aistudio.google.com/apikey", "costo": "gratis, con un tetto di richieste al minuto e al giorno",
                "dati": "con la chiave gratuita Google può usare i testi per migliorare i modelli"},
     "mistral": {"nome": "Mistral", "base": "https://api.mistral.ai/v1", "secret": ["MISTRAL_API_KEY"], "vista_cap": True, "pref_testo": [r"mistral-small-latest", r"mistral-medium-latest", r"mistral-large-latest"],
@@ -154,7 +154,7 @@ def il_modelli(prov, vista=True):
     elenco = _il_elenco_modelli(prov, _il_hl.sha1(il_chiave(prov).encode()).hexdigest()[:8])
     ids = [m["id"] for m in elenco]
     scelti = []
-    if cfg.get("vista_re") and ids and vista:
+    if cfg.get("vista_re") and ids:
         cand = []
         for i in ids:
             m = _il_re.match(cfg["vista_re"], i)
@@ -182,9 +182,10 @@ def il_modelli(prov, vista=True):
             out.append(m)
     with _IL_BLOCCO:
         buono = _IL_STATO["modello"].get((prov, vista))
-    if buono in out:
-        out.remove(buono)
-        out.insert(0, buono)
+    if buono:
+        if buono in out:
+            out.remove(buono)
+        out.insert(0, buono)                                              # quello che ha funzionato (o che il servizio ha suggerito) per primo
     return out[:5]
 
 
@@ -264,6 +265,16 @@ def il_chiama(prov, istruzioni, testo, immagini=(), max_tokens=2500, timeout=120
 
 
 def _il_gemini(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max):
+    if getattr(_il_gemini, "_dentro", False):
+        return _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max)
+    _il_gemini._dentro = True
+    try:
+        return _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max)
+    finally:
+        _il_gemini._dentro = False
+
+
+def _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_max):
     """Google Gemini con l'API generateContent. Pensiero ridotto al minimo (prima i modelli «pensavano» e non rispondevano in tempo)."""
     parti = [{"text": testo}] + [{"inline_data": {"mime_type": "image/jpeg", "data": _il_b64.b64encode(im).decode()}} for im in immagini]
     ultimo = "modello"
@@ -314,6 +325,11 @@ def _il_gemini(key, istruzioni, testo, immagini, max_tokens, timeout, modelli_ma
                 return "", "limite"
             if r.status_code == 400 and tentativo == 0 and pensiero:
                 continue                                                  # non accetta il «pensiero ridotto»: riprovo senza
+            m_sugg = _il_re.search(r"models/(gemini-[\w.\-]+)", r.text or "") if r.status_code == 404 else None
+            if m_sugg and m_sugg.group(1) != modello:                       # Google dice quale modello usare al suo posto: lo uso subito
+                with _IL_BLOCCO:
+                    _IL_STATO["modello"][("gemini", bool(immagini))] = m_sugg.group(1)
+                return _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, 1) if modelli_max > 1 else ("", "modello")
             ultimo = "modello" if r.status_code in (400, 404) else "servizio"
             break
     return "", ultimo
