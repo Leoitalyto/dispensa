@@ -206,7 +206,7 @@ LU_CHI_REGOLE = ("Il destinatario di una lettera o bolletta è di solito nel riq
                  "Scrivi il nome come è scritto, senza titoli (Sig., Sig.ra, Dott.).")
 
 
-def lu_leggi(files, sezione, tipi, contesto, testo=""):
+def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
     """files = [(nome, mime, byte)] (fronte, retro, pagine). → {tipo, campi, problemi, fonti, dubbi} oppure {} se l'IA non è disponibile."""
     if not lu_attivo():
         return {}
@@ -221,12 +221,12 @@ def lu_leggi(files, sezione, tipi, contesto, testo=""):
         return {}
     # primo tempo: che documento è
     t1, f1 = il_leggi_campi(contesto, {"tipo": "uno di: " + " | ".join(tipi), **LU_CHI_CAMPI}, testo=testo, immagini=immagini, quante=1,
-                            regole=LU_CHI_REGOLE)
+                            regole=LU_CHI_REGOLE + (("\n" + memoria) if memoria else ""))
     tipo = t1.get("tipo") if t1.get("tipo") in tipi else ""
     # secondo tempo: la scheda su misura
     campi_s, regole = _lu_scheda(tipo, sezione)
     critici = [k for k in ("numero", "scadenza", "data_doc", "importo", "competenza", "data", "netto") if k in campi_s][:3]
-    c2, f2 = il_leggi_campi(f"{contesto}. È un documento di tipo «{tipo or 'non chiaro'}»", campi_s, testo=testo, immagini=immagini, quante=2, critici=critici, regole=regole)
+    c2, f2 = il_leggi_campi(f"{contesto}. È un documento di tipo «{tipo or 'non chiaro'}»", campi_s, testo=testo, immagini=immagini, quante=2, critici=critici, regole=(regole or "") + (("\n" + memoria) if memoria else ""))
     dubbi = c2.pop("_dubbi", [])
     campi = {k: v for k, v in c2.items() if not k.startswith("_")}
     for k in ("numero", "targa", "telaio", "cf"):
@@ -551,6 +551,7 @@ def _lu_salva_esito(percorso, sez, did, voce):
 
 
 def _lu_avvia(sez, d, tutti=False, solo=None):
+    memoria = lu_memoria_regole(d, sez)
     k = (_lu_chi(), sez)
     cfg = LU_SEZIONI[sez]
     docs = [dict(x) for x in lu_da_controllare(sez, d, tutti) if solo is None or x.get("id") in solo][:80]
@@ -582,7 +583,7 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
         files = cfg["file"](x)
         if not files:
             return {"errore": "file non trovato"}
-        letto = lu_leggi(files, sez, tipi, cfg["contesto"])
+        letto = lu_leggi(files, sez, tipi, cfg["contesto"], memoria=memoria)
         if not letto:
             return {"errore": "nessun servizio ha risposto"}
         return _lu_con_dest(sez, x, letto)
@@ -723,9 +724,48 @@ def lu_ui_persone():
 _LU_ETICH_DEST = {"profilo": "👤 Di chi è", "casa_id": "🏠 In quale casa", "sezione": "📦 Va spostato in"}
 
 
-def _lu_salva_conferma(sez, scelti, tutti_ids):
-    """Applica le proposte scelte; tutte diventano «controllate»."""
+# ---------------------------------------------------------------------------------------------------------------------
+# 8. IMPARARE DALLE CORREZIONI: quello che correggi prima di applicare (o il tipo che rifiuti) diventa una regola per le letture dopo
+# ---------------------------------------------------------------------------------------------------------------------
+LU_MEMORIA_MAX = 60
+
+
+def _lu_chi_emette(x):
+    for k in ("ente", "fornitore", "emittente", "compagnia", "datore", "clinica", "veterinario", "titolo"):
+        v = str(x.get(k) or (x.get("campi") or {}).get(k) or "").strip()
+        if v:
+            return v[:60]
+    return ""
+
+
+def lu_memoria_aggiungi(d, sez, voce):
+    m = d.setdefault("lu_memoria", {}).setdefault(sez, [])
+    chiave = (voce.get("campo"), str(voce.get("letto")), str(voce.get("giusto")), voce.get("ente"), voce.get("rifiutato", False))
+    m[:] = [v for v in m if (v.get("campo"), str(v.get("letto")), str(v.get("giusto")), v.get("ente"), v.get("rifiutato", False)) != chiave]
+    m.append(voce)
+    del m[:-LU_MEMORIA_MAX]
+
+
+def lu_memoria_regole(d, sez):
+    """Le correzioni passate, scritte come regole per l'IA (le più recenti, al massimo 15)."""
+    m = ((d or {}).get("lu_memoria") or {}).get(sez) or []
+    if not m:
+        return ""
+    righe = []
+    for v in m[-15:]:
+        dove = f"per un documento di «{v['ente']}»" if v.get("ente") else "per un documento simile"
+        dove += f" (tipo «{v['tipo']}»)" if v.get("tipo") else ""
+        if v.get("rifiutato"):
+            righe.append(f"- {dove}: il campo «{v.get('campo')}» NON è «{v.get('letto')}».")
+        else:
+            righe.append(f"- {dove}: il campo «{v.get('campo')}» era stato letto «{v.get('letto')}», il valore giusto era «{v.get('giusto')}».")
+    return "CORREZIONI FATTE DALL'UTENTE IN PASSATO (imparale e non ripetere gli stessi errori):\n" + "\n".join(righe)
+
+
+def _lu_salva_conferma(sez, scelti, tutti_ids, correzioni=None):
+    """Applica le proposte scelte; tutte diventano «controllate». correzioni = {doc_id: {campo: valore giusto}} (si applica quello e si impara)."""
     scelti, tutti_ids = set(scelti), set(tutti_ids)
+    correzioni = correzioni or {}
     ora = _lu_time.strftime("%Y-%m-%dT%H:%M:%S")
     campi_sez = LU_SEZIONI[sez]["campi"]
 
@@ -744,9 +784,17 @@ def _lu_salva_conferma(sez, scelti, tutti_ids):
                     x["casa_id"] = dest["casa_id"]
                 if "sezione" in cam and dest.get("sezione"):
                     da_spostare.append((x, dest))
+                corr = correzioni.get(x["id"]) or {}
                 for k, (_a, b) in cam.items():
                     if k not in campi_sez:
                         continue
+                    if k in corr and str(corr[k]).strip() != str(b):
+                        giusto = str(corr[k]).strip()
+                        lu_memoria_aggiungi(d, sez, {"campo": k, "letto": b, **({"giusto": giusto} if giusto else {"rifiutato": True}),
+                                                     "tipo": x.get("tipo") or pr.get("tipo") or "", "ente": _lu_chi_emette(x), "il": ora})
+                        b = str(corr[k]).strip()
+                        if not b:
+                            continue
                     if k not in x and isinstance(x.get("campi"), dict) and sez == "animali" and k not in ("tipo", "data", "scadenza"):
                         x["campi"][k] = b
                     else:
@@ -754,6 +802,9 @@ def _lu_salva_conferma(sez, scelti, tutti_ids):
                 x["lettura_lu"] = {k: v for k, v in pr.items() if k != "cambi"} | {"il": ora, "applicata": True}
             else:
                 x["lettura_lu"] = {k: v for k, v in pr.items() if k != "cambi"} | {"il": ora, "rifiutata": True}
+                tp = (pr.get("cambi") or {}).get("tipo")
+                if tp and x["id"] in (correzioni.get("_rifiuta_tipo") or set()):
+                    lu_memoria_aggiungi(d, sez, {"campo": "tipo", "letto": tp[1], "rifiutato": True, "tipo": x.get("tipo") or "", "ente": _lu_chi_emette(x), "il": ora})
             x.pop("proposta_lu", None)
         for x, dest in da_spostare:
             _lu_sposta(d, sez, x, dest)
@@ -802,7 +853,7 @@ def lu_pannello(sez):
                 _lu_vivo(sez)
             if pend:
                 st.markdown(f"<div style='font-weight:700;margin:6px 0'>🟡 Proposte da confermare: {len(pend)}</div>", unsafe_allow_html=True)
-                scelti = []
+                scelti, correzioni, rifiuta_tipo = [], {}, set()
                 for x in pend:
                     pr = x["proposta_lu"]
                     st.markdown(f"**📄 {_lu_html.escape(_lu_titolo(x))}**")
@@ -814,16 +865,32 @@ def lu_pannello(sez):
                         avvisi.insert(0, "👤 Intestato a: " + str(pr["chi"]["intestatario"])[:60] + ("" if (pr.get("dest") or {}).get("persona") else " (non so chi è: scrivilo in «👥 Di chi sono i documenti»)"))
                     if avvisi:
                         st.caption(" · ".join(avvisi))
+                    dati_c = [(k, b) for k, (a, b) in (pr.get("cambi") or {}).items() if k in LU_SEZIONI[sez]["campi"]]
+                    if dati_c:
+                        with st.popover("✏️ Correggi prima di applicare (l'IA impara)", width="stretch"):
+                            st.caption("Scrivi il valore giusto: lo applico e **me lo ricordo** per le prossime letture. Lascia vuoto per non cambiare quel dato.")
+                            cor = {}
+                            for k, b in dati_c:
+                                v = st.text_input(LU_SEZIONI[sez]["campi"].get(k, k), value=str(b), key=f"lu_cor_{sez}_{x['id']}_{k}")
+                                if v.strip() != str(b):
+                                    cor[k] = v.strip()
+                            if "tipo" in dict(dati_c):
+                                if st.checkbox("Il tipo proposto è sbagliato: non propormelo più per documenti così", key=f"lu_rt_{sez}_{x['id']}"):
+                                    rifiuta_tipo.add(x["id"])
+                            if cor:
+                                correzioni[x["id"]] = cor
                     if st.checkbox("Applica a questo documento", value=True, key=f"lu_sc_{sez}_{x['id']}"):
                         scelti.append(x["id"])
                 c1, c2 = st.columns(2, gap="small")
                 ids = [x["id"] for x in pend]
                 if c1.button(f"✅ Applica ({len(scelti)})", key=f"lu_app_{sez}", type="primary", width="stretch", disabled=not scelti):
-                    _lu_salva_conferma(sez, scelti, ids)
-                    st.toast(f"Aggiornati {len(scelti)} documenti")
+                    for i_ in rifiuta_tipo:                                  # tipo rifiutato: quel dato non si applica e si impara
+                        correzioni.setdefault(i_, {})["tipo"] = ""
+                    _lu_salva_conferma(sez, scelti, ids, correzioni | ({"_rifiuta_tipo": rifiuta_tipo} if rifiuta_tipo else {}))
+                    st.toast(f"Aggiornati {len(scelti)} documenti" + (" · ho imparato le tue correzioni" if correzioni or rifiuta_tipo else ""))
                     st.rerun()
                 if c2.button("✖ Non applicare", key=f"lu_no_{sez}", width="stretch"):
-                    _lu_salva_conferma(sez, [], ids)
+                    _lu_salva_conferma(sez, [], ids, {"_rifiuta_tipo": rifiuta_tipo} if rifiuta_tipo else None)
                     st.rerun()
     with st.expander("🤖 Rileggi e ricataloga con l'IA"):
         if not lu_attivo():
