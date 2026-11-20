@@ -1711,7 +1711,8 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
         extra += f"<br><small>📝 {_sp_e(d['conclusioni'][:260])}{'…' if len(d['conclusioni']) > 260 else ''}</small>"
     if d.get("controllo_indicato") or d.get("prossimo_controllo"):
         extra += f"<br><small>🔁 {_sp_e(d.get('controllo_indicato', ''))}" + (f" · entro il {_sp_data_it(d['prossimo_controllo'])}" if d.get("prossimo_controllo") else "") + "</small>"
-    num = f"<span style='display:inline-block;min-width:2.2em;padding:0 6px;margin-right:6px;border-radius:8px;background:#0f766e;color:#fff;font-weight:800'>N° {_sp_e(d['num'])}</span>" if d.get("num") else ""
+    n_ = (stt_numeri_docsan(p.get("docsan") or []) if "stt_numeri_docsan" in globals() else {}).get(d.get("id"))
+    num = f"<span style='display:inline-block;min-width:2.2em;padding:0 6px;margin-right:6px;border-radius:8px;background:#0f766e;color:#fff;font-weight:800'>N° {n_}</span>" if n_ else ""
     st.markdown(f"<div class='sp-card'>{num}<b>{_sp_e(d.get('titolo'))}</b>" + (f"<br><small>{_sp_e(badge)}</small>" if badge else "") + f"<br><small>{_sp_e(righe)}</small>" + extra
                 + (f"<br><small>{_sp_e(d.get('note'))}</small>" if d.get("note") else "") + "</div>", unsafe_allow_html=True)
     ref = d.get("file") or {}
@@ -1813,11 +1814,12 @@ def sp_modulo_docsan(pid):
     q = _sp_norm_nome(cerca)
     vedi = st.session_state.setdefault("sp_vedi", [])
     def _pagliaio(d):
-        return " ".join(_sp_norm_nome(" ".join(str(d.get(k) or "") for k in ("titolo", "esame", "prestazione", "specialita", "medico", "struttura", "note", "esami_elenco", "conclusioni", "tipo")))) + " " + _sp_data_it(d.get("data")) + " " + str(d.get("data") or "") + (f" n{d['num']} n°{d['num']} {d['num']}" if d.get("num") else "")
+        return " ".join(_sp_norm_nome(" ".join(str(d.get(k) or "") for k in ("titolo", "esame", "prestazione", "specialita", "medico", "struttura", "note", "esami_elenco", "conclusioni", "tipo")))) + " " + _sp_data_it(d.get("data")) + " " + str(d.get("data") or "")
     visibili = [d for d in docs if all(x in _pagliaio(d) for x in q)] if q else docs
     _n_cerca = str(cerca or "").strip().lower().replace("n°", "").replace("n.", "").lstrip("n").strip()
-    if _n_cerca.isdigit() and any(str(d.get("num")) == _n_cerca for d in docs):
-        visibili = [d for d in docs if str(d.get("num")) == _n_cerca]               # cerca per numero: solo quel documento
+    _numeri = stt_numeri_docsan(p.get("docsan") or []) if "stt_numeri_docsan" in globals() else {}
+    if _n_cerca.isdigit() and any(str(_numeri.get(d.get("id"))) == _n_cerca for d in docs):
+        visibili = [d for d in docs if str(_numeri.get(d.get("id"))) == _n_cerca]   # cerca per numero: solo quel documento
     if not visibili:
         st.warning("Nessun documento corrisponde.")
         return

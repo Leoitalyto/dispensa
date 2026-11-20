@@ -341,41 +341,23 @@ def _stt_cosa_e(d, titolo, strut):
     return cosa[:160]
 
 
-def stt_numera_docsan(docs):
-    """Dà a ogni documento sanitario un NUMERO fisso (N° 1, 2, 3…): i più vecchi hanno i numeri più bassi, quelli nuovi prendono il numero dopo l'ultimo.
-    Il numero non cambia più: il medico può scrivere «portami il 4, il 12 e il 17» guardando il riepilogo. Ritorna True se ha dato numeri nuovi."""
-    usati = [int(d["num"]) for d in docs if str(d.get("num") or "").isdigit()]
-    senza = [d for d in docs if not str(d.get("num") or "").isdigit()]
-    if not senza:
-        return False
-    prossimo = max(usati or [0]) + 1
-    for d in sorted(senza, key=lambda x: (x.get("data") or x.get("data_referto") or "9999", str(x.get("id")))):
-        d["num"] = prossimo
-        prossimo += 1
-    return True
+def stt_numeri_docsan(docs):
+    """{id del documento: N°}. Il N° 1 è il documento PIÙ RECENTE, poi a scendere (come nel riepilogo PDF, che è in ordine di data).
+    Il numero dipende dall'ordine: se arriva un documento nuovo, gli altri scalano di uno (il riepilogo stampato ha la sua data)."""
+    ordinati = sorted(docs or [], key=lambda x: (x.get("data") or x.get("data_referto") or "", str(x.get("id"))), reverse=True)
+    return {d.get("id"): n for n, d in enumerate(ordinati, 1)}
 
 
 def stt_numeri_salva(pid):
-    """Se nella scheda di questa persona ci sono documenti senza numero, li numera e salva (una sola scrittura)."""
-    try:
-        f = _fa_dati()
-        p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
-        if not any(not str(d.get("num") or "").isdigit() for d in p.get("docsan") or []):
-            return
-        def _m(f_):
-            for pr in f_.get("profili") or []:
-                if pr.get("id") == pid:
-                    stt_numera_docsan(pr.get("docsan") or [])
-        _fa_salva(_m, "Salute: documenti numerati")
-    except Exception:
-        pass
+    """(non serve più: i numeri si calcolano dall'ordine di data)"""
+    return
 
 
 def _stt_righe_docsan(p):
     pr = p["p"]
     righe = []
-    stt_numera_docsan(pr.get("docsan", []) or [])                     # sulla copia del riepilogo: se mancano, i numeri sono gli stessi che si salveranno
-    for d in sorted(pr.get("docsan", []) or [], key=lambda x: x.get("data") or x.get("data_referto") or "", reverse=True):
+    numeri = stt_numeri_docsan(pr.get("docsan", []) or [])
+    for d in sorted(pr.get("docsan", []) or [], key=lambda x: (x.get("data") or x.get("data_referto") or "", str(x.get("id"))), reverse=True):
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else "") or d.get("esame", "")
         medico = sr_medico_pulito(d.get("medico")) if "sr_medico_pulito" in globals() else d.get("medico", "")
         strut = sr_struttura_pulita(d.get("struttura"), pr.get("nome", "")) if "sr_struttura_pulita" in globals() else d.get("struttura", "")
@@ -383,7 +365,7 @@ def _stt_righe_docsan(p):
         if "sr_conclusioni_valide" in globals() and not sr_conclusioni_valide(concl):
             concl = ""
         contenuto = d.get("esami_elenco") or concl or _stt_cosa_e(d, titolo, strut)                                      # per gli esami: cosa contengono; per le visite: le conclusioni
-        righe.append([str(d.get("num") or ""), _stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), medico, strut,
+        righe.append([str(numeri.get(d.get("id"), "")), _stt_fd(d.get("data") or d.get("data_referto")), d.get("tipo", ""), titolo, d.get("specialita", ""), medico, strut,
                       (str(contenuto)[:160] + ("…" if len(str(contenuto)) > 160 else "")), _stt_nomi_file(d)])
     return righe
 
