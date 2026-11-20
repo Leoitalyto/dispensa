@@ -325,7 +325,7 @@ def _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modell
                 _il_metti_pausa("gemini", 6 * 3600, "chiave non valida")
                 return "", "chiave"
             if r.status_code == 429:
-                if _il_re.search(r"limit:\s*0|free_tier|FreeTier|free tier", r.text or "", _il_re.I):
+                if _il_re.search(r"limit:\s*0|free_tier|FreeTier|free tier", getattr(r, "text", "") or "", _il_re.I):
                     ultimo = "limite"                                     # questo modello non è nel piano gratuito: provo il prossimo
                     break
                 _il_metti_pausa("gemini", 20 * 60, "troppe richieste")
