@@ -44,7 +44,7 @@ IL_FORNITORI = {
                    "vista": ["openrouter/free"], "testo": ["deepseek/deepseek-chat-v3.1:free", "openrouter/free"], "link": "https://openrouter.ai/keys",
                    "costo": "gratis con i modelli «:free» (circa 50 richieste al giorno)", "dati": "dipende dal modello gratuito: alcuni possono usare i dati"},
     "nvidia": {"nome": "NVIDIA NIM", "base": "https://integrate.api.nvidia.com/v1", "secret": ["NVIDIA_API_KEY"],
-               "pref_vista": [r"llama-4-maverick", r"llama-3\.2-90b-vision", r"vl", r"vision"], "pref_testo": [r"llama-3\.3-70b", r"deepseek-v3", r"gpt-oss-120b", r"llama-4-maverick"],
+               "pref_vista": [r"gemma-4-31b", r"nemotron.*omni", r"gemma-3-12b", r"llama-4-maverick", r"muse", r"vl", r"vision"], "pref_testo": [r"mistral-large", r"kimi-k\d", r"gemma-4-31b", r"nemotron-3\.5-lightning", r"minimax", r"llama-3\.3-70b", r"gpt-oss-120b"],
                "vista": ["meta/llama-4-maverick-17b-128e-instruct", "meta/llama-3.2-90b-vision-instruct", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"],
                "testo": ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-v3.1"], "link": "https://build.nvidia.com/settings/api-keys",
                "costo": "gratis per prove (circa 40 richieste al minuto), serve il numero di telefono", "dati": "servizio per sviluppatori"},
@@ -173,6 +173,10 @@ def il_modelli(prov, vista=True):
         scelti += [m for m in base if m in ids]
         for rx in cfg.get("pref_vista" if vista else "pref_testo") or []:          # dall'elenco VERO del servizio (i nomi cambiano spesso)
             scelti += [i for i in ids if _il_re.search(rx, i, _il_re.I) and not _il_re.search(r"guard|whisper|tts|embed|orpheus|prompt", i, _il_re.I)][:1]
+        if not any(m in ids for m in scelti):                                     # nessun nome conosciuto: scelgo io dall'elenco un modello per parlare
+            no = r"embed|guard|safety|retriev|detector|calibration|starcoder|coder|reward|tts|whisper|rerank|pii|parse|ocr-|clip|diffusion|image-gen|video|audio"
+            si = r"vl|vision|omni|gemma|llama-4|muse|pixtral" if vista else r"instruct|-it|chat|flash|pro|large|lightning|ultra|kimi|mistral|gemma|llama|qwen|minimax"
+            scelti += [i for i in ids if _il_re.search(si, i, _il_re.I) and not _il_re.search(no, i, _il_re.I)][:3]
         scelti = [m for m in scelti if m in ids] + [m for m in scelti if m not in ids]   # prima quelli che esistono davvero
     scelti += base
     visti, out = set(), []
@@ -321,6 +325,9 @@ def _il_gemini_una(key, istruzioni, testo, immagini, max_tokens, timeout, modell
                 _il_metti_pausa("gemini", 6 * 3600, "chiave non valida")
                 return "", "chiave"
             if r.status_code == 429:
+                if _il_re.search(r"limit:\s*0|free_tier|FreeTier|free tier", r.text or "", _il_re.I):
+                    ultimo = "limite"                                     # questo modello non è nel piano gratuito: provo il prossimo
+                    break
                 _il_metti_pausa("gemini", 20 * 60, "troppe richieste")
                 return "", "limite"
             if r.status_code == 400 and tentativo == 0 and pensiero:
@@ -825,7 +832,7 @@ def il_blocco_utilita():
             if ha:
                 if st.button("🧪 Prova questa chiave", key=f"il_prova_{prov}", width="stretch"):
                     with st.spinner("Provo… (al massimo un minuto)"):
-                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=400, timeout=30, modelli_max=2)
+                        r, err = il_chiama(prov, "Rispondi solo con la parola OK.", "Scrivi OK", max_tokens=400, timeout=30, modelli_max=3)
                     if r:
                         st.success(f"Funziona ✅ (modello: {il_modelli(prov, False)[0]})")
                     else:
