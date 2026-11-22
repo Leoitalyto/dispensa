@@ -3985,7 +3985,7 @@ def schermata_casa():
         st.markdown(f"##### 🏡 {html.escape(next((x['nome'] for x in ca_case(c) if x['id'] == sel_c), 'Casa principale'))}")
     if "cb_barra_casa" in globals():
         cb_barra_casa(c)
-    t5, t1, t2, t3, t4 = st.tabs(["🏢 Amministrazione", "🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti"])      # Amministrazione è la prima scheda
+    t5, t1, t2, t3, t4, t6 = st.tabs(["🏢 Amministrazione", "🏠 Beni", "📚 Documenti", "🔧 Manutenzioni", "📇 Riferimenti", "🎛️ Domotica"])      # Amministrazione è la prima scheda
     with t1:
         if getattr(t1, "open", True):                                  # si disegna solo la scheda aperta (più veloce)
             _ca_tab_beni(cv)
@@ -4001,6 +4001,12 @@ def schermata_casa():
                 lv_tab_contatti(cv, "casa")
             else:
                 st.info("La rubrica dei riferimenti non è disponibile.")
+    with t6:
+        if getattr(t6, "open", True):
+            if "dm_tab" in globals():                                      # la centrale domotica (domotica.py)
+                dm_tab(c, sel_c)
+            else:
+                st.info("La domotica non è disponibile adesso.")
     with t5:
         if getattr(t5, "open", True):
             if "ca_amm_tab" in globals():                                  # la scheda Amministrazione (casa_amministrazione.py); se manca, le altre quattro funzionano uguale
