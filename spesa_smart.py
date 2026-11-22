@@ -1014,6 +1014,7 @@ _SS_CSS = """<style>
 .ss-card .ss-pu{flex:0 0 auto;text-align:right;font-size:1.9rem;font-weight:900;color:#00704f;line-height:1.05;white-space:nowrap;letter-spacing:-.5px}
 .ss-card .ss-pu small{display:block;font-size:.7rem;font-weight:700;color:#35514a;letter-spacing:0}
 .ss-card .ss-pu.pz{font-size:1.15rem;color:#8a6d00}
+.ss-card img.ss-foto{float:none;flex:0 0 auto;width:64px;height:64px;margin:0;object-fit:contain;border-radius:10px;background:#fff;border:1px solid #d6e4df}
 .ss-promo{display:inline-block;background:#ff3d71;color:#fff;font-weight:900;border-radius:10px;padding:1px 8px;font-size:.8rem;margin-left:4px}
 .ss-ver{display:inline-block;background:#ffb300;color:#3a2600;font-weight:800;border-radius:10px;padding:1px 8px;font-size:.78rem}
 .ss-scen{border-radius:18px;padding:12px 14px;margin:10px 0;background:rgba(10,30,26,.94);color:#e8fff8;border:2px solid rgba(0,230,168,.35)}
@@ -1402,7 +1403,8 @@ def _ss_pu_html(pu, base):
 def _ss_card_dcm(ss, x):
     p, m = x["prodotto"], x["migliore"]
     n = ss_trova(ss, "negozi", m["negozio_id"])
-    img = f"<img src='{_ss_esc(p['immagine'])}' alt=''>" if str(p.get("immagine", "")).startswith("http") else ""
+    img = (f"<img class='ss-foto' src='{_ss_esc(p['immagine'])}' alt=''>"
+           if str(p.get("immagine", "")).startswith(("http", "data:image/")) else "")
     r = m["rilevazione"]
     promo = (f"<span class='ss-promo'>OFFERTA" + (f" fino al {ss_data_it(r.get('promo_al'))}" if r.get("promo_al") else "") + "</span>") if m["offerta"] else ""
     tess = " 💳 con tessera" if r.get("tessera") else ""
@@ -1412,7 +1414,7 @@ def _ss_card_dcm(ss, x):
         righe += (f"<li>{_ss_esc(ss_nome_negozio(nn))}: <b>{ss_euro(c['prezzo'])}</b>" + (f" · {ss_fmt_unitario(c['unitario'], c['base'])}" if c["unitario"] else "")
                   + (" <span class='ss-promo'>offerta</span>" if c["offerta"] else "") + f" <small>({ss_data_it(c['rilevazione'].get('data'))})</small></li>")
     avviso = "" if m["confrontabile"] else "<div class='m'>⚠️ Confezioni misurate in unità diverse (es. litri e kg): confronto solo sul prezzo della confezione.</div>"
-    return (f"<div class='ss-card'><div class='ss-top'><div class='ss-sx'>{img}<div class='t'>{_ss_esc(p.get('nome'))}</div><div class='m'>{_ss_esc(' · '.join(x_ for x_ in (p.get('marca'), ss_fmt_formato(p)) if x_))}</div>"
+    return (f"<div class='ss-card'><div class='ss-top'>{img}<div class='ss-sx'><div class='t'>{_ss_esc(p.get('nome'))}</div><div class='m'>{_ss_esc(' · '.join(x_ for x_ in (p.get('marca'), ss_fmt_formato(p)) if x_))}</div>"
             f"<div class='big'>{ss_euro(m['prezzo'])} {promo}</div></div>{_ss_pu_html(m['unitario'], m['base'])}</div>"
             f"<div class='m'>🏪 <b>{_ss_esc(ss_nome_negozio(n))}</b>{tess} · rilevato il {ss_data_it(r.get('data'))}"
             + (f" · risparmi fino al {x['risparmio_pct']:.0f}%" if x["risparmio_pct"] >= 1 else "") + f"</div>{avviso}"
@@ -1429,12 +1431,19 @@ def _ss_v_dcm(ss, disp):
         st.info("Nessun prezzo valido oggi" + (" per questa ricerca" if filtro else "") + ". I prezzi più vecchi di 30 giorni e le offerte finite non valgono: aggiungine con **⚡ Inserisci un prezzo**.")
     if "sf_banner_senza_peso" in globals():
         sf_banner_senza_peso(ss, "dcm", con_elenco=False)
+    if "sf_dcm_barra_lista" in globals():
+        sf_dcm_barra_lista(ss, righe[:60])
     for x in righe[:60]:
         st.markdown(_ss_card_dcm(ss, x), unsafe_allow_html=True)
         if ss_senza_formato(x["prodotto"]) and "sf_widget_formato" in globals():
             sf_widget_formato(ss, x["prodotto"], "dcm_" + x["prodotto"]["id"], compatto=True)
-        if "sf_dialogo_modifica" in globals() and st.button("✏️ Modifica questo prezzo o il prodotto", key="dcm_m_" + x["migliore"]["rilevazione"]["id"], width="stretch"):
+        if "sf_dcm_tasto_lista" in globals():
+            sf_dcm_tasto_lista(x)
+        b1, b2 = st.columns([3, 2], gap="small")
+        if "sf_dialogo_modifica" in globals() and b1.button("✏️ Modifica prezzo o prodotto", key="dcm_m_" + x["migliore"]["rilevazione"]["id"], width="stretch"):
             sf_dialogo_modifica(x["migliore"]["rilevazione"]["id"])
+        if "sf_dialogo_foto" in globals() and b2.button("📷 " + ("Cambia foto" if x["prodotto"].get("immagine") else "Aggiungi foto"), key="dcm_f_" + x["prodotto"]["id"], width="stretch"):
+            sf_dialogo_foto(x["prodotto"]["id"])
     da_ver = [(p, c) for p in ss["prodotti"] for c in ss_prezzi_correnti(ss, p["id"], ss_oggi(), anche_da_verificare=True) if c["stato"] == "da verificare"]
     if da_ver:
         with st.expander(f"🟠 Prezzi da verificare ({len(da_ver)}): più vecchi di 30 giorni, NON usati nei confronti"):
@@ -1817,6 +1826,11 @@ def _ss_v_ottimizzata(ss, disp):
                             help="Se lo lasci a 0 conto solo i prezzi. L'app non ti manda in più negozi se il risparmio è minimo.")
     if abs(costo - costo0) > 0.001:
         _ss_salva(lambda s_: s_["impostazioni"].__setitem__("costo_negozio", costo), "costo spostamento")
+    if "sf_ottimizzata_a_scelta" in globals():
+        modo = st.radio("Come vuoi dividere la spesa?", ["✅ Lo decide l'app (A, B, C)", "🏪 Scelgo io i negozi"], horizontal=True, key="sf_ott_modo")
+        if modo.startswith("🏪"):
+            sf_ottimizzata_a_scelta(ss, righe)
+            return
     o = ss_ottimizza(ss, righe, ss_oggi(), costo)
     if o["mancano"]:
         st.warning("⚠️ **Confronto incompleto**: per " + str(len(o["mancano"])) + " prodotti non c'è un prezzo valido oggi ("
@@ -2017,6 +2031,10 @@ def _ss_v_prodotti(ss, disp):
                     + (f" · `{p['ean']}`" if p.get("ean") else "") + (f" · {n_pr} prezzi" if n_pr else "") + (" · _dalla Dispensa_" if p.get("_virtuale") else ""))
         if p.get("_virtuale"):
             continue
+        if str(p.get("immagine") or "").startswith(("http", "data:image/")):
+            c1.markdown(f"<img src='{_ss_esc(p['immagine'])}' style='width:56px;height:56px;object-fit:contain;border-radius:8px;background:#fff'>", unsafe_allow_html=True)
+        if "sf_dialogo_foto" in globals() and c1.button("📷 " + ("Cambia foto" if p.get("immagine") else "Aggiungi foto"), key="ss_pr_foto_" + p["id"]):
+            sf_dialogo_foto(p["id"])
         with c2.popover("✏️"):
             m = _ss_campi_prodotto("ss_pr_" + p["id"], p)
             if st.button("💾 Salva", key="ss_pr_ok_" + p["id"], type="primary", width="stretch"):

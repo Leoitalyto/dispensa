@@ -222,3 +222,183 @@ def sf_dialogo_modifica(rid):
         _ss_salva(lambda s_: ss_elimina(s_, "rilevazioni", rid), "prezzo eliminato")
         st.session_state["ss_msg"] = "🗑️ Prezzo eliminato."
         st.rerun()
+
+
+# ---- «Si può anche aggiungere la foto del prodotto?» (22 novembre 2026)
+def _sf_img_ok(u):
+    u = str(u or "")
+    return u.startswith("http") or u.startswith("data:image/")
+
+
+@st.dialog("📷 Foto del prodotto", width="large")
+def sf_dialogo_foto(pid):
+    """Scatta, carica dal telefono o scegli dall'archivio: sfondo tolto e raddrizzata come nella Dispensa."""
+    ss, disp = _ss_leggi()
+    p = ss_trova(ss, "prodotti", pid)
+    if not p:
+        p = next((x for x in ss_catalogo(ss, disp) if x.get("id") == pid), None)
+    if not p:
+        st.warning("Prodotto non trovato.")
+        return
+    st.markdown(f"**{_ss_esc(p.get('nome'))}**" + (f" · {_ss_esc(p.get('marca'))}" if p.get("marca") else ""))
+    uri = ""
+    try:
+        uri = campo_foto("ssfoto_" + pid, p.get("immagine") or "", archivio=True)
+    except Exception:
+        st.caption("La foto con ritocco non è disponibile adesso: usa il campo qui sotto.")
+    with st.expander("📎 Se la foto non compare, usa questo campo"):
+        alt = st.file_uploader("Scatta o scegli la foto", type=["jpg", "jpeg", "png", "webp"], key="ssfoto_alt_" + pid)
+        if alt is not None and not uri:
+            try:
+                from PIL import Image as _Im
+                import io as _io, base64 as _b64
+                im = _Im.open(_io.BytesIO(alt.getvalue())).convert("RGB")
+                im.thumbnail((640, 640))
+                buf = _io.BytesIO()
+                im.save(buf, "WEBP", quality=80)
+                uri = "data:image/webp;base64," + _b64.b64encode(buf.getvalue()).decode()
+                st.image(uri, width=200)
+            except Exception as ex:
+                st.warning(f"Non riesco a leggere questa foto ({type(ex).__name__}).")
+    c1, c2 = st.columns(2, gap="small")
+    if c1.button("💾 Salva la foto", key="ssfoto_ok_" + pid, type="primary", width="stretch", disabled=not uri):
+        def _m(s_):
+            pr = ss_trova(s_, "prodotti", pid) or (ss_materializza(s_, dict(p)) if "ss_materializza" in globals() else None)
+            if pr is not None:
+                pr["immagine"] = uri
+        _ss_salva(_m, "foto del prodotto")
+        st.session_state["ss_msg"] = "📷 Foto salvata."
+        st.rerun()
+    if p.get("immagine") and c2.button("🗑️ Togli la foto", key="ssfoto_del_" + pid, width="stretch"):
+        _ss_salva(lambda s_: (ss_trova(s_, "prodotti", pid) or {}).pop("immagine", None), "foto tolta")
+        st.session_state["ss_msg"] = "🗑️ Foto tolta."
+        st.rerun()
+
+
+# ---- «I prodotti di Dove costa meno devono poter essere inseriti nella lista ottimizzata e suddivisi per supermercato o negozio a richiesta» (22/11/2026)
+def sf_metti_in_lista(lid, p, quantita=1):
+    """Aggiunge il prodotto alla lista scelta (Dispensa, privata o condivisa) senza doppioni. Ritorna True se nuovo, False se ha sommato/era già."""
+    q = ss_num(quantita, 1) or 1
+    esito = {"nuovo": True}
+    if lid == _SS_LISTA_DISP:
+        _ss_salva_disp(lambda d: esito.__setitem__("nuovo", aggiungi_a_spesa(d, {"nome": p.get("nome"), "marca": p.get("marca", ""), "barcode": p.get("ean", ""), "q": q})),
+                       "dalla classifica alla lista")
+    elif str(lid).startswith("c:"):
+        uid = _ss_uid()
+
+        def _fn(d):
+            l = next((x for x in d.get("liste") or [] if x.get("id") == lid[2:]), None)
+            if not ss_lc_puo(l, uid):
+                raise PermissionError("lista non condivisa con te")
+            esito["nuovo"] = ss_lc_aggiungi(l, p, q, uid)[1]
+            d["versione"] = int(d.get("versione") or 0) + 1
+        salva_file(SS_LC, _fn, "Spesa Smart: lista condivisa")
+    else:
+        def _fp(s_):
+            pr = ss_trova(s_, "prodotti", p["id"]) or ss_materializza(s_, dict(p))
+            gia = next((r for r in s_["liste_righe"] if r.get("lista_id") == lid and r.get("prodotto_id") == pr["id"] and r.get("stato") != "preso"), None)
+            if gia:
+                gia["quantita"] = (ss_num(gia.get("quantita"), 1) or 1) + q
+                esito["nuovo"] = False
+            else:
+                s_["liste_righe"].append({"id": ss_id(), "lista_id": lid, "prodotto_id": pr["id"], "quantita": q, "priorita": "Normale", "stato": "da comprare"})
+        _ss_salva(_fp, "dalla classifica alla lista")
+    return esito["nuovo"]
+
+
+def sf_dcm_barra_lista(ss, righe):
+    """In cima a Dove costa meno: in quale lista mettere i prodotti, «tutti in lista» e il passaggio alla Lista ottimizzata."""
+    with st.container(border=True):
+        st.markdown("**📝 Metti in lista e ottimizza**")
+        lid = _ss_scegli_lista(ss, "ss_dcm_lista")
+        st.session_state["_sf_dcm_lid"] = lid
+        c1, c2 = st.columns(2, gap="small")
+        if righe and c1.button(f"➕ Tutti quelli qui sotto ({len(righe)})", key="sf_dcm_tutti", width="stretch"):
+            nuovi = sum(1 for x in righe if sf_metti_in_lista(lid, x["prodotto"], 1))
+            st.session_state["ss_msg"] = f"📝 {nuovi} prodotti messi in lista" + (f" ({len(righe) - nuovi} c'erano già)." if len(righe) - nuovi else ".")
+            st.rerun()
+        if c2.button("🧮 Vai alla lista ottimizzata", key="sf_dcm_vai", type="primary", width="stretch"):
+            st.session_state["ss_ott_sel_prossima"] = lid
+            _ss_vai("ott")
+            st.rerun()
+
+
+def sf_dcm_tasto_lista(x):
+    lid = st.session_state.get("_sf_dcm_lid", _SS_LISTA_DISP)
+    if st.button("➕ In lista", key="sf_dcm_l_" + x["prodotto"]["id"], width="stretch"):
+        nuovo = sf_metti_in_lista(lid, x["prodotto"], 1)
+        st.toast(f"📝 «{x['prodotto'].get('nome')}» " + ("è in lista." if nuovo else "era già in lista."))
+
+
+def ss_dividi_nei_negozi(ss, righe, negozi_scelti, oggi_=None):
+    """Divide la lista SOLO nei negozi scelti: ogni prodotto va dove costa meno fra quelli. Ritorna {per_negozio:{nid:[voce]}, totale, non_trovati:[riga], mancano:[riga]}."""
+    oggi_ = oggi_ or ss_oggi()
+    scelti = set(negozi_scelti or [])
+    per_neg, tot, non_trovati, mancano = {}, 0.0, [], []
+    for rg in righe:
+        pid = rg.get("prodotto_id")
+        cor = ss_prezzi_correnti(ss, pid, oggi_) if pid else []
+        if not cor:
+            mancano.append(rg)
+            continue
+        qui = [c for c in cor if c["negozio_id"] in scelti]
+        if not qui:
+            non_trovati.append(rg)
+            continue
+        c = min(qui, key=lambda c: c["prezzo"])
+        q = ss_num(rg.get("quantita"), 1) or 1
+        voce = {"riga": rg, "negozio_id": c["negozio_id"], "prezzo": c["prezzo"], "totale": round(c["prezzo"] * q, 2), "unitario": c.get("unitario"), "base": c.get("base"),
+                "offerta": c.get("offerta")}
+        per_neg.setdefault(c["negozio_id"], []).append(voce)
+        tot += voce["totale"]
+    return {"per_negozio": per_neg, "totale": round(tot, 2), "non_trovati": non_trovati, "mancano": mancano}
+
+
+def sf_testo_per_negozio(ss, div):
+    righe = ["🛒 Lista della spesa divisa per negozio"]
+    for nid, voci in div["per_negozio"].items():
+        n = ss_trova(ss, "negozi", nid)
+        righe.append(f"\n🏪 {ss_nome_negozio(n)} — {ss_euro(sum(v['totale'] for v in voci))}")
+        for v in voci:
+            nome = v["riga"].get("nome") or (ss_trova(ss, "prodotti", v["riga"].get("prodotto_id")) or {}).get("nome", "?")
+            righe.append(f"☐ {nome} × {ss_num(v['riga'].get('quantita'), 1):g} = {ss_euro(v['totale'])}")
+    if div["non_trovati"] or div["mancano"]:
+        righe.append("\n❓ Senza prezzo in questi negozi: " + ", ".join(r.get("nome") or "?" for r in div["non_trovati"] + div["mancano"]))
+    righe.append(f"\nTotale: {ss_euro(div['totale'])}")
+    return "\n".join(righe)
+
+
+def sf_ottimizzata_a_scelta(ss, righe):
+    """La divisione per negozio a richiesta: scegli tu uno o più negozi, ogni prodotto va dove costa meno fra quelli."""
+    con_prezzo = {c["negozio_id"] for rg in righe if rg.get("prodotto_id") for c in ss_prezzi_correnti(ss, rg["prodotto_id"], ss_oggi())}
+    ids = [n["id"] for n in ss["negozi"] if n["id"] in con_prezzo] or [n["id"] for n in ss["negozi"]]
+    if not ids:
+        st.info("Non ci sono ancora negozi con prezzi.")
+        return
+    scelti = st.multiselect("🏪 In quali negozi vuoi andare?", ids, default=ids[:min(len(ids), 2)], format_func=lambda i: ss_nome_negozio(ss_trova(ss, "negozi", i)),
+                            key="sf_ott_neg", help="Ne scegli uno solo = tutta la spesa lì. Più di uno = ogni prodotto va dove costa meno fra quelli scelti.")
+    if not scelti:
+        st.info("Scegli almeno un negozio.")
+        return
+    div = ss_dividi_nei_negozi(ss, righe, scelti)
+    st.markdown(f"<div class='ss-scen ok'><h4>🏪 La tua spesa divisa per negozio</h4><div class='tot'>{ss_euro(div['totale'])}</div>"
+                f"<div>{len(div['per_negozio'])} {'negozio' if len(div['per_negozio']) == 1 else 'negozi'}</div></div>", unsafe_allow_html=True)
+    for nid, voci in div["per_negozio"].items():
+        n = ss_trova(ss, "negozi", nid)
+        with st.container(border=True):
+            st.markdown(f"**🏪 {_ss_esc(ss_nome_negozio(n))}** — **{ss_euro(sum(v['totale'] for v in voci))}**")
+            for v in voci:
+                nome = v["riga"].get("nome") or (ss_trova(ss, "prodotti", v["riga"].get("prodotto_id")) or {}).get("nome", "?")
+                st.markdown(f"• {_ss_esc(nome)} × {ss_num(v['riga'].get('quantita'), 1):g} = **{ss_euro(v['totale'])}**"
+                            + (f" · {ss_fmt_unitario(v['unitario'], v['base'])}" if v.get("unitario") and v.get("base") != "pz" else "")
+                            + (" 🔥 offerta" if v.get("offerta") else ""))
+    if div["non_trovati"]:
+        st.warning("❓ Non ho il prezzo **in questi negozi** per: " + ", ".join(_ss_esc(r.get("nome") or "?") for r in div["non_trovati"])
+                   + ". Aggiungi un altro negozio o inserisci il prezzo.")
+    if div["mancano"]:
+        st.caption("Senza nessun prezzo valido oggi: " + ", ".join(_ss_esc(r.get("nome") or "?") for r in div["mancano"]))
+    testo = sf_testo_per_negozio(ss, div)
+    import urllib.parse as _up
+    st.link_button("📤 Manda la lista divisa per negozio su WhatsApp", "https://wa.me/?text=" + _up.quote(testo), width="stretch")
+    with st.expander("📋 Testo da copiare"):
+        st.code(testo, language=None)
