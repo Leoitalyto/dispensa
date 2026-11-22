@@ -418,9 +418,15 @@ def dm_sm(metodo, percorso, corpo=None):
             return r.json() if r.text.strip() else {}
         except Exception:
             return {}
+    try:
+        dett = str((r.json() or {}).get("message") or (r.json() or {}).get("error_description") or r.text)[:160]
+    except Exception:
+        dett = (r.text or "")[:160]
+    if r.status_code == 401 and "subscription key" in dett.lower():
+        raise DmErrore("BTicino: la «subscription_key» nei Secrets non è giusta o l'abbonamento Starter Kit non è attivo (401). Ricopia la Primary key da Legrand → Subscription keys")
     spieg = {401: "permesso scaduto o non valido (ricollega il termostato)", 403: "la chiave «subscription_key» non è giusta o l'abbonamento non è attivo",
              404: "termostato non trovato", 408: "il termostato non risponde (Wi-Fi?)", 429: "troppe richieste: aspetta un minuto", 469: "il termostato è offline"}
-    raise DmErrore(f"BTicino: {spieg.get(r.status_code, 'errore')} ({r.status_code})")
+    raise DmErrore(f"BTicino: {spieg.get(r.status_code, 'errore')} ({r.status_code})" + (f" — risposta: {dett}" if dett else ""))
 
 
 def dm_sm_dispositivi():
@@ -750,7 +756,7 @@ def _dm_cerca_nuovi(dm, casa_id):
                 t["piattaforma"] = piatt
                 trovati.append(t)
         except Exception as e:
-            errori.append(f"{nome}: {e}")
+            errori.append(str(e) if str(e).startswith(nome.split(" ")[0]) else f"{nome}: {e}")
     noti = {(y.get("piattaforma"), y.get("ext_id")) for y in dm["dispositivi"]}
     return [t for t in trovati if (t["piattaforma"], t["ext_id"]) not in noti], trovati, errori
 
