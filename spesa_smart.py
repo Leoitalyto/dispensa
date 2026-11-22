@@ -1010,6 +1010,10 @@ _SS_CSS = """<style>
 .ss-card .t{font-weight:900;font-size:1.02rem}.ss-card .m{font-size:.85rem;color:#35514a}.ss-card .big{font-size:1.35rem;font-weight:900;color:#00704f}
 .ss-card .u{font-size:.85rem;color:#00704f;font-weight:700}.ss-card img{float:right;width:54px;height:54px;object-fit:contain;margin-left:8px;border-radius:8px;background:#fff}
 .ss-card ol{margin:4px 0 0 18px;padding:0;font-size:.88rem}.ss-card li{margin:1px 0}
+.ss-card .ss-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.ss-card .ss-sx{min-width:0;flex:1}
+.ss-card .ss-pu{flex:0 0 auto;text-align:right;font-size:1.9rem;font-weight:900;color:#00704f;line-height:1.05;white-space:nowrap;letter-spacing:-.5px}
+.ss-card .ss-pu small{display:block;font-size:.7rem;font-weight:700;color:#35514a;letter-spacing:0}
+.ss-card .ss-pu.pz{font-size:1.15rem;color:#8a6d00}
 .ss-promo{display:inline-block;background:#ff3d71;color:#fff;font-weight:900;border-radius:10px;padding:1px 8px;font-size:.8rem;margin-left:4px}
 .ss-ver{display:inline-block;background:#ffb300;color:#3a2600;font-weight:800;border-radius:10px;padding:1px 8px;font-size:.78rem}
 .ss-scen{border-radius:18px;padding:12px 14px;margin:10px 0;background:rgba(10,30,26,.94);color:#e8fff8;border:2px solid rgba(0,230,168,.35)}
@@ -1386,6 +1390,15 @@ def _ss_in_dispensa_proposta():
 # ---------------------------------------------------------------------------------------------------------------------
 # 13.3 Dove costa meno
 # ---------------------------------------------------------------------------------------------------------------------
+def _ss_pu_html(pu, base):
+    """Il prezzo al kg/litro grande, in alto a destra della scheda; a pezzo più piccolo con l'invito a mettere il peso."""
+    if pu is None:
+        return ""
+    if base == "pz":
+        return f"<div class='ss-pu pz'>{ss_fmt_unitario(pu, base)}<small>⚖️ manca il peso</small></div>"
+    return f"<div class='ss-pu'>{ss_fmt_unitario(pu, base)}</div>"
+
+
 def _ss_card_dcm(ss, x):
     p, m = x["prodotto"], x["migliore"]
     n = ss_trova(ss, "negozi", m["negozio_id"])
@@ -1399,8 +1412,8 @@ def _ss_card_dcm(ss, x):
         righe += (f"<li>{_ss_esc(ss_nome_negozio(nn))}: <b>{ss_euro(c['prezzo'])}</b>" + (f" · {ss_fmt_unitario(c['unitario'], c['base'])}" if c["unitario"] else "")
                   + (" <span class='ss-promo'>offerta</span>" if c["offerta"] else "") + f" <small>({ss_data_it(c['rilevazione'].get('data'))})</small></li>")
     avviso = "" if m["confrontabile"] else "<div class='m'>⚠️ Confezioni misurate in unità diverse (es. litri e kg): confronto solo sul prezzo della confezione.</div>"
-    return (f"<div class='ss-card'>{img}<div class='t'>{_ss_esc(p.get('nome'))}</div><div class='m'>{_ss_esc(' · '.join(x_ for x_ in (p.get('marca'), ss_fmt_formato(p)) if x_))}</div>"
-            f"<div class='big'>{ss_euro(m['prezzo'])} {promo}</div><div class='u'>{ss_fmt_unitario(m['unitario'], m['base'])}</div>"
+    return (f"<div class='ss-card'><div class='ss-top'><div class='ss-sx'>{img}<div class='t'>{_ss_esc(p.get('nome'))}</div><div class='m'>{_ss_esc(' · '.join(x_ for x_ in (p.get('marca'), ss_fmt_formato(p)) if x_))}</div>"
+            f"<div class='big'>{ss_euro(m['prezzo'])} {promo}</div></div>{_ss_pu_html(m['unitario'], m['base'])}</div>"
             f"<div class='m'>🏪 <b>{_ss_esc(ss_nome_negozio(n))}</b>{tess} · rilevato il {ss_data_it(r.get('data'))}"
             + (f" · risparmi fino al {x['risparmio_pct']:.0f}%" if x["risparmio_pct"] >= 1 else "") + f"</div>{avviso}"
             + (f"<ol start='2'>{righe}</ol>" if righe else "") + "</div>")
@@ -1841,7 +1854,8 @@ def _ss_v_offerte(ss, disp):
         p, c = o["prodotto"], o["corrente"]
         n = ss_trova(ss, "negozi", c["negozio_id"])
         c1, c2 = st.columns([5, 2], gap="small")
-        c1.markdown(f"<div class='ss-card'><div class='t'>{_ss_esc(_ss_etich_prodotto(p))}</div><div class='big'>{ss_euro(c['prezzo'])} <span class='ss-promo'>−{o['risparmio_pct']:.0f}%</span></div>"
+        c1.markdown(f"<div class='ss-card'><div class='ss-top'><div class='ss-sx'><div class='t'>{_ss_esc(_ss_etich_prodotto(p))}</div><div class='big'>{ss_euro(c['prezzo'])} <span class='ss-promo'>−{o['risparmio_pct']:.0f}%</span></div></div>"
+                    f"{_ss_pu_html(c.get('unitario'), c.get('base'))}</div>"
                     f"<div class='m'>🏪 {_ss_esc(ss_nome_negozio(n))}" + (f" · fino al {ss_data_it(o['fine'])}" if o["fine"] else "") + (" · 💳 tessera" if c["rilevazione"].get("tessera") else "")
                     + f" · rilevato {('oggi' if o['eta'] == 0 else str(o['eta']) + ' giorni fa')}</div></div>", unsafe_allow_html=True)
         if c2.button("➕ In lista", key=f"ss_off_l{i}", width="stretch"):
