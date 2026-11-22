@@ -466,14 +466,107 @@ def ss_stato(r, oggi_=None):
     return "attiva", prezzo_ora, False
 
 
-def ss_unitario_oggi(r, prezzo):
+def ss_unitario_oggi(r, prezzo, prod=None):
+    """Prezzo unitario di una rilevazione; se la rilevazione non ha il formato, vale quello del prodotto (aggiunto dopo)."""
+    if not ss_num(r.get("formato_valore")) and prod and ss_num(prod.get("formato_valore")):
+        return ss_prezzo_unitario(prezzo, ss_num(r.get("confezioni"), None) or prod.get("confezioni"), prod.get("formato_valore"), prod.get("formato_unita"))
     return ss_prezzo_unitario(prezzo, r.get("confezioni"), r.get("formato_valore"), r.get("formato_unita"))
+
+
+def ss_ricalcola_rilevazione(r):
+    """Ricalcola il prezzo al kg/litro/pezzo di una rilevazione dai suoi campi (dopo ogni modifica)."""
+    pu, base = ss_prezzo_unitario(r.get("prezzo_promo") or r.get("prezzo"), r.get("confezioni"), r.get("formato_valore"),
+                                  r.get("formato_unita") if ss_num(r.get("formato_valore")) else "")
+    r["prezzo_unitario"], r["unita_base"] = pu, base
+    r["prezzo_unitario_pieno"] = ss_prezzo_unitario(r.get("prezzo"), r.get("confezioni"), r.get("formato_valore"),
+                                                    r.get("formato_unita") if ss_num(r.get("formato_valore")) else "")[0] if r.get("prezzo") else None
+    return r
+
+
+def ss_modifica_rilevazione(ss, rid, campi):
+    """Cambia un prezzo già inserito (qualsiasi campo) e ricalcola il prezzo al kg/litro. Ritorna gli errori ([] se va bene)."""
+    r = ss_trova(ss, "rilevazioni", rid)
+    if not r:
+        return ["Prezzo non trovato."]
+    nuovo = dict(r)
+    nuovo.update({k: v for k, v in campi.items() if k in ("prezzo", "prezzo_promo", "negozio_id", "data", "promo_dal", "promo_al", "tessera", "note",
+                                                         "confezioni", "formato_valore", "formato_unita", "da_verificare")})
+    for k in ("prezzo", "prezzo_promo", "formato_valore"):
+        nuovo[k] = ss_num(nuovo.get(k))
+    nuovo["confezioni"] = int(ss_num(nuovo.get("confezioni"), 1) or 1)
+    if not nuovo.get("formato_valore"):
+        nuovo["formato_unita"] = ""
+    for k in ("data", "promo_dal", "promo_al"):
+        nuovo[k] = str(nuovo.get(k) or "")[:10]
+    err = ss_valida_rilevazione(nuovo)
+    if err:
+        return err
+    r.clear()
+    r.update(ss_ricalcola_rilevazione(nuovo))
+    r["modificato_il"] = ss_ora()
+    return []
+
+
+def ss_cambia_formato_prodotto(ss, prodotto_id, prima):
+    """Dopo aver cambiato peso/litri del prodotto: i prezzi che usavano il formato di prima (o nessuno) prendono quello nuovo e si ricalcolano."""
+    p = ss_trova(ss, "prodotti", prodotto_id)
+    if not p:
+        return 0
+    vecchio = (ss_num(prima.get("formato_valore")), str(prima.get("formato_unita") or ""))
+    n = 0
+    for r in ss["rilevazioni"]:
+        if r.get("prodotto_id") != prodotto_id:
+            continue
+        suo = (ss_num(r.get("formato_valore")), str(r.get("formato_unita") or ""))
+        if suo[0] and suo != vecchio:                                    # aveva un formato tutto suo (confezione diversa): resta
+            continue
+        r["formato_valore"], r["formato_unita"] = ss_num(p.get("formato_valore")), (p.get("formato_unita") or "") if ss_num(p.get("formato_valore")) else ""
+        if ss_num(prima.get("confezioni"), 1) == ss_num(r.get("confezioni"), 1):
+            r["confezioni"] = int(ss_num(p.get("confezioni"), 1) or 1)
+        ss_ricalcola_rilevazione(r)
+        n += 1
+    return n
+
+
+def ss_senza_formato(p):
+    """Il prodotto non ha peso/volume: il prezzo al kg o al litro non si può calcolare."""
+    return not ss_num((p or {}).get("formato_valore"))
+
+
+def ss_completa_formato(ss, prodotto_id, valore, unita, confezioni=None, nome=None, marca=None):
+    """Scrive peso/volume sul prodotto e ricalcola il prezzo al kg/litro di TUTTI i suoi prezzi che non avevano un formato proprio."""
+    p = ss_trova(ss, "prodotti", prodotto_id)
+    v = ss_num(valore)
+    u = str(unita or "").strip().lower()
+    if not p or not v or v <= 0 or u not in SS_UNITA:
+        return 0
+    p["formato_valore"], p["formato_unita"] = v, u
+    if confezioni:
+        p["confezioni"] = int(ss_num(confezioni, 1) or 1)
+    if nome and str(nome).strip():
+        p["nome"] = str(nome).strip()
+    if marca and str(marca).strip():
+        p["marca"] = str(marca).strip()
+    n = 0
+    for r in ss["rilevazioni"]:
+        if r.get("prodotto_id") != prodotto_id or ss_num(r.get("formato_valore")):
+            continue
+        r["formato_valore"], r["formato_unita"] = v, u
+        if confezioni:
+            r["confezioni"] = p["confezioni"]
+        pu, base = ss_prezzo_unitario(r.get("prezzo_promo") or r.get("prezzo"), r.get("confezioni"), v, u)
+        r["prezzo_unitario"], r["unita_base"] = pu, base
+        if r.get("prezzo"):
+            r["prezzo_unitario_pieno"] = ss_prezzo_unitario(r["prezzo"], r.get("confezioni"), v, u)[0]
+        n += 1
+    return n
 
 
 def ss_prezzi_correnti(ss, prodotto_id, oggi_=None, anche_da_verificare=False):
     """Per ogni negozio l'ULTIMA rilevazione valida del prodotto: [{negozio_id, rilevazione, stato, prezzo, unitario, base, offerta}] dal più conveniente."""
     oggi_ = oggi_ or ss_oggi()
     per_neg = {}
+    prod = ss_trova(ss, "prodotti", prodotto_id)
     for r in ss["rilevazioni"]:
         if r.get("prodotto_id") != prodotto_id:
             continue
@@ -483,7 +576,7 @@ def ss_prezzi_correnti(ss, prodotto_id, oggi_=None, anche_da_verificare=False):
         chiave = (r.get("data") or "", 1 if offerta else 0, r.get("creato_il") or "")
         att = per_neg.get(r.get("negozio_id"))
         if att is None or chiave > att["_k"]:
-            pu, base = ss_unitario_oggi(r, prezzo)
+            pu, base = ss_unitario_oggi(r, prezzo, prod)
             per_neg[r.get("negozio_id")] = {"_k": chiave, "negozio_id": r.get("negozio_id"), "rilevazione": r, "stato": stato, "prezzo": prezzo,
                                             "unitario": pu, "base": base, "offerta": offerta}
     righe = list(per_neg.values())
@@ -1191,6 +1284,10 @@ def _ss_v_inserisci(ss, disp):
     neg_id, neg_nuovo = _ss_scelta_negozio(ss, k)
     prezzo = st.number_input("💶 Prezzo (€)", min_value=0.0, max_value=5000.0, value=None, step=0.01, format="%.2f", key=k + "_prezzo", placeholder="es. 1,29")
     prod_rif = per_id.get(scelta) if scelta and scelta != "__nuovo__" else (nuovo_p or {})
+    if scelta and scelta != "__nuovo__" and ss_senza_formato(prod_rif) and not prod_rif.get("_virtuale") and "sf_widget_formato" in globals():
+        sf_widget_formato(ss, prod_rif, k + "_sf", compatto=True)
+    elif scelta == "__nuovo__" and nuovo_p and nuovo_p.get("nome") and ss_senza_formato(nuovo_p):
+        st.warning("⚖️ Scrivi anche il **Formato** (peso o litri, es. 500 g): senza, l'app non può calcolare il prezzo al kg o al litro e confrontare confezioni diverse.")
     with st.expander("🏷️ Offerta, formato, tessera, data e note"):
         c1, c2 = st.columns(2, gap="small")
         promo = c1.number_input("Prezzo in offerta (€)", min_value=0.0, value=None, step=0.01, format="%.2f", key=k + "_promo", placeholder="se c'è")
@@ -1317,8 +1414,14 @@ def _ss_v_dcm(ss, disp):
     righe = ss_dove_costa_meno(ss, ss_oggi(), ordine, filtro)
     if not righe:
         st.info("Nessun prezzo valido oggi" + (" per questa ricerca" if filtro else "") + ". I prezzi più vecchi di 30 giorni e le offerte finite non valgono: aggiungine con **⚡ Inserisci un prezzo**.")
+    if "sf_banner_senza_peso" in globals():
+        sf_banner_senza_peso(ss, "dcm", con_elenco=False)
     for x in righe[:60]:
         st.markdown(_ss_card_dcm(ss, x), unsafe_allow_html=True)
+        if ss_senza_formato(x["prodotto"]) and "sf_widget_formato" in globals():
+            sf_widget_formato(ss, x["prodotto"], "dcm_" + x["prodotto"]["id"], compatto=True)
+        if "sf_dialogo_modifica" in globals() and st.button("✏️ Modifica questo prezzo o il prodotto", key="dcm_m_" + x["migliore"]["rilevazione"]["id"], width="stretch"):
+            sf_dialogo_modifica(x["migliore"]["rilevazione"]["id"])
     da_ver = [(p, c) for p in ss["prodotti"] for c in ss_prezzi_correnti(ss, p["id"], ss_oggi(), anche_da_verificare=True) if c["stato"] == "da verificare"]
     if da_ver:
         with st.expander(f"🟠 Prezzi da verificare ({len(da_ver)}): più vecchi di 30 giorni, NON usati nei confronti"):
@@ -1375,6 +1478,8 @@ def _ss_v_storico(ss, disp):
                     + (f" · {ss_fmt_unitario(r.get('prezzo_unitario'), r.get('unita_base'))}" if r.get("prezzo_unitario") else "")
                     + f" · _{r.get('fonte')}_ · {stato}")
         with c2.popover("⋯"):
+            if "sf_dialogo_modifica" in globals() and st.button("✏️ Modifica", key="sto_m_" + r["id"], width="stretch"):
+                sf_dialogo_modifica(r["id"])
             if st.button("🟠 Da verificare" if not r.get("da_verificare") else "🟢 È giusto", key="ss_ver_" + r["id"], width="stretch"):
                 _ss_salva(lambda s_, i=r["id"]: ss_trova(s_, "rilevazioni", i).__setitem__("da_verificare", not ss_trova(s_, "rilevazioni", i).get("da_verificare")), "verifica prezzo")
                 st.rerun()
@@ -1888,6 +1993,8 @@ def _ss_v_prodotti(ss, disp):
                 _ss_salva(lambda s_: esito.__setitem__("x", ss_aggiungi_prodotto(s_, nuovo)), "nuovo prodotto")
                 st.session_state["ss_msg"] = ("✅ Prodotto creato." if esito["x"][1] else "ℹ️ Esisteva già: ho completato la sua scheda (niente doppioni).")
                 st.rerun()
+    if "sf_banner_senza_peso" in globals():
+        sf_banner_senza_peso(ss, "arch")
     st.caption(f"{len(cat)} prodotti")
     for p in sorted(cat, key=lambda p: ss_norm(p.get("nome")))[:150]:
         n_pr = sum(1 for r in ss["rilevazioni"] if r.get("prodotto_id") == p["id"])
@@ -1905,7 +2012,13 @@ def _ss_v_prodotti(ss, disp):
                     for e in err + ([f"Esiste già uguale: {_ss_etich_prodotto(dop)} — usa «Unisci»."] if dop else []):
                         st.warning(e)
                 else:
-                    _ss_salva(lambda s_, i=p["id"]: ss_trova(s_, "prodotti", i).update({k: v for k, v in m.items() if k != "immagine" or v}), "prodotto modificato")
+                    def _mod(s_, i=p["id"]):
+                        pr = ss_trova(s_, "prodotti", i)
+                        prima = {k: pr.get(k) for k in ("formato_valore", "formato_unita", "confezioni")}
+                        pr.update({k: v for k, v in m.items() if k != "immagine" or v})
+                        ss_cambia_formato_prodotto(s_, i, prima)
+                    _ss_salva(_mod, "prodotto modificato")
+                    st.session_state["ss_msg"] = "✅ Prodotto modificato: prezzi al kg/litro ricalcolati."
                     st.rerun()
             altri = [x["id"] for x in ss["prodotti"] if x["id"] != p["id"]]
             if altri:
