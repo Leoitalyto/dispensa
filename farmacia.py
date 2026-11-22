@@ -3325,13 +3325,15 @@ def _fa_fasce_dottore(d):
 # =====================================================================
 # I MIEI DOCUMENTI: catalogo dei documenti personali con avvisi di scadenza a 6 e a 3 mesi
 # =====================================================================
+DOC_CQC = "CQC – Carta di qualificazione del conducente"
 CATALOGO_DOCUMENTI = {
     "🪪 Identità": ["Carta d'identità", "Passaporto", "Patente di guida", "Codice fiscale", "Permesso di soggiorno",
                     "Certificato di nascita", "Stato di famiglia", "Certificato di residenza", "Tessera elettorale"],
     "🩺 Salute": ["Tessera sanitaria", "Esenzione ticket", "Certificato medico sportivo", "Certificato di invalidità",
                   "Piano terapeutico", "Polizza sanitaria"],
     "🚗 Veicoli": ["Libretto / carta di circolazione", "Assicurazione auto (RCA)", "Bollo auto", "Revisione del veicolo",
-                   "Assicurazione moto", "Patente nautica", "Contrassegno invalidi", "Telepass / abbonamento"],
+                   "Assicurazione moto", "Patente nautica", "Contrassegno invalidi", "Telepass / abbonamento",
+                   DOC_CQC, "Carta tachigrafica"],
     "🏠 Casa": ["Contratto di affitto", "Atto di proprietà", "Assicurazione casa", "Attestato energetico (APE)",
                 "Libretto impianto / caldaia", "Visura catastale", "Contratto luce", "Contratto gas",
                 "Contratto internet / telefono", "Regolamento condominiale"],
@@ -3499,6 +3501,10 @@ def _doc_card(x, oggi_, emoji):
         testo = {"scaduto": f"SCADUTO da {abs(g or 0)} giorni", "urgente": f"URGENTE · scade tra {g} giorni (entro 3 mesi)",
                  "avviso": f"Scade tra {g} giorni (entro 6 mesi)", "ok": f"Scade tra {g} giorni"}.get(stato, "")
         righe += f"<span class='scad'>{_DOC_ICO[stato]} {e(testo)} · {data_it(x['scadenza'])}</span>"
+    if x.get("scadenza_cqc"):
+        righe += f"<div class='riga'>🚛 CQC (codice 95) fino al <b>{data_it(x['scadenza_cqc'])}</b> · ha la sua scheda «CQC» con gli avvisi</div>"
+    if x.get("cqc_della_patente"):
+        righe += "<div class='riga'>🔗 Presa dal codice 95 della patente: per cambiarla modifica la patente</div>"
     if x.get("note"):
         righe += f"<div class='riga'>📝 {e(x['note'])}</div>"
     classe = "fa-med doc-urg" if stato == "urgente" else "fa-med"
@@ -3829,6 +3835,10 @@ def _doc_modulo(pid, doc_id=None):
         senza = st.checkbox("Questo documento non scade", value=bool(x.get("senza_scadenza")))
         scadenza = st.date_input("Data di scadenza", value=_fa_data(pre.get("scadenza") or x.get("scadenza")), format="DD/MM/YYYY",
                                  min_value=date(1930, 1, 1), max_value=date(2100, 12, 31))
+        scad_cqc = st.date_input("🚛 Solo per la patente: scadenza della CQC (facoltativa)", value=_fa_data(pre.get("scadenza_cqc") or x.get("scadenza_cqc")),
+                                 format="DD/MM/YYYY", min_value=date(1930, 1, 1), max_value=date(2100, 12, 31),
+                                 help="La trovi sul RETRO della patente, colonna 12: il codice 95 con la data tra parentesi, es. 95(22.07.31) = 22/07/2031. "
+                                      "È diversa dalla scadenza della patente. L'app crea da sola anche la scheda «CQC» con i suoi avvisi.")
         note = st.text_area("Note", value=x.get("note") or pre.get("note", ""))
         nuovi = ar_uploader("Altri file (facoltativo): PDF o foto di altre pagine", type=TIPI_FILE,
                                  accept_multiple_files=True)
@@ -3853,7 +3863,8 @@ def _doc_modulo(pid, doc_id=None):
             return
         rec = {"profilo": per, "tipo": tipo_f, "numero": numero.strip(), "ente": ente.strip(),
                "rilascio": rilascio.isoformat() if rilascio else None, "senza_scadenza": bool(senza),
-               "scadenza": None if senza or not scadenza else scadenza.isoformat(), "note": note.strip()}
+               "scadenza": None if senza or not scadenza else scadenza.isoformat(), "note": note.strip(),
+               "scadenza_cqc": scad_cqc.isoformat() if scad_cqc and tipo_f == "Patente di guida" else None}
 
         def _scrivi(f):
             f.setdefault("documenti", [])
@@ -4622,13 +4633,31 @@ def _doc_analizza(testo, validi):
         esito["ente"] = ente
     if cf:
         esito["cf"] = cf.group(0)
+    q = doc_cqc_dal_testo(t_)                                          # CQC: codice 95 sul retro della patente
+    if q:
+        esito["scadenza_cqc"] = q
     return esito
+
+
+def doc_cqc_dal_testo(t_):
+    """Sul retro della patente la CQC è il codice 95 con la data di scadenza: «95(22.07.31)», «95.22.07.2031», «95 22/07/31»."""
+    m = re.search(r"\b95\s*[.(:]?\s*\(?\s*(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})\s*\)?", str(t_ or ""))
+    if not m:
+        return None
+    g_, me_, a_ = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if a_ < 100:
+        a_ += 2000
+    try:
+        d_ = date(a_, me_, g_)
+    except ValueError:
+        return None
+    return d_.isoformat() if 2000 <= a_ <= 2100 else None
 
 
 _DOC_REGOLE_IA = ("REGOLE DEI DOCUMENTI ITALIANI. Carta d'identità elettronica (CIE): il NUMERO è in alto a destra, formato 2 lettere + 5 cifre + 2 lettere (es. CA21222IJ); "
                   "«EMISSIONE / ISSUING» è la data di RILASCIO, «SCADENZA / EXPIRY» è la data di scadenza (di solito il giorno del compleanno, 5 o 10 anni dopo l'emissione); "
                   "«COMUNE DI …» è chi l'ha rilasciata (ente = Comune di …; se non si vede: Ministero dell'Interno). Carta d'identità cartacea: numero tipo AX 1234567. "
-                  "Patente: campo 4a = rilascio, 4b = scadenza, 4c = ente (es. MIT-UCO), campo 5 = numero. Passaporto: numero 2 lettere + 7 cifre, «Data di rilascio», «Scadenza», autorità (Questura/Ministero degli Affari Esteri). "
+                  "Patente: campo 4a = rilascio, 4b = scadenza, 4c = ente (es. MIT-UCO), campo 5 = numero; sul RETRO, colonna 12, il codice 95 con una data tra parentesi (es. 95(22.07.31)) è la scadenza della CQC (scadenza_cqc), DIVERSA dalla scadenza della patente. Passaporto: numero 2 lettere + 7 cifre, «Data di rilascio», «Scadenza», autorità (Questura/Ministero degli Affari Esteri). "
                   "Tessera sanitaria: numero di identificazione della tessera (20 cifre, sul retro), data di scadenza, codice fiscale (16 caratteri). "
                   "La data di nascita NON è mai rilascio né scadenza. La scadenza viene sempre DOPO il rilascio.")
 
@@ -4684,14 +4713,15 @@ def _doc_ia_leggi(testo, uris, validi):
     with st.spinner("🤖 Leggo il documento con l'intelligenza artificiale…"):
         ia, fonti = il_leggi_campi("un DOCUMENTO PERSONALE italiano (carta d'identità, patente, passaporto, tessera sanitaria…) fotografato fronte e retro",
                                    {"tipo": "uno di: " + " | ".join(validi), "numero": "numero del documento", "ente": "chi l'ha rilasciato",
-                                    "rilascio": "data di emissione/rilascio AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG", "cf": "codice fiscale se c'è"},
+                                    "rilascio": "data di emissione/rilascio AAAA-MM-GG", "scadenza": "data di scadenza AAAA-MM-GG", "cf": "codice fiscale se c'è",
+                                    "scadenza_cqc": "solo patente: scadenza CQC (retro, codice 95 con data tra parentesi) AAAA-MM-GG"},
                                    testo=testo, immagini=imgs, quante=2, critici=("numero", "scadenza", "rilascio"), regole=_DOC_REGOLE_IA)
     return ia, fonti
 
 
 def _doc_ia_unisci(esito, ia, fonti, validi):
     out = dict(esito or {})
-    for k in ("tipo", "numero", "ente", "rilascio", "scadenza", "cf"):
+    for k in ("tipo", "numero", "ente", "rilascio", "scadenza", "cf", "scadenza_cqc"):
         v = ia.get(k)
         if not v:
             continue
@@ -4748,6 +4778,8 @@ def _doc_precompila(chiave_d, foto_fronte, foto_retro, validi):
             righe.append(f"**Rilascio:** {data_it(esito['rilascio'])}")
         if esito.get("scadenza"):
             righe.append(f"**Scadenza:** {data_it(esito['scadenza'])}")
+        if esito.get("scadenza_cqc"):
+            righe.append(f"**🚛 Scadenza CQC (codice 95):** {data_it(esito['scadenza_cqc'])}")
         if esito.get("note"):
             righe.append(f"**Note:** {esito['note']}")
         if esito.get("_fonti"):
