@@ -295,7 +295,7 @@ def _sz_f_auto(d, oggi):
         if not isinstance(pt, dict) or pt.get("avvisa") is False:
             continue
         for k, et in (("scadenza", "Patente"), ("visita_medica", "Visita medica patente"), ("cqc", "CQC")):
-            if pt.get(k):
+            if pt.get(k) and not (pt.get("doc_id") and k in ("scadenza", "cqc")):     # collegata a I miei documenti: lì ci sono già patente e CQC
                 out.append(_sz_voce(f"auto:pat:{pt.get('id') or pt.get('nome')}:{k}", f"🪪 {et}" + (f" di {pt['nome']}" if pt.get("nome") else ""), pt[k], "documenti", "auto"))
     for vb in cond.get("verbali") or []:
         if isinstance(vb, dict) and vb.get("stato") == "Da pagare" and vb.get("scadenza_pagamento"):
