@@ -957,7 +957,14 @@ def dm_tab(c=None, casa_id=None):
     st.markdown(f"<div class='dm-kpi'><div class='dm-k'><b>{len(disp)}</b><span>apparecchi</span></div>"
                 f"<div class='dm-k'><b>{len(collegati)}</b><span>comandabili da qui</span></div>"
                 f"<div class='dm-k'><b>{len(disp) - len(collegati)}</b><span>con la loro app</span></div></div>", unsafe_allow_html=True)
-    vista = st.radio("Vedi", ["🗺️ Per stanza", "🗂️ Per tipo", "🎬 Scenari"], horizontal=True, key="dm_vista", label_visibility="collapsed")
+    vista = st.radio("Vedi", ["🎛️ Telecomando", "🗺️ Elenco per stanza", "🗂️ Per tipo", "🎬 Scenari"], horizontal=True, key="dm_vista", label_visibility="collapsed")
+    if vista.startswith("🎛️"):
+        _dm_telecomando(dm, casa_id, disp)
+        _dm_pannello_nuovi(dm, casa_id)
+        _dm_aggiungi_a_mano(dm, casa_id)
+        _dm_stanze_ui(dm, casa_id)
+        _dm_collegamenti()
+        return
     cerca = st.text_input("🔎 Cerca", key="dm_cerca_t", placeholder="nome, marca, stanza…")
     if cerca:
         parole = cerca.lower().split()
@@ -993,6 +1000,154 @@ def dm_tab(c=None, casa_id=None):
     _dm_aggiungi_a_mano(dm, casa_id)
     _dm_stanze_ui(dm, casa_id)
     _dm_collegamenti()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 6-bis. IL TELECOMANDO (richiesta del 23 novembre 2026): un tasto per stanza; toccandolo si apre la stanza con i suoi apparecchi
+#        e i comandi rapidi (acceso/spento, temperatura ±); «🎮 Tutti i comandi» apre la scheda completa.
+# ---------------------------------------------------------------------------------------------------------------------
+_DM_CSS_TELE = """<style>
+.st-key-dm_tele [data-testid='stHorizontalBlock']{gap:10px !important}
+.st-key-dm_tele button{min-height:96px !important;border-radius:22px !important;background:linear-gradient(145deg,#12355c,#1f6fb8) !important;
+ border:2px solid #6fb3ff !important;box-shadow:0 0 14px rgba(80,160,255,.35) !important;white-space:pre-line !important}
+.st-key-dm_tele button p{color:#fff !important;font-weight:900 !important;font-size:1.05rem !important;line-height:1.25 !important;white-space:pre-line !important}
+.st-key-dm_tele button:disabled{opacity:.45 !important}
+.dm-rc{border-radius:18px;padding:10px 12px;margin:8px 0 4px;background:rgba(255,255,255,.96);color:#10243a;border-left:6px solid #2f7de1}
+.dm-rc .t{font-weight:900;font-size:1.05rem}.dm-rc .s{font-size:.9rem;color:#3c5269}.dm-rc .big{font-size:2rem;font-weight:900;line-height:1.05}
+</style>"""
+_DM_INTERRUTTORI = ("switch_led", "switch", "switch_1")
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _dm_funzioni_cache(dev_id, _finto_firma=""):
+    return dm_tuya_funzioni(dev_id)
+
+
+def _dm_rapido_tuya(x, k):
+    """Comandi rapidi Tuya: interruttore principale e, se c'è, temperatura voluta − / +."""
+    try:
+        funz = _dm_funzioni_cache(x["ext_id"], str(bool(dm_finto())))
+        stato = dm_tuya_stato(x["ext_id"])
+    except Exception as e:
+        st.caption("❌ " + str(e)[:160])
+        return
+    codici = {f["code"]: f for f in funz}
+    inter = next((c for c in _DM_INTERRUTTORI if c in codici), None)
+    acceso = stato.get(inter) if inter else None
+    righe = []
+    if inter:
+        righe.append("🟢 ACCESO" if acceso else "⚫ SPENTO")
+    if "temp_current" in stato:
+        sc = int(((codici.get("temp_current") or {}).get("values") or {}).get("scale") or 0)
+        righe.append(f"🌡️ {stato['temp_current'] / (10 ** sc):g}°")
+    if "temp_set" in stato:
+        sc = int((codici.get("temp_set") or {}).get("values", {}).get("scale") or 0)
+        righe.append(f"🎯 {stato['temp_set'] / (10 ** sc):g}°")
+    if "mode" in stato:
+        righe.append(DM_ENUM_IT.get(str(stato["mode"]), str(stato["mode"])))
+    if righe:
+        st.caption(" · ".join(righe))
+    if x.get("categoria") in DM_SENSIBILI:
+        st.caption("🔐 Dispositivo di sicurezza: comandalo da «🎮 Tutti i comandi» (chiede conferma).")
+        return
+    cols = st.columns(3 if "temp_set" in codici else 1, gap="small")
+    if inter and cols[0].button("⏻ Spegni" if acceso else "⏻ Accendi", key=k + "_on", type="primary", width="stretch"):
+        if _dm_esito(lambda: dm_tuya_comando(x["ext_id"], inter, not bool(acceso)), f"{x.get('nome')}: {'spento' if acceso else 'acceso'}"):
+            _dm_log(f"{x.get('nome')}: {DM_CODICI_IT.get(inter, inter)} → {'no' if acceso else 'sì'}")
+            st.rerun()
+    if "temp_set" in codici and isinstance(stato.get("temp_set"), (int, float)):
+        v = codici["temp_set"].get("values") or {}
+        passo = int(v.get("step") or 1)
+        for i_, (et, d) in enumerate((("➖", -passo), ("➕", passo)), start=1):
+            nuovo = max(int(v.get("min", stato["temp_set"])), min(int(v.get("max", stato["temp_set"])), int(stato["temp_set"]) + d))
+            if cols[i_].button(et, key=f"{k}_t{i_}", width="stretch", disabled=nuovo == stato["temp_set"]):
+                if _dm_esito(lambda n=nuovo: dm_tuya_comando(x["ext_id"], "temp_set", n), f"{x.get('nome')}: temperatura voluta cambiata"):
+                    _dm_log(f"{x.get('nome')}: Temperatura voluta → {nuovo}")
+                    st.rerun()
+
+
+def _dm_rapido_smarther(x, k):
+    """Comandi rapidi del termostato: temperatura di casa, voluta, − / + mezzo grado, automatico."""
+    try:
+        s_ = dm_sm_stato(x["ext_id"])
+    except Exception as e:
+        st.caption("❌ " + str(e)[:160])
+        return
+    t, v = s_.get("temperatura"), s_.get("voluta")
+    modi = {"automatic": "🅰️ automatico", "manual": "✋ manuale", "boost": "🚀 boost", "off": "⏻ spento", "protection": "❄️ antigelo"}
+    st.markdown(f"<div class='dm-rc'><span class='big'>{(f'{t:.1f}°' if t is not None else '—').replace('.', ',')}</span> "
+                f"<span class='s'>in casa · 🎯 voluta {(f'{v:.1f}°' if v is not None else '—').replace('.', ',')}"
+                f" · {modi.get(s_.get('modo'), s_.get('modo') or '')}{' · 🔥 acceso' if s_.get('acceso') else ''}"
+                f"{(' · 💧 ' + format(s_['umidita'], '.0f') + '%') if s_.get('umidita') is not None else ''}</span></div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3, gap="small")
+    base = v if v is not None else 20.0
+    for col, et, d in ((c1, "➖ 0,5°", -0.5), (c2, "➕ 0,5°", 0.5)):
+        if col.button(et, key=f"{k}_{d}", width="stretch"):
+            n = max(5.0, min(30.0, base + d))
+            if _dm_esito(lambda n=n: dm_sm_imposta(x["ext_id"], "manual", n), f"Termostato a {n:g}°".replace(".", ",")):
+                _dm_log(f"{x.get('nome')}: manuale {n:g}°")
+                st.rerun()
+    if c3.button("🅰️ Auto", key=k + "_auto", width="stretch", disabled=s_.get("modo") == "automatic"):
+        if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "automatic", programma=s_.get("programma")), "Termostato in automatico"):
+            _dm_log(f"{x.get('nome')}: automatico")
+            st.rerun()
+
+
+def _dm_telecomando(dm, casa_id, disp):
+    st.markdown(_DM_CSS_TELE, unsafe_allow_html=True)
+    stanze = dm_stanze(dm, casa_id)
+    ids_st = {s_["id"] for s_ in stanze}
+    aperta = st.session_state.get("dm_stanza_aperta")
+    senza = [x for x in disp if x.get("stanza_id") not in ids_st]
+    if aperta and aperta not in ids_st | {"__senza__"}:
+        aperta = None
+    if not aperta:
+        st.caption("Tocca una stanza per aprirla e comandare i suoi apparecchi.")
+        tasti = [(s_["id"], s_.get("icona", "🏠"), s_["nome"], [x for x in disp if x.get("stanza_id") == s_["id"]]) for s_ in stanze]
+        if senza:
+            tasti.append(("__senza__", "❔", "Da sistemare", senza))
+        with st.container(key="dm_tele"):
+            for i in range(0, len(tasti), 2):
+                cols = st.columns(2, gap="small")
+                for col, (sid, ico, nome, xs) in zip(cols, tasti[i:i + 2]):
+                    sotto = (f"{len(xs)} apparecch{'io' if len(xs) == 1 else 'i'} " + "".join(_dm_icona(x) for x in xs[:4])) if xs else "vuota"
+                    if col.button(f"{ico} {nome}\n{sotto}", key="dm_st_" + sid.replace(":", "_"), width="stretch"):
+                        st.session_state["dm_stanza_aperta"] = sid
+                        st.rerun()
+        return
+    nome = "❔ Da sistemare" if aperta == "__senza__" else dm_nome_stanza(dm, aperta, casa_id)
+    if st.button("← Tutte le stanze", key="dm_st_back", width="stretch"):
+        st.session_state.pop("dm_stanza_aperta", None)
+        st.rerun()
+    st.markdown(f"### {_dm_h.escape(nome)}")
+    xs = senza if aperta == "__senza__" else [x for x in disp if x.get("stanza_id") == aperta]
+    if not xs:
+        st.info("Nessun apparecchio in questa stanza. Spostane uno qui sotto, oppure cercali nei cloud o aggiungili a mano.")
+    for x in xs:
+        with st.container(border=True):
+            st.markdown(f"**{_dm_icona(x)} {_dm_h.escape(x.get('nome') or '')}**" + (f" · {_dm_h.escape(x.get('marca') or '')}" if x.get("marca") else ""))
+            if x.get("piattaforma") == "tuya":
+                _dm_rapido_tuya(x, "dmr_" + x["id"])
+            elif x.get("piattaforma") == "smarther":
+                _dm_rapido_smarther(x, "dmr_" + x["id"])
+            elif x.get("app"):
+                dm_pulsante_app(x["app"], "dmra_" + x["id"])
+            if st.button("🎮 Tutti i comandi e la scheda", key="dm_full_" + x["id"], width="stretch"):
+                dm_scheda(x["id"], casa_id)
+    altri = [x for x in disp if x.get("stanza_id") != aperta]
+    if altri and aperta != "__senza__":
+        with st.expander(f"➕ Metti un apparecchio in {nome}"):
+            scelto = st.selectbox("Quale apparecchio", [x["id"] for x in altri], index=None, placeholder="Scegli…",
+                                  format_func=lambda i: next(f"{_dm_icona(x)} {x.get('nome')} ({dm_nome_stanza(dm, x.get('stanza_id'), casa_id)})" for x in altri if x["id"] == i),
+                                  key="dm_sposta_" + aperta)
+            if scelto and st.button("✅ Spostalo qui", key="dm_sposta_ok_" + aperta, width="stretch"):
+                def _m(dm_, i=scelto, sid=aperta):
+                    y = next((z for z in dm_["dispositivi"] if z["id"] == i), None)
+                    if y:
+                        y["stanza_id"] = sid
+                        dm_registra(dm_, f"{y['nome']}: spostato in {nome}")
+                _dm_salva(_m, "apparecchio spostato")
+                st.rerun()
 
 
 def _dm_stanze_ui(dm, casa_id):
