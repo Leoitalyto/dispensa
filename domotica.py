@@ -466,12 +466,27 @@ def dm_sm_diagnosi():
         out.append(("✅", "Permesso rinnovato", f"account: {info.get('account') or '?'} · permessi: {info.get('scope') or '?'}"))
     except Exception as e:
         return out + [("❌", "Permesso rinnovato", str(e))]
-    for nome, perc in (("Elenco impianti (/plants)", "/plants"),):
-        try:
-            r = _dm_req.get(DM_SM_API + perc, headers={"Ocp-Apim-Subscription-Key": conf["subscription_key"], "Authorization": "Bearer " + acc}, timeout=15)
-            out.append(("✅" if r.status_code in (200, 204) else "❌", nome, f"HTTP {r.status_code} · {(r.text or '')[:200]}"))
-        except Exception as e:
-            out.append(("❌", nome, str(e)))
+    h = {"Ocp-Apim-Subscription-Key": conf["subscription_key"], "Authorization": "Bearer " + acc}
+    piante = []
+    try:
+        r = _dm_req.get(DM_SM_API + "/plants", headers=h, timeout=15)
+        out.append(("✅" if r.status_code in (200, 204) else "❌", "Elenco impianti (/plants)", f"HTTP {r.status_code} · {(r.text or '')[:200]}"))
+        piante = ((r.json() or {}).get("plants") or []) if r.status_code == 200 else []
+    except Exception as e:
+        out.append(("❌", "Elenco impianti (/plants)", str(e)))
+    for pl in piante[:2]:
+        for nome, perc in (("Termostati dell'impianto (topology)", f"/plants/{pl['id']}/topology"),
+                           ("Termostati dell'impianto (modules)", f"/chronothermostat/thermoregulation/addressLocation/plants/{pl['id']}/modules")):
+            try:
+                r = _dm_req.get(DM_SM_API + perc, headers=h, timeout=15)
+                out.append(("✅" if r.status_code == 200 else "❌", nome, f"HTTP {r.status_code} · {(r.text or '')[:300]}"))
+            except Exception as e:
+                out.append(("❌", nome, str(e)))
+    try:
+        trovati = dm_sm_dispositivi()
+        out.append(("✅" if trovati else "❌", "Termostati trovati da VitaMemo", ", ".join(t["nome"] for t in trovati) or "nessuno"))
+    except Exception as e:
+        out.append(("❌", "Termostati trovati da VitaMemo", str(e)))
     return out
 
 
@@ -482,8 +497,17 @@ def dm_sm_dispositivi():
         return f.get("smarther", [])
     out = []
     for pl in (dm_sm("GET", "/plants") or {}).get("plants") or []:
-        topo = dm_sm("GET", f"/plants/{pl['id']}/topology") or {}
+        try:
+            topo = dm_sm("GET", f"/plants/{pl['id']}/topology") or {}
+        except DmErrore:
+            topo = {}
         mods = ((topo.get("plant") or {}).get("modules")) or topo.get("modules") or []
+        if not mods:
+            try:
+                alt = dm_sm("GET", f"/chronothermostat/thermoregulation/addressLocation/plants/{pl['id']}/modules") or {}
+                mods = alt.get("modules") or alt.get("chronothermostats") or ((alt.get("plant") or {}).get("modules")) or []
+            except DmErrore:
+                mods = []
         for m in mods:
             if m.get("device") and "chrono" not in str(m.get("device")).lower():
                 continue
