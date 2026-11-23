@@ -535,15 +535,50 @@ def dm_sm_stato(ext_id):
         sp = None
     return {"temperatura": _mis(c.get("thermometer")), "umidita": _mis(c.get("hygrometer")), "voluta": sp, "modo": str(c.get("mode") or "").lower(),
             "funzione": str(c.get("function") or "heating").lower(), "programma": ((c.get("programs") or [{}])[0] or {}).get("number"),
-            "acceso": str(c.get("loadState") or "").upper() == "ACTIVE"}
+            "acceso": str(c.get("loadState") or "").upper() == "ACTIVE", "fino": _dm_sm_fine(c.get("activationTime"))}
 
 
-def dm_sm_imposta(ext_id, modo, voluta=None, minuti=None, programma=None, funzione=None):
+def _dm_sm_fine(at):
+    """«2026-11-23T10:00:00/2026-11-23T11:30:00» → «11:30» (o «24/11 11:30» se non è oggi)."""
+    try:
+        import datetime as _dt
+        fine = str(at or "").split("/")[1][:16]
+        d = _dt.datetime.strptime(fine, "%Y-%m-%dT%H:%M")
+        try:
+            oggi = adesso().date()
+        except Exception:
+            oggi = _dt.date.today()
+        return d.strftime("%H:%M") if d.date() == oggi else d.strftime("%d/%m %H:%M")
+    except Exception:
+        return ""
+
+
+def dm_sm_programmi(ext_id):
+    """Programmi settimanali salvati nel termostato: [(numero, nome)]. Se Legrand non risponde: lista vuota."""
+    f = dm_finto()
+    if f is not None:
+        return [tuple(p) for p in f.get("programmi_sm", {}).get(ext_id, [])]
+    pl, mod = ext_id.split("|", 1)
+    try:
+        j = dm_sm("GET", f"/chronothermostat/thermoregulation/addressLocation/plants/{pl}/modules/parameter/id/value/{mod}/programlist") or {}
+    except Exception:
+        return []
+    progs = ((j.get("chronothermostats") or [{}])[0] or {}).get("programs") or j.get("programs") or []
+    out = []
+    for p_ in progs:
+        try:
+            out.append((int(p_.get("number")), str(p_.get("name") or f"Programma {p_.get('number')}")))
+        except Exception:
+            pass
+    return out
+
+
+def dm_sm_imposta(ext_id, modo, voluta=None, minuti=None, programma=None, funzione=None, fino=None):
     """modo: automatic (programma), manual (temperatura, per sempre o per N minuti), boost (30/60/90 min), off, protection (antigelo).
     Il corpo è lo stesso dell'integrazione per Home Assistant (bticino_x8000): funzione attuale, setPoint in «°C», programma attuale."""
     f = dm_finto()
     if f is not None:
-        f.setdefault("comandi", []).append([ext_id, modo, voluta, minuti])
+        f.setdefault("comandi", []).append([ext_id, modo, voluta, minuti, fino.strftime("%Y-%m-%dT%H:%M") if fino else None])
         _dm_os.environ["VM_DM_FINTO"] = _dm_json.dumps(f)
         return True
     import datetime as _dt
@@ -555,14 +590,16 @@ def dm_sm_imposta(ext_id, modo, voluta=None, minuti=None, programma=None, funzio
     funz = (funzione or ora_st.get("funzione") or "heating").lower()
     prog = int(programma or ora_st.get("programma") or 1)
     try:
-        adesso_ = adesso()
+        adesso_ = adesso().replace(microsecond=0, tzinfo=None)
     except Exception:
-        adesso_ = _dt.datetime.now()
+        adesso_ = _dt.datetime.now().replace(microsecond=0)
     fmt = "%Y-%m-%dT%H:%M:%S"
     corpo = {"function": funz, "mode": modo}
     if modo == "manual":
         corpo["setPoint"] = {"value": f"{float(voluta if voluta is not None else (ora_st.get('voluta') or 20)):.1f}", "unit": "°C"}
-        if minuti:
+        if fino is not None:
+            corpo["activationTime"] = adesso_.strftime(fmt) + "/" + fino.replace(second=0, microsecond=0, tzinfo=None).strftime(fmt)
+        elif minuti:
             corpo["activationTime"] = adesso_.strftime(fmt) + "/" + (adesso_ + _dt.timedelta(minutes=int(minuti))).strftime(fmt)
         else:
             corpo["programs"] = [{"number": prog}]
@@ -718,23 +755,35 @@ def _dm_controlli_smarther(x, k):
                 f"<div class='m'>💧 Umidità {f'{u:.0f}%' if u is not None else '—'} · 🎯 voluta {(f'{v:.1f}°' if v is not None else '—').replace('.', ',')}"
                 f" · modo: <b>{ {'automatic': 'automatico', 'manual': 'manuale', 'boost': 'boost', 'off': 'spento', 'protection': 'antigelo'}.get(s.get('modo'), s.get('modo') or '?') }</b>"
                 f"{' · 🔥 caldaia accesa' if s.get('acceso') else ''}</div></div>", unsafe_allow_html=True)
-    modo = st.radio("Cosa vuoi fare?", ["🎯 Temperatura a mano", "🅰️ Programma automatico", "🚀 Boost", "❄️ Antigelo", "⏻ Spegni"], horizontal=True, key=k + "_modo")
+    if s.get("fino") and s.get("modo") in ("manual", "boost"):
+        st.caption(f"⏱️ {'Boost' if s.get('modo') == 'boost' else 'Manuale'} fino alle {s['fino']}, poi torna al programma automatico.")
+    modo = st.radio("Cosa vuoi fare?", ["🎯 Temperatura a mano", "🚀 Boost", "🅰️ Programma automatico", "❄️ Antigelo", "⏻ Spegni"], horizontal=True, key=k + "_modo")
     if modo.startswith("🎯"):
-        nuova = st.slider("Temperatura voluta (°C)", 5.0, 30.0, float(v or 20.0), 0.5, key=k + "_t")
-        durata = st.selectbox("Per quanto tempo", [0, 60, 120, 180, 240, 480], format_func=lambda m: "finché non cambio" if not m else f"{m // 60} ore", key=k + "_dur")
-        if st.button(f"✅ Imposta {nuova:g}°".replace(".", ","), key=k + "_ok1", type="primary", width="stretch"):
-            if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "manual", nuova, durata or None), f"Termostato a {nuova:g}°"):
-                _dm_log(f"{x.get('nome')}: manuale {nuova:g}°"); _dm_rr()
+        _dm_manuale_smarther(x, k, v)
     elif modo.startswith("🅰️"):
-        prog = st.number_input("Numero del programma (come nell'app)", 1, 10, int(s.get("programma") or 1), key=k + "_p")
-        if st.button("✅ Torna al programma automatico", key=k + "_ok2", type="primary", width="stretch"):
+        progs = dm_sm_programmi(x["ext_id"])
+        attuale = s.get("programma")
+        if progs:
+            nums = [n for n, _ in progs]
+            prog = st.radio("Quale programma settimanale", nums, index=nums.index(attuale) if attuale in nums else 0,
+                            format_func=lambda n: next(f"{nome_} (n. {n})" for n_, nome_ in progs if n_ == n) + (" · in uso" if n == attuale else ""), key=k + "_p")
+        else:
+            prog = st.number_input("Numero del programma (come nell'app Termostato)", 0, 10, int(attuale or 1), key=k + "_p")
+        st.caption("📅 Gli orari di ogni giorno (a che ora accendere e a quanti gradi) sono scritti dentro il programma. "
+                   "Legrand permette alle altre app solo di sceglierlo, non di cambiarne gli orari: quelli si modificano nell'app Termostato.")
+        dm_pulsante_app("bticino", k + "_app")
+        if st.button("✅ Usa questo programma", key=k + "_ok2", type="primary", width="stretch"):
             if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "automatic", programma=prog), "Termostato in automatico"):
                 _dm_log(f"{x.get('nome')}: automatico (programma {prog})"); _dm_rr()
     elif modo.startswith("🚀"):
+        st.caption("Il boost accende il riscaldamento al massimo per il tempo scelto, poi torna da solo al programma automatico (come il tasto ▶ dell'app Termostato).")
         mi = st.radio("Per", [30, 60, 90], format_func=lambda m: f"{m} minuti", horizontal=True, key=k + "_b")
-        if st.button("✅ Avvia il boost", key=k + "_ok3", type="primary", width="stretch"):
+        if st.button(f"🚀 Avvia il boost per {mi} minuti", key=k + "_ok3", type="primary", width="stretch"):
             if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "boost", minuti=mi), f"Boost per {mi} minuti"):
                 _dm_log(f"{x.get('nome')}: boost {mi} min"); _dm_rr()
+        if s.get("modo") == "boost" and st.button("⏹ Ferma il boost (torna in automatico)", key=k + "_stopb", width="stretch"):
+            if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "automatic", programma=s.get("programma")), "Boost fermato"):
+                _dm_log(f"{x.get('nome')}: boost fermato"); _dm_rr()
     elif modo.startswith("❄️"):
         if st.button("✅ Metti in antigelo", key=k + "_ok4", type="primary", width="stretch"):
             if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "protection"), "Termostato in antigelo"):
@@ -743,6 +792,35 @@ def _dm_controlli_smarther(x, k):
         if st.button("✅ Spegni il riscaldamento", key=k + "_ok5", type="primary", width="stretch"):
             if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "off"), "Termostato spento"):
                 _dm_log(f"{x.get('nome')}: spento"); _dm_rr()
+
+
+def _dm_manuale_smarther(x, k, v):
+    """Come «Modalità manuale» dell'app Termostato: temperatura + «Fino a» (per sempre, per qualche ora, fino a un orario)."""
+    import datetime as _dt
+    nuova = st.number_input("🌡️ Imposta temperatura (°C)", min_value=3.0, max_value=40.0, value=float(v if v is not None else 20.0), step=0.5, format="%.1f", key=k + "_t")
+    g_ = f"{nuova:g}".replace(".", ",")
+    fino_a = st.radio("Fino a", ["♾️ Per sempre", "⏱️ Per qualche ora", "🕘 Fino a un orario"], horizontal=True, key=k + "_fa")
+    durata, fino, ok = None, None, True
+    if fino_a.startswith("⏱️"):
+        durata = st.select_slider("Per quanto tempo", [30, 60, 90, 120, 180, 240, 360, 480, 720],
+                                  value=120, format_func=lambda m: f"{m} minuti" if m < 60 else (f"{m // 60} ore" + (" e mezza" if m % 60 else "")).replace("1 ore", "1 ora"), key=k + "_dur")
+    elif fino_a.startswith("🕘"):
+        ora_ = adesso()
+        c1, c2 = st.columns(2, gap="small")
+        orario = c2.time_input("Orario", value=_dt.time((ora_.hour + 2) % 24, 0), step=_dt.timedelta(minutes=15), key=k + "_ora")
+        giorno_def = ora_.date() if orario > ora_.time() else ora_.date() + _dt.timedelta(days=1)
+        giorno = c1.date_input("Giorno", value=giorno_def, min_value=ora_.date(), max_value=ora_.date() + _dt.timedelta(days=60), format="DD/MM/YYYY", key=k + "_gio")
+        fino = _dt.datetime.combine(giorno, orario)
+        if fino <= ora_:
+            st.warning("⚠️ L'orario scelto è già passato: scegli un orario più avanti o il giorno dopo.")
+            ok = False
+        else:
+            quando = "oggi" if giorno == ora_.date() else ("domani" if giorno == ora_.date() + _dt.timedelta(days=1) else giorno.strftime("%d/%m"))
+            st.caption(f"Resterà a {g_}° fino a {quando} alle {orario.strftime('%H:%M')}, poi tornerà al programma automatico.")
+    if st.button(f"✅ Imposta {g_}°", key=k + "_ok1", type="primary", width="stretch", disabled=not ok):
+        dove = " per sempre" if not durata and not fino else (f" fino alle {fino.strftime('%H:%M')}" if fino else f" per {durata} minuti")
+        if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "manual", nuova, durata, fino=fino), f"Termostato a {g_}°{dove}"):
+            _dm_log(f"{x.get('nome')}: manuale {nuova:g}°{dove}"); _dm_rr()
 
 
 def _dm_rr():
@@ -1077,7 +1155,8 @@ def _dm_rapido_smarther(x, k):
     modi = {"automatic": "🅰️ automatico", "manual": "✋ manuale", "boost": "🚀 boost", "off": "⏻ spento", "protection": "❄️ antigelo"}
     st.markdown(f"<div class='dm-rc'><span class='big'>{(f'{t:.1f}°' if t is not None else '—').replace('.', ',')}</span> "
                 f"<span class='s'>in casa · 🎯 voluta {(f'{v:.1f}°' if v is not None else '—').replace('.', ',')}"
-                f" · {modi.get(s_.get('modo'), s_.get('modo') or '')}{' · 🔥 acceso' if s_.get('acceso') else ''}"
+                f" · {modi.get(s_.get('modo'), s_.get('modo') or '')}{(' fino alle ' + s_['fino']) if s_.get('fino') and s_.get('modo') in ('manual', 'boost') else ''}"
+                f"{' · 🔥 acceso' if s_.get('acceso') else ''}"
                 f"{(' · 💧 ' + format(s_['umidita'], '.0f') + '%') if s_.get('umidita') is not None else ''}</span></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3, gap="small")
     base = v if v is not None else 20.0
@@ -1091,6 +1170,24 @@ def _dm_rapido_smarther(x, k):
         if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "automatic", programma=s_.get("programma")), "Termostato in automatico"):
             _dm_log(f"{x.get('nome')}: automatico")
             st.rerun()
+    st.caption("🚀 Boost: riscaldamento al massimo, poi torna da solo in automatico")
+    b1, b2, b3 = st.columns(3, gap="small")
+    for col, mi in ((b1, 30), (b2, 60), (b3, 90)):
+        if col.button(f"🚀 {mi}′", key=f"{k}_b{mi}", width="stretch"):
+            if _dm_esito(lambda mi=mi: dm_sm_imposta(x["ext_id"], "boost", minuti=mi), f"{x.get('nome')}: boost per {mi} minuti"):
+                _dm_log(f"{x.get('nome')}: boost {mi} min")
+                st.rerun()
+    if s_.get("modo") == "boost":
+        if st.button("⏹ Ferma il boost", key=k + "_stopb", width="stretch"):
+            if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "automatic", programma=s_.get("programma")), "Boost fermato"):
+                _dm_log(f"{x.get('nome')}: boost fermato")
+                st.rerun()
+    elif s_.get("modo") != "off":
+        if st.button("⏻ Spegni", key=k + "_off", width="stretch"):
+            if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "off"), f"{x.get('nome')}: spento"):
+                _dm_log(f"{x.get('nome')}: spento")
+                st.rerun()
+    st.caption("🕘 Temperatura fino a un orario e programmi: tocca «🎮 Tutti i comandi e la scheda».")
 
 
 def _dm_telecomando(dm, casa_id, disp):
