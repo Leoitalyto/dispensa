@@ -35,7 +35,7 @@ LM_MODELLI = {
         "data": {"g": (108, 719), "m": (137, 719), "a": (166, 719)},
     },
     "frassati_vestiario": {
-        "titolo": "Scheda ordini abbigliamento", "icona": "👕", "file": "modelli_lavoro/frassati_vestiario.json", "pagina": (595, 842),
+        "titolo": "Scheda ordini abbigliamento", "icona": "👕", "solo_admin": True, "file": "modelli_lavoro/frassati_vestiario.json", "pagina": (595, 842),
         "testi": {"appalto": (92, 158, 560, 11), "mese": (124, 187, 400, 11), "data_ordine": (422, 187, 560, 11),
                   "luogo": (152, 216, 560, 11), "riferimento": (95, 251, 560, 10)},
         "tabella": {"y0": 285.0, "y1": 730.0, "righe": 23, "colonne": [("nome", 24, 136), ("articolo", 136, 268), ("qta", 268, 302), ("taglia", 302, 396), ("altro", 396, 564)]},
@@ -155,10 +155,19 @@ def lm_genera_pdf(modello, sfondo_jpg, valori, firma_png=None):
         elif tipo == "Altro":
             x, y, xm, f = t["altro"]
             _lm_scrivi(pg, x, y, xm, v.get("altro"), f)
-        dal, al = lm_data(v.get("dal")), lm_data(v.get("al"))
-        if dal:
+        testo_p = _lm_latino(lm_testo_periodi(v))
+        if testo_p:
             x, y, xm, f = t["periodo"]
-            _lm_scrivi(pg, x, y, xm, _lm_fmt(dal) + (f"  fino al  {_lm_fmt(al)}" if al else ""), f)
+            if fitz.get_text_length(testo_p, fontname="helv", fontsize=f) <= (xm - x):
+                _lm_scrivi(pg, x, y, xm, testo_p, f)
+            else:                                                 # giorni sparsi: si va oltre la riga e, se serve, a capo sotto
+                dim = 10
+                righe_p = _lm_righe_a_capo(testo_p, 505 - x, dim)
+                while len(righe_p) > 3 and dim > 7:
+                    dim -= 0.5
+                    righe_p = _lm_righe_a_capo(testo_p, 505 - x, dim)
+                for i, r_ in enumerate(righe_p[:4]):
+                    _lm_scrivi(pg, x if i == 0 else 98, y + i * (dim + 3), 505, r_, dim, minimo=6)
         dm = lm_data(v.get("data_modulo"))
         if dm:
             for k, s in (("g", f"{dm.day:02d}"), ("m", f"{dm.month:02d}"), ("a", str(dm.year))):
@@ -213,14 +222,68 @@ def lm_pagine(pdf):
         return len(doc)
 
 
+def lm_periodi(v):
+    """I giorni chiesti: [(dal, al)] in ordine, uniti se si toccano. Accetta il formato nuovo (v["giorni"]) e quello vecchio (dal/al)."""
+    grezzi = []
+    for g in (v.get("giorni") or []) or [{"dal": v.get("dal"), "al": v.get("al")}]:
+        a, b = lm_data(g.get("dal")), lm_data(g.get("al"))
+        if a:
+            b = b if b and b >= a else a
+            grezzi.append((a, b))
+    uniti = []
+    for a, b in sorted(grezzi):
+        if uniti and a <= uniti[-1][1] + _lm_dt.timedelta(days=1):
+            uniti[-1] = (uniti[-1][0], max(uniti[-1][1], b))
+        else:
+            uniti.append((a, b))
+    return uniti
+
+
+def lm_n_giorni(v):
+    return sum((b - a).days + 1 for a, b in lm_periodi(v))
+
+
+def lm_testo_periodi(v, corto=False):
+    """Come si scrive sul modulo: un periodo → «22/12/2026 fino al 06/01/2027»; giorni sparsi → «02/12/2026, 05/12/2026 e dal 10/12/2026 al 12/12/2026»."""
+    per = lm_periodi(v)
+    if not per:
+        return ""
+    if len(per) == 1:
+        a, b = per[0]
+        return _lm_fmt(a) if a == b else f"{_lm_fmt(a)}  fino al  {_lm_fmt(b)}"
+    f = (lambda d: d.strftime("%d/%m")) if corto else _lm_fmt
+    pezzi = [f(a) if a == b else f"dal {f(a)} al {f(b)}" for a, b in per]
+    return ", ".join(pezzi[:-1]) + " e " + pezzi[-1]
+
+
+def _lm_righe_a_capo(testo, larg, dim):
+    """Divide il testo in righe che stanno nella larghezza (va a capo dopo le virgole)."""
+    import pymupdf as fitz
+    righe, cur = [], ""
+    for parola in testo.split(" "):
+        prova = (cur + " " + parola).strip()
+        if cur and fitz.get_text_length(prova, fontname="helv", fontsize=dim) > larg:
+            righe.append(cur)
+            cur = parola
+        else:
+            cur = prova
+    return righe + ([cur] if cur else [])
+
+
 def lm_titolo(rec):
     """Il nome del modulo compilato (anche per il file)."""
     v = rec.get("valori") or {}
     if rec.get("modello") == "frassati_permessi":
-        dal, al = lm_data(v.get("dal")), lm_data(v.get("al"))
         tipo = v.get("altro") if v.get("tipo") == "Altro" else v.get("tipo")
-        per = (f" dal {_lm_fmt(dal)}" if dal else "") + (f" al {_lm_fmt(al)}" if al and al != dal else "")
-        return f"{tipo or 'Permesso'}{per}"
+        per = lm_periodi(v)
+        if len(per) == 1:
+            a, b = per[0]
+            testo_ = f" il {_lm_fmt(a)}" if a == b else f" dal {_lm_fmt(a)} al {_lm_fmt(b)}"
+        elif per:
+            testo_ = f" · {lm_n_giorni(v)} giorni: {lm_testo_periodi(v, corto=True)}"
+        else:
+            testo_ = ""
+        return f"{tipo or 'Permesso'}{testo_}"
     n = len([r for r in v.get("righe") or [] if r.get("articolo") or r.get("nome")])
     return f"Ordine abbigliamento {v.get('mese') or ''}".strip() + (f" · {n} {'riga' if n == 1 else 'righe'}" if n else "")
 
@@ -249,11 +312,12 @@ def lm_controlla(modello, v):
             err.append("Scegli cosa chiedi (ferie, permesso…).")
         if v.get("tipo") == "Altro" and not str(v.get("altro") or "").strip():
             err.append("Hai scelto «Altro»: scrivi che cosa.")
-        dal, al = lm_data(v.get("dal")), lm_data(v.get("al"))
-        if not dal:
-            err.append("Scegli da quando («A decorrere dal»).")
-        if dal and al and al < dal:
-            err.append("«Fino al» è prima di «dal»: controlla le date.")
+        if not lm_periodi(v):
+            err.append("Scegli almeno un giorno («A decorrere dal»).")
+        for g in v.get("giorni") or []:
+            a, b = lm_data(g.get("dal")), lm_data(g.get("al"))
+            if a and b and b < a:
+                err.append(f"«Fino al» {_lm_fmt(b)} è prima di «dal» {_lm_fmt(a)}: controlla le date.")
     else:
         if not [r for r in v.get("righe") or [] if r.get("articolo")]:
             err.append("Aggiungi almeno una riga (chi, che articolo, quanti).")
@@ -286,16 +350,25 @@ def lm_taglia_proposta(mem, nome, articolo):
     return ""
 
 
-def lm_appuntamento(rec):
-    """La voce per gli appuntamenti di Lavoro (solo per i permessi): {nome, data, …}."""
+def lm_appuntamenti(rec):
+    """Le voci per gli appuntamenti di Lavoro (solo per i permessi): una per ogni giorno o periodo chiesto."""
     v = rec.get("valori") or {}
-    dal, al = lm_data(v.get("dal")), lm_data(v.get("al"))
-    if rec.get("modello") != "frassati_permessi" or not dal:
-        return None
+    per = lm_periodi(v)
+    if rec.get("modello") != "frassati_permessi" or not per:
+        return []
     tipo = v.get("altro") if v.get("tipo") == "Altro" else v.get("tipo")
-    return {"id": "lm_" + rec["id"], "nome": tipo or "Permesso", "funzione": "Richiesta di permesso – ferie", "telefono": "", "data": dal.isoformat(), "ora": "",
-            "luogo": "", "motivo": (f"dal {_lm_fmt(dal)} al {_lm_fmt(al)}" if al and al != dal else f"il {_lm_fmt(dal)}"), "note": "Dal modulo compilato in Lavoro → Moduli.",
-            "fatto": False, "priorita": "", "da_modulo": rec["id"]}
+    out = []
+    for i, (a, b) in enumerate(per):
+        out.append({"id": f"lm_{rec['id']}_{i}", "nome": tipo or "Permesso", "funzione": "Richiesta di permesso – ferie", "telefono": "", "data": a.isoformat(), "ora": "",
+                    "luogo": "", "motivo": (f"dal {_lm_fmt(a)} al {_lm_fmt(b)}" if b != a else f"il {_lm_fmt(a)}") + (f" (in tutto {lm_n_giorni(v)} giorni)" if len(per) > 1 else ""),
+                    "note": "Dal modulo compilato in Lavoro → Moduli.", "fatto": False, "priorita": "", "da_modulo": rec["id"]})
+    return out
+
+
+def lm_metti_appuntamenti(d, rec):
+    """Sostituisce negli appuntamenti di Lavoro quelli di questo modulo (se lo modifichi non restano i giorni vecchi)."""
+    lst = d.setdefault("appuntamenti", {}).setdefault("lavoro", [])
+    lst[:] = [x for x in lst if x.get("da_modulo") != rec["id"]] + lm_appuntamenti(rec)
 
 
 # =====================================================================================================================
@@ -447,13 +520,37 @@ def _lm_form_permessi(v, k):
     v["tipo"] = st.radio("chiede di poter usufruire di", opz, index=opz.index(v["tipo"]) if v.get("tipo") in opz else 3, key=k + "tipo", label_visibility="collapsed")
     if v["tipo"] == "Altro":
         v["altro"] = st.text_input("Altro: che cosa", value=v.get("altro", ""), key=k + "altro")
-    st.markdown("**3 · Quando**")
-    c1, c2 = st.columns(2, gap="small")
-    dal = c1.date_input("A decorrere dal", value=lm_data(v.get("dal")) or _lm_dt.date.today(), format="DD/MM/YYYY", key=k + "dal")
-    al = c2.date_input("fino al", value=max(lm_data(v.get("al")) or dal, dal), min_value=dal, format="DD/MM/YYYY", key=k + "al")
-    v["dal"], v["al"] = dal.isoformat(), al.isoformat()
-    giorni = (al - dal).days + 1
-    st.caption(f"🗓️ {giorni} {'giorno' if giorni == 1 else 'giorni'} di calendario.")
+    st.markdown("**3 · Quali giorni**")
+    st.caption("Un giorno solo: lascia «fino al» uguale a «dal». Giorni non di fila: tocca «➕ Aggiungi un altro giorno».")
+    if not v.get("giorni"):
+        v["giorni"] = [{"dal": v.get("dal") or _lm_dt.date.today().isoformat(), "al": v.get("al") or v.get("dal") or _lm_dt.date.today().isoformat()}]
+    giorni = v["giorni"]
+    for i, g in enumerate(giorni):
+        with st.container(border=True, key=f"{k}g{i}"):
+            c1, c2 = st.columns(2, gap="small")
+            dal = c1.date_input("A decorrere dal" if i == 0 else "e dal", value=lm_data(g.get("dal")) or _lm_dt.date.today(), format="DD/MM/YYYY", key=f"{k}dal{i}")
+            al0 = lm_data(g.get("al")) or dal
+            al = c2.date_input("fino al", value=al0 if al0 >= dal else dal, min_value=dal, format="DD/MM/YYYY", key=f"{k}al{i}")
+            g["dal"], g["al"] = dal.isoformat(), al.isoformat()
+            n = (al - dal).days + 1
+            c3, c4 = st.columns([3, 1], gap="small")
+            c3.caption(f"🗓️ {'1 giorno' if n == 1 else f'{n} giorni di fila'}")
+            if len(giorni) > 1 and c4.button("🗑️", key=f"{k}gdel{i}", width="stretch", help="Togli questo giorno"):
+                giorni.pop(i)
+                for x in ("dal", "al"):
+                    for j in range(i, len(giorni) + 1):
+                        st.session_state.pop(f"{k}{x}{j}", None)
+                st.rerun()
+    if st.button("➕ Aggiungi un altro giorno", key=k + "gadd", width="stretch"):
+        ultimo = max((lm_data(g.get("al")) for g in giorni if lm_data(g.get("al"))), default=_lm_dt.date.today())
+        nuovo = (ultimo + _lm_dt.timedelta(days=2)).isoformat()
+        giorni.append({"dal": nuovo, "al": nuovo})
+        st.rerun()
+    per = lm_periodi(v)
+    if per:
+        v["dal"], v["al"] = per[0][0].isoformat(), per[-1][1].isoformat()
+        tot = lm_n_giorni(v)
+        st.info(f"Sul modulo: **{lm_testo_periodi(v)}** · in tutto **{tot} {'giorno' if tot == 1 else 'giorni'}**")
     st.markdown("**4 · Data del modulo**")
     v["data_modulo"] = st.date_input("Torino, il", value=lm_data(v.get("data_modulo")) or _lm_dt.date.today(), format="DD/MM/YYYY", key=k + "dm").isoformat()
     st.caption("«Visto dal Responsabile di Settore» resta vuoto: lo firma lui.")
@@ -466,12 +563,13 @@ def _lm_form_vestiario(v, k, mem):
     v["mese"] = c1.text_input("Ordine mese", value=v.get("mese", ""), key=k + "mese")
     v["data_ordine"] = c2.date_input("Data ordine", value=lm_data(v.get("data_ordine")) or _lm_dt.date.today(), format="DD/MM/YYYY", key=k + "do").isoformat()
     v["luogo"] = st.text_input("Luogo consegna", value=v.get("luogo", ""), key=k + "luogo")
-    v["riferimento"] = st.text_input("Riferimento", value=v.get("riferimento", ""), key=k + "rif")
+    v["riferimento"] = st.text_input("Riferimento (il tuo nome: va anche nella colonna «Nome cognome»)", value=v.get("riferimento", ""), key=k + "rif")
     st.markdown(f"**2 · Abbigliamento** ({len(v.get('righe') or [])} {'riga' if len(v.get('righe') or []) == 1 else 'righe'})")
     righe = v.setdefault("righe", [])
     for i, r in enumerate(righe):
         a, b = st.columns([5, 1], gap="small")
-        a.markdown(f"<div class='lm-card' style='margin:2px 0;padding:6px 10px'><b>{sc_esc(r.get('nome') or '—')}</b> · {sc_esc(r.get('articolo') or '')}"
+        r["nome"] = v.get("riferimento") or r.get("nome") or ""
+        a.markdown(f"<div class='lm-card' style='margin:2px 0;padding:6px 10px'><b>{sc_esc(r.get('articolo') or '')}</b>"
                    f" · <b>{sc_esc(r.get('qta') or '')}</b> pz · taglia <b>{sc_esc(r.get('taglia') or '—')}</b>"
                    + (f" · {sc_esc(r['altro'])}" if r.get("altro") else "") + "</div>", unsafe_allow_html=True)
         if b.button("🗑️", key=f"{k}del{i}", width="stretch"):
@@ -479,11 +577,7 @@ def _lm_form_vestiario(v, k, mem):
             st.rerun()
     with st.container(border=True, key=k + "riga"):
         st.markdown("➕ **Aggiungi una riga**")
-        colleghi = list(((mem or {}).get("colleghi") or {}).keys())
-        mio = v.get("riferimento") or ""
-        nomi = ([mio] if mio else []) + [n for n in colleghi if n != mio]
-        nome = st.selectbox("Nome e cognome", nomi, index=0 if nomi else None, accept_new_options=True, key=k + "rn",
-                            placeholder="Scrivi o scegli", help="Scrivi un nome nuovo e premi Invio: la prossima volta lo trovi nell'elenco.")
+        nome = v.get("riferimento") or _lm_nome_mio()                 # la scheda è solo per te: il nome è il tuo
         arts = LM_ARTICOLI + [a for a in ((mem or {}).get("articoli") or []) if a not in LM_ARTICOLI]
         art = st.selectbox("Articolo", arts, index=None, accept_new_options=True, key=k + "ra", placeholder="Scrivi o scegli")
         c1, c2 = st.columns([1, 2], gap="small")
@@ -491,7 +585,7 @@ def _lm_form_vestiario(v, k, mem):
         prop = lm_taglia_proposta(mem, nome, art)
         tg_opz = ([prop] if prop and prop not in LM_TAGLIE else []) + LM_TAGLIE
         tg = c2.selectbox("Taglia / Numero", tg_opz, index=tg_opz.index(prop) if prop in tg_opz else None, accept_new_options=True, key=k + "rt",
-                          placeholder="Scegli", help="Se la persona l'ha già ordinata, la taglia è proposta da sola.")
+                          placeholder="Scegli", help="Se l'hai già ordinato, la taglia è proposta da sola.")
         altro = st.text_input("Altro (facoltativo: colore, note…)", key=k + "rx")
         if st.button("➕ Aggiungi alla lista", key=k + "radd", type="primary", width="stretch"):
             if not art:
@@ -565,10 +659,9 @@ def _lm_editor(m):
                     mm["impostazioni"]["cantiere"] = v.get("cantiere", "").strip()
                 mm["memoria"] = lm_impara(mm.get("memoria"), rec)
             _lm_salva(_fn, lm_titolo(rec))
-            ap = lm_appuntamento(rec)                            # le ferie vanno anche negli appuntamenti di Lavoro
-            if ap and "_apn_salva" in globals():
+            if modello == "frassati_permessi" and "sc_salva" in globals():     # i giorni chiesti vanno anche negli appuntamenti di Lavoro
                 try:
-                    _apn_salva("lavoro", ap)
+                    sc_salva(lambda d, rec=rec: lm_metti_appuntamenti(d, rec), "Lavoro: giorni di permesso negli appuntamenti")
                 except Exception:
                     pass
             st.session_state.pop("lm_bozza", None)
@@ -700,6 +793,8 @@ def lm_pagina(c):
     if _lm_editor(m):
         return
     for mid, M in LM_MODELLI.items():
+        if M.get("solo_admin") and not (st.session_state.get("sess") or {}).get("admin"):
+            continue
         if st.button(f"{M['icona']} {M['titolo']}", key=f"lm_nuovo_{mid}", type="primary", width="stretch"):
             st.session_state["lm_bozza"] = {"id": _lm_uuid.uuid4().hex[:10], "modello": mid, "valori": _lm_nuovo_valori(mid, m)}
             st.rerun()
