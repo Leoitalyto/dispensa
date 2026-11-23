@@ -789,7 +789,7 @@ def schermata_lavoro():
     except Exception as ex:
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
-    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato"]
+    voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato", "📝 Moduli da compilare"]
     solo_admin = ("🧮 Controllo ore", "💰 Stipendio previsto")                   # servono al modulo ore dell'amministratore: gli utenti non le vedono
     if not (st.session_state.get("sess") or {}).get("admin"):
         voci_viste = [v for v in voci if v not in solo_admin]
@@ -833,6 +833,11 @@ def schermata_lavoro():
             ost_pagina(c)
         else:
             st.warning("La previsione dello stipendio non è disponibile.")
+    elif scelta == voci[8]:
+        if "lm_pagina" in globals():
+            lm_pagina(c)
+        else:
+            st.warning("I moduli non sono disponibili.")
     else:
         lv_tab_contatti(c)
 
