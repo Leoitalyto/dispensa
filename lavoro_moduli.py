@@ -371,6 +371,69 @@ def lm_metti_appuntamenti(d, rec):
     lst[:] = [x for x in lst if x.get("da_modulo") != rec["id"]] + lm_appuntamenti(rec)
 
 
+# --- catalogo dei moduli ------------------------------------------------------------------------------------------------
+def lm_data_rif(rec):
+    """La data con cui il modulo si cataloga: per i permessi il primo giorno chiesto, per l'abbigliamento la data dell'ordine."""
+    v = rec.get("valori") or {}
+    if rec.get("modello") == "frassati_permessi":
+        per = lm_periodi(v)
+        if per:
+            return per[0][0]
+    return lm_data(v.get("data_ordine")) or lm_data(v.get("data_modulo")) or lm_data(rec.get("creato_il")) or _lm_dt.date.today()
+
+
+def lm_stato(rec):
+    """("inviato" | "da_rimandare" | "da_inviare", testo). «da_rimandare» = modificato dopo l'ultimo invio."""
+    invii = rec.get("invii") or []
+    if not invii:
+        return "da_inviare", "⏳ da inviare"
+    ult = invii[-1]
+    if str(rec.get("aggiornato_il") or "") > str(ult.get("il") or ""):
+        return "da_rimandare", f"✏️ modificato dopo l'invio del {_lm_fmt(lm_data(ult.get('il')))}: da rimandare"
+    return "inviato", f"📤 inviato a {ult.get('a') or '—'} il {_lm_fmt(lm_data(ult.get('il')))}" + (f" ({len(invii)} invii)" if len(invii) > 1 else "")
+
+
+def lm_filtra(compilati, tipo="tutti", stato="tutti", anno=None, cerca=""):
+    out = []
+    q = str(cerca or "").strip().lower()
+    for r in compilati or []:
+        if tipo != "tutti" and r.get("modello") != tipo:
+            continue
+        s_ = lm_stato(r)[0]
+        if stato == "inviati" and s_ != "inviato":
+            continue
+        if stato == "da_inviare" and s_ == "inviato":
+            continue
+        if anno and lm_data_rif(r).year != anno:
+            continue
+        if q:
+            v = r.get("valori") or {}
+            pagliaio = " ".join([lm_titolo(r), str(v.get("note") or ""), str(v.get("appalto") or ""), str(v.get("luogo") or "")]
+                                + [" ".join(str(x.get(c) or "") for c in ("articolo", "taglia", "altro")) for x in v.get("righe") or []]
+                                + [str(x.get("a") or "") for x in r.get("invii") or []]).lower()
+            if q not in pagliaio:
+                continue
+        out.append(r)
+    return sorted(out, key=lambda r: (lm_data_rif(r), str(r.get("creato_il") or "")), reverse=True)
+
+
+def lm_riepilogo_anno(compilati, anno):
+    """Per i permessi dell'anno: {tipo: giorni} (contati una volta sola anche se lo stesso giorno è in due moduli)."""
+    giorni = {}
+    for r in compilati or []:
+        if r.get("modello") != "frassati_permessi":
+            continue
+        v = r.get("valori") or {}
+        tipo = (v.get("altro") or "Altro") if v.get("tipo") == "Altro" else (v.get("tipo") or "Permesso")
+        for a, b in lm_periodi(v):
+            d_ = a
+            while d_ <= b:
+                if d_.year == anno:
+                    giorni.setdefault(tipo, set()).add(d_)
+                d_ += _lm_dt.timedelta(days=1)
+    return {k: len(v) for k, v in sorted(giorni.items(), key=lambda kv: -len(kv[1]))}
+
+
 # =====================================================================================================================
 # Streamlit
 # =====================================================================================================================
@@ -615,6 +678,10 @@ def _lm_editor(m):
     with st.container(border=True, key="lm_editor"):
         st.markdown(f"### {M['icona']} {M['titolo']}" + (" · ✏️ modifica" if bz.get("esistente") else ""))
         v = bz["valori"]
+        if bz.get("invii"):
+            ult = bz["invii"][-1]
+            st.warning(f"Questo modulo è già stato inviato a {ult.get('a')} il {_lm_fmt(lm_data(ult.get('il')))}. La copia inviata resta salvata così com'era; "
+                       "dopo la modifica ricordati di rimandarlo.")
         if modello == "frassati_permessi":
             _lm_form_permessi(v, k)
         else:
@@ -682,12 +749,33 @@ def lm_pdf_di(rec):
     return lm_genera_pdf(rec["modello"], sf, rec.get("valori") or {}, firma)
 
 
-def _lm_segna_invio(rec_id, a, come):
+def _lm_segna_invio(rec, a, come, pdf=None):
+    """Segna l'invio e salva la COPIA ESATTA del PDF inviato (resta così anche se poi modifichi il modulo o cambi la firma)."""
+    copia = None
+    if pdf:
+        try:
+            nid = "lm_" + _lm_uuid.uuid4().hex[:12]
+            _ca_scrivi_file(nid, lm_nome_file(rec), "application/pdf", pdf)
+            copia = {"id": nid, "nome": lm_nome_file(rec), "mime": "application/pdf"}
+        except Exception:
+            copia = None
+    voce = {"a": a, "come": come, "il": _lm_dt.datetime.now().isoformat(timespec="seconds")}
+    if copia:
+        voce["copia"] = copia
+
     def _fn(mm):
         for x in mm["compilati"]:
-            if x.get("id") == rec_id:
-                x.setdefault("invii", []).append({"a": a, "come": come, "il": _lm_dt.datetime.now().isoformat(timespec="seconds")})
+            if x.get("id") == rec["id"]:
+                x.setdefault("invii", []).append(voce)
     _lm_salva(_fn, "inviato a " + a)
+
+
+def _lm_leggi_copia(copia):
+    try:
+        f_ = _fa_inv_allegati([copia]) if "_fa_inv_allegati" in globals() else []
+        return f_[0][2] if f_ else None
+    except Exception:
+        return None
 
 
 def _lm_invio(rec, m, pdf):
@@ -712,7 +800,7 @@ def _lm_invio(rec, m, pdf):
         else:
             st.caption("Per aprire direttamente la sua chat, scrivi il suo numero in «⚙️ A chi li mandi».")
         if st.button(f"✅ Fatto: l'ho mandato a {rn.split()[0] if rn else 'lui'}", key=f"lm_segna_{rec['id']}", width="stretch"):
-            _lm_segna_invio(rec["id"], rn, "WhatsApp")
+            _lm_segna_invio(rec, rn, "WhatsApp", pdf)
             st.toast("✅ Segnato come inviato")
             st.rerun()
     c1, c2 = st.columns(2, gap="small")
@@ -722,13 +810,24 @@ def _lm_invio(rec, m, pdf):
         if imp.get("email_altri"):
             st.caption(f"✉️ Email salvata: {imp['email_altri']}")
         inv_canali(f"lm_altri_{rec['id']}", lm_titolo(rec), msg, [(nome_pdf, "application/pdf", pdf)], oggetto=lm_titolo(rec), forma_fissa=True)
+        st.markdown("**Dopo averlo mandato, segnalo qui** (così resta nel catalogo con la copia inviata):")
+        a1, a2 = st.columns([3, 2], gap="small")
+        chi = a1.text_input("A chi l'hai mandato", value=imp.get("email_altri", ""), key=f"lm_altri_chi_{rec['id']}")
+        come = a2.selectbox("Come", ["Email", "WhatsApp", "Telegram", "A mano", "Altro"], key=f"lm_altri_come_{rec['id']}")
+        if st.button("✅ Segna come inviato", key=f"lm_altri_ok_{rec['id']}", width="stretch"):
+            if not chi.strip():
+                st.error("Scrivi a chi l'hai mandato.")
+            else:
+                _lm_segna_invio(rec, chi.strip(), come, pdf)
+                st.toast("✅ Segnato come inviato")
+                st.rerun()
 
 
 def _lm_card(rec, m):
     M = LM_MODELLI.get(rec.get("modello")) or {"icona": "📝", "titolo": "Modulo"}
     quando = (lm_data(rec.get("aggiornato_il")) or lm_data(rec.get("creato_il")))
     invii = rec.get("invii") or []
-    stato = ("✍️ firmato" if rec.get("firmato") else "senza firma") + (" · " + "; ".join(f"📤 a {x['a']} il {_lm_fmt(lm_data(x['il']))}" for x in invii[-2:]) if invii else " · non ancora inviato")
+    stato = ("✍️ firmato" if rec.get("firmato") else "senza firma") + " · " + lm_stato(rec)[1]
     aperto = st.session_state.get("lm_aperto") == rec["id"]
     st.markdown(f"<div class='lm-card'><b>{M['icona']} {sc_esc(lm_titolo(rec))}</b><div class='lm-s'>{sc_esc(M['titolo'])} · {_lm_fmt(quando)}<br>{sc_esc(stato)}</div></div>",
                 unsafe_allow_html=True)
@@ -781,6 +880,15 @@ def _lm_card(rec, m):
                             x["firmato"] = True
                 _lm_salva(_fn, "firmato")
                 st.rerun()
+        copie = [x for x in invii if x.get("copia")]
+        if copie:
+            with st.expander(f"📎 Copie inviate ({len(copie)}): esattamente come le hai mandate"):
+                for j, x in enumerate(reversed(copie)):
+                    st.caption(f"📤 a {x.get('a')} ({x.get('come')}) il {_lm_fmt(lm_data(x.get('il')))} alle {str(x.get('il'))[11:16]}")
+                    dati_ = _lm_leggi_copia(x["copia"])
+                    if dati_:
+                        st.download_button("⬇️ Scarica questa copia", dati_, file_name=x["copia"].get("nome") or "modulo.pdf", mime="application/pdf",
+                                           key=f"lm_copia_{rec['id']}_{j}", width="stretch")
         _lm_invio(rec, m, pdf)
 
 
@@ -800,9 +908,63 @@ def lm_pagina(c):
             st.rerun()
     _lm_sezione_firma()
     _lm_impostazioni(m)
-    lst = sorted(m["compilati"], key=lambda r: str(r.get("aggiornato_il") or r.get("creato_il") or ""), reverse=True)
-    st.markdown(f"### 🗂️ Moduli compilati ({len(lst)})")
-    if not lst:
+    _lm_catalogo(m)
+
+
+def _lm_catalogo(m):
+    """🗂️ Il catalogo: tutti i moduli, per tipo, stato e anno, divisi per mese; riepilogo dei giorni e copie inviate in un ZIP."""
+    tutti = m["compilati"]
+    st.markdown(f"### 🗂️ Catalogo dei moduli ({len(tutti)})")
+    if not tutti:
         st.caption("Ancora nessuno: tocca uno dei moduli qui sopra.")
-    for rec in lst:
+        return
+    admin = (st.session_state.get("sess") or {}).get("admin")
+    tipi = ["tutti"] + [mid for mid, M in LM_MODELLI.items() if (admin or not M.get("solo_admin")) and any(r.get("modello") == mid for r in tutti)]
+    n_tipo = {mid: sum(1 for r in tutti if r.get("modello") == mid) for mid in LM_MODELLI}
+    tipo = st.pills("Tipo", tipi, default="tutti", key="lm_f_tipo",
+                    format_func=lambda t: "Tutti" if t == "tutti" else f"{LM_MODELLI[t]['icona']} {'Permessi e ferie' if t == 'frassati_permessi' else 'Abbigliamento'} ({n_tipo[t]})") or "tutti"
+    n_st = {k: len(lm_filtra(tutti, tipo, k)) for k in ("inviati", "da_inviare")}
+    stato = st.pills("Stato", ["tutti", "inviati", "da_inviare"], default="tutti", key="lm_f_stato",
+                     format_func=lambda k: {"tutti": "Tutti", "inviati": f"📤 Inviati ({n_st['inviati']})", "da_inviare": f"⏳ Da inviare ({n_st['da_inviare']})"}[k]) or "tutti"
+    anni = sorted({lm_data_rif(r).year for r in tutti}, reverse=True)
+    c1, c2 = st.columns([1, 2], gap="small")
+    anno = c1.selectbox("Anno", ["tutti"] + anni, format_func=lambda a: "Tutti gli anni" if a == "tutti" else str(a), key="lm_f_anno")
+    anno = None if anno == "tutti" else anno
+    cerca = c2.text_input("🔎 Cerca", key="lm_f_cerca", placeholder="es. ferie, polo, Fabio…")
+    lista = lm_filtra(tutti, tipo, stato, anno, cerca)
+    anno_rip = anno or _lm_dt.date.today().year
+    rip = lm_riepilogo_anno(tutti, anno_rip)
+    if rip and tipo in ("tutti", "frassati_permessi"):
+        st.markdown(f"<div class='lm-card'><b>📊 Giorni chiesti nel {anno_rip}</b><div class='lm-s'>"
+                    + " · ".join(f"{sc_esc(k)}: <b>{n}</b>" for k, n in rip.items()) + f"<br>In tutto: <b>{sum(rip.values())}</b> giorni</div></div>", unsafe_allow_html=True)
+    if not lista:
+        st.caption("Nessun modulo con questi filtri.")
+    mese_prec = None
+    for rec in lista:
+        dr = lm_data_rif(rec)
+        mese = f"{LM_MESI[dr.month - 1]} {dr.year}"
+        if mese != mese_prec:
+            mese_prec = mese
+            st.markdown(f"#### 📅 {mese}")
         _lm_card(rec, m)
+    copie = [(r, x["copia"]) for r in lista for x in (r.get("invii") or []) if x.get("copia")]
+    if copie:
+        with st.expander(f"🗜️ Scarica tutte le copie inviate di questo elenco ({len(copie)}) in un ZIP"):
+            if st.button("Prepara lo ZIP", key="lm_zip", width="stretch"):
+                import zipfile
+                b = _lm_io.BytesIO()
+                with zipfile.ZipFile(b, "w", zipfile.ZIP_DEFLATED) as z:
+                    usati = set()
+                    for r, cp in copie:
+                        dati_ = _lm_leggi_copia(cp)
+                        if not dati_:
+                            continue
+                        nome = f"{lm_data_rif(r).isoformat()}_{cp.get('nome') or 'modulo.pdf'}"
+                        while nome in usati:
+                            nome = "_" + nome
+                        usati.add(nome)
+                        z.writestr(nome, dati_)
+                st.session_state["lm_zip_dati"] = b.getvalue()
+            if st.session_state.get("lm_zip_dati"):
+                st.download_button("⬇️ Scarica lo ZIP", st.session_state["lm_zip_dati"], file_name=f"moduli_inviati_{anno or 'tutti'}.zip", mime="application/zip",
+                                   key="lm_zip_dl", type="primary", width="stretch")
