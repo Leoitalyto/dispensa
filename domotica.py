@@ -757,8 +757,11 @@ def _dm_controlli_smarther(x, k):
                 f"{' · 🔥 caldaia accesa' if s.get('acceso') else ''}</div></div>", unsafe_allow_html=True)
     if s.get("fino") and s.get("modo") in ("manual", "boost"):
         st.caption(f"⏱️ {'Boost' if s.get('modo') == 'boost' else 'Manuale'} fino alle {s['fino']}, poi torna al programma automatico.")
-    modo = st.radio("Cosa vuoi fare?", ["🎯 Temperatura a mano", "🚀 Boost", "🅰️ Programma automatico", "❄️ Antigelo", "⏻ Spegni"], horizontal=True, key=k + "_modo")
-    if modo.startswith("🎯"):
+    modo = st.radio("Cosa vuoi fare?", ["🎯 Temperatura a mano", "🚀 Boost", "📅 Orari della settimana", "🅰️ Programma automatico", "❄️ Antigelo", "⏻ Spegni"],
+                    horizontal=True, key=k + "_modo")
+    if modo.startswith("📅"):
+        dm_orari_ui(x, k)
+    elif modo.startswith("🎯"):
         _dm_manuale_smarther(x, k, v)
     elif modo.startswith("🅰️"):
         progs = dm_sm_programmi(x["ext_id"])
@@ -1187,6 +1190,10 @@ def _dm_rapido_smarther(x, k):
             if _dm_esito(lambda: dm_sm_imposta(x["ext_id"], "off"), f"{x.get('nome')}: spento"):
                 _dm_log(f"{x.get('nome')}: spento")
                 st.rerun()
+    _or_riga_rapida(x)
+    if st.button("📅 Orari della settimana", key=k + "_orari", width="stretch"):
+        st.session_state[f"dms_{x['id']}_modo"] = "📅 Orari della settimana"
+        dm_scheda(x["id"], st.session_state.get("ca_casa_sel") or "")
     st.caption("🕘 Temperatura fino a un orario e programmi: tocca «🎮 Tutti i comandi e la scheda».")
 
 
