@@ -60,6 +60,37 @@ def at_gruppo(dd, oggi_):
     return "Più avanti"
 
 
+AT_TIPI = {"salute": ("🩺", "Salute"), "auto": ("🚗", "Auto"), "lavoro": ("💼", "Lavoro"), "casa": ("🏠", "Casa"), "animali": ("🐾", "Animali"),
+           "documenti": ("🪪", "Documenti"), "utilita": ("🧰", "Altro (resta in Utilità)")}
+AT_PRIORITA = {"Alta": ("🔴", 0), "Media": ("🟡", 1), "Bassa": ("🟢", 2)}
+
+
+def at_tipo(v):
+    """La tipologia di un appuntamento = la sezione a cui appartiene."""
+    s = str(v.get("sezione") or "utilita")
+    return s if s in AT_TIPI else "utilita"
+
+
+def at_priorita(v):
+    return v.get("priorita") if v.get("priorita") in AT_PRIORITA else "Media"
+
+
+def at_ordina(voci, modo="data"):
+    """«data»: prima i più vicini. «priorita»: prima le Alte (e tra loro i più vicini)."""
+    chiave_data = lambda v: (v["data"], v.get("ora") or "99:99", v.get("titolo") or "")
+    if modo == "priorita":
+        return sorted(voci, key=lambda v: (AT_PRIORITA[at_priorita(v)][1],) + chiave_data(v))
+    return sorted(voci, key=chiave_data)
+
+
+def at_dove_va(tipo, pid, principale):
+    """Dove si salva un appuntamento scritto da Utilità: nella sezione del suo tipo (e della persona, dove ci sono le persone)."""
+    tipo = tipo if tipo in AT_TIPI else "utilita"
+    if tipo in ("salute", "documenti", "casa") and pid and pid != principale:
+        return f"{tipo}@{pid}"
+    return tipo
+
+
 def _at_cifre(n):
     return "".join(c for c in str(n or "") if c.isdigit() or c == "+")
 
@@ -221,10 +252,106 @@ def at_blocco(sez0):
         _at_card(v, i, tutti, nomi)
 
 
+def _at_rec(d, chiave):
+    """Dalla chiave «app:{sezione}:{id}» → (sezione, appuntamento originale)."""
+    try:
+        _, resto = chiave.split(":", 1)
+        sez, aid = resto.rsplit(":", 1)
+    except ValueError:
+        return None, None
+    return sez, next((a for a in (d.get("appuntamenti") or {}).get(sez, []) if isinstance(a, dict) and a.get("id") == aid), None)
+
+
+def _at_riga_tipo(v, nomi):
+    ico, nome = AT_TIPI[at_tipo(v)]
+    nome = "Utilità" if at_tipo(v) == "utilita" else nome
+    chi = nomi.get(v.get("profilo"))
+    pr = at_priorita(v)
+    return f"{ico} **{nome}**" + (f" · 👤 {chi}" if chi and f"({chi})" not in str(v.get("titolo")) else "") + f" · {AT_PRIORITA[pr][0]} priorità {pr.lower()}"
+
+
+def _at_cambia_priorita(v, pr):
+    def _fn(sz_):
+        sz_.setdefault("stati", {}).setdefault(v["chiave"], {})["priorita"] = pr
+    _sz_salva(_fn, "priorità di " + str(v.get("titolo") or ""))
+    sc_rerun()
+
+
+def at_utilita_corpo():
+    """Utilità → 📅 Appuntamenti: TUTTI gli appuntamenti dell'app, per tipologia e per data o priorità.
+    Un appuntamento nuovo scritto da qui va nella sezione del suo tipo (Salute, Auto, Lavoro…)."""
+    st.markdown(RBU_CSS, unsafe_allow_html=True) if "RBU_CSS" in globals() else None
+    d = sc_dati()
+    oggi_ = sc_oggi()
+    pr_ = sc_profili() if "sc_profili" in globals() else []
+    ids = [i for i, _n in pr_] or ["p0"]
+    nomi_tutti = dict(pr_)
+    nomi = dict(pr_[1:])
+    st.caption("Qui vedi TUTTI gli appuntamenti dell'app, da ogni sezione. Ognuno resta anche nella sua sezione (Salute in Salute, Auto in Auto…).")
+    # ➕ nuovo: si sceglie il tipo e va nella sua sezione
+    if st.button("➕ Aggiungi un appuntamento", key="at_nuovo", type="primary", width="stretch"):
+        st.session_state["apn_mod"] = "__nuovo__"
+        sc_rerun()
+    if st.session_state.get("apn_mod") == "__nuovo__":
+        with st.container(border=True, key="at_nuovo_box"):
+            tipo = st.selectbox("Di che tipo è? (andrà anche nella sua sezione)", list(AT_TIPI), key="at_nuovo_tipo",
+                                format_func=lambda t: " ".join(AT_TIPI[t]))
+            pid = ids[0]
+            if tipo in ("salute", "documenti", "casa") and len(ids) > 1:
+                pid = st.radio("Per chi?", ids, horizontal=True, key="at_nuovo_chi", format_func=lambda i: "👤 " + str(nomi_tutti.get(i, "")))
+            _apn_modulo(at_dove_va(tipo, pid, ids[0]), {})
+    try:
+        voci = sz_raccogli(d, _sz_adesso() if "_sz_adesso" in globals() else _at_dt.datetime.now(), solo_aperte=True)
+        voci = at_filtra(voci, "utilita", "__tutte__", sz_principale(d), oggi_)
+    except Exception:
+        voci = []
+    st.markdown(f"### 🗓️ Tutti gli appuntamenti ({len(voci)})")
+    if not voci:
+        st.info("Nessun appuntamento in programma. Tocca «Aggiungi un appuntamento».")
+    else:
+        presenti = [t for t in AT_TIPI if any(at_tipo(v) == t for v in voci)]
+        conta = {t: sum(1 for v in voci if at_tipo(v) == t) for t in presenti}
+        etich = lambda t: "Tutte" if t == "tutte" else f"{AT_TIPI[t][0]} {'Utilità' if t == 'utilita' else AT_TIPI[t][1]} ({conta[t]})"
+        tipo_sel = st.pills("Tipologia", ["tutte"] + presenti, selection_mode="single", default="tutte", key="at_f_tipo", format_func=etich) or "tutte"
+        modo = st.radio("Ordina per", ["data", "priorita"], horizontal=True, key="at_f_ordine",
+                        format_func=lambda m: "📅 Data" if m == "data" else "⭐ Priorità")
+        lista = at_ordina([v for v in voci if tipo_sel == "tutte" or at_tipo(v) == tipo_sel], modo)
+        gruppo = None
+        for i, v in enumerate(lista):
+            g = at_gruppo(v["data"], oggi_) if modo == "data" else f"{AT_PRIORITA[at_priorita(v)][0]} Priorità {at_priorita(v).lower()}"
+            if g != gruppo:
+                gruppo = g
+                st.markdown(f"#### {g}")
+            st.markdown(_at_riga_tipo(v, nomi))
+            if v["chiave"].startswith("app:"):
+                sez, rec = _at_rec(d, v["chiave"])
+                if rec:
+                    _apn_card(sez, rec, False)                         # come nella sua sezione: Fatto, Modifica (anche priorità), Elimina, calendario
+                    continue
+            _at_card(v, i, False)
+            with st.popover(f"⭐ Cambia priorità", width="stretch"):
+                for pr in AT_PRIORITA:
+                    if st.button(f"{AT_PRIORITA[pr][0]} {pr}", key=f"at_pr_{i}_{pr}_{abs(hash(v['chiave'])) % 10**8}", width="stretch",
+                                 type="primary" if pr == at_priorita(v) else "secondary"):
+                        _at_cambia_priorita(v, pr)
+    # passati o fatti (scritti con il bottone 📅 nelle sezioni)
+    vecchi = []
+    for sez, lst in (d.get("appuntamenti") or {}).items():
+        for a in lst or []:
+            if isinstance(a, dict) and a.get("id") and (a.get("fatto") or (sc_data(a.get("data")) and sc_data(a.get("data")) < oggi_)):
+                vecchi.append((sez, a))
+    if vecchi:
+        vecchi.sort(key=lambda x: str(x[1].get("data") or ""), reverse=True)
+        with st.expander(f"🗂️ Passati o fatti ({len(vecchi)})"):
+            for sez, a in vecchi[:40]:
+                b = str(sez).split("@")[0]
+                ico, nome = AT_TIPI.get(b, AT_TIPI["utilita"])
+                st.caption(f"{ico} {'Utilità' if b == 'utilita' else nome}" + (f" · 👤 {nomi_tutti.get(sez.split('@', 1)[1], '')}" if "@" in sez else ""))
+                _apn_card(sez, a, True)
+
+
 def at_conta_altrove(sez):
     base = str(sez).split("@")[0]
-    if base == "utilita":
-        return 0                                                       # in Utilità il numero sul bottone resta quello dei suoi
     return len(_at_voci_altrove(base, sez))
 
 
@@ -233,21 +360,18 @@ if "_apn_corpo" in globals() and "_at_apn_corpo_prima" not in globals():
     _at_apn_corpo_prima = _apn_corpo
 
     def _apn_corpo(sez0):                                              # noqa: F811
-        utilita = str(sez0).split("@")[0] == "utilita"
-        if utilita:                                                    # in Utilità il riepilogo di tutto viene PRIMA
+        if str(sez0).split("@")[0] == "utilita":
             try:
-                at_blocco(sez0)
+                at_utilita_corpo()
+                return
             except Exception as _e:
                 st.caption(f"(il riepilogo non si può mostrare: {type(_e).__name__})")
-            st.divider()
-            st.markdown("### 🧰 Appuntamenti scritti qui in Utilità")
         _at_apn_corpo_prima(sez0)
-        if not utilita:
-            try:
-                st.divider()
-                at_blocco(sez0)
-            except Exception as _e:
-                st.caption(f"(gli appuntamenti delle altre schede non si possono mostrare: {type(_e).__name__})")
+        try:
+            st.divider()
+            at_blocco(sez0)
+        except Exception as _e:
+            st.caption(f"(gli appuntamenti delle altre schede non si possono mostrare: {type(_e).__name__})")
 
 if "apn_prossimi" in globals() and "_at_apn_prossimi_prima" not in globals():
     _at_apn_prossimi_prima = apn_prossimi

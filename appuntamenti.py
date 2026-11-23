@@ -64,13 +64,17 @@ def _apn_modulo(sez, a):
         st.markdown("<b>3 · Perché</b>", unsafe_allow_html=True)
         motivo = st.text_input("Motivazione", value=a.get("motivo", ""), key=k + "_m")
         note = st.text_area("📝 Note", value=a.get("note", ""), key=k + "_note", height=90)
+        _pr = ["", "Alta", "Media", "Bassa"]
+        priorita = st.radio("⭐ Priorità", _pr, index=_pr.index(a.get("priorita")) if a.get("priorita") in _pr else 0, horizontal=True, key=k + "_pr",
+                            format_func=lambda x: {"": "⚙️ Automatica", "Alta": "🔴 Alta", "Media": "🟡 Media", "Bassa": "🟢 Bassa"}[x])
+        st.caption("⚙️ Automatica: alta se è un pagamento o è scaduto, media entro 30 giorni, bassa se è più lontano.") if not priorita else None
         b1, b2 = st.columns(2, gap="small")
         if b1.button("✅ Salva", type="primary", key=k + "_ok", width="stretch"):
             if not nome.strip():
                 st.error("Scrivi almeno il nominativo.")
                 return
             rec = {**a, "id": a.get("id") or sc_id(), "nome": nome.strip(), "funzione": funzione.strip(), "telefono": tel.strip(), "data": data.isoformat(),
-                   "ora": ora.strftime("%H:%M"), "luogo": luogo.strip(), "motivo": motivo.strip(), "note": note.strip(), "fatto": bool(a.get("fatto"))}
+                   "ora": ora.strftime("%H:%M"), "luogo": luogo.strip(), "motivo": motivo.strip(), "note": note.strip(), "fatto": bool(a.get("fatto")), "priorita": priorita}
             _apn_salva(sez, rec)
             st.session_state["apn_mod"] = None
             st.toast("✅ Appuntamento salvato")
@@ -102,6 +106,8 @@ def _apn_card(sez, a, passato):
         righe.append("📞 " + e(a["telefono"]))
     if a.get("note"):
         righe.append("<i>" + e(a["note"]) + "</i>")
+    if a.get("priorita") == "Alta":
+        righe.insert(0, "🔴 <b>Priorità alta</b>")
     colore = "rgba(160,160,170,.4)" if (passato or a.get("fatto")) else "rgba(255,183,77,.7)"
     st.markdown(f"<div class='rbu-card' style='border-color:{colore};{'opacity:.7' if passato or a.get('fatto') else ''}'><b class='rbu-nome'>"
                 f"{'✔️ ' if a.get('fatto') else ''}{e(a.get('nome'))}</b><div class='rbu-righe'>" + "<br>".join(righe) + "</div></div>", unsafe_allow_html=True)

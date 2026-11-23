@@ -364,8 +364,8 @@ def _sz_f_appuntamenti(d, oggi):
             if isinstance(x, dict) and x.get("data") and x.get("id") and not x.get("fatto"):
                 cat = "lavoro" if base == "lavoro" else "visite"
                 out.append(_sz_voce(f"app:{sez}:{x['id']}", f"📅 {x.get('nome') or 'Appuntamento'}" + (f" ({x['funzione']})" if x.get("funzione") else ""), x["data"], cat,
-                                 base if base in SZ_SEZIONI else "salute", ora=x.get("ora"), descrizione=" · ".join(y for y in (x.get("motivazione"), x.get("telefono")) if y),
-                                 nav={"sezione": base, "appuntamenti": sez}, profilo=(str(sez).split("@", 1)[1] if "@" in str(sez) else None)))
+                                 base if base in SZ_SEZIONI else "salute", ora=x.get("ora"), descrizione=" · ".join(y for y in (x.get("motivo") or x.get("motivazione"), x.get("luogo"), x.get("telefono")) if y),
+                                 priorita=x.get("priorita") or "", nav={"sezione": base, "appuntamenti": sez}, profilo=(str(sez).split("@", 1)[1] if "@" in str(sez) else None)))
     return out
 
 
