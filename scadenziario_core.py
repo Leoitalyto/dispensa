@@ -210,6 +210,31 @@ def _sz_f_salute(d, oggi):
         for x in p.get("docsan") or []:
             if x.get("prossimo_controllo") and x.get("id"):
                 out.append(_sz_voce(f"salute:docsan:{x['id']}", f"🩺 Controllo indicato: {x.get('titolo') or x.get('tipo') or 'referto'}{nome}", x["prossimo_controllo"], "visite", "salute", profilo=p.get("id")))
+    # PERCORSI DI CURA (salute_percorsi.py): appuntamenti non ancora fatti e rate non coperte dai pagamenti (coperte in ordine di scadenza)
+    for pc in f.get("percorsi") or []:
+        if not pc.get("id") or pc.get("stato") in ("Concluso", "Sospeso"):
+            continue
+        nav = {"sezione": "salute", "percorso": pc["id"], "profilo": pc.get("profilo")}
+        tit = str(pc.get("titolo") or "Percorso di cura")[:60]
+        luogo = str((pc.get("struttura") or {}).get("nome") or "")
+        for a in pc.get("appuntamenti") or []:
+            dv = sz_d(a.get("data"))
+            if a.get("id") and dv and not a.get("fatto") and dv >= oggi - _sz_td(days=1):
+                v = _sz_voce(f"salute:percorso:{pc['id']}:app:{a['id']}", f"🗂️ {tit}" + (f": {a['cosa']}" if a.get("cosa") else "") + per(pc.get("profilo")), dv, "visite", "salute",
+                             ora=a.get("ora"), descrizione=" · ".join(y for y in (luogo, a.get("note")) if y), nav=nav, profilo=pc.get("profilo"))
+                if v:
+                    out.append(v)
+        pagato = sum(sz_num(x.get("importo")) or 0 for x in pc.get("pagamenti") or [])
+        for r in sorted(pc.get("rate") or [], key=lambda r: (str(r.get("scadenza") or "9999"), str(r.get("id") or ""))):
+            imp = sz_num(r.get("importo")) or 0
+            cop = min(imp, max(0.0, pagato))
+            pagato -= cop
+            residuo = round(imp - cop, 2)
+            if r.get("id") and residuo > 0.005 and sz_d(r.get("scadenza")):
+                v = _sz_voce(f"salute:percorso:{pc['id']}:rata:{r['id']}", f"💶 {tit}: {r.get('nota') or 'rata'}" + per(pc.get("profilo")), r["scadenza"], "pagamenti", "salute",
+                             importo=residuo, descrizione=luogo, priorita="Alta", nav=nav, profilo=pc.get("profilo"))
+                if v:
+                    out.append(v)
     return out
 
 

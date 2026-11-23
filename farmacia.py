@@ -526,6 +526,11 @@ def schermata_farmacia():
         f"<div class='fa-k scaduto'><span>Scaduti</span><b>{n('scaduto')}</b></div></div>",
         unsafe_allow_html=True)
 
+    if "pc_sezione" in globals():
+        try:
+            pc_sezione(f, pid, nomi, oggi_)
+        except Exception as _pc_err:
+            st.warning(f"🗂️ Percorsi di cura non disponibili ({type(_pc_err).__name__}: {_pc_err})")
     tab_med, tab_ter, tab_pre, tab_vis, tab_vac = st.tabs(["💊 Medicinali", "📅 Terapie", "📝 Prescrizioni", "🩺 Visite", "💉 Vaccini"])
     with tab_med:
         _fa_blocco_allergie(f, pid, nomi, del_profilo)
