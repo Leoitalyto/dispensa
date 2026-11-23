@@ -158,7 +158,7 @@ def _apn_corpo(sez0):
     if st.session_state.get("apn_mod") == "__nuovo__":
         _apn_modulo(sez, {})
     if not lista:
-        st.info("Nessun appuntamento. Tocca «Aggiungi un appuntamento».")
+        st.info("Nessun appuntamento scritto qui. Per aggiungerne uno tocca «Aggiungi un appuntamento».")
         return
     oggi_ = sc_oggi()
     futuri = sorted([a for a in lista if not a.get("fatto") and (sc_data(a.get("data")) or oggi_) >= oggi_], key=lambda a: _apn_quando(a) or _ap_dt.datetime.max)
