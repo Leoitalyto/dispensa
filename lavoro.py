@@ -790,7 +790,7 @@ def schermata_lavoro():
         st.error(f"Non riesco a leggere i dati ({type(ex).__name__}). Riprova fra poco.")
         return
     voci = ["💶 Buste paga", "📊 Anno per anno", "📑 Certificazione Unica", "🏛️ INPS", "🏢 Portale e posta", "🧮 Controllo ore", "💰 Stipendio previsto", "🤝 Sindacato · CAF · Patronato", "📝 Moduli da compilare"]
-    solo_admin = ("🧮 Controllo ore", "💰 Stipendio previsto")                   # servono al modulo ore dell'amministratore: gli utenti non le vedono
+    solo_admin = ("🧮 Controllo ore", "💰 Stipendio previsto", "📝 Moduli da compilare")   # personali: «📝 Moduli» è solo dell'amministratore (23/11)                   # servono al modulo ore dell'amministratore: gli utenti non le vedono
     if not (st.session_state.get("sess") or {}).get("admin"):
         voci_viste = [v for v in voci if v not in solo_admin]
     else:
@@ -893,7 +893,7 @@ Le vedi **a schede** (una per anno) o **in tabella**, con il **grafico** e il co
          """Scegli **🏛️ INPS**. Il tasto **🔗 Apri la mia pagina INPS** ti porta alla tua pagina: la prima volta apri **✏️ Scrivi o cambia il link**, incolla l'indirizzo della tua pagina e salva. **Non si scrivono mai password o PIN.**
 Sotto, i **documenti scaricati dall'INPS** (estratto conto contributivo, CU, ISEE, domande…): li carichi, li **vedi**, li **scarichi**, li **invii** o li **elimini**. Si vedono a elenco per tipo o **in tabella**.""", "inps pagina link documenti estratto conto contributivo isee pensione spid"),
     ])
-    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps", "l_portale", "l_controllo", "l_stipendio"])
+    _ID_GUIDA.setdefault("lavoro", ["l_cosa", "l_carica", "l_anni", "l_rubrica", "l_cu", "l_inps"])   # gli altri (portale, controllo, stipendio…) li aggiunge _lv_guida_aggiungi qui sotto
     if "_CTX_GUIDA" in globals():
         _CTX_GUIDA.setdefault("lavoro", "l_cosa")
     _lv_guida_aggiungi("lavoro", [

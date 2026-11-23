@@ -10,7 +10,7 @@ RICHIESTA (Leonardo): «aggiorna le spiegazioni dell'app e l'assistente in tutte
 L'assistente (scritto e vocale), la ricerca e il pulsante Informazioni leggono tutti questa stessa base (_GUIDE), quindi rispondono anche sulle novità.
 Caricato dopo guida_completa.py."""
 
-GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.3", "2026-11-20", "20/11/2026"
+GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.4", "2026-11-23", "23/11/2026"
 
 GA_SCHEDE = {
     "x_ia": ("🤖 Intelligenza artificiale: documenti, scritte a mano, spie, lingue",
@@ -198,6 +198,102 @@ GA_NOVITA = [
     ("nv_spesa_smart", "🛒", "Spesa Smart", "Dispensa → 🛒 Spesa Smart: dove costa meno, offerte, spesa ottimizzata, scontrini"),
 ]
 GA_NOV_K = {}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 23/11/2026 — RICHIESTA (Leonardo): «aggiorna l'assistente e le informazioni in tutte le lingue».
+# Nuove: Moduli da compilare e catalogo (Lavoro, SOLO amministratore: sono personali), Appuntamenti in ogni sezione e tutti in Utilità,
+# Cartelle di cura (Salute) e collegamento dei documenti con l'IA; riscritta la Domotica (termostato: boost, «fino a», orari della settimana).
+# Traduzioni in guida_agg_traduzioni_2311.py (anche le schede rimaste solo in italiano: Utilità, CQC, patente, Portale, Controllo ore,
+# Stipendio previsto, Peso e litri, e le novità 7–14).
+# ---------------------------------------------------------------------------------------------------------------------
+GA_SOLO_ADMIN = {"l_moduli", "l_moduli_catalogo", "l_controllo", "l_stipendio", "l_festivita"}   # personali: le vede (e l'assistente le usa) solo l'amministratore
+
+GA_SCHEDE.update({
+    "l_moduli": ("📝 Moduli da compilare (solo per te)",
+                 """In **💼 Lavoro → 📝 Moduli da compilare** compili dal telefono i moduli di carta del lavoro: l'app **scrive sul foglio originale**, come con la penna. **È una cosa personale**: la vede solo l'amministratore.
+1. Tocca il modulo: **🏖️ Richiesta di permesso – ferie** oppure **👕 Scheda ordini abbigliamento**.
+2. Rispondi alle domande: nome, cantiere e data di oggi sono già scritti.
+   - **Permesso**: scegli cosa chiedi (ferie, permesso retribuito… o **Altro**) e **quali giorni**: «A decorrere dal… fino al…». Per **giorni non di fila** tocca **➕ Aggiungi un altro giorno**: sotto vedi cosa verrà scritto e il **totale dei giorni**.
+   - **Abbigliamento**: appalto, mese, luogo di consegna; poi aggiungi **una riga alla volta** (articolo, quantità, taglia). Il nome è il tuo e **le taglie vengono ricordate**.
+3. Apri **👁️ Guarda l'anteprima**, poi tocca **✍️ Firma e salva** (la firma si mette **solo** con questo tasto) oppure **💾 Salva senza firma**.
+4. Nel riquadro verde tocca **📤 Manda il PDF**: si apre «Condividi» con il PDF già allegato, scegli **WhatsApp** e poi il tuo responsabile. Poi tocca **✅ Fatto: l'ho mandato**. Ci sono anche **⬇️ PDF**, **⬇️ Foto (JPG)** e **📨 Altri modi** (email, Telegram…).
+
+**✍️ La tua firma**: la carichi una volta (foto della firma su un foglio bianco): l'app toglie il bianco e tiene solo l'inchiostro. **⚙️ A chi li mandi**: nome e cellulare del responsabile e il tuo cantiere.
+I giorni di permesso entrano da soli negli **📅 Appuntamenti** di Lavoro (e nel riepilogo di Utilità).""",
+                 "moduli modulo compilare permesso ferie richiesta giorni non consecutivi firma responsabile whatsapp abbigliamento vestiario taglia pdf"),
+    "l_moduli_catalogo": ("🗂️ Il catalogo dei moduli inviati",
+                          """Ogni modulo compilato resta nel **🗂️ Catalogo dei moduli** (in fondo a **📝 Moduli da compilare**), diviso **per mese**.
+- **Filtri**: **Tipo** (permessi, abbigliamento), **Stato** (📤 Inviati, ⏳ Da inviare), **Anno** e **🔎 Cerca** (per esempio «ferie», «polo», il nome del responsabile).
+- Quando segni l'invio, l'app salva la **copia esatta del PDF inviato**, con data e ora: la trovi in **📎 Copie inviate** e resta così anche se poi modifichi il modulo o cambi la firma.
+- Se modifichi un modulo già mandato compare **«✏️ modificato dopo l'invio: da rimandare»**.
+- Su ogni modulo: **👁️ Apri**, **✏️ Modifica**, **📄 Duplica** (comodo per l'ordine del mese dopo) e **🗑️ Elimina**.
+- **📊 Giorni chiesti nell'anno**: quanti giorni di ferie, permessi… (un giorno conta una volta sola).
+- **🗜️ ZIP**: scarichi in un solo file tutte le copie inviate dell'elenco che stai guardando.""",
+                          "catalogo moduli inviati copia esatta pdf stato da inviare rimandare filtro anno cerca giorni chiesti zip duplica"),
+    "x_appuntamenti": ("📅 Appuntamenti: in ogni sezione e tutti insieme in Utilità",
+                       """**In ogni sezione** il bottone **📅 Appuntamenti** mostra quelli di quella sezione: Salute in Salute, Auto in Auto, Lavoro in Lavoro… Sotto, in **🔗 Dalle altre schede**, compaiono anche quelli scritti altrove per la stessa persona (in Salute: visite, controlli, cartelle di cura come il dentista). Il numero sul bottone li conta tutti.
+
+**In 🧰 Utilità → 📅 Appuntamenti** ci sono **tutti** gli appuntamenti dell'app: per ognuno vedi da quale sezione viene, di chi è e la priorità.
+- **Tipologia**: Tutte, Salute, Auto, Lavoro… (con quanti sono).
+- **Ordina per**: **📅 Data** (Oggi, Domani, Nei prossimi 7 giorni, Entro un mese, Più avanti) oppure **⭐ Priorità** (prima le alte).
+- **➕ Aggiungi un appuntamento**: scegli prima **«Di che tipo è?»** (e, per Salute, **per chi**): l'appuntamento va **nella sua sezione**. In Utilità resta solo quello di tipo «Altro».
+- **Priorità**: **⚙️ Automatica** (alta se è un pagamento o è scaduto, media entro 30 giorni, bassa se è più lontano), oppure 🔴 Alta, 🟡 Media, 🟢 Bassa. Per quelli delle altre schede c'è **⭐ Cambia priorità**. Vale anche nello Scadenziario.
+- Da lì segni **✅ Fatto**, **✏️ Modifichi** o elimini; **↗️ Apri la scheda** porta dove l'appuntamento è scritto. In fondo, **🗂️ Passati o fatti**.""",
+                       "appuntamenti tutti riepilogo utilità sezione tipologia priorità alta media bassa automatica data ordina dalle altre schede dentista visite"),
+    "f_percorsi": ("🗂️ Cartelle di cura (dentista, cicli di cure)",
+                   """Per un **lavoro lungo dal dentista**, un ciclo di fisioterapia o un intervento: tutto **in una cartella sola**.
+1. In **Salute** scegli la persona (per esempio la mamma). In alto trovi **🗂️ Cartelle di cura** → **➕ Nuova cartella**.
+2. Carica il **cartellino dell'appuntamento** e il **preventivo** (foto o PDF) e tocca **🔎 Leggi i documenti e compila**: l'app legge studio, telefoni, medico, date, orari e righe del preventivo. Controlli e tocchi **💾 Crea la cartella**.
+
+Dentro la cartella:
+- **Appuntamenti**: data e ora, cosa si fa; dopo la seduta segni **fatto**, l'**esito** e il **prossimo appuntamento**;
+- **Pagamenti**: bonifici e contanti, con la **ricevuta** (l'app legge importo e data), il **piano delle rate** e **quanto resta da pagare**;
+- **Documenti**, **Preventivo** e **Diario**.
+In alto ci sono **📞 Chiama**, **📍 Mappa** e **✉️ Email** dello studio e il file **.ics** per il calendario.
+Appuntamenti e rate entrano nello **🗓️ Scadenziario** con gli avvisi (WhatsApp, email, Telegram) e negli **📅 Appuntamenti** della persona. Lo studio entra **da solo nei 📞 Numeri utili** della persona (una volta sola: se lo elimini non torna). Le cartelle concluse stanno sotto, in **Concluse**.""",
+                   "cartella di cura percorso dentista preventivo rate bonifico ricevuta pagamenti appuntamenti studio cure fisioterapia intervento mamma"),
+    "f_percorsi_ia": ("🤖 Collegare i documenti a una cartella di cura (con l'IA)",
+                      """Dentro una cartella di cura, **🔗 Da collegare (N)** mostra i documenti **già nell'app** (documenti sanitari, visite, prescrizioni della **stessa persona**) che sembrano di quella cartella, con il **motivo** (stesso studio, stessa data, stesso telefono…).
+Tocca **🤖 Controlla che sia di questa cartella**: l'IA confronta con cura **partita IVA, codice fiscale, telefono, nome dello studio, paziente e importi** e risponde **✅ collima**, **❌ non collima** o **⚠️ incerto**, spiegando perché.
+Anche i documenti caricati **dopo** vengono proposti. **Niente si collega senza la tua conferma**; quelli che scarti non vengono riproposti.""",
+                      "collegare documenti cartella di cura ia controlla collima partita iva codice fiscale paziente importo da collegare"),
+    "x_domotica": ("🎛️ Domotica: comandare la casa (anche il termostato)",
+                   """In **🏠 Casa → 🎛️ Domotica** trovi gli apparecchi di casa divisi **per stanza** o **per tipo**.
+- **☁️ si comanda da qui**: apparecchi collegati al cloud del produttore (Tuya / Smart Life: climatizzatori, lampadine, prese…; BTicino: termostato). Tocca **🎮 Apri → Controlli**: compaiono SOLO i comandi che l'apparecchio ha davvero; ogni comando risponde ✅ o con l'errore.
+- **📱 con la sua app** (Google Home, Alexa, SmartThings…): il pulsante **▶ Apri** apre l'app giusta.
+- **🔎 Cerca adesso** chiede ai cloud collegati gli apparecchi nuovi: scegli la stanza e confermi (niente doppioni).
+- **🎬 Scenari**: «Esco di casa», «Buonanotte»… più comandi con un tocco.
+- **🔗 Collegamenti**: lo stato dei collegamenti Tuya e BTicino. Le chiavi stanno solo nei Secrets di Streamlit.
+
+**🌡️ Il termostato (BTicino)**: **🎯 Temperatura a mano** (anche **«fino a»** un orario), **🚀 Boost** di 30, 60 o 90 minuti (e **⏹ Ferma boost**), **🅰️ Programma automatico**, **❄️ Antigelo**, **⏻ Spegni**.
+**📅 Orari della settimana**: per ogni giorno scrivi **le fasce** (dalle… alle…) con la temperatura; ci sono **modelli pronti**, **«copia su»** altri giorni, e scegli cosa fare **fuori dalle fasce** (programma del termostato o temperatura ridotta). Vedi la **stima del risparmio**. Un **orologio automatico** controlla ogni mezz'ora, **anche ad app chiusa**, e manda al termostato la fascia giusta: quando è attivo compare **«🤖 Orologio automatico attivo»**.
+Per sicurezza serrature e allarmi chiedono una conferma prima di ogni comando.""",
+                   "domotica casa apparecchi stanza comandi luce lampadina climatizzatore termostato boost orari fasce settimana risparmio antigelo tuya smart life bticino google home scenari"),
+})
+GA_DOVE.update({"l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
+                "x_appuntamenti": ("farmacia", "documenti", "casa", "lavoro", "auto", "animali", "utilita"),
+                "f_percorsi": ("farmacia",), "f_percorsi_ia": ("farmacia",)})
+GA_NOVITA += [
+    ("nv_appuntamenti", "📅", "Tutti gli appuntamenti", "Utilità → 📅 Appuntamenti: per tipologia, per data o per priorità"),
+    ("nv_percorsi", "🗂️", "Cartelle di cura", "Salute → 🗂️ Cartelle di cura: appuntamenti, pagamenti e documenti insieme"),
+    ("nv_termostato", "🌡️", "Termostato: boost e orari", "Casa → 🎛️ Domotica → termostato: 🚀 Boost e 📅 Orari della settimana"),
+]
+
+
+def _ga_admin():
+    try:
+        return bool((st.session_state.get("sess") or {}).get("admin"))
+    except Exception:
+        return False
+
+
+if "voci_guida" in globals() and "_ga_voci_guida_prima" not in globals():
+    _ga_voci_guida_prima = voci_guida
+
+    def voci_guida(sezione):                                                 # noqa: F811 — le schede personali solo per l'amministratore
+        voci = _ga_voci_guida_prima(sezione)
+        return voci if _ga_admin() else [v for v in voci if v.get("id") not in GA_SOLO_ADMIN]
 
 
 def _ga_applica():

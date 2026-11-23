@@ -894,6 +894,9 @@ def _lm_card(rec, m):
 
 def lm_pagina(c):
     """La pagina «📝 Moduli da compilare» dentro Lavoro."""
+    if not (st.session_state.get("sess") or {}).get("admin"):          # i moduli e il catalogo sono personali dell'amministratore
+        st.info("Questa parte è personale.")
+        return
     st.markdown(_LM_CSS, unsafe_allow_html=True)
     m = _lm_dati(c)
     st.markdown("### 📝 Moduli da compilare")
@@ -968,3 +971,13 @@ def _lm_catalogo(m):
             if st.session_state.get("lm_zip_dati"):
                 st.download_button("⬇️ Scarica lo ZIP", st.session_state["lm_zip_dati"], file_name=f"moduli_inviati_{anno or 'tutti'}.zip", mime="application/zip",
                                    key="lm_zip_dl", type="primary", width="stretch")
+
+
+# --- l'assistente: con «📝 Moduli da compilare» aperto parla dei moduli (solo l'amministratore la vede) --------------------
+try:
+    if "_AE_LV" in globals() and ("moduli", "moduli") not in _AE_LV:
+        _AE_LV.insert(0, ("moduli", "moduli"))
+    if "_CTX_GUIDA" in globals():
+        _CTX_GUIDA["lavoro:moduli"] = "l_moduli"
+except Exception:
+    pass
