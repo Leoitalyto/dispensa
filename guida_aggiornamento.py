@@ -271,7 +271,15 @@ Anche i documenti caricati **dopo** vengono proposti. **Niente si collega senza 
 Per sicurezza serrature e allarmi chiedono una conferma prima di ogni comando.""",
                    "domotica casa apparecchi stanza comandi luce lampadina climatizzatore termostato boost orari fasce settimana risparmio antigelo tuya smart life bticino google home scenari"),
 })
-GA_DOVE.update({"l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
+GA_SCHEDE["x_parcheggio"] = ("🅿️ Dove ho parcheggiato",
+    """In **Home**, accanto a **🛒 Spesa Smart**, c'è **🅿️ Parcheggio**.
+1. Appena parcheggi toccalo e poi tocca **📍 Salva qui (GPS)**: il telefono trova dove sei (la prima volta tocca **Consenti**) e salva da solo, con l'indirizzo. Oppure **scrivi tu** il posto.
+2. Se vuoi, in **➕ Foto, note, veicolo, scadenza della sosta**: una **foto** (il piano, la colonna), le **note** (es. «Piano -1, colonna B14»), **quale auto** e la **scadenza della sosta** (strisce blu): poi **📲 Avviso nel calendario** suona 10 minuti prima.
+3. Quando torni, il bottone diventa **🅿️ Dov'è l'auto**: tocca **🧭 Portami all'auto** (Google Maps a piedi), **🗺️ Mappa** o **📤 Manda** la posizione su WhatsApp.
+4. Ripresa l'auto, tocca **✅ Ho ripreso l'auto**: il parcheggio va nei **🕘 Parcheggi precedenti**. La posizione compare anche in **Auto**, nella scheda del veicolo.""",
+    "parcheggio parcheggiato dove auto macchina gps posizione sosta strisce blu disco orario portami mappa piano colonna")
+GA_NOVITA.append(("nv_parcheggio", "🅿️", "Dove ho parcheggiato", "Home → 🅿️ Parcheggio, accanto a Spesa Smart: un tocco e il GPS salva il posto"))
+GA_DOVE.update({"x_parcheggio": ("dispensa", "auto", "utilita"), "l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
                 "x_appuntamenti": ("farmacia", "documenti", "casa", "lavoro", "auto", "animali", "utilita"),
                 "f_percorsi": ("farmacia",), "f_percorsi_ia": ("farmacia",)})
 GA_NOVITA += [

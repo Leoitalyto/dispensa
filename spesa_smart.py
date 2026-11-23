@@ -2190,7 +2190,20 @@ if "_vm_riepilogo" in globals() and "_ss_riep_prima" not in globals():
         try:
             st.markdown(_SS_CSS, unsafe_allow_html=True)
             n = len(sc.get("spesa_smart") or pn_scadenze().get("spesa_smart") or [])
-            st.button("🛒 Spesa Smart" + (f" · 🔔 {n} in offerta" if n else ""), key="vm_ss", on_click=vm_apri, args=("spesa_smart",))
+            if "pk_etichetta_home" in globals():                         # accanto: 🅿️ Parcheggio (parcheggio.py)
+                st.markdown(_PK_CSS_HOME, unsafe_allow_html=True)
+                with st.container(key="vm_riga_ss"):
+                    c_ss, c_pk = st.columns(2, gap="small")
+                    with c_ss:
+                        st.button("🛒 Spesa Smart" + (f" 🔔{n}" if n else ""), key="vm_ss", on_click=vm_apri, args=("spesa_smart",), width="stretch")
+                    with c_pk:
+                        try:
+                            et_pk = pk_etichetta_home()
+                        except Exception:
+                            et_pk = "🅿️ Parcheggio"
+                        st.button(et_pk, key="vm_pk", on_click=_pk_apri, width="stretch")
+            else:
+                st.button("🛒 Spesa Smart" + (f" · 🔔 {n} in offerta" if n else ""), key="vm_ss", on_click=vm_apri, args=("spesa_smart",))
         except Exception:
             pass
         return _ss_riep_prima({k: v for k, v in sc.items() if k != "spesa_smart"})
