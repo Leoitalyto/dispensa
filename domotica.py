@@ -346,7 +346,7 @@ def dm_sm_url_accesso():
 
     def _f(d):
         p = {k: v for k, v in (d.get("attesa") or {}).items() if v.get("scade", 0) > _dm_time.time()}
-        p[stato] = {"uid": uid, "scade": _dm_time.time() + 900}
+        p[stato] = {"uid": uid, "scade": _dm_time.time() + 900, "k": st.query_params.get("k") or ""}
         d["attesa"] = p
     salva_file("domotica/accessi_in_attesa.json", _f, "Domotica: accesso BTicino in corso")
     return DM_SM_AUTH + "?" + _dm_up.urlencode({"client_id": conf["client_id"], "response_type": "code", "redirect_uri": conf["redirect_uri"], "state": stato})
@@ -380,7 +380,7 @@ def dm_sm_ritorno():
             except DmErrore:
                 tok = _dm_sm_token_da(conf, {"grant_type": "authorization_code", "code": code})
             _dm_sm_scrivi_tok(conf, tok, voce["uid"])
-            esito = {"ok": True}
+            esito = {"ok": True, "k": voce.get("k") or ""}
         except Exception as e:
             esito = {"ok": False, "msg": str(e)}
         st.session_state["_dm_sm_esito"] = esito
@@ -389,8 +389,11 @@ def dm_sm_ritorno():
     else:
         st.error("❌ Non sono riuscito a collegare il termostato: " + esito.get("msg", ""))
     if st.button("Torna a VitaMemo", type="primary", key="dm_sm_torna"):
-        st.session_state.pop("_dm_sm_esito", None)
+        k = (st.session_state.pop("_dm_sm_esito", None) or {}).get("k")
+        st.session_state.pop("_dm_sm_tok", None)
         st.query_params.clear()
+        if k:
+            st.query_params["k"] = k                                    # si rientra senza riscrivere la password (accesso ricordato)
         st.rerun()
     st.stop()
 
@@ -430,6 +433,46 @@ def dm_sm(metodo, percorso, corpo=None):
     spieg = {401: "accesso negato: nell'app «Termostato» attiva Account → Accesso di terze parti, poi in VitaMemo «🔄 Ricollega il termostato» (Casa → Domotica → Collegamenti)", 403: "la chiave «subscription_key» non è giusta o l'abbonamento non è attivo",
              404: "termostato non trovato", 408: "il termostato non risponde (Wi-Fi?)", 429: "troppe richieste: aspetta un minuto", 469: "il termostato è offline"}
     raise DmErrore(f"BTicino: {spieg.get(r.status_code, 'errore')} ({r.status_code})" + (f" — risposta: {dett}" if dett else ""))
+
+
+def _dm_jwt_info(tok):
+    """Chi è il proprietario del permesso (senza mostrare il permesso): email/nome e scadenza dal token."""
+    try:
+        import base64 as _b64
+        corpo = tok.split(".")[1]
+        corpo += "=" * (-len(corpo) % 4)
+        j = _dm_json.loads(_b64.urlsafe_b64decode(corpo))
+        mail = j.get("email") or (j.get("emails") or [None])[0] or j.get("upn") or j.get("name") or j.get("sub")
+        return {"account": mail, "scope": j.get("scp") or j.get("scope"), "aud": j.get("aud")}
+    except Exception:
+        return {}
+
+
+def dm_sm_diagnosi():
+    """Prova passo per passo il collegamento BTicino e dice dove si ferma (senza mostrare chiavi)."""
+    out = []
+    conf = dm_sm_conf()
+    if not conf:
+        return [("❌", "Chiavi [smarther] nei Secrets", "mancano o sono incomplete")]
+    out.append(("✅", "Chiavi [smarther] nei Secrets", f"subscription_key di {len(conf['subscription_key'])} caratteri, redirect {conf['redirect_uri']}"))
+    vecchio = _dm_sm_leggi_tok(conf)
+    if not vecchio.get("refresh_token"):
+        return out + [("❌", "Accesso BTicino", "non ancora fatto: tocca «Collega il termostato»")]
+    out.append(("✅", "Accesso BTicino salvato", "c'è"))
+    st.session_state.pop("_dm_sm_tok", None)
+    try:
+        acc = _dm_sm_access(conf)
+        info = _dm_jwt_info(acc)
+        out.append(("✅", "Permesso rinnovato", f"account: {info.get('account') or '?'} · permessi: {info.get('scope') or '?'}"))
+    except Exception as e:
+        return out + [("❌", "Permesso rinnovato", str(e))]
+    for nome, perc in (("Elenco impianti (/plants)", "/plants"),):
+        try:
+            r = _dm_req.get(DM_SM_API + perc, headers={"Ocp-Apim-Subscription-Key": conf["subscription_key"], "Authorization": "Bearer " + acc}, timeout=15)
+            out.append(("✅" if r.status_code in (200, 204) else "❌", nome, f"HTTP {r.status_code} · {(r.text or '')[:200]}"))
+        except Exception as e:
+            out.append(("❌", nome, str(e)))
+    return out
 
 
 def dm_sm_dispositivi():
@@ -853,6 +896,10 @@ def _dm_collegamenti():
                 st.caption("Entra con lo stesso account dell'app «Termostato» e tocca «Allow / Consenti»: tornerai qui da solo.")
         elif not dm_sm_conf():
             st.caption("Servono le chiavi Legrand nei Secrets, sotto [smarther]: subscription_key, client_id, client_secret, redirect_uri.")
+        if dm_sm_conf() and st.button("🧪 Prova il collegamento BTicino (passo per passo)", key="dm_sm_diag", width="stretch"):
+            with st.spinner("Provo il collegamento…"):
+                for ico, cosa, dett in dm_sm_diagnosi():
+                    st.markdown(f"{ico} **{cosa}** — {_dm_h.escape(str(dett))}")
         st.markdown("**🔊 Google Home, Alexa e le altre app**: si aprono con il pulsante «▶ Apri» (non danno comandi alle app esterne).")
 
 
