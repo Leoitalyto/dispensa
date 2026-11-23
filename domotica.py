@@ -476,13 +476,17 @@ def dm_sm_diagnosi():
 
 
 def dm_sm_dispositivi():
+    """Impianti (/plants) → per ognuno la topologia (/plants/{id}/topology → plant.modules): un termostato per modulo."""
     f = dm_finto()
     if f is not None:
         return f.get("smarther", [])
     out = []
     for pl in (dm_sm("GET", "/plants") or {}).get("plants") or []:
-        mods = dm_sm("GET", f"/chronothermostat/thermoregulation/addressLocation/plants/{pl['id']}/modules") or {}
-        for m in mods.get("modules") or mods.get("chronothermostats") or []:
+        topo = dm_sm("GET", f"/plants/{pl['id']}/topology") or {}
+        mods = ((topo.get("plant") or {}).get("modules")) or topo.get("modules") or []
+        for m in mods:
+            if m.get("device") and "chrono" not in str(m.get("device")).lower():
+                continue
             out.append({"ext_id": f"{pl['id']}|{m.get('id')}", "nome": m.get("name") or pl.get("name") or "Termostato", "modello": "Smarther",
                         "categoria_cloud": "termostato", "online": True, "app_cloud": "BTicino Termostato"})
     return out
@@ -510,29 +514,42 @@ def dm_sm_stato(ext_id):
             "acceso": str(c.get("loadState") or "").upper() == "ACTIVE"}
 
 
-def dm_sm_imposta(ext_id, modo, voluta=None, minuti=None, programma=None, funzione="heating"):
-    """modo: automatic (programma), manual (temperatura, per sempre o per N minuti), boost (30/60/90 min), off, protection (antigelo)."""
+def dm_sm_imposta(ext_id, modo, voluta=None, minuti=None, programma=None, funzione=None):
+    """modo: automatic (programma), manual (temperatura, per sempre o per N minuti), boost (30/60/90 min), off, protection (antigelo).
+    Il corpo è lo stesso dell'integrazione per Home Assistant (bticino_x8000): funzione attuale, setPoint in «°C», programma attuale."""
     f = dm_finto()
     if f is not None:
         f.setdefault("comandi", []).append([ext_id, modo, voluta, minuti])
         _dm_os.environ["VM_DM_FINTO"] = _dm_json.dumps(f)
         return True
+    import datetime as _dt
     pl, mod = ext_id.split("|", 1)
-    corpo = {"function": funzione, "mode": modo}
-    if modo == "manual" and voluta is not None:
-        corpo["setPoint"] = {"value": f"{float(voluta):.1f}", "unit": "C"}
-    if modo == "automatic":
-        corpo["programs"] = [{"number": int(programma or 1)}]
-    if minuti and modo in ("manual", "boost"):
-        try:
-            fine = adesso()
-        except Exception:
-            import datetime as _dt
-            fine = _dt.datetime.now()
-        import datetime as _dt2
-        corpo["activationTime"] = (fine + _dt2.timedelta(minutes=int(minuti))).strftime("%Y-%m-%dT%H:%M:%S")
-        if modo == "boost":
-            corpo["boostTime"] = int(minuti)
+    try:
+        ora_st = dm_sm_stato(ext_id)
+    except Exception:
+        ora_st = {}
+    funz = (funzione or ora_st.get("funzione") or "heating").lower()
+    prog = int(programma or ora_st.get("programma") or 1)
+    try:
+        adesso_ = adesso()
+    except Exception:
+        adesso_ = _dt.datetime.now()
+    fmt = "%Y-%m-%dT%H:%M:%S"
+    corpo = {"function": funz, "mode": modo}
+    if modo == "manual":
+        corpo["setPoint"] = {"value": f"{float(voluta if voluta is not None else (ora_st.get('voluta') or 20)):.1f}", "unit": "°C"}
+        if minuti:
+            corpo["activationTime"] = adesso_.strftime(fmt) + "/" + (adesso_ + _dt.timedelta(minutes=int(minuti))).strftime(fmt)
+        else:
+            corpo["programs"] = [{"number": prog}]
+    elif modo == "automatic":
+        corpo["programs"] = [{"number": prog}]
+        if ora_st.get("voluta") is not None:
+            corpo["setPoint"] = {"value": f"{float(ora_st['voluta']):.1f}", "unit": "°C"}
+    elif modo == "boost":
+        m_ = int(minuti or 30)
+        corpo["activationTime"] = adesso_.strftime(fmt) + "/" + (adesso_ + _dt.timedelta(minutes=m_)).strftime(fmt)
+        corpo["setPoint"] = {"value": "7" if funz == "cooling" else "40", "unit": "°C"}
     dm_sm("POST", f"/chronothermostat/thermoregulation/addressLocation/plants/{pl}/modules/parameter/id/value/{mod}", corpo)
     return True
 
