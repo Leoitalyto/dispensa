@@ -375,7 +375,10 @@ def dm_sm_ritorno():
             voce = attesa.get(stato)
             if not conf or not voce or voce.get("scade", 0) < _dm_time.time():
                 raise DmErrore("il collegamento è scaduto o non è partito da VitaMemo: riprova da Casa → Domotica")
-            tok = _dm_sm_token_da(conf, {"grant_type": "authorization_code", "code": code})
+            try:
+                tok = _dm_sm_token_da(conf, {"grant_type": "authorization_code", "code": code, "redirect_uri": conf["redirect_uri"]})
+            except DmErrore:
+                tok = _dm_sm_token_da(conf, {"grant_type": "authorization_code", "code": code})
             _dm_sm_scrivi_tok(conf, tok, voce["uid"])
             esito = {"ok": True}
         except Exception as e:
@@ -424,7 +427,7 @@ def dm_sm(metodo, percorso, corpo=None):
         dett = (r.text or "")[:160]
     if r.status_code == 401 and "subscription key" in dett.lower():
         raise DmErrore("BTicino: la «subscription_key» nei Secrets non è giusta o l'abbonamento Starter Kit non è attivo (401). Ricopia la Primary key da Legrand → Subscription keys")
-    spieg = {401: "permesso scaduto o non valido (ricollega il termostato)", 403: "la chiave «subscription_key» non è giusta o l'abbonamento non è attivo",
+    spieg = {401: "accesso negato: nell'app «Termostato» attiva Account → Accesso di terze parti, poi in VitaMemo «🔄 Ricollega il termostato» (Casa → Domotica → Collegamenti)", 403: "la chiave «subscription_key» non è giusta o l'abbonamento non è attivo",
              404: "termostato non trovato", 408: "il termostato non risponde (Wi-Fi?)", 429: "troppe richieste: aspetta un minuto", 469: "il termostato è offline"}
     raise DmErrore(f"BTicino: {spieg.get(r.status_code, 'errore')} ({r.status_code})" + (f" — risposta: {dett}" if dett else ""))
 
@@ -840,8 +843,10 @@ def _dm_collegamenti():
         if not dm_tuya_conf():
             st.caption("Servono le chiavi del progetto Tuya nei Secrets di Streamlit, sotto [tuya]: access_id, access_secret, region = \"eu\". Te le faccio creare passo passo.")
         st.markdown("**🌡️ BTicino Smarther** (termostato): " + ("✅ collegato" if dm_sm_collegato() else "🟠 chiavi presenti, manca l'accesso" if dm_sm_conf() else "❌ non ancora configurato"))
-        if dm_sm_conf() and not dm_sm_collegato():
-            if st.button("🔗 Collega il termostato BTicino", key="dm_sm_coll", type="primary", width="stretch"):
+        if dm_sm_conf():
+            st.caption("Prima di collegare: nell'app «Termostato» BTicino vai su **Account → Accesso di terze parti** (Third party access) e attivalo.")
+            if st.button("🔗 Collega il termostato BTicino" if not dm_sm_collegato() else "🔄 Ricollega il termostato BTicino", key="dm_sm_coll",
+                         type="primary", width="stretch"):
                 st.session_state["_dm_sm_url"] = dm_sm_url_accesso()
             if st.session_state.get("_dm_sm_url"):
                 st.link_button("➡️ Apri la pagina di accesso BTicino", st.session_state["_dm_sm_url"], width="stretch")
