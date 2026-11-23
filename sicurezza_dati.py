@@ -7,6 +7,7 @@
 • «Spazio in più»: i servizi cloud dove tenere le copie di backup (i più sicuri, noti ed economici), con i prezzi indicativi.
 • Solo per l'amministratore: backup di TUTTA l'app (tutti gli utenti) e la lista di quello che va conservato per poter rimettere in piedi l'app.
 Caricato da app_dispensa.py (aggiunge il riquadro in fondo a Utilità). Nomi con prefisso «bk_»."""
+import html
 import io
 import os
 import re
@@ -363,7 +364,14 @@ def bk_per_utente(elenco):
         m = re.match(r"^(?:dispense/([^/]+)\.json|documenti/([^/]+)/|posta/([^/]+)\.json)", p)
         chi = (m.group(1) or m.group(2) or m.group(3)) if m else "__altro__"
         pesi[chi] = pesi.get(chi, 0) + n
-    nomi = lambda k: "⚙️ Dati comuni dell'app (famiglia, chat, impostazioni)" if k == "__altro__" else "👤 " + str(nome_admin() if k == "admin" and "nome_admin" in globals() else utenti.get(k, k))
+    def nomi(k):
+        if k == "__altro__":
+            return "⚙️ Dati comuni dell'app (famiglia, chat, impostazioni)"
+        if k == "admin":
+            return "👤 " + str(nome_admin() if "nome_admin" in globals() else "Amministratore")
+        if k in utenti:
+            return "👤 " + str(utenti[k])
+        return f"🗑️ Utente eliminato ({k})"                              # resti di un account che non c'è più: vedi «Dati di utenti eliminati»
     return sorted(((nomi(k), v) for k, v in pesi.items()), key=lambda x: -x[1])
 
 
@@ -409,6 +417,8 @@ def bk_ui_spazio(elenco, avviso):
         st.session_state.pop("bk_elenco_mem", None)
         st.rerun()
     bk_ui_orfani(elenco)
+    if bk_admin():
+        bk_ui_utenti_eliminati(elenco)
 
 
 def bk_cerca_orfani(elenco, uid):
@@ -571,3 +581,86 @@ def bk_blocco_utilita():
                     bk_pannello()
         except Exception as ex:
             st.warning(f"Il riquadro del backup non è disponibile ({type(ex).__name__}).")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Dati rimasti di utenti eliminati (solo amministratore): si vedono con il loro nome (se si riesce a capirlo), si scaricano o si eliminano
+# ---------------------------------------------------------------------------------------------------------------------
+def bk_utenti_eliminati(elenco, ids_vivi):
+    """{uid: [(percorso, byte)]} per i file di utenti che non sono più in utenti.json (né admin)."""
+    out = {}
+    for p, n in elenco:
+        m = re.match(r"^(?:dispense/([^/]+)\.json|documenti/([^/]+)/|posta/([^/]+)\.json)", p)
+        if not m:
+            continue
+        k = m.group(1) or m.group(2) or m.group(3)
+        if k in ids_vivi or k == "admin" or k in ("famiglia", "condivisa", "comune"):
+            continue
+        out.setdefault(k, []).append((p, n))
+    return out
+
+
+def _bk_nome_file(p):
+    try:
+        d = carica_dati(crea_archivio(), p)
+        return str(d.get("nome") or "") if isinstance(d, dict) else ""
+    except Exception:
+        return ""
+
+
+def bk_ui_utenti_eliminati(elenco):
+    try:
+        ids = {u.get("id") for u in (carica_dati(crea_archivio(), "utenti.json").get("utenti") or [])}
+    except Exception:
+        return
+    resti = bk_utenti_eliminati(elenco, ids)
+    if not resti:
+        return
+    with st.expander(f"🗑️ Dati rimasti di utenti eliminati ({len(resti)})"):
+        st.caption("Sono file di account che **non esistono più** (l'utente è stato eliminato o rifatto): nessuno li vede. "
+                   "Puoi scaricarli prima, poi eliminarli per fare ordine e liberare spazio.")
+        for k, files in resti.items():
+            nomi_f = [x for x in (_bk_nome_file(p) for p, _n in files[:6]) if x]
+            with st.container(border=True):
+                st.markdown(f"**Utente eliminato · {k}** — {len(files)} file, {bk_peso(sum(n for _p, n in files))}"
+                            + (f"<br><small>📎 {html.escape(', '.join(nomi_f))}</small>" if nomi_f else ""), unsafe_allow_html=True)
+                c1, c2 = st.columns(2, gap="small")
+                if c1.button("⬇️ Prepara lo ZIP", key=f"bk_el_zip_{k}", width="stretch"):
+                    import base64 as _b64e, io as _ioe, zipfile as _zfe
+                    b = _ioe.BytesIO()
+                    with _zfe.ZipFile(b, "w", _zfe.ZIP_DEFLATED) as z:
+                        for p, _n in files:
+                            try:
+                                d = carica_dati(crea_archivio(), p)
+                                if isinstance(d, dict) and d.get("b64"):
+                                    z.writestr(f"{p.rsplit('/', 1)[-1][:-5]}_{d.get('nome') or 'file'}", _b64e.b64decode(d["b64"]))
+                                else:
+                                    z.writestr(p.replace("/", "_"), json.dumps(d, ensure_ascii=False, indent=1))
+                            except Exception:
+                                continue
+                    st.session_state[f"bk_el_zipdati_{k}"] = b.getvalue()
+                if st.session_state.get(f"bk_el_zipdati_{k}"):
+                    c1.download_button("⬇️ Scarica lo ZIP", st.session_state[f"bk_el_zipdati_{k}"], file_name=f"utente_eliminato_{k}.zip", mime="application/zip",
+                                       key=f"bk_el_dl_{k}", width="stretch")
+                if c2.button("🗑️ Elimina questi file", key=f"bk_el_del_{k}", width="stretch"):
+                    st.session_state["bk_el_conferma"] = k
+                if st.session_state.get("bk_el_conferma") == k:
+                    st.warning(f"Eliminare per sempre i {len(files)} file dell'utente eliminato {k}?")
+                    s1, s2 = st.columns(2, gap="small")
+                    if s1.button("🗑️ Sì, elimina", key=f"bk_el_si_{k}", type="primary", width="stretch"):
+                        errori = 0
+                        with st.spinner("Elimino…"):
+                            for p, _n in files:
+                                try:
+                                    crea_archivio().elimina(p, f"Pulizia: file dell'utente eliminato {k}")
+                                except Exception:
+                                    errori += 1
+                        carica_dati.clear()
+                        st.session_state.pop("bk_elenco_mem", None)
+                        st.session_state.pop("bk_el_conferma", None)
+                        st.session_state.pop(f"bk_el_zipdati_{k}", None)
+                        (st.warning if errori else st.success)(f"Fatto{'' if not errori else f', ma {errori} file non si sono eliminati: riprova'}.")
+                        st.rerun()
+                    if s2.button("No", key=f"bk_el_no_{k}", width="stretch"):
+                        st.session_state.pop("bk_el_conferma", None)
+                        st.rerun()
