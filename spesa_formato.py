@@ -169,8 +169,17 @@ def sf_modifica_prezzo(ss, r, k):
     prezzo = c6.number_input("Prezzo (€)", min_value=0.0, value=ss_num(r.get("prezzo")), step=0.01, format="%.2f", key=k + "_pr")
     promo = c7.number_input("In offerta (€)", min_value=0.0, value=ss_num(r.get("prezzo_promo")), step=0.01, format="%.2f", key=k + "_pp", placeholder="se c'è")
     neg_ids = [n["id"] for n in ss["negozi"]]
-    neg = st.selectbox("🏪 Negozio", neg_ids, index=neg_ids.index(r["negozio_id"]) if r.get("negozio_id") in neg_ids else 0,
-                       format_func=lambda i: ss_nome_negozio(ss_trova(ss, "negozi", i)), key=k + "_neg") if neg_ids else None
+    _nomi_neg = {i: ss_nome_negozio(ss_trova(ss, "negozi", i)) for i in neg_ids}
+    neg = st.selectbox("🏪 Negozio", neg_ids, index=neg_ids.index(r["negozio_id"]) if r.get("negozio_id") in neg_ids else (0 if neg_ids else None),
+                       format_func=lambda i: _nomi_neg.get(i, i), key=k + "_neg", accept_new_options=True,
+                       placeholder="Scegli o scrivi il negozio")
+    st.caption("🏪 Per cambiare negozio tocca il riquadro: scegli dall'elenco oppure **scrivi il nome di un negozio nuovo** e tocca la riga **«Add: …»** (in inglese vuol dire «Aggiungi»).")
+    neg_nuovo = {}
+    if neg and neg not in neg_ids:                                   # negozio scritto a mano: lo creo (o lo riconosco se c'è già)
+        cn1, cn2 = st.columns(2, gap="small")
+        neg_nuovo = {"nome": str(neg).strip(), "citta": cn1.text_input("Città (facoltativa)", key=k + "_negc", placeholder="es. Torino"),
+                     "indirizzo": cn2.text_input("Indirizzo (facoltativo)", key=k + "_negi", placeholder="es. Via Roma 1")}
+        st.caption(f"➕ «{neg_nuovo['nome']}» sarà aggiunto ai tuoi negozi quando salvi.")
     c8, c9, c10 = st.columns(3, gap="small")
     data_r = c8.date_input("Data del prezzo", value=ss_data(r.get("data")) or ss_oggi(), max_value=ss_oggi(), format="DD/MM/YYYY", key=k + "_d")
     pdal = c9.date_input("Offerta dal", value=ss_data(r.get("promo_dal")), format="DD/MM/YYYY", key=k + "_pdal")
@@ -196,7 +205,14 @@ def sf_modifica_prezzo(ss, r, k):
                 pr["marca"] = marca.strip()
                 pr["formato_valore"], pr["formato_unita"], pr["confezioni"] = (fv or None), (fu if fv else ""), int(conf)
                 ss_cambia_formato_prodotto(s_, pr["id"], prima)
-            esito["err"] = ss_modifica_rilevazione(s_, r["id"], {"prezzo": prezzo, "prezzo_promo": promo, "negozio_id": neg or r.get("negozio_id"),
+            neg_id = neg if neg in neg_ids else None
+            if neg_nuovo.get("nome"):
+                n_ = ss_trova_negozio_da_testo(s_, neg_nuovo["nome"], neg_nuovo.get("citta", ""), neg_nuovo.get("indirizzo", ""))
+                if n_ is None:
+                    n_, _x = ss_aggiungi_negozio(s_, {"nome": neg_nuovo["nome"], "catena": neg_nuovo["nome"], "citta": neg_nuovo.get("citta", "").strip(),
+                                                      "indirizzo": neg_nuovo.get("indirizzo", "").strip()})
+                neg_id = n_["id"]
+            esito["err"] = ss_modifica_rilevazione(s_, r["id"], {"prezzo": prezzo, "prezzo_promo": promo, "negozio_id": neg_id or r.get("negozio_id"),
                                                                  "data": data_r.isoformat() if data_r else r.get("data"),
                                                                  "promo_dal": pdal.isoformat() if pdal else "", "promo_al": pal.isoformat() if pal else "",
                                                                  "tessera": tess, "note": note})
@@ -206,6 +222,8 @@ def sf_modifica_prezzo(ss, r, k):
                 st.warning(e)
         else:
             st.session_state["ss_msg"] = "✅ Modificato: prezzo al kg/litro ricalcolato."
+            for _kk in [x for x in list(st.session_state) if str(x).startswith(k + "_")]:     # la prossima volta riparte dai dati salvati
+                st.session_state.pop(_kk, None)
             st.rerun()
 
 
