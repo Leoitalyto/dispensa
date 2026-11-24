@@ -271,6 +271,17 @@ Anche i documenti caricati **dopo** vengono proposti. **Niente si collega senza 
 Per sicurezza serrature e allarmi chiedono una conferma prima di ogni comando.""",
                    "domotica casa apparecchi stanza comandi luce lampadina climatizzatore termostato boost orari fasce settimana risparmio antigelo tuya smart life bticino google home scenari"),
 })
+GA_SCHEDE["x_orologio"] = ("⏰ Orologio automatico e 📅 giorni speciali del riscaldamento",
+    """Gli **📅 Orari della settimana** del termostato funzionano anche **ad app chiusa** grazie all'**⏰ Orologio automatico**: una sveglia gratuita (sul sito cron-job.org) che ogni mezz'ora, dalle 5:00 alle 23:30, manda al termostato la fascia giusta.
+**Dove:** Casa → 🎛️ Domotica → termostato → **📅 Orari della settimana**, in fondo: riquadro **⏰ Orologio automatico** (nel titolo vedi se è acceso o in pausa).
+- **▶️ Accendi**: resta acceso finché non lo fermi. **⏸️ Metti in pausa**: si ferma. **📅 Accendi solo per oggi**: si spegne da solo stanotte. **🔧 Orario consigliato**: ogni mezz'ora dalle 5 alle 23:30.
+- **Perché si mette in pausa:** ogni sveglia consuma 1 minuto dei circa **2.000 minuti gratuiti al mese** di GitHub (gli stessi di promemoria e posta). Acceso tutto il mese sono circa 1.150 minuti: va bene, ma se non usi gli orari conviene tenerlo in pausa. Se si superano i 2.000 minuti non paghi niente, ma le automazioni si fermano fino al mese dopo.
+- **Funziona anche in pausa:** 🎯 temperatura a mano (anche «fino a» un orario), 🚀 Boost, ⏻ Spegni, ❄️ Antigelo, il programma del termostato e l'app BTicino; e gli orari vengono applicati quando apri VitaMemo.
+
+**📅 Solo per un giorno** (sopra «Fuori dalle fasce»): scegli una data, tocca **➕ Aggiungi** e scrivi le fasce di quel giorno (ferie, sei a casa, ospiti…). Valgono **solo quel giorno**, al posto di quelle della settimana, **anche se gli orari della settimana sono spenti**; senza fasce, quel giorno niente riscaldamento in più. Poi **💾 Salva gli orari** e, quel giorno, **📅 Accendi solo per oggi** nell'orologio. Il giorno dopo si cancellano da sole.
+Per comandare l'orologio da qui serve una volta sola la chiave gratuita di cron-job.org nei Secrets (`[cronjob] api_key`); senza, il riquadro spiega come farlo a mano.""",
+    "orologio automatico cron job cron-job.org pausa accendi solo per oggi minuti github actions riscaldamento orari giorno speciale eccezione ferie fasce termostato")
+GA_NOVITA.append(("nv_orologio", "⏰", "Orologio del riscaldamento dall'app", "Termostato → 📅 Orari → ⏰ Orologio automatico: accendi, pausa, solo per oggi; e 📅 Solo per un giorno"))
 GA_SCHEDE["x_parcheggio"] = ("🅿️ Dove ho parcheggiato",
     """In **Home**, accanto a **🛒 Spesa Smart**, c'è **🅿️ Parcheggio**.
 1. Appena parcheggi toccalo e poi tocca **📍 Salva qui (GPS)**: il telefono trova dove sei (la prima volta tocca **Consenti**) e salva da solo, con l'indirizzo. Oppure **scrivi tu** il posto.
@@ -279,7 +290,7 @@ GA_SCHEDE["x_parcheggio"] = ("🅿️ Dove ho parcheggiato",
 4. Ripresa l'auto, tocca **✅ Ho ripreso l'auto**: il parcheggio va nei **🕘 Parcheggi precedenti**. La posizione compare anche in **Auto**, nella scheda del veicolo.""",
     "parcheggio parcheggiato dove auto macchina gps posizione sosta strisce blu disco orario portami mappa piano colonna")
 GA_NOVITA.append(("nv_parcheggio", "🅿️", "Dove ho parcheggiato", "Home → 🅿️ Parcheggio, accanto a Spesa Smart: un tocco e il GPS salva il posto"))
-GA_DOVE.update({"x_parcheggio": ("dispensa", "auto", "utilita"), "l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
+GA_DOVE.update({"x_orologio": ("casa",), "x_parcheggio": ("dispensa", "auto", "utilita"), "l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
                 "x_appuntamenti": ("farmacia", "documenti", "casa", "lavoro", "auto", "animali", "utilita"),
                 "f_percorsi": ("farmacia",), "f_percorsi_ia": ("farmacia",)})
 GA_NOVITA += [
