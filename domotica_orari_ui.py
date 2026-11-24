@@ -302,5 +302,5 @@ def dm_orari_ui(x, k):
         st.caption("✋ Se cambi la temperatura a mano (qui o nell'app Termostato), la tua scelta vale fino all'inizio della fascia successiva.")
     if "orl_pannello" in globals():
         orl_pannello(in_uso=or_in_uso(_or_pulito(b), adesso()))
-    if not or_leggi_stato().get("giro"):
+    if not or_leggi_stato().get("giro") and (st.session_state.get("sess") or {}).get("admin"):
         _or_guida_orologio()

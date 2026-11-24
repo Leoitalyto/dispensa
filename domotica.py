@@ -157,6 +157,13 @@ def dm_finto():
 
 
 def dm_tuya_conf():
+    # Le chiavi [tuya] dei Secrets sono quelle del progetto Tuya dell'AMMINISTRATORE (collegato al SUO account Smart Life):
+    # gli altri utenti non devono vedere né comandare i suoi apparecchi (24/11/2026). Ognuno aggiunge i propri.
+    try:
+        if not (st.session_state.get("sess") or {}).get("admin"):
+            return None
+    except Exception:
+        return None
     s = _dm_secret("tuya")
     if s.get("access_id") and s.get("access_secret"):
         return {"id": str(s["access_id"]).strip(), "secret": str(s["access_secret"]).strip(), "base": DM_TUYA_URL.get(str(s.get("region") or "eu").lower(), DM_TUYA_URL["eu"])}
@@ -1005,8 +1012,11 @@ def _dm_aggiungi_a_mano(dm, casa_id):
 def _dm_collegamenti():
     with st.expander("🔗 Collegamenti ai cloud (Tuya / Smart Life, BTicino)"):
         st.markdown("**☁️ Tuya / Smart Life** (climatizzatore, lampadine, prese…): " + ("✅ chiavi presenti" if dm_tuya_conf() else "❌ non ancora collegato"))
-        if not dm_tuya_conf():
+        if not dm_tuya_conf() and (st.session_state.get("sess") or {}).get("admin"):
             st.caption("Servono le chiavi del progetto Tuya nei Secrets di Streamlit, sotto [tuya]: access_id, access_secret, region = \"eu\". Te le faccio creare passo passo.")
+        elif not dm_tuya_conf():
+            st.caption("Il collegamento Tuya dell'app è dell'amministratore (i suoi apparecchi restano suoi). I tuoi apparecchi Smart Life puoi aggiungerli "
+                       "con «➕ Aggiungi un apparecchio a mano»: si aprono con la loro app con il pulsante «▶ Apri».")
         st.markdown("**🌡️ BTicino Smarther** (termostato): " + ("✅ collegato" if dm_sm_collegato() else "🟠 chiavi presenti, manca l'accesso" if dm_sm_conf() else "❌ non ancora configurato"))
         if dm_sm_conf():
             st.caption("Prima di collegare: nell'app «Termostato» BTicino vai su **Account → Accesso di terze parti** (Third party access) e attivalo.")

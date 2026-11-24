@@ -220,6 +220,9 @@ def _orl_guida_chiave():
 
 def orl_pannello(in_uso=False, aperto=False):
     """Il riquadro «⏰ Orologio automatico» (nella pagina degli orari del termostato)."""
+    if not (st.session_state.get("sess") or {}).get("admin"):          # l'orologio (cron-job.org e i minuti GitHub) è dell'amministratore
+        st.caption("⏰ Gli orari vengono applicati quando apri VitaMemo; l'orologio automatico ad app chiusa lo gestisce l'amministratore dell'app.")
+        return
     ora = _orl_adesso()
     chiave = orl_chiave()
     job, errore = None, None
