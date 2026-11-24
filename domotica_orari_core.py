@@ -15,7 +15,10 @@ Come funziona (pensato per sbagliare il meno possibile):
 Formato (dentro d["casa"]["domotica"]["orari"][id_apparecchio]):
   {"attivo": True,
    "fuori": {"tipo": "programma" | "temp", "temp": 16.0},
-   "giorni": {"0": [{"dalle": "06:00", "alle": "08:30", "temp": 20.0}, …], …, "6": […]}}     # 0 = lunedì
+   "giorni": {"0": [{"dalle": "06:00", "alle": "08:30", "temp": 20.0}, …], …, "6": […]},     # 0 = lunedì
+   "eccezioni": {"2026-11-25": [{"dalle": …, "alle": …, "temp": …}, …]}}                     # «solo per un giorno» (24/11/2026)
+Le eccezioni valgono per QUELLA data al posto delle fasce del giorno della settimana, e funzionano anche se gli orari
+settimanali sono spenti (in quel caso, fuori dalle fasce dell'eccezione, il termostato segue il suo programma).
 """
 import datetime as _odt
 
@@ -29,12 +32,13 @@ OR_RISPARMIO_PER_GRADO = 0.07                                                  #
 
 
 def or_vuoto():
-    return {"attivo": False, "fuori": {"tipo": "programma", "temp": 16.0}, "giorni": {str(i): [] for i in range(7)}}
+    return {"attivo": False, "fuori": {"tipo": "programma", "temp": 16.0}, "giorni": {str(i): [] for i in range(7)}, "eccezioni": {}}
 
 
 def or_normalizza(prog):
     p = or_vuoto()
     p.update({k: v for k, v in (prog or {}).items() if k in ("attivo", "fuori", "giorni")})
+    p["eccezioni"] = {str(k): list(v or []) for k, v in ((prog or {}).get("eccezioni") or {}).items() if v is not None}
     p["fuori"] = dict(or_vuoto()["fuori"], **(p.get("fuori") or {}))
     p["giorni"] = {str(i): list(((prog or {}).get("giorni") or {}).get(str(i)) or []) for i in range(7)}
     return p
@@ -64,10 +68,50 @@ def or_controlla_giorno(fasce):
     return err
 
 
+def or_fasce_giorno(prog, giorno):
+    """Le fasce (dizionari) che valgono in quella data: l'eccezione «solo per quel giorno» se c'è, se no quelle della settimana (se attive)."""
+    ecc = (prog.get("eccezioni") or {})
+    if giorno.isoformat() in ecc:
+        return ecc[giorno.isoformat()] or []
+    if not prog.get("attivo"):
+        return []
+    return (prog.get("giorni") or {}).get(str(giorno.weekday())) or []
+
+
+def or_eccezioni_vicine(prog, adesso, giorni=8):
+    """Le date con un'eccezione da ieri a fra «giorni» giorni (per sapere se l'orologio serve)."""
+    d0 = adesso.date() - _odt.timedelta(days=1)
+    d1 = adesso.date() + _odt.timedelta(days=giorni)
+    out = []
+    for k in (prog.get("eccezioni") or {}):
+        try:
+            d = _odt.date.fromisoformat(k)
+        except ValueError:
+            continue
+        if d0 <= d <= d1:
+            out.append(d)
+    return sorted(out)
+
+
+def or_in_uso(prog, adesso=None):
+    """Gli orari fanno qualcosa? (settimana attiva, oppure un'eccezione vicina)."""
+    prog = prog or {}
+    if prog.get("attivo"):
+        return True
+    return bool(or_eccezioni_vicine(prog, adesso or _odt.datetime.now()))
+
+
+def or_pulisci_eccezioni(prog, oggi):
+    """Toglie le eccezioni dei giorni già passati (prima di ieri)."""
+    ecc = prog.get("eccezioni") or {}
+    prog["eccezioni"] = {k: v for k, v in ecc.items() if k >= (oggi - _odt.timedelta(days=1)).isoformat()}
+    return prog
+
+
 def or_fasce_data(prog, giorno):
     """Le fasce di una data: [(inizio, fine, temperatura)] in ordine."""
     out = []
-    for f in (prog.get("giorni") or {}).get(str(giorno.weekday())) or []:
+    for f in or_fasce_giorno(prog, giorno):
         try:
             a = _odt.datetime.combine(giorno, _odt.time()) + _odt.timedelta(minutes=_or_min(f["dalle"]))
             b = _odt.datetime.combine(giorno, _odt.time()) + _odt.timedelta(minutes=_or_min(f["alle"]))
@@ -97,7 +141,7 @@ def or_obiettivo(prog, adesso):
     """Cosa deve fare il termostato adesso. None = niente da fare (orari spenti, oppure fuori fascia col programma del termostato)
     Altrimenti {"chiave", "tipo": "fascia"|"ridotta"|"programma", "temp", "fino", "descr"}."""
     prog = or_normalizza(prog)
-    if not prog.get("attivo"):
+    if not or_in_uso(prog, adesso):
         return None
     ora = adesso + _odt.timedelta(minutes=OR_TOLLERANZA_MIN)
     fasce = _or_fasce_vicine(prog, adesso)
@@ -108,7 +152,7 @@ def or_obiettivo(prog, adesso):
     prima = max((b for a, b, t in fasce if b <= ora), default=None)
     dopo = min((a for a, b, t in fasce if a > ora), default=None)
     inizio = f"{prima:%Y-%m-%dT%H:%M}" if prima else "-"
-    if prog["fuori"].get("tipo") == "temp":
+    if prog["fuori"].get("tipo") == "temp" and prog.get("attivo"):
         t = float(prog["fuori"].get("temp") or 16.0)
         return {"chiave": f"R|{inizio}|{dopo:%Y-%m-%dT%H:%M}|{t:g}" if dopo else f"R|{inizio}|-|{t:g}", "tipo": "ridotta", "temp": t, "fino": dopo,
                 "descr": (f"ridotta {t:g}°" + (f" fino alle {dopo:%H:%M}" if dopo else "")).replace(".", ",")}
@@ -118,12 +162,12 @@ def or_obiettivo(prog, adesso):
 def or_prossimo_cambio(prog, adesso):
     """(quando, testo) del prossimo passaggio, per mostrarlo nell'app."""
     prog = or_normalizza(prog)
-    if not prog.get("attivo"):
+    if not or_in_uso(prog, adesso):
         return None
     ora = adesso + _odt.timedelta(minutes=OR_TOLLERANZA_MIN)
     for a, b, t in _or_fasce_vicine(prog, adesso):
         if a <= ora < b:
-            dopo = "temperatura ridotta" if prog["fuori"].get("tipo") == "temp" else "programma del termostato"
+            dopo = "temperatura ridotta" if (prog["fuori"].get("tipo") == "temp" and prog.get("attivo")) else "programma del termostato"
             return b, f"alle {b:%H:%M} si passa a: {dopo}"
         if a > ora:
             quando = "oggi" if a.date() == adesso.date() else ("domani" if a.date() == adesso.date() + _odt.timedelta(days=1) else OR_GIORNI[a.weekday()].lower())

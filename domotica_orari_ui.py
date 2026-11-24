@@ -86,7 +86,7 @@ def dm_orari_applica(x, prog=None, forza=False):
 def _or_riga_rapida(x):
     """Nel telecomando: cosa stanno facendo gli orari, e li applica se il passaggio non è ancora stato fatto."""
     prog = dm_orari_di(x)
-    if not prog.get("attivo"):
+    if not or_in_uso(prog, adesso()):
         return
     ob = or_obiettivo(prog, adesso())
     pross = or_prossimo_cambio(prog, adesso())
@@ -101,8 +101,8 @@ def _or_riga_rapida(x):
 def _or_bozza(x, k):
     bk = k + "_orb"
     if bk not in st.session_state:
-        b = _or_copy.deepcopy(dm_orari_di(x))
-        for g in b["giorni"].values():
+        b = or_pulisci_eccezioni(_or_copy.deepcopy(dm_orari_di(x)), adesso().date())
+        for g in list(b["giorni"].values()) + list(b["eccezioni"].values()):
             for f in g:
                 f["id"] = _or_uuid.uuid4().hex[:8]
         st.session_state[bk] = b
@@ -113,6 +113,8 @@ def _or_pulito(b):
     out = _or_copy.deepcopy(b)
     for g, fasce in out["giorni"].items():
         out["giorni"][g] = sorted(({kk: vv for kk, vv in f.items() if kk != "id"} for f in fasce), key=lambda f: f["dalle"])
+    for g, fasce in (out.get("eccezioni") or {}).items():
+        out["eccezioni"][g] = sorted(({kk: vv for kk, vv in f.items() if kk != "id"} for f in fasce), key=lambda f: f["dalle"])
     return out
 
 
@@ -131,7 +133,7 @@ def _or_stato_auto(x, attivo):
                    + (f" · {voce.get('testo')}" if voce.get("testo") else ""))
     elif attivo:
         st.warning("🤖 L'orologio automatico non è ancora attivo" + (f" (ultimo controllo: {giro[8:10]}/{giro[5:7]} alle {giro[11:]})" if giro else "")
-                   + ": per ora gli orari vengono applicati solo quando apri VitaMemo. Per farli funzionare anche ad app chiusa segui «⚙️ Attiva l'orologio automatico» qui sotto.")
+                   + ": per ora gli orari vengono applicati solo quando apri VitaMemo. Per farli funzionare anche ad app chiusa accendilo in «⏰ Orologio automatico» qui sotto.")
     if voce.get("esito") == "errore":
         st.error("❌ Ultimo tentativo non riuscito: " + str(voce.get("testo") or ""))
     storia = [h for h in (s.get("storia") or []) if h.get("nome") == (x.get("nome") or "Termostato")][:10]
@@ -157,6 +159,64 @@ def _or_guida_orologio():
             "Quando funziona, qui sopra compare «🤖 Orologio automatico attivo». Claude ti guida passo passo.")
 
 
+def _or_editor_fasce(fasce, k, pref):
+    """Le fasce di una lista (un giorno della settimana o un giorno speciale): modifica, togli, aggiungi. Modifica la lista sul posto."""
+    for f in list(fasce):
+        fid = f["id"]
+        with st.container(border=True):
+            c1, c2 = st.columns(2, gap="small")
+            f["dalle"] = c1.selectbox("Dalle", OR_ORARI, index=OR_ORARI.index(f["dalle"]) if f["dalle"] in OR_ORARI else 12, key=f"{k}_{pref}_d_{fid}")
+            f["alle"] = c2.selectbox("Alle", OR_ORARI_FINE, index=OR_ORARI_FINE.index(f["alle"]) if f["alle"] in OR_ORARI_FINE else 16, key=f"{k}_{pref}_a_{fid}")
+            c3, c4 = st.columns([3, 1], gap="small", vertical_alignment="bottom")
+            f["temp"] = c3.number_input("🌡️ Temperatura (°C)", min_value=OR_TEMP_MIN, max_value=OR_TEMP_MAX, value=float(f.get("temp") or 20.0),
+                                        step=0.5, format="%.1f", key=f"{k}_{pref}_t_{fid}")
+            if c4.button("🗑️", key=f"{k}_{pref}_x_{fid}", width="stretch", help="Togli questa fascia"):
+                fasce[:] = [y for y in fasce if y["id"] != fid]
+                _dm_rr()
+    if st.button("➕ Aggiungi una fascia", key=f"{k}_{pref}_add", width="stretch"):
+        ultima = max((OR_ORARI_FINE.index(y["alle"]) for y in fasce), default=OR_ORARI.index("06:00") - 1)
+        inizio = OR_ORARI[min(ultima + 1, len(OR_ORARI) - 1)] if fasce else "06:00"
+        i0 = OR_ORARI.index(inizio)
+        fine = OR_ORARI_FINE[min(i0 + 3, len(OR_ORARI_FINE) - 1)]
+        fasce.append({"id": _or_uuid.uuid4().hex[:8], "dalle": inizio, "alle": fine, "temp": float(fasce[-1]["temp"]) if fasce else 20.0})
+        _dm_rr()
+    for e in or_controlla_giorno(fasce):
+        st.error("⚠️ " + e)
+
+
+def _or_giorni_speciali(b, k):
+    """📅 Solo per un giorno: fasce diverse per una data precisa (ferie, malattia, ospiti…). Valgono anche con la settimana spenta."""
+    ecc = b.setdefault("eccezioni", {})
+    oggi_ = adesso().date()
+    if ecc:
+        st.caption("📅 Giorni speciali: " + ", ".join(f"{_or_dt.date.fromisoformat(g):%d/%m}" for g in sorted(ecc)))
+    with st.expander("📅 Solo per un giorno (ferie, a casa, ospiti…)", expanded=bool(st.session_state.get(k + "_or_ecc_aperto"))):
+        st.caption("Per un giorno diverso dal solito (sei a casa, ferie, ospiti…): scegli la data e le sue fasce. Valgono **solo quel giorno**, al posto "
+                   "di quelle della settimana, e funzionano **anche se gli orari della settimana sono spenti**. Dopo quel giorno si cancellano da sole. "
+                   "Lascia il giorno **senza fasce** se quel giorno non vuoi riscaldare.")
+        for data in sorted(ecc):
+            d = _or_dt.date.fromisoformat(data)
+            nome = ("Oggi" if d == oggi_ else "Domani" if d == oggi_ + _or_dt.timedelta(days=1) else OR_GIORNI[d.weekday()]) + f" {d:%d/%m}"
+            with st.container(border=True):
+                st.markdown(f"**📅 {nome}** — " + (", ".join(f"{f['dalle']}–{f['alle']} {float(f['temp']):g}°" for f in sorted(ecc[data], key=lambda f: f["dalle"])) or "nessuna fascia (niente riscaldamento in più)"))
+                _or_editor_fasce(ecc[data], k, "ecc" + data.replace("-", ""))
+                if st.button(f"🗑️ Togli il giorno speciale {d:%d/%m}", key=f"{k}_or_eccdel_{data}", width="stretch"):
+                    ecc.pop(data, None)
+                    _dm_rr()
+        c1, c2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
+        nuova = c1.date_input("Aggiungi un giorno", value=oggi_, min_value=oggi_, max_value=oggi_ + _or_dt.timedelta(days=60), format="DD/MM/YYYY", key=k + "_or_eccdata")
+        if c2.button("➕ Aggiungi", key=k + "_or_eccadd", width="stretch"):
+            if nuova.isoformat() not in ecc:
+                base = b["giorni"][str(nuova.weekday())] if b.get("attivo") else []
+                ecc[nuova.isoformat()] = [dict(f, id=_or_uuid.uuid4().hex[:8]) for f in base] or [
+                    {"id": _or_uuid.uuid4().hex[:8], "dalle": "07:00", "alle": "09:00", "temp": 20.0}]
+            st.session_state[k + "_or_ecc_aperto"] = True
+            _dm_rr()
+        if ecc:
+            st.caption("💾 Ricordati di toccare **Salva gli orari** qui sotto. Per farli partire anche ad app chiusa, in «⏰ Orologio automatico» "
+                       "usa **📅 Accendi solo per oggi** (o ▶️ Accendi se il giorno speciale è un altro).")
+
+
 def dm_orari_ui(x, k):
     """La pagina «📅 Orari della settimana» del termostato."""
     b = _or_bozza(x, k)
@@ -177,27 +237,7 @@ def dm_orari_ui(x, k):
                       format_func=lambda i: OR_GIORNI_BREVI[i] + (f" · {len(b['giorni'][str(i)])}" if b["giorni"][str(i)] else ""))
     fasce = b["giorni"][str(giorno)]
     st.markdown(f"**{OR_GIORNI[giorno]}** — " + (f"{len(fasce)} fasc{'ia' if len(fasce) == 1 else 'e'}" if fasce else "nessuna fascia"))
-    for i, f in enumerate(fasce):
-        fid = f["id"]
-        with st.container(border=True):
-            c1, c2 = st.columns(2, gap="small")
-            f["dalle"] = c1.selectbox("Dalle", OR_ORARI, index=OR_ORARI.index(f["dalle"]) if f["dalle"] in OR_ORARI else 12, key=f"{k}_or_d_{fid}")
-            f["alle"] = c2.selectbox("Alle", OR_ORARI_FINE, index=OR_ORARI_FINE.index(f["alle"]) if f["alle"] in OR_ORARI_FINE else 16, key=f"{k}_or_a_{fid}")
-            c3, c4 = st.columns([3, 1], gap="small", vertical_alignment="bottom")
-            f["temp"] = c3.number_input("🌡️ Temperatura (°C)", min_value=OR_TEMP_MIN, max_value=OR_TEMP_MAX, value=float(f.get("temp") or 20.0),
-                                        step=0.5, format="%.1f", key=f"{k}_or_t_{fid}")
-            if c4.button("🗑️", key=f"{k}_or_x_{fid}", width="stretch", help="Togli questa fascia"):
-                b["giorni"][str(giorno)] = [y for y in fasce if y["id"] != fid]
-                _dm_rr()
-    if st.button("➕ Aggiungi una fascia", key=k + "_or_add", width="stretch"):
-        ultima = max((OR_ORARI_FINE.index(y["alle"]) for y in fasce), default=OR_ORARI.index("06:00") - 1)
-        inizio = OR_ORARI[min(ultima + 1, len(OR_ORARI) - 1)] if fasce else "06:00"
-        i0 = OR_ORARI.index(inizio)
-        fine = OR_ORARI_FINE[min(i0 + 3, len(OR_ORARI_FINE) - 1)]
-        fasce.append({"id": _or_uuid.uuid4().hex[:8], "dalle": inizio, "alle": fine, "temp": float(fasce[-1]["temp"]) if fasce else 20.0})
-        _dm_rr()
-    for e in or_controlla_giorno(fasce):
-        st.error("⚠️ " + e)
+    _or_editor_fasce(fasce, k, "or")
     if fasce:
         with st.expander(f"📋 Copia gli orari di {OR_GIORNI[giorno].lower()} su altri giorni"):
             scorciatoie = {"Lun–Ven": [0, 1, 2, 3, 4], "Sab–Dom": [5, 6], "Tutti": list(range(7))}
@@ -208,6 +248,7 @@ def dm_orari_ui(x, k):
                 for g in dest:
                     b["giorni"][str(g)] = [dict(y, id=_or_uuid.uuid4().hex[:8]) for y in fasce]
                 _dm_rr()
+    _or_giorni_speciali(b, k)
     st.markdown("**Fuori dalle fasce**")
     tipo = st.radio("Fuori dalle fasce", ["programma", "temp"], label_visibility="collapsed", key=k + "_or_ft",
                     index=0 if b["fuori"].get("tipo") != "temp" else 1,
@@ -231,10 +272,11 @@ def dm_orari_ui(x, k):
             txt += ". Con «temperatura ridotta» qui sotto vedi anche il risparmio stimato."
         st.info(txt)
     errori = [f"{OR_GIORNI[int(g)]}: {e}" for g, fs in b["giorni"].items() for e in or_controlla_giorno(fs)]
+    errori += [f"{g[8:10]}/{g[5:7]}: {e}" for g, fs in (b.get("eccezioni") or {}).items() for e in or_controlla_giorno(fs)]
     c1, c2 = st.columns([2, 1], gap="small")
     if c1.button("💾 Salva gli orari", key=k + "_or_salva", type="primary", width="stretch", disabled=bool(errori)):
         pulito = _or_pulito(b)
-        if pulito["attivo"] and not any(pulito["giorni"].values()):
+        if pulito["attivo"] and not any(pulito["giorni"].values()) and not pulito.get("eccezioni"):
             st.error("⚠️ Aggiungi almeno una fascia prima di attivare gli orari.")
         else:
             _dm_salva(lambda dm_: dm_.setdefault("orari", {}).__setitem__(x["id"], pulito), "orari riscaldamento")
@@ -243,7 +285,7 @@ def dm_orari_ui(x, k):
                 carica_dati.clear()
             except Exception:
                 pass
-            esito = dm_orari_applica(x, pulito, forza=True) if pulito["attivo"] else None
+            esito = dm_orari_applica(x, pulito, forza=True) if or_in_uso(pulito, adesso()) else None
             st.session_state.pop(k + "_orb", None)
             st.session_state.pop(f"_or_fatto_{x['id']}", None)
             st.toast("✅ Orari salvati" + (" · " + esito if esito else ""))
@@ -253,9 +295,12 @@ def dm_orari_ui(x, k):
         _dm_rr()
     if errori:
         st.caption("Correggi prima: " + "; ".join(errori))
-    if b["attivo"]:
+    if or_in_uso(b, adesso()):
         pross = or_prossimo_cambio(_or_pulito(b), adesso())
         if pross:
             st.caption("⏭️ Prossimo cambio: " + pross[1])
         st.caption("✋ Se cambi la temperatura a mano (qui o nell'app Termostato), la tua scelta vale fino all'inizio della fascia successiva.")
-    _or_guida_orologio()
+    if "orl_pannello" in globals():
+        orl_pannello(in_uso=or_in_uso(_or_pulito(b), adesso()))
+    if not or_leggi_stato().get("giro"):
+        _or_guida_orologio()
