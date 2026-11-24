@@ -265,6 +265,11 @@ if arancioni:
 _posto_messaggio = st.empty()          # posto fisso: cosi' le schede non tornano alla prima quando il messaggio sparisce
 if st.session_state.get("messaggio"):
     _posto_messaggio.success(st.session_state.pop("messaggio"))
+if "dp_box_finiti" in globals():                             # ❓ prodotti finiti: cosa faccio? (dispensa_prezzi.py)
+    try:
+        dp_box_finiti()
+    except Exception:
+        pass
 
 _n_nuovi = sum(1 for m in carica_messaggi() if not m.get("letto")) if e_admin else 0
 _nome_messaggi = (":material/mail: " + t("Messaggi") + (f" ({_n_nuovi})" if _n_nuovi else "")) if e_admin else ":material/chat: " + t("Suggerimenti")
@@ -382,8 +387,15 @@ with tab_dispensa:
                 _esito = {}
                 try:
                     salva(lambda d: _esito.update(consuma_uno(d, _riga["id"])), "Consumato un prodotto")
-                    if _esito.get("stato") == "finito":
+                    if _esito.get("stato") == "finito" and _esito.get("dove") in ("decidere", "offerta", "mai", "gia"):
+                        st.session_state["messaggio"] = {"decidere": f"❓ {_esito['nome']} è finito: scegli qui sotto se rimetterlo nella lista.",
+                                                         "offerta": f"💭 {_esito['nome']} è finito: te lo propongo quando è in offerta.",
+                                                         "mai": f"✅ {_esito['nome']} è finito (non lo ricompri: non l'ho messo in lista).",
+                                                         "gia": f"✅ {_esito['nome']} è finito: è già nella lista della spesa."}[_esito["dove"]]
+                    elif _esito.get("stato") == "finito":
                         st.session_state["messaggio"] = "🛒 " + t("{nome} è finito: l'ho messo nella lista della spesa.", nome=_esito["nome"])
+                    elif _esito.get("dove") in ("decidere", "offerta", "lista"):
+                        st.session_state["messaggio"] = f"📦 {_esito['nome']}: sei alla scorta minima" + (" → l'ho messo nella lista della spesa." if _esito["dove"] == "lista" else ": scegli qui sotto se ricomprarlo.")
                     elif _esito.get("stato") == "altre":
                         st.session_state["messaggio"] = "✅ " + t("{nome}: questa scadenza è finita, ma hai ancora altre unità in dispensa.", nome=_esito["nome"])
                     elif _esito.get("stato") == "resta":
@@ -401,5 +413,10 @@ with tab_dispensa:
                     st.rerun()
                 except Exception as e:
                     st.error(t("Non sono riuscito a salvare: {e}", e=e))
+            if "dp_pannello" in globals():                       # 💶 prezzi, 🛒 in lista, ⚙️ quando finisce (dispensa_prezzi.py)
+                try:
+                    dp_pannello(_riga)
+                except Exception as e:
+                    st.caption(f"(prezzi non disponibili: {type(e).__name__})")
 
 # >>> FINE PARTE 3 di 4: adesso incolla la PARTE 4 qui sotto <<<

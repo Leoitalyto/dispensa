@@ -10,7 +10,7 @@ RICHIESTA (Leonardo): «aggiorna le spiegazioni dell'app e l'assistente in tutte
 L'assistente (scritto e vocale), la ricerca e il pulsante Informazioni leggono tutti questa stessa base (_GUIDE), quindi rispondono anche sulle novità.
 Caricato dopo guida_completa.py."""
 
-GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.4", "2026-11-23", "23/11/2026"
+GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.5", "2026-11-24", "24/11/2026"
 
 GA_SCHEDE = {
     "x_ia": ("🤖 Intelligenza artificiale: documenti, scritte a mano, spie, lingue",
@@ -293,6 +293,16 @@ GA_NOVITA.append(("nv_parcheggio", "🅿️", "Dove ho parcheggiato", "Home → 
 GA_DOVE.update({"x_orologio": ("casa",), "x_parcheggio": ("dispensa", "auto", "utilita"), "l_moduli": ("lavoro",), "l_moduli_catalogo": ("lavoro",),
                 "x_appuntamenti": ("farmacia", "documenti", "casa", "lavoro", "auto", "animali", "utilita"),
                 "f_percorsi": ("farmacia",), "f_percorsi_ia": ("farmacia",)})
+GA_SCHEDE["d_prezzi"] = ("💶 Prezzi in Dispensa e 🛒 «quando finisce»",
+    """**Dove:** Dispensa → **🔍 Dettagli prodotto** → scegli il prodotto: sotto la scheda ci sono tre cose nuove.
+- **🛒 Metti nella lista della spesa**: scegli **quanti** e tocca. Se è già in lista aggiorna la quantità.
+- **💶 Prezzo, peso e prezzo al kg**: scrivi **prezzo pagato**, **confezioni**, **peso o contenuto** (g, kg, ml, l) e **negozio**: l'app calcola da sola **€/kg** o **€/litro**. Per frutta, verdura e carne attiva **⚖️ Venduto a peso** (€/kg × grammi). Se era in offerta spunta **🏷️ Era in offerta**. Il prezzo va in **🛒 Spesa Smart** (niente doppioni): sulla scheda vedi l'ultimo prezzo, **🏷️ In offerta da…** o **💡 Costa meno da…** e gli ultimi prezzi.
+- **⚙️ Quando finisce**: ❓ **Chiedimi** (normale), 🛒 **Mettilo sempre in lista**, 🏷️ **Solo se è in offerta**, 🚫 **Mai**. E la **📦 scorta minima**: quando ne restano così pochi, è come se fosse finito.
+**Un prodotto finito NON va più in lista da solo**: compare **«❓ È finito: cosa faccio?»** con 4 scelte: **🛒 Mettilo nella lista**, **⏰ Più avanti** (1 settimana, 2 settimane, 1 mese o una data; quel giorno te lo richiedo o lo metto in lista da solo), **💭 Solo se conviene** (ti avviso 🔔 quando è in offerta), **🚫 Non lo ricompro**. Se non scegli, resta in **Spesa → ❓ Finiti, da decidere**. Se lo rimetti in lista 3 volte di fila, l'app ti propone **«mettilo sempre in lista»**.
+**Nella scheda 🛒 Spesa**, sopra la lista: **❓ Finiti, da decidere** · **🏷️ Da ricomprare se conviene** (con 🔥 quando sono in offerta) · **⏰ Più avanti**. In **📦 Metti in dispensa i prodotti presi** puoi scrivere anche **quanto hai pagato e dove**: i prezzi vanno in Spesa Smart.""",
+    "prezzo prezzi peso kg chilo litro euro al kg costo pagato negozio offerta conviene dove costa meno lista della spesa finito finiti ricomprare riacquistare più avanti scorta minima regola quando finisce non lo ricompro")
+GA_NOVITA.append(("nv_dprezzi", "💶", "Prezzi in Dispensa e «quando finisce»", "Dispensa → Dettagli prodotto: 💶 prezzo e €/kg, 🛒 in lista; se finisce l'app ti chiede cosa fare"))
+GA_DOVE.update({"d_prezzi": ("dispensa",)})
 GA_NOVITA += [
     ("nv_appuntamenti", "📅", "Tutti gli appuntamenti", "Utilità → 📅 Appuntamenti: per tipologia, per data o per priorità"),
     ("nv_percorsi", "🗂️", "Cartelle di cura", "Salute → 🗂️ Cartelle di cura: appuntamenti, pagamenti e documenti insieme"),

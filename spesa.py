@@ -54,6 +54,17 @@ def togli_da_spesa(d, prodotti):
     d["spesa"] = [x for x in d.get("spesa", []) if _chiave_prodotto(x) not in chiavi]
 
 
+def _spesa_finito(d, r, motivo="finito"):
+    """Un prodotto è finito: di base va in lista (dispensa_prezzi.py lo sostituisce con «chiedi / regola del prodotto»).
+    Ritorna dove è andato: lista | decidere | offerta | mai | gia."""
+    return "lista" if aggiungi_a_spesa(d, r) else "gia"
+
+
+def _spesa_sotto_minima(d, r):
+    """Dopo un consumo, se il prodotto è sotto la scorta minima (dispensa_prezzi.py). None = niente da fare."""
+    return None
+
+
 def consuma_uno(d, id_riga):
     """Toglie un'unita' al prodotto. Se finisce, lo toglie dalla dispensa e lo mette nella lista della spesa."""
     articoli = d.get("articoli", [])
@@ -65,12 +76,12 @@ def consuma_uno(d, id_riga):
         registra_evento(d, "consumato", riga, 1)                      # per le statistiche
     if resto > 0:
         riga["quantita"] = resto
-        return {"stato": "resta", "nome": riga.get("nome", ""), "n": resto}
+        return {"stato": "resta", "nome": riga.get("nome", ""), "n": resto, "dove": _spesa_sotto_minima(d, riga)}
     d["articoli"] = [r for r in articoli if r.get("id") != id_riga]
     if any(_chiave_prodotto(r) == _chiave_prodotto(riga) for r in d["articoli"]):
-        return {"stato": "altre", "nome": riga.get("nome", "")}      # ne restano con un'altra scadenza
-    aggiungi_a_spesa(d, riga)
-    return {"stato": "finito", "nome": riga.get("nome", "")}
+        return {"stato": "altre", "nome": riga.get("nome", ""), "dove": _spesa_sotto_minima(d, riga)}      # ne restano con un'altra scadenza
+    dove = _spesa_finito(d, riga, "finito")
+    return {"stato": "finito", "nome": riga.get("nome", ""), "dove": dove}
 
 
 def aggiungi_uno(d, id_riga):
@@ -104,7 +115,7 @@ def applica_modifiche(d, modificata):
                 registra_evento(d, "sprecato", r, motivo="Era scaduto: l'ho buttato")
     for r in finiti:
         if not any(_chiave_prodotto(x) == _chiave_prodotto(r) for x in d.get("articoli", [])):
-            aggiungi_a_spesa(d, r)
+            _spesa_finito(d, r, "finito")
 
 
 _FRAMMENTO = hasattr(st, "fragment")
@@ -121,7 +132,15 @@ def _corpo_spesa():
     """Contenuto della scheda 'Spesa' (legge sempre i dati aggiornati)."""
     lista = list(carica_dati(crea_archivio(), st.session_state["percorso"]).get("spesa", []))
     st.subheader("🛒 " + t("Lista della spesa"))
-    st.caption(t("I prodotti finiti (0 unità) arrivano qui da soli. Quando li aggiungi di nuovo in dispensa escono dalla lista."))
+    if "dp_sezioni_spesa" in globals():
+        st.caption("Quando un prodotto finisce ti chiedo cosa fare (o seguo la regola che hai scelto per lui). Quando lo rimetti in dispensa esce dalla lista.")
+        try:
+            dp_sezioni_spesa(_ricarica)
+        except Exception as e:
+            st.caption(f"(finiti da decidere non disponibili: {type(e).__name__})")
+        lista = list(carica_dati(crea_archivio(), st.session_state["percorso"]).get("spesa", []))
+    else:
+        st.caption(t("I prodotti finiti (0 unità) arrivano qui da soli. Quando li aggiungi di nuovo in dispensa escono dalla lista."))
     giro = st.session_state.setdefault("spesa_giro", 0)
     c1, cq, c2 = st.columns([3, 1.3, 2])
     nuovo = c1.text_input(t("Cosa devi comprare?"), key=f"spesa_nuovo_{giro}", label_visibility="collapsed",
@@ -203,7 +222,14 @@ def _corpo_spesa():
     if presi:
         with st.expander(f"📦 Metti in dispensa i prodotti presi ({len(presi)})", expanded=True):
             st.caption("Conferma quante unità hai preso, la scadenza e dove le metti: li aggiungo alla dispensa con la data di acquisto di oggi.")
-            scelte = []
+            scelte, prezzi_presi = [], []
+            negozi_noti = []
+            if "dp_campi_prezzo_presi" in globals():
+                st.caption("💶 Se vuoi, scrivi anche quanto l'hai pagato e dove: il prezzo va in 🛒 Spesa Smart (dove costa meno, offerte).")
+                try:
+                    negozi_noti = _dp_negozi(_dp_ss())
+                except Exception:
+                    negozi_noti = []
             for x in presi:
                 st.markdown(f"**{x.get('nome', '')}**" + (f" · {x['marca']}" if x.get("marca") else ""))
                 g1, g2, g3 = st.columns([1, 2, 2])
@@ -214,10 +240,16 @@ def _corpo_spesa():
                 po_ = g3.selectbox("Dove", posti_, format_func=(nome_posto_scelta if "nome_posto_scelta" in globals() else str), key=f"sp_po_{x['id']}",
                                    index=posti_.index(st.session_state.get("ultimo_posto", "dispensa")) if st.session_state.get("ultimo_posto", "dispensa") in posti_ else 0)
                 scelte.append({"id": x["id"], "quantita": q_, "scadenza": None if senza else sc_.isoformat(), "posto": po_})
+                if "dp_campi_prezzo_presi" in globals():
+                    try:
+                        prezzi_presi.append((x,) + tuple(dp_campi_prezzo_presi(x, negozi_noti)))
+                    except Exception:
+                        pass
             if st.button("📦 " + "Metti in dispensa", type="primary", key="spesa_in_dispensa", width="stretch"):
                 try:
+                    n_pr = dp_salva_prezzi_presi(prezzi_presi) if prezzi_presi and "dp_salva_prezzi_presi" in globals() else 0
                     salva(lambda d: spesa_in_dispensa(d, scelte, utente if "utente" in globals() else ""), "Dalla spesa alla dispensa")
-                    st.session_state["messaggio"] = f"📦 {len(scelte)} prodotti messi in dispensa."
+                    st.session_state["messaggio"] = f"📦 {len(scelte)} prodotti messi in dispensa." + (f" 💶 {n_pr} prezzi salvati." if n_pr else "")
                     _ricarica()
                 except Exception as e:
                     st.error(t("Non sono riuscito a salvare: {e}", e=e))
