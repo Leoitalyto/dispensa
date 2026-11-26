@@ -4379,8 +4379,9 @@ _MESI_DOC = {"GEN": 1, "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAG": 5, "MAY": 
 
 
 @st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def _doc_ocr_lingue():
-    """Le lingue di Tesseract da usare ('ita+eng', 'eng') oppure '' se Tesseract non c'è."""
+    """Le lingue di Tesseract da usare ('ita+eng', 'eng') oppure '' se Tesseract non c'è. Si chiede una volta sola (prima a ogni lettura)."""
     if not _sh_doc.which("tesseract"):
         return ""
     try:

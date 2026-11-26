@@ -222,17 +222,26 @@ def dp_registra_prezzo(ss, r, prezzo, negozio_nome, confezioni=1, valore=None, u
         return None, None, ["Scrivi il prezzo pagato (per esempio 1,89)."]
     if prezzo <= 0:
         return None, None, ["Il prezzo deve essere più di 0."]
-    if not str(negozio_nome or "").strip():
+    if isinstance(negozio_nome, (tuple, list)):                       # (negozio_id, negozio nuovo) dal campo unico ss_campo_negozio
+        neg_scelta = tuple(negozio_nome) + (None, None)
+        if not neg_scelta[0] and not (neg_scelta[1] or {}).get("nome"):
+            return None, None, ["Scegli o scrivi il negozio."]
+    elif not str(negozio_nome or "").strip():
         return None, None, ["Scegli o scrivi il negozio."]
+    else:
+        neg_scelta = None
     p = ss_prodotto_per_riga_disp(ss, r)
     if p is None:
         base = ss_da_dispensa(r)
         if valore:
             base["formato_valore"], base["formato_unita"] = valore, dp_unita_ss(unita)
         p, _nuovo = ss_aggiungi_prodotto(ss, base)
-    n = ss_trova_negozio_da_testo(ss, negozio_nome)
-    if n is None:
-        n, _nn = ss_aggiungi_negozio(ss, {"nome": str(negozio_nome).strip()})
+    if neg_scelta is not None:
+        n = ss_negozio_da_scelta(ss, neg_scelta[0], neg_scelta[1])
+    else:
+        n = ss_trova_negozio_da_testo(ss, negozio_nome)
+        if n is None:
+            n, _nn = ss_aggiungi_negozio(ss, {"nome": str(negozio_nome).strip()})
     kw = dict(confezioni=confezioni or 1, formato_valore=valore if valore else None, formato_unita=dp_unita_ss(unita) if valore else None,
               data=data or oggi_.isoformat(), fonte="acquisto", oggi_=oggi_)
     if promo and prezzo_pieno:
@@ -516,9 +525,8 @@ def _dp_pannello_prezzo(r, ss):
             pu, base = ss_prezzo_unitario(prezzo, conf, val, uni) if prezzo else (None, None)
             if pu:
                 st.markdown(f"➡️ Prezzo al {('kg' if base == 'kg' else 'litro' if base == 'l' else base)}: **{ss_fmt_unitario(pu, base)}**")
-        c5, c6 = st.columns(2, gap="small")
-        neg = c5.selectbox("🏪 Negozio", neg_noti, index=None, accept_new_options=True, placeholder="Scegli o scrivi", key=k + "_n")
-        data = c6.date_input("📅 Data", value=dp_oggi(), max_value=dp_oggi(), format="DD/MM/YYYY", key=k + "_d")
+        neg = ss_campo_negozio(ss, k + "_n") if ss is not None else (None, None)      # lo stesso modo semplice di Spesa Smart
+        data = st.date_input("📅 Data", value=dp_oggi(), max_value=dp_oggi(), format="DD/MM/YYYY", key=k + "_d")
         promo = st.checkbox("🏷️ Era in offerta", key=k + "_pr")
         pieno = st.number_input("Prezzo normale (senza offerta, €)", min_value=0.0, step=0.05, format="%.2f", key=k + "_pp") if promo else None
         if st.button("💾 Salva il prezzo", key=k + "_ok", type="primary", width="stretch"):
@@ -594,17 +602,23 @@ def dp_pannello(r):
     _dp_pannello_regola(r)
 
 
+def dp_negozio_spesa(k):
+    """Sopra i prodotti presi: DOVE hai fatto la spesa (uno per tutti). Ritorna (negozio_id, negozio nuovo) o None."""
+    ss = _dp_ss()
+    if ss is None:
+        return None
+    return ss_campo_negozio(ss, k, etichetta="🏪 Dove hai fatto la spesa")
+
+
 def dp_campi_prezzo_presi(x, ss_neg=None):
-    """Nella lista della spesa, per un prodotto preso: prezzo pagato e negozio (facoltativi). Ritorna (prezzo, negozio)."""
-    a, b = st.columns(2, gap="small")
-    p = a.number_input("💶 Pagato (€, facoltativo)", min_value=0.0, step=0.05, format="%.2f", key=f"dp_sp_p_{x['id']}")
-    n = b.selectbox("🏪 Negozio", ss_neg or [], index=None, accept_new_options=True, placeholder="Scegli o scrivi", key=f"dp_sp_n_{x['id']}")
-    return p, n
+    """Nella lista della spesa, per un prodotto preso: quanto l'hai pagato (facoltativo). Il negozio è quello scelto sopra. Ritorna (prezzo, negozio)."""
+    p = st.number_input("💶 Pagato (€, facoltativo)", min_value=0.0, step=0.05, format="%.2f", key=f"dp_sp_p_{x['id']}")
+    return p, ss_neg
 
 
 def dp_salva_prezzi_presi(voci):
     """voci = [(riga della lista, prezzo, negozio)]: salva i prezzi validi nell'archivio di Spesa Smart. Ritorna quanti."""
-    buone = [(x, p, n) for x, p, n in voci if p and p > 0 and n]
+    buone = [(x, p, n) for x, p, n in voci if p and p > 0 and n and (not isinstance(n, (tuple, list)) or n[0] or (n[1] or {}).get("nome"))]
     if not buone:
         return 0
     conta = {"n": 0}

@@ -1545,19 +1545,24 @@ def _sp_docsan_corpo(f, p, pid, utente, coda, finestra):
         st.image(c["dati"], width=260)
     chiave_lettura = f"sp_ds_lett_{c['sha']}"
     if chiave_lettura not in st.session_state:
-        with st.spinner("Leggo il documento…"):
+        def _sp_locale():
             try:
-                testo, info = ca_estrai_testo(c["nome"], mime, c["dati"]) if "ca_estrai_testo" in globals() else ("", {})
+                t_, _i = ca_estrai_testo(c["nome"], mime, c["dati"]) if "ca_estrai_testo" in globals() else ("", {})
             except Exception:
-                testo, info = "", {}
-            locale = sp_leggi_doc(testo, f, c["nome"]) if testo.strip() else {}
-            ia = None
-            if "il_leggi_sanitario" in globals():                          # 🤖 l'IA legge e classifica (anche i manoscritti, con più servizi e confronto)
-                try:
-                    with st.spinner("🤖 L'intelligenza artificiale legge e classifica il documento…"):
-                        ia = il_leggi_sanitario(c["nome"], mime, c["dati"], f)
-                except Exception:
-                    ia = None
+                t_ = ""
+            return t_, (sp_leggi_doc(t_, f, c["nome"]) if t_.strip() else {})
+
+        def _sp_ia():
+            try:
+                return il_leggi_sanitario(c["nome"], mime, c["dati"], f) if "il_leggi_sanitario" in globals() else None
+            except Exception:
+                return None
+        with st.spinner("📖 Leggo il documento e 🤖 l'intelligenza artificiale lo classifica…"):
+            if "il_in_parallelo" in globals():                             # le due letture INSIEME (prima una dopo l'altra): stesso risultato, meno attesa
+                _r_loc, ia = il_in_parallelo([_sp_locale, _sp_ia], massimo=2)
+            else:
+                _r_loc, ia = _sp_locale(), _sp_ia()
+            testo, locale = _r_loc or ("", {})
             st.session_state[chiave_lettura] = ((il_unisci(locale, ia) if ia and ia.get("campi") else locale), bool(testo.strip()) or bool(ia and ia.get("campi")))
     riconosciuto, letto = st.session_state[chiave_lettura]
     if letto:

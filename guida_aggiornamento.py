@@ -10,7 +10,7 @@ RICHIESTA (Leonardo): «aggiorna le spiegazioni dell'app e l'assistente in tutte
 L'assistente (scritto e vocale), la ricerca e il pulsante Informazioni leggono tutti questa stessa base (_GUIDE), quindi rispondono anche sulle novità.
 Caricato dopo guida_completa.py."""
 
-GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.5", "2026-11-24", "24/11/2026"
+GA_VERSIONE, GA_DATA, GA_DATA_IT = "5.6", "2026-11-27", "27/11/2026"
 
 GA_SCHEDE = {
     "x_ia": ("🤖 Intelligenza artificiale: documenti, scritte a mano, spie, lingue",
@@ -302,6 +302,25 @@ GA_SCHEDE["d_prezzi"] = ("💶 Prezzi in Dispensa e 🛒 «quando finisce»",
 **Nella scheda 🛒 Spesa**, sopra la lista: **❓ Finiti, da decidere** · **🏷️ Da ricomprare se conviene** (con 🔥 quando sono in offerta) · **⏰ Più avanti**. In **📦 Metti in dispensa i prodotti presi** puoi scrivere anche **quanto hai pagato e dove**: i prezzi vanno in Spesa Smart.""",
     "prezzo prezzi peso kg chilo litro euro al kg costo pagato negozio offerta conviene dove costa meno lista della spesa finito finiti ricomprare riacquistare più avanti scorta minima regola quando finisce non lo ricompro")
 GA_NOVITA.append(("nv_dprezzi", "💶", "Prezzi in Dispensa e «quando finisce»", "Dispensa → Dettagli prodotto: 💶 prezzo e €/kg, 🛒 in lista; se finisce l'app ti chiede cosa fare"))
+GA_SCHEDE["x_non_indietro"] = ("🧭 L'app non torna più indietro da sola",
+    """**Cosa è cambiato (27/11/2026):**
+- Dopo un'azione (Salva, Metti in lista, Applica…) resti **nella stessa scheda e nella stessa voce**: anche se sopra compare o sparisce un messaggio, o cambia un numero tra parentesi (per esempio «Messaggi (3)» → «(4)»).
+- Le **pillole** (per esempio le categorie dell'Archivio) ricordano la scelta anche quando apri un documento o un'altra voce e poi torni.
+- Se il telefono **«stacca» l'app** (fotocamera, scelta di un file, WhatsApp, schermo spento) e la pagina riparte entro 20 minuti, torni **nella sezione, nella voce e nella scheda** in cui eri, non una pagina indietro.
+**Negozio nuovo più semplice:** in Spesa Smart, in Modifica prezzo e in Dispensa, sotto i negozi che hai c'è sempre la riga **«✍️ …oppure scrivi un negozio nuovo»**: scrivi il nome e basta. Città e indirizzo solo se servono, in **«➕ Città e indirizzo»**. Il negozio nuovo diventa il primo dell'elenco. Quando metti in dispensa i prodotti presi, il negozio si sceglie **una volta sola** per tutta la spesa.""",
+    "indietro torna indietro pagina precedente scheda prima scheda si chiude perdo il punto ricomincia riparte negozio nuovo aggiungere negozio scrivere negozio città indirizzo")
+GA_SCHEDE["x_velocita_doc"] = ("⚡ Documenti letti più in fretta",
+    """**Cosa è cambiato (27/11/2026), con la stessa qualità di prima:**
+- **Caricare un documento in Salute**: la lettura del testo e l'intelligenza artificiale lavorano **insieme** (prima una dopo l'altra).
+- **Documenti scritti a mano o difficili**: le letture dei vari servizi si chiedono **tutte insieme**; poi il confronto finale, come prima.
+- **Negli altri documenti** (Casa, Auto, Animali, ricatalogazione): se l'app sa già che tipo di documento è, la scheda su misura parte subito, insieme al riconoscimento del tipo; se il tipo era diverso, la rifà con quello giusto.
+- **Scansioni e PDF senza testo**: le pagine si leggono insieme. Lo stesso file non si rilegge due volte (la seconda volta è immediato).
+- **🔄 Rileggi i documenti già archiviati** (Salute): i file si scaricano e si leggono **4 alla volta**: molto più veloce, stesse proposte.
+- **Riclassificazione in sottofondo**: mentre l'IA legge un documento, il file del successivo si scarica già; e i salvataggi avvengono in coda, senza far aspettare la lettura.""",
+    "veloce lento lentezza velocità rileggi documenti archiviati riclassifica ricatalogare lettura documenti caricare documento OCR scansione intelligenza artificiale aspettare")
+GA_DOVE.update({"x_non_indietro": ("utilita", "dispensa", "spesa_smart"), "x_velocita_doc": ("farmacia", "documenti", "casa", "utilita")})
+GA_NOVITA.append(("nv_nonindietro", "🧭", "Non si torna più indietro da soli", "Dopo un'azione resti nella stessa scheda e voce; se il telefono stacca l'app, torni dove eri. Negozio nuovo: scrivi il nome e basta"))
+GA_NOVITA.append(("nv_velocita", "⚡", "Documenti letti più in fretta", "Salute, Rileggi, riclassificazione e caricamenti: letture insieme e file preparati in anticipo, stessa qualità"))
 GA_DOVE.update({"d_prezzi": ("dispensa",)})
 GA_NOVITA += [
     ("nv_appuntamenti", "📅", "Tutti gli appuntamenti", "Utilità → 📅 Appuntamenti: per tipologia, per data o per priorità"),

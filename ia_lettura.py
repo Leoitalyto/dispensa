@@ -137,6 +137,126 @@ def _il_segna(prov, modello):
         lav["segnale"] = _il_time.time()
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# VELOCITÀ (27/11/2026): più richieste insieme e salvataggi in coda, con lo stesso identico risultato
+# ---------------------------------------------------------------------------------------------------------------------
+def il_in_parallelo(funzioni, massimo=3):
+    """Esegue le funzioni (senza argomenti) INSIEME, in fili separati che ereditano scadenza, permessi e lavoro di chi le chiama.
+    Ritorna i risultati nello stesso ordine (None per quella che è andata in errore)."""
+    funzioni = list(funzioni)
+    if len(funzioni) <= 1:
+        out = []
+        for fn in funzioni:
+            try:
+                out.append(fn())
+            except Exception:
+                out.append(None)
+        return out
+    tl = {k: getattr(_IL_TL, k, None) for k in ("lavoro", "permessi", "scadenza", "doc_i")}
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        ctx = get_script_run_ctx()
+    except Exception:
+        add_script_run_ctx, ctx = None, None
+    ris = [None] * len(funzioni)
+
+    def _corri(i, fn):
+        for k, v in tl.items():
+            setattr(_IL_TL, k, v)
+        try:
+            ris[i] = fn()
+        except Exception:
+            ris[i] = None
+    fili = []
+    for i, fn in enumerate(funzioni):
+        t_ = _il_thr.Thread(target=_corri, args=(i, fn), daemon=True)
+        if add_script_run_ctx and ctx is not None:
+            try:
+                add_script_run_ctx(t_, ctx)
+            except Exception:
+                pass
+        fili.append(t_)
+    attivi = []
+    for t_ in fili:                                                          # al massimo «massimo» insieme
+        while len([x for x in attivi if x.is_alive()]) >= max(1, massimo):
+            _il_time.sleep(0.05)
+        t_.start()
+        attivi.append(t_)
+    for t_ in fili:
+        sc = tl.get("scadenza")
+        t_.join(None if not sc else max(1.0, sc - _il_time.time() + 5))
+    return ris
+
+
+@st.cache_resource
+def _il_code_globali():
+    return {}, _il_thr.Lock()
+
+
+_IL_CODE, _IL_CODE_BLOCCO = _il_code_globali()
+
+
+def il_salva_in_coda(percorso, fn, messaggio):
+    """Salva in sottofondo: la lettura del documento successivo parte subito, senza aspettare GitHub. Più salvataggi in attesa sullo stesso file
+    diventano UNA sola scrittura (con il controllo dei conflitti di sempre). I dati sono gli stessi: cambia solo che non si aspetta."""
+    if not percorso:
+        return
+    with _IL_CODE_BLOCCO:
+        q = _IL_CODE.setdefault(percorso, {"fn": [], "filo": None, "errore": ""})
+        q["fn"].append((fn, messaggio))
+        if q["filo"] is not None and q["filo"].is_alive():
+            return
+
+        def _svuota():
+            while True:
+                with _IL_CODE_BLOCCO:
+                    lotto, q["fn"] = q["fn"], []
+                    if not lotto:
+                        q["filo"] = None
+                        return
+
+                def _tutto(d, lotto=lotto):
+                    for f_, _m in lotto:
+                        try:
+                            f_(d)
+                        except Exception:
+                            pass
+                msg = lotto[-1][1] + (f" (+{len(lotto) - 1})" if len(lotto) > 1 else "")
+                for tentativo in range(3):
+                    try:
+                        crea_archivio().modifica(percorso, _tutto, msg)
+                        q["errore"] = ""
+                        break
+                    except Exception as e_:
+                        q["errore"] = f"{type(e_).__name__}: {e_}"[:160]
+                        _il_time.sleep(2 * (tentativo + 1))
+                try:
+                    carica_dati.clear()
+                except Exception:
+                    pass
+        t_ = _il_thr.Thread(target=_svuota, daemon=True, name="il_coda_salvataggi")
+        try:
+            from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+            add_script_run_ctx(t_, get_script_run_ctx())
+        except Exception:
+            pass
+        q["filo"] = t_
+        t_.start()
+
+
+def il_coda_attendi(percorso, secondi=90):
+    """Aspetta che i salvataggi in coda di quel file siano scritti (alla fine di un lavoro). Ritorna l'ultimo errore ('' se tutto bene)."""
+    fine = _il_time.time() + secondi
+    while _il_time.time() < fine:
+        with _IL_CODE_BLOCCO:
+            q = _IL_CODE.get(percorso) or {}
+            vuota = not q.get("fn") and not (q.get("filo") is not None and q["filo"].is_alive())
+        if vuota:
+            return q.get("errore", "")
+        _il_time.sleep(0.2)
+    return "tempo scaduto"
+
+
 IL_RISERVATI = ("deepseek",)          # servizi A PAGAMENTO: li usa solo chi l'amministratore ha scelto (l'amministratore sempre)
 IL_PERMESSI_FILE = "ia_permessi.json"
 
@@ -647,23 +767,41 @@ def il_consenso(letture, schema_txt="", ordine_testo=None):
 
 def il_consenso_immagine(istruzioni, testo, immagini, quante=3, sempre=False, incerta=None, schema_txt=""):
     """Legge con il primo servizio; se la lettura è incerta (incerta(dict) → True) o sempre=True, chiede anche ad altri (fino a «quante»), poi l'arbitro.
-    Ritorna {"risultato", "fonti", "arbitro", "errori"}."""
+    Ritorna {"risultato", "fonti", "arbitro", "errori"}.
+    Velocità (27/11/2026): le letture in più si chiedono INSIEME ai servizi successivi (prima una dopo l'altra): stesse letture, stesso arbitro, meno attesa."""
     letture, errori = [], {}
-    for prov in il_disponibili(IL_ORDINE_VISTA):
+    servizi = list(il_disponibili(IL_ORDINE_VISTA))
+
+    def _leggi(prov):
+        r, err = il_chiama(prov, istruzioni, testo, immagini)
+        d = il_json(r)
+        return (prov, d, err)
+    pos = 0
+    while pos < len(servizi):
         sc = getattr(_IL_TL, "scadenza", None)
         if sc and letture and sc - _il_time.time() < 35:
             break                                                          # poco tempo rimasto: tengo le letture che ho e lascio lavorare l'arbitro
         if _il_scaduto():
             break
-        r, err = il_chiama(prov, istruzioni, testo, immagini)
-        d = il_json(r)
-        if isinstance(d, dict):
-            letture.append((prov, d))
-        else:
-            errori[prov] = err or "formato"
-        if letture and len(letture) >= quante:
+        if not letture:
+            serve = quante if sempre else 1                                # la prima lettura (o tutte subito, se servono sempre più letture)
+        elif len(letture) == 1 and not sempre and not (incerta and incerta(letture[0][1])):
             break
-        if len(letture) == 1 and not sempre and not (incerta and incerta(letture[0][1])):
+        else:
+            serve = quante - len(letture)
+        if serve <= 0:
+            break
+        gruppo = servizi[pos:pos + serve]
+        pos += len(gruppo)
+        for esito in il_in_parallelo([(lambda p_=p_: _leggi(p_)) for p_ in gruppo], massimo=serve):
+            if not esito:
+                continue
+            prov, d, err = esito
+            if isinstance(d, dict):
+                letture.append((prov, d))
+            else:
+                errori[prov] = err or "formato"
+        if letture and len(letture) >= quante:
             break
     fin, arbitro = il_consenso(letture, schema_txt)
     return {"risultato": fin, "fonti": [p for p, _d in letture], "arbitro": arbitro, "errori": errori}
@@ -873,8 +1011,35 @@ def _il_fase(testo):
         lav["servizio"], lav["segnale"] = testo, _il_time.time()
 
 
-def _il_uno_doc(d, f, files, titolo):
-    """Legge e classifica UN documento → voce delle proposte."""
+def il_prepara_dopo(fn):
+    """Fa partire fn() in sottofondo (per esempio: scaricare il file del documento SUCCESSIVO mentre l'IA legge quello di adesso).
+    Ritorna una funzione che dà il risultato (aspettandolo) oppure None se è andato male."""
+    ris = {}
+    tl = {k: getattr(_IL_TL, k, None) for k in ("lavoro", "permessi", "scadenza", "doc_i")}
+
+    def _corri():
+        for k, v in tl.items():
+            setattr(_IL_TL, k, v)
+        try:
+            ris["v"] = fn()
+        except Exception:
+            ris["v"] = None
+    t_ = _il_thr.Thread(target=_corri, daemon=True)
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        add_script_run_ctx(t_, get_script_run_ctx())
+    except Exception:
+        pass
+    t_.start()
+
+    def _prendi(attesa=120):
+        t_.join(attesa)
+        return ris.get("v")
+    return _prendi
+
+
+def _il_uno_doc(d, f, files, titolo, pronto=None):
+    """Legge e classifica UN documento → voce delle proposte. «pronto»: il file già scaricato in anticipo (velocità), se c'è."""
     refs = files(d) if files else [d["file"]]
     if _il_os.environ.get("VM_IL_PROVA_LENTA"):                              # solo per le prove automatiche: lettura finta e lenta
         lenta = float(_il_os.environ["VM_IL_PROVA_LENTA"])
@@ -888,9 +1053,13 @@ def _il_uno_doc(d, f, files, titolo):
         return {"id": d.get("id"), "titolo": titolo, "cambi": {"tipo": (d.get("tipo"), "Esame di laboratorio")} | _il_cambio_persona(d, f, ia_f), "ia": ia_f, "errore": ""}
     _il_fase("apro il file…")
     try:
-        nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
+        gia = pronto(60) if pronto else None
+        nome, mime, dati = gia[0] if gia else _fa_inv_allegati(refs[:1])[0]
     except Exception:
-        return {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"}
+        try:
+            nome, mime, dati = _fa_inv_allegati(refs[:1])[0]
+        except Exception:
+            return {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "file non leggibile"}
     _il_fase("preparo le pagine del documento…")
     try:
         ia = il_leggi_sanitario(nome, mime, dati, f)
@@ -971,16 +1140,7 @@ def _il_salva_esito(percorso, pid, voce):
                 else:
                     d_.pop("proposta_ia", None)
                     d_["lettura_ia"] = dict(_il_riassunto_ia(voce.get("ia")), il=ora, nessun_cambio=True)
-    try:
-        crea_archivio().modifica(percorso, _m, "Salute: documento controllato con l'IA")   # in sottofondo: niente «Salvo…» a schermo
-    except Exception as e_:
-        lav = getattr(_IL_TL, "lavoro", None)
-        if lav is not None:
-            lav["errore_salva"] = f"{type(e_).__name__}: {e_}"[:160]
-    try:
-        carica_dati.clear()
-    except Exception:
-        pass
+    il_salva_in_coda(percorso, _m, "Salute: documento controllato con l'IA")   # in sottofondo e in coda: la lettura del documento dopo parte subito
 
 
 def il_proposte_riclassifica(f, pid, progress=None, massimo=60, tutti=False):
@@ -989,22 +1149,34 @@ def il_proposte_riclassifica(f, pid, progress=None, massimo=60, tutti=False):
     docs = il_da_controllare(p, tutti)[:massimo]
     out = []
     lav = getattr(_IL_TL, "lavoro", None)
+    anticipo = {}                                                         # il file del documento SUCCESSIVO si scarica mentre l'IA legge quello di adesso
+
+    def _anticipa(j):
+        if j < len(docs) and j not in anticipo and not _il_os.environ.get("VM_IL_PROVA_LENTA"):
+            refs_ = files(docs[j]) if files else [docs[j].get("file")]
+            anticipo[j] = il_prepara_dopo(lambda r_=refs_: _fa_inv_allegati(r_[:1]))
     for i, d in enumerate(docs):
+        _anticipa(i)
+        _anticipa(i + 1)
         titolo = d.get("titolo") or (sp_titolo_doc(d) if "sp_titolo_doc" in globals() else d.get("tipo", "Documento"))
         if progress:
             progress(i / max(1, len(docs)), f"Leggo con l'IA {i + 1} di {len(docs)}: {titolo}"[:90])
         if lav is None:
-            out.append(_il_uno_doc(d, f, files, titolo))
+            out.append(_il_uno_doc(d, f, files, titolo, anticipo.pop(i, None)))
             continue
         if lav.get("stop"):
             break
         lav.update(i=i, n=len(docs), inizio_doc=_il_time.time(), servizio="", segnale=_il_time.time(), out=list(out), titolo=titolo)
         _IL_TL.scadenza = _il_time.time() + IL_MAX_DOC
-        finito, voce = _il_con_controllo(lambda d=d, titolo=titolo: _il_uno_doc(d, f, files, titolo), IL_MAX_DOC + 15)
+        pronto_ = anticipo.pop(i, None)
+        finito, voce = _il_con_controllo(lambda d=d, titolo=titolo, pronto_=pronto_: _il_uno_doc(d, f, files, titolo, pronto_), IL_MAX_DOC + 15)
         out.append(voce if finito and voce else {"id": d.get("id"), "titolo": titolo, "cambi": {}, "errore": "troppo lento, saltato"})
         _il_salva_esito(lav.get("percorso"), pid, out[-1])
     _IL_TL.scadenza = None
     if lav is not None:
+        err_ = il_coda_attendi(lav.get("percorso"))                         # prima di dire «fatto», tutto scritto
+        if err_:
+            lav["errore_salva"] = err_
         lav["out"] = list(out)
     if progress:
         progress(1.0, "Fatto")

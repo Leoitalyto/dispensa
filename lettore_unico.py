@@ -210,8 +210,10 @@ LU_RIASSUNTO_CAMPI = {"riassunto": "in 1-2 frasi semplici in italiano: che docum
                       "parole_chiave": "6-12 parole utili per ritrovarlo con una ricerca (nomi, ditte, luoghi, oggetti, periodi), separate da virgola"}
 
 
-def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
-    """files = [(nome, mime, byte)] (fronte, retro, pagine). → {tipo, campi, problemi, fonti, dubbi} oppure {} se l'IA non è disponibile."""
+def lu_leggi(files, sezione, tipi, contesto, testo="", memoria="", tipo_atteso=""):
+    """files = [(nome, mime, byte)] (fronte, retro, pagine). → {tipo, campi, problemi, fonti, dubbi} oppure {} se l'IA non è disponibile.
+    Velocità (27/11/2026): se si sa già che tipo dovrebbe essere («tipo_atteso»: quello archiviato, o quello letto dal testo), il secondo tempo
+    (la scheda su misura) parte INSIEME al primo. Se il primo tempo conferma il tipo, si usa quella lettura (mezza attesa); se no, si rifà con il tipo giusto."""
     if not lu_attivo():
         return {}
     immagini, testo = [], str(testo or "")
@@ -223,15 +225,30 @@ def lu_leggi(files, sezione, tipi, contesto, testo="", memoria=""):
     immagini = immagini[:3]
     if not immagini and not testo.strip():
         return {}
+    def _primo():
+        return il_leggi_campi(contesto, {"tipo": "uno di: " + " | ".join(tipi), **LU_CHI_CAMPI}, testo=testo, immagini=immagini, quante=1,
+                              regole=LU_CHI_REGOLE + (("\n" + memoria) if memoria else ""))
+
+    def _secondo(tipo_):
+        campi_s, regole = _lu_scheda(tipo_, sezione)
+        critici = [k for k in ("numero", "scadenza", "data_doc", "importo", "competenza", "data", "netto") if k in campi_s][:3]
+        campi_s = dict(campi_s, **LU_RIASSUNTO_CAMPI)
+        return il_leggi_campi(f"{contesto}. È un documento di tipo «{tipo_ or 'non chiaro'}»", campi_s, testo=testo, immagini=immagini, quante=2, critici=critici,
+                              regole=(regole or "") + (("\n" + memoria) if memoria else ""))
+    tipo_atteso = tipo_atteso if tipo_atteso in tipi else ""
+    if tipo_atteso and "il_in_parallelo" in globals():
+        r1, r2 = il_in_parallelo([_primo, lambda: _secondo(tipo_atteso)], massimo=2)
+        t1, f1 = r1 or ({}, [])
+    else:
+        t1, f1 = _primo()
+        r2 = None
     # primo tempo: che documento è
-    t1, f1 = il_leggi_campi(contesto, {"tipo": "uno di: " + " | ".join(tipi), **LU_CHI_CAMPI}, testo=testo, immagini=immagini, quante=1,
-                            regole=LU_CHI_REGOLE + (("\n" + memoria) if memoria else ""))
     tipo = t1.get("tipo") if t1.get("tipo") in tipi else ""
-    # secondo tempo: la scheda su misura
-    campi_s, regole = _lu_scheda(tipo, sezione)
-    critici = [k for k in ("numero", "scadenza", "data_doc", "importo", "competenza", "data", "netto") if k in campi_s][:3]
-    campi_s = dict(campi_s, **LU_RIASSUNTO_CAMPI)
-    c2, f2 = il_leggi_campi(f"{contesto}. È un documento di tipo «{tipo or 'non chiaro'}»", campi_s, testo=testo, immagini=immagini, quante=2, critici=critici, regole=(regole or "") + (("\n" + memoria) if memoria else ""))
+    # secondo tempo: la scheda su misura (già pronta se il tipo era quello atteso)
+    if r2 and tipo == tipo_atteso:
+        c2, f2 = r2
+    else:
+        c2, f2 = _secondo(tipo)
     dubbi = c2.pop("_dubbi", [])
     riassunto = {k: str(c2.pop(k, "") or "").strip()[:400] for k in LU_RIASSUNTO_CAMPI}
     campi = {k: v for k, v in c2.items() if not k.startswith("_")}
@@ -595,6 +612,9 @@ def _lu_salva_esito(percorso, sez, did, voce):
                 else:
                     x.pop("proposta_lu", None)
                     x["lettura_lu"] = dict(info, nessun_cambio=True)
+    if "il_salva_in_coda" in globals():                                   # in coda: il documento dopo si legge subito, senza aspettare GitHub
+        il_salva_in_coda(percorso, _m, f"{LU_SEZIONI[sez]['nome']}: documento controllato con l'IA")
+        return
     try:
         crea_archivio().modifica(percorso, _m, f"{LU_SEZIONI[sez]['nome']}: documento controllato con l'IA")
     except Exception:
@@ -615,6 +635,7 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
            "fatti": 0, "cambi": 0, "errori": [], "stop": False, "percorso": st.session_state.get("percorso")}
     _LU_LAVORI[k] = lav
     tipi = cfg["tipi"]()
+    anticipo = {}
 
     def _lu_con_dest(sez_, x, letto):
         cambi = lu_cambi(sez_, x, letto)
@@ -637,10 +658,11 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
                 n_, c_, s_ = (_lu_os.environ["VM_LU_CHI"].split("|") + ["", "", ""])[:3]
                 letto["chi"] = {"intestatario": n_, "cf_intestatario": c_, "sezione": s_}
             return _lu_con_dest(sez, x, letto)
-        files = cfg["file"](x)
+        pronto = anticipo.pop(x.get("id"), None)
+        files = (pronto(60) if pronto else None) or cfg["file"](x)          # il file era già stato scaricato in anticipo (velocità)?
         if not files:
             return {"errore": "file non trovato"}
-        letto = lu_leggi(files, sez, tipi, cfg["contesto"], memoria=memoria)
+        letto = lu_leggi(files, sez, tipi, cfg["contesto"], memoria=memoria, tipo_atteso=str(x.get("tipo") or ""))
         if not letto:
             return {"errore": "nessun servizio ha risposto"}
         return _lu_con_dest(sez, x, letto)
@@ -652,6 +674,10 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
             for i, x in enumerate(docs):
                 if lav.get("stop"):
                     break
+                if "il_prepara_dopo" in globals() and not _lu_os.environ.get("VM_LU_FINTO"):    # il file del documento dopo si scarica mentre l'IA legge questo
+                    for x_ in docs[i:i + 2]:
+                        if x_.get("id") not in anticipo:
+                            anticipo[x_.get("id")] = il_prepara_dopo(lambda x_=x_: cfg["file"](x_))
                 lav.update(i=i, inizio_doc=_lu_time.time(), segnale=_lu_time.time(), titolo=_lu_titolo(x), servizio="")
                 if "_IL_TL" in globals():
                     _IL_TL.scadenza = _lu_time.time() + LU_MAX_DOC
@@ -673,6 +699,8 @@ def _lu_avvia(sez, d, tutti=False, solo=None):
                     _lu_salva_esito(lav["percorso"], sez, x["id"], ris)
                     lav["fatti"] += 1
                     lav["cambi"] += 1 if ris.get("cambi") else 0
+            if "il_coda_attendi" in globals():
+                il_coda_attendi(lav.get("percorso"))                          # prima di dire «fatto», tutto scritto
             lav["stato"] = "fermato" if lav.get("stop") else "fatto"
         except Exception as e_:
             lav["stato"], lav["errore"] = "errore", f"{type(e_).__name__}: {e_}"[:200]

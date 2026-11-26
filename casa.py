@@ -152,21 +152,60 @@ def _ca_ocr_pdf(dati, max_pagine=3):
             import fitz as _mu
         from PIL import Image
         doc = _mu.open(stream=dati, filetype="pdf")
-        parti = []
+        lavori = []
         for i in range(min(max_pagine, doc.page_count)):
             pix = doc[i].get_pixmap(dpi=170, alpha=False)
             im = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
             im.thumbnail((2400, 2400))
-            parti.append(_doc_tesseract(im, "6"))
+            lavori.append((im, "6"))
             if i == 0:                                                       # la prima pagina (copertina, dati dell'apparecchio) si legge con due metodi
-                parti.append(_doc_tesseract(im, "11"))
+                lavori.append((im, "11"))
         doc.close()
+        try:                                                                 # tutte le letture INSIEME, una per processore (stesso testo, nello stesso ordine)
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            with _TPE(max(1, min(len(lavori), os.cpu_count() or 1))) as _ex:
+                parti = list(_ex.map(lambda x: _doc_tesseract(x[0], x[1]), lavori))
+        except Exception:
+            parti = [_doc_tesseract(im_, psm_) for im_, psm_ in lavori]
         return "\n".join(parti)
     except Exception:
         return ""
 
 
+@st.cache_resource
+def _ca_memoria_testi():
+    """Testi già estratti (per impronta del file): rileggere lo stesso file (rilettura, ricatalogazione, anteprima) non rifà l'OCR. Una per tutto il server."""
+    import collections as _col_ca
+    import threading as _thr_ca
+    return _col_ca.OrderedDict(), _thr_ca.Lock()
+
+
 def ca_estrai_testo(nome, mime, dati, max_pagine=8, max_car=24000):
+    """(testo, info) — come _ca_estrai_testo_vero, ma lo stesso file si legge una volta sola (l'OCR di una foto può richiedere molti secondi)."""
+    try:
+        import hashlib as _hl_ca
+        chiave = (_hl_ca.sha1(dati or b"").hexdigest(), str(mime or ""), int(max_pagine), int(max_car))
+        mem, blocco = _ca_memoria_testi()
+        with blocco:
+            if chiave in mem:
+                mem.move_to_end(chiave)
+                t_, i_ = mem[chiave]
+                return t_, dict(i_)
+    except Exception:
+        mem = blocco = chiave = None
+    t_, i_ = _ca_estrai_testo_vero(nome, mime, dati, max_pagine, max_car)
+    if mem is not None and (t_ or "").strip():                              # si ricorda solo una lettura riuscita (se fallisce, la prossima volta si riprova)
+        try:
+            with blocco:
+                mem[chiave] = (t_, dict(i_ or {}))
+                while len(mem) > 300:
+                    mem.popitem(last=False)
+        except Exception:
+            pass
+    return t_, i_
+
+
+def _ca_estrai_testo_vero(nome, mime, dati, max_pagine=8, max_car=24000):
     """(testo, info). Dai PDF con testo si legge il testo; dalle foto e dalle scansioni, se c'è, con l'OCR. info = {pagine, titolo, data_meta, scansione, metodo}."""
     info = {"pagine": None, "titolo": "", "data_meta": None, "scansione": False, "metodo": ""}
     if mime == "text/plain":                                                  # il testo di un messaggio di posta (senza allegati)
@@ -1552,8 +1591,10 @@ def ca_ai_classifica(testo, base=None, sorgente=None):
     """Migliora la lettura con l'intelligenza artificiale: i servizi gratuiti (ia_lettura.py, con le foto se il documento è una scansione) oppure la chiave
     dell'assistente. Ritorna un dizionario o None."""
     if "lu_leggi" in globals() and lu_attivo() and (sorgente or {}).get("dati"):    # il lettore unico: tipo → scheda su misura → controlli
+        _t_loc = (((base or {}).get("campi") or {}).get("tipo") or {}) if isinstance((base or {}).get("campi"), dict) else {}
+        _atteso = (_t_loc.get("valore") or "") if _t_loc.get("affidabilita") == "alta" else ""         # solo se la lettura locale è sicura: allora la scheda parte subito
         r = lu_leggi([(sorgente.get("nome") or "doc", sorgente.get("mime") or "", sorgente["dati"])], "casa", [t for t in CA_TIPI if t not in _CA_TIPI_LAVORO],
-                     LU_SEZIONI["casa"]["contesto"], testo=testo)
+                     LU_SEZIONI["casa"]["contesto"], testo=testo, tipo_atteso=str(_atteso))
         if r:
             d = {k: v for k, v in (r.get("campi") or {}).items() if k not in (r.get("problemi") or {})}
             if r.get("tipo"):

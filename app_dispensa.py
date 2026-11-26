@@ -15,18 +15,25 @@ except Exception:
     pass
 
 # Le SCHEDE (tab) ricordano quella scelta: dopo un'azione o un ridisegno non si torna alla prima.
+# Versione 2 (27/11/2026): la memoria non dipende più dai numeri nei titoli («Messaggi (3)» → «Messaggi (4)») e non si perde
+# quando le schede per un giro non si disegnano (finestra aperta, altra sezione): prima in quei casi si tornava alla prima scheda.
 import inspect as _inspect_tab
+import re as _re_tab
 import streamlit as _st_tab
-if not getattr(_st_tab.tabs, "_ricorda", False):
-    _tabs_originale = _st_tab.tabs
+if getattr(_st_tab.tabs, "_versione", 0) < 2:
+    _tabs_originale = getattr(_st_tab.tabs, "_originale", None) or _st_tab.tabs
     try:
         _par_tab = _inspect_tab.signature(_tabs_originale).parameters
-        _tabs_ok = "key" in _par_tab and "on_change" in _par_tab
+        _tabs_ok = "key" in _par_tab and "on_change" in _par_tab and "default" in _par_tab
     except Exception:
         _tabs_ok = False
 
+    def _tab_norm(x):
+        return _re_tab.sub(r"\s*[\(\[]?\d+[\)\]]?\s*", " ", str(x)).strip()
+
     def _tabs_con_memoria(tabs, *a, **kw):
-        if not _tabs_ok or "key" in kw or a:
+        tabs = list(tabs)
+        if not _tabs_ok or "key" in kw or a or len(set(tabs)) != len(tabs) or kw.get("on_change", "ignore") != "ignore":
             return _tabs_originale(tabs, *a, **kw)
         try:
             nome_file = os.path.basename(_sys_cc._getframe(1).f_code.co_filename)
@@ -34,23 +41,41 @@ if not getattr(_st_tab.tabs, "_ricorda", False):
             nome_file = ""
         if nome_file in ("invio.py", "info_sezioni.py"):                  # finestre di invio e guide: restano come sono
             return _tabs_originale(tabs, **kw)
-        vistE = _st_tab.session_state.setdefault("_tabs_viste", {})
-        base = "tabm_" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
-        try:                                                                       # dopo «Salva in dispensa» si torna alla scheda Dispensa (la prima delle schede principali)
-            if _st_tab.session_state.get("_vai_tab_dispensa") and any("Aggiungi" in str(t) for t in tabs) and len(tabs) >= 5:
-                _st_tab.session_state.pop("_vai_tab_dispensa", None)
-                _st_tab.session_state[base] = tabs[0]
-        except Exception:
-            pass
-        giro = _st_tab.session_state.get("_tabs_giro", 0)
+        ss_ = _st_tab.session_state
+        vistE = ss_.setdefault("_tabs_viste", {})
+        mem = ss_.setdefault("_tabs_mem", {})                                  # {schede senza numeri: scheda scelta (senza numeri)} — non è un widget: non si cancella da sola
+        base = "tabm_" + _hashlib_cc.md5("|".join(_tab_norm(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
+        giro = ss_.get("_tabs_giro", 0)
         n = vistE.get(base)
         n = (n[1] + 1) if (n and n[0] == giro) else 0
         vistE[base] = (giro, n)
-        try:
-            return _tabs_originale(tabs, key=base + (f"_{n}" if n else ""), on_change="rerun", **kw)
+        base_n = base + (f"_{n}" if n else "")
+        try:                                                                       # dopo «Salva in dispensa» si torna alla scheda Dispensa (la prima delle schede principali)
+            if ss_.get("_vai_tab_dispensa") and any("Aggiungi" in str(t) for t in tabs) and len(tabs) >= 5:
+                ss_.pop("_vai_tab_dispensa", None)
+                mem[base_n] = _tab_norm(tabs[0])
+                for k_ in [k_ for k_ in list(ss_.keys()) if str(k_).startswith(base_n + "#")]:
+                    ss_.pop(k_, None)
         except Exception:
+            pass
+        chiave = base_n + "#" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:6]
+
+        def _ricorda(chiave=chiave, base_n=base_n):
+            try:
+                v = _st_tab.session_state.get(chiave)
+                if v is not None:
+                    _st_tab.session_state.setdefault("_tabs_mem", {})[base_n] = _tab_norm(v)
+            except Exception:
+                pass
+        if not kw.get("default") and mem.get(base_n):
+            kw["default"] = next((t for t in tabs if _tab_norm(t) == mem[base_n]), None)
+        try:
+            return _tabs_originale(tabs, key=chiave, on_change=_ricorda, **kw)
+        except Exception:
+            kw.pop("default", None)
             return _tabs_originale(tabs, **kw)
     _tabs_con_memoria._ricorda = True
+    _tabs_con_memoria._versione = 2
     _tabs_con_memoria._attiva = bool(_tabs_ok)                     # lo legge il «Controllo tecnico»: dopo il primo ridisegno questo codice non si riesegue
     _tabs_con_memoria._originale = _tabs_originale
     _st_tab.tabs = _tabs_con_memoria
@@ -171,6 +196,105 @@ if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
                 setattr(_st_chiuse, _nome_v, getattr(_st_chiuse._main, _nome_v))
         except Exception:
             pass
+
+# LE SCELTE NON SI PERDONO (27/11/2026). Streamlit cancella da solo il valore di una pillola/scelta (st.pills, st.radio, st.segmented_control)
+# quando, per un giro, non viene disegnata (per esempio mentre è aperto un documento, una finestra o un'altra voce): al ritorno si ripartiva
+# dalla prima voce, come se l'app fosse «tornata indietro». Qui si tiene una copia del valore e, se Streamlit l'ha cancellato da solo, lo si rimette.
+# Se invece è il programma a cancellarlo apposta (subito dopo averlo disegnato), si rispetta e non si rimette.
+from streamlit.delta_generator import DeltaGenerator as _DG_scelte
+if not getattr(_DG_scelte, "_vm_scelte_ricordate", False):
+    def _scelta_valida(v, opzioni, multi):
+        try:
+            ops = list(opzioni.keys()) if isinstance(opzioni, dict) else list(opzioni)
+        except Exception:
+            return False
+        if multi:
+            return isinstance(v, list) and all(x in ops for x in v)
+        try:
+            return v is not None and v in ops
+        except Exception:
+            return False
+
+    def _scelta_norm(x):
+        import re as _re_sc
+        return _re_sc.sub(r"\s*[\(\[]?\d+[\)\]]?\s*", " ", str(x)).strip()
+
+    def _scelta_adatta(v, opzioni, multi):
+        """Il valore ricordato, adattato alle voci di adesso: «📚 Tutti (5)» → «📚 Tutti (6)». None se non c'è più."""
+        try:
+            ops = list(opzioni.keys()) if isinstance(opzioni, dict) else list(opzioni)
+        except Exception:
+            return None
+        if _scelta_valida(v, ops, multi):
+            return v
+        if not all(isinstance(o, str) for o in ops):
+            return None
+        per_norm = {}
+        for o in ops:
+            per_norm.setdefault(_scelta_norm(o), o)
+        if multi and isinstance(v, list):
+            nuovi = [per_norm.get(_scelta_norm(x)) for x in v]
+            return nuovi if all(nuovi) else None
+        return per_norm.get(_scelta_norm(v)) if isinstance(v, str) else None
+
+    def _scelte_avvolgi(originale):
+        def _nuovo(self, label, options=None, *a, **kw):
+            key = kw.get("key")
+            if not isinstance(key, str) or not key or a or options is None:
+                return originale(self, label, options, *a, **kw) if options is not None else originale(self, label, *a, **kw)
+            try:
+                ss_ = _st_chiuse.session_state
+                ombra = ss_.setdefault("_vm_ombra", {})
+                giro = ss_.get("_tabs_giro", 0)
+                multi = kw.get("selection_mode") == "multi"
+                if key not in ss_ and key in ombra:
+                    g_, v_ = ombra.pop(key)
+                    v_ = _scelta_adatta(v_, options, multi) if g_ < giro - 1 else None
+                    if v_ is not None:
+                        ss_[key] = v_
+                        for k_ in ("default", "index"):
+                            kw.pop(k_, None)
+                elif ss_.get(key) is not None and not _scelta_valida(ss_.get(key), options, multi):
+                    v_ = _scelta_adatta(ss_.get(key), options, multi)            # è cambiato solo il numero tra parentesi: resta la stessa voce
+                    if v_ is not None:
+                        ss_[key] = v_
+                        for k_ in ("default", "index"):
+                            kw.pop(k_, None)
+            except Exception:
+                pass
+            esito = originale(self, label, options, **kw)
+            try:
+                ss_ = _st_chiuse.session_state
+                if ss_.get(key) is not None:
+                    ss_.setdefault("_vm_ombra", {})[key] = (ss_.get("_tabs_giro", 0), ss_.get(key))
+            except Exception:
+                pass
+            return esito
+        _nuovo.__wrapped__ = originale
+        return _nuovo
+    for _nome_s in ("pills", "radio", "segmented_control"):
+        try:
+            setattr(_DG_scelte, _nome_s, _scelte_avvolgi(getattr(_DG_scelte, _nome_s)))
+            setattr(_st_chiuse, _nome_s, getattr(_st_chiuse._main, _nome_s))
+        except Exception:
+            pass
+    try:                                                       # se il programma CANCELLA apposta una scelta (per ricominciare da capo), non la si rimette
+        from streamlit.runtime.state.session_state_proxy import SessionStateProxy as _SSP_sc
+        _del_originale_sc = _SSP_sc.__delitem__
+
+        def _del_ricorda_sc(self, key):
+            try:
+                if str(key) != "_vm_ombra":
+                    om_ = _st_chiuse.session_state.get("_vm_ombra")
+                    if isinstance(om_, dict):
+                        om_.pop(str(key), None)
+            except Exception:
+                pass
+            return _del_originale_sc(self, key)
+        _SSP_sc.__delitem__ = _del_ricorda_sc
+    except Exception:
+        pass
+    _DG_scelte._vm_scelte_ricordate = True
 
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
@@ -413,8 +537,47 @@ def _carica(percorso):
 
 import streamlit as _st_pos
 _SEZ_VALIDE = {"spesa_smart", "scadenziario", "salute", "documenti", "archivio", "casa", "lavoro", "auto", "animali", "chat", "utilita"}
+# DOVE SEI DENTRO LA SEZIONE (27/11/2026): se il telefono «stacca» l'app (fotocamera, scelta di un file, WhatsApp, schermo spento) la pagina
+# può ripartire da zero; prima si tornava solo alla sezione, cioè una pagina indietro. Ora si ricordano anche la voce aperta e le schede scelte.
+_NAV_CHIAVI = ("sezione_home", "lv_sezione", "au_vista", "au_sezione", "an_sezione", "dg_vista", "amm_vista", "ch_vista", "ss_vista", "sc_sez",
+               "fa_profilo", "ca_pers_sel", "ca_casa_sel", "_tabs_mem", "_linguette_vive")
+
+
+def _nav_codifica(ss_):
+    import base64 as _b64_n
+    import json as _json_n
+    d_ = {}
+    for k_ in _NAV_CHIAVI:
+        v_ = ss_.get(k_)
+        if v_ is not None and v_ != {} and v_ != "":
+            d_[k_] = v_
+    try:
+        return _b64_n.urlsafe_b64encode(_json_n.dumps(d_, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+    except Exception:
+        return ""
+
+
+def _nav_decodifica(t_):
+    import base64 as _b64_n
+    import json as _json_n
+    try:
+        d_ = _json_n.loads(_b64_n.urlsafe_b64decode((t_ + "=" * (-len(t_) % 4)).encode("ascii")).decode("utf-8"))
+        return {k_: v_ for k_, v_ in d_.items() if k_ in _NAV_CHIAVI} if isinstance(d_, dict) else {}
+    except Exception:
+        return {}
+
+
 if not _st_pos.session_state.get("_pos_letta"):                       # sessione nuova (primo avvio, o la pagina è stata ripresa dopo una pausa): si torna alla sezione in cui eri
     _st_pos.session_state["_pos_letta"] = True
+    try:                                                              # … e, se è ripartita da pochi minuti, anche alla voce e alla scheda in cui eri
+        import time as _time_nav
+        _t_nav = int(_st_pos.query_params.get("t") or 0)
+        if _st_pos.query_params.get("n") and abs(int(_time_nav.time() // 60) - _t_nav) <= 20:
+            for _k_nav, _v_nav in _nav_decodifica(_st_pos.query_params.get("n")).items():
+                if _k_nav not in _st_pos.session_state:
+                    _st_pos.session_state[_k_nav] = _v_nav
+    except Exception:
+        pass
     try:
         _s_url = _st_pos.query_params.get("s")
         if _s_url in _SEZ_VALIDE and "farmacia_aperta" not in _st_pos.session_state:
@@ -423,6 +586,12 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
                 _st_pos.session_state["sezione_home"] = _s_url
     except Exception:
         pass
+try:                                                                  # a OGNI giro (anche nelle sezioni, che finiscono con st.stop): lo stato di dove sei va nell'indirizzo
+    _nav_ora = _nav_codifica(_st_pos.session_state)
+    if "sess" in _st_pos.session_state and _nav_ora and len(_nav_ora) < 1800 and _st_pos.query_params.get("n") != _nav_ora:
+        _st_pos.query_params["n"] = _nav_ora
+except Exception:
+    pass
 
 # CARICAMENTO A PROVA DI GUASTO: se una parte non essenziale dell'app non si carica (per esempio dopo un aggiornamento di Streamlit), le altre continuano a funzionare e l'amministratore
 # vede un avviso nella barra laterale e in Utilità → «Controllo tecnico». Le quattro parti essenziali (parte1-4) invece, se si rompono, fermano l'app come prima.

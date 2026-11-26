@@ -226,10 +226,10 @@ def _corpo_spesa():
             negozi_noti = []
             if "dp_campi_prezzo_presi" in globals():
                 st.caption("💶 Se vuoi, scrivi anche quanto l'hai pagato e dove: il prezzo va in 🛒 Spesa Smart (dove costa meno, offerte).")
-                try:
-                    negozi_noti = _dp_negozi(_dp_ss())
+                try:                                                    # UN negozio per tutta la spesa (lo stesso modo semplice di Spesa Smart)
+                    negozi_noti = dp_negozio_spesa("dp_sp_neg")
                 except Exception:
-                    negozi_noti = []
+                    negozi_noti = None
             for x in presi:
                 st.markdown(f"**{x.get('nome', '')}**" + (f" · {x['marca']}" if x.get("marca") else ""))
                 g1, g2, g3 = st.columns([1, 2, 2])

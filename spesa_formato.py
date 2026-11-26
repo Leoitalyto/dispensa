@@ -168,23 +168,7 @@ def sf_modifica_prezzo(ss, r, k):
     c6, c7 = st.columns(2, gap="small")
     prezzo = c6.number_input("Prezzo (€)", min_value=0.0, value=ss_num(r.get("prezzo")), step=0.01, format="%.2f", key=k + "_pr")
     promo = c7.number_input("In offerta (€)", min_value=0.0, value=ss_num(r.get("prezzo_promo")), step=0.01, format="%.2f", key=k + "_pp", placeholder="se c'è")
-    neg_ids = [n["id"] for n in ss["negozi"]]
-    _nomi_neg = {i: ss_nome_negozio(ss_trova(ss, "negozi", i)) for i in neg_ids}
-    _nomi_neg["__nuovo__"] = "➕ Un altro negozio (lo scrivo io)"
-    if st.session_state.get(k + "_neg") not in neg_ids + ["__nuovo__"]:      # valori vecchi rimasti in memoria: si riparte dal negozio salvato
-        st.session_state.pop(k + "_neg", None)
-    neg = st.selectbox("🏪 Negozio", neg_ids + ["__nuovo__"], index=neg_ids.index(r["negozio_id"]) if r.get("negozio_id") in neg_ids else len(neg_ids),
-                       format_func=lambda i: _nomi_neg.get(i, i), key=k + "_neg")
-    neg_nuovo = {}
-    if neg == "__nuovo__":                                           # negozio nuovo: lo scrivo (lo creo al salvataggio, o lo riconosco se c'è già)
-        neg_nuovo["nome"] = st.text_input("✍️ Nome del negozio *", key=k + "_negn", placeholder="es. Lidl")
-        cn1, cn2 = st.columns(2, gap="small")
-        neg_nuovo["citta"] = cn1.text_input("Città (facoltativa)", key=k + "_negc", placeholder="es. Torino")
-        neg_nuovo["indirizzo"] = cn2.text_input("Indirizzo (facoltativo)", key=k + "_negi", placeholder="es. Via Roma 1")
-        if (neg_nuovo["nome"] or "").strip():
-            st.caption(f"➕ «{neg_nuovo['nome'].strip()}» sarà aggiunto ai tuoi negozi quando salvi.")
-    else:
-        st.caption("🏪 Per cambiare negozio tocca il riquadro: scegli dall'elenco oppure, in fondo, **➕ Un altro negozio (lo scrivo io)**.")
+    neg_id_sc, neg_nuovo = ss_campo_negozio(ss, k, attuale=r.get("negozio_id"))      # lo stesso modo semplice di «Inserisci un prezzo»
     c8, c9, c10 = st.columns(3, gap="small")
     data_r = c8.date_input("Data del prezzo", value=ss_data(r.get("data")) or ss_oggi(), max_value=ss_oggi(), format="DD/MM/YYYY", key=k + "_d")
     pdal = c9.date_input("Offerta dal", value=ss_data(r.get("promo_dal")), format="DD/MM/YYYY", key=k + "_pdal")
@@ -200,9 +184,6 @@ def sf_modifica_prezzo(ss, r, k):
                     + ("" if fv_r else " <small>(scrivi il peso o i litri per il prezzo al kg/litro)</small>") + "</div>", unsafe_allow_html=True)
     if st.button("💾 Salva le modifiche", key=k + "_ok", type="primary", width="stretch"):
         esito = {}
-        if neg == "__nuovo__" and not (neg_nuovo.get("nome") or "").strip():
-            st.warning("✍️ Scrivi il nome del negozio nuovo (oppure scegline uno dall'elenco).")
-            st.stop()
 
         def _m(s_):
             pr = ss_trova(s_, "prodotti", r.get("prodotto_id"))
@@ -213,14 +194,8 @@ def sf_modifica_prezzo(ss, r, k):
                 pr["marca"] = marca.strip()
                 pr["formato_valore"], pr["formato_unita"], pr["confezioni"] = (fv or None), (fu if fv else ""), int(conf)
                 ss_cambia_formato_prodotto(s_, pr["id"], prima)
-            neg_id = neg if neg in neg_ids else None
-            neg_nuovo["nome"] = (neg_nuovo.get("nome") or "").strip()
-            if neg_nuovo.get("nome"):
-                n_ = ss_trova_negozio_da_testo(s_, neg_nuovo["nome"], neg_nuovo.get("citta", ""), neg_nuovo.get("indirizzo", ""))
-                if n_ is None:
-                    n_, _x = ss_aggiungi_negozio(s_, {"nome": neg_nuovo["nome"], "catena": neg_nuovo["nome"], "citta": neg_nuovo.get("citta", "").strip(),
-                                                      "indirizzo": neg_nuovo.get("indirizzo", "").strip()})
-                neg_id = n_["id"]
+            n_ = ss_negozio_da_scelta(s_, neg_id_sc, neg_nuovo)
+            neg_id = n_["id"] if n_ else None
             esito["err"] = ss_modifica_rilevazione(s_, r["id"], {"prezzo": prezzo, "prezzo_promo": promo, "negozio_id": neg_id or r.get("negozio_id"),
                                                                  "data": data_r.isoformat() if data_r else r.get("data"),
                                                                  "promo_dal": pdal.isoformat() if pdal else "", "promo_al": pal.isoformat() if pal else "",

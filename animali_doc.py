@@ -625,8 +625,9 @@ if "_an_leggi_prima" not in globals():
             if "il_leggi_campi" not in globals() or not il_disponibili(IL_ORDINE_VISTA) or p.get("tipo") == "Fotografia" and len(str(p.get("testo") or "").strip()) < 25 and not str(mime).startswith("image/"):
                 return p
             poco = len(str(p.get("testo") or "").strip()) < 300 or float(p.get("qualita") or 0) < 0.55
-            imm = il_immagini(nome or "doc", mime or "", dati, max_pagine=2) if poco and dati else None
-            r_lu = lu_leggi([(nome or "doc", mime or "", dati)], "animali", list(AN_TIPI_DOC), "un documento VETERINARIO di un animale domestico", testo=p.get("testo") or "") if "lu_leggi" in globals() and dati else {}
+            r_lu = lu_leggi([(nome or "doc", mime or "", dati)], "animali", list(AN_TIPI_DOC), "un documento VETERINARIO di un animale domestico", testo=p.get("testo") or "",
+                            tipo_atteso=str(p.get("tipo") or "") if p.get("tipo_sicuro") else "") if "lu_leggi" in globals() and dati else {}
+            imm = il_immagini(nome or "doc", mime or "", dati, max_pagine=2) if (not r_lu and poco and dati) else None     # le pagine come immagini solo se servono (prima si preparavano sempre)
             if r_lu:
                 ia = {k: v for k, v in (r_lu.get("campi") or {}).items() if k not in (r_lu.get("problemi") or {})}
                 if r_lu.get("tipo"):

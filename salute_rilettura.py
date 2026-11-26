@@ -219,15 +219,56 @@ def sr_segna_riletti(pid, ids):
     _fa_salva(_fn, "Salute: documenti segnati come riletti")
 
 
+SR_INSIEME = 4                                     # quanti file si scaricano e si leggono insieme
+
+
+def _sr_testi_insieme(docs, progress=None):
+    """{indice: (testo, nome_file)} per tutti i documenti, SR_INSIEME alla volta; la barra avanza a ogni file finito. Il testo è identico a quello letto uno per uno."""
+    out = {}
+    if not docs:
+        return out
+    try:
+        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _fatto
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        import threading as _thr_sr
+        ctx = get_script_run_ctx()
+
+        def _uno(i, d):
+            try:
+                add_script_run_ctx(_thr_sr.current_thread(), ctx)
+            except Exception:
+                pass
+            try:
+                return i, _sr_testo_file(d)
+            except Exception:
+                return i, ("", "")
+        with _TPE(max(1, min(SR_INSIEME, len(docs)))) as ex:
+            futuri = [ex.submit(_uno, i, d) for i, d in enumerate(docs)]
+            for n, fu in enumerate(_fatto(futuri)):
+                i, ris = fu.result()
+                out[i] = ris
+                if progress:
+                    d = docs[i]
+                    progress((n + 1) / max(1, len(docs)), f"Letti {n + 1} di {len(docs)}: {d.get('titolo') or d.get('esame') or d.get('tipo') or ''}"[:80])
+        return out
+    except Exception:
+        for i, d in enumerate(docs):                                          # riserva: uno alla volta, come prima
+            if i in out:
+                continue
+            if progress:
+                progress(i / max(1, len(docs)), f"Rileggo {i + 1} di {len(docs)}: {d.get('titolo') or d.get('esame') or d.get('tipo') or ''}"[:80])
+            out[i] = _sr_testo_file(d)
+        return out
+
+
 def sr_proposte(f, pid, progress=None, tutti=False):
     """Rilegge i documenti con file di una persona. Ritorna [{id, titolo_vecchio, titolo_nuovo, cambi, senza_testo}]."""
     p = next((x for x in (f.get("profili") or []) if x.get("id") == pid), {})
     docs = sr_da_rileggere(p, tutti)
     out = []
+    testi = _sr_testi_insieme(docs, progress)                             # VELOCITÀ: i file si scaricano e si leggono 4 alla volta (prima uno alla volta)
     for i, d in enumerate(docs):
-        if progress:
-            progress(i / max(1, len(docs)), f"Rileggo {i + 1} di {len(docs)}: {d.get('titolo') or d.get('esame') or d.get('tipo') or ''}"[:80])
-        testo, nome_file = _sr_testo_file(d)
+        testo, nome_file = testi.get(i) or ("", "")
         if not testo.strip():
             tv = d.get("titolo") or sp_titolo_doc(d)
             out.append({"id": d.get("id"), "titolo_vecchio": tv, "titolo_nuovo": tv, "cambi": {}, "senza_testo": True})

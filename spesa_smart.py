@@ -1232,24 +1232,51 @@ def _ss_dati_off(ean, k):
     return st.session_state[k + "_off"]
 
 
-def _ss_scelta_negozio(ss, k, etichetta="🏪 Negozio"):
-    """Ritorna (negozio_id esistente | None, dati del negozio nuovo | None)."""
-    ultimo = ss["impostazioni"].get("ultimo_negozio")
+def ss_campo_negozio(ss, k, attuale=None, etichetta="🏪 Negozio"):
+    """IL MODO UNICO per scegliere il negozio (Inserisci un prezzo, Modifica prezzo, Dispensa, lista della spesa) — 27/11/2026, più semplice:
+    • i negozi che hai già, con l'ultimo usato per primo (e già scelto);
+    • SEMPRE sotto, una riga «✍️ …oppure scrivi un negozio nuovo»: se la scrivi, vale quella (niente bottoni in più da toccare);
+    • città e indirizzo, solo se servono, in «➕ Città e indirizzo».
+    Ritorna (negozio_id esistente | None, dati del negozio nuovo | None)."""
+    ultimo = attuale or ss["impostazioni"].get("ultimo_negozio")
     ids = [n["id"] for n in sorted(ss["negozi"], key=lambda n: (n["id"] != ultimo, ss_norm(n.get("nome"))))]
     nomi = {n["id"]: ss_nome_negozio(n) for n in ss["negozi"]}
+    scelta = None
     if ids:
-        scelta = st.pills(etichetta, ids + ["__nuovo__"], default=(ultimo if ultimo in ids else None), key=k + "_neg",
-                          format_func=lambda i: "➕ Nuovo negozio" if i == "__nuovo__" else nomi.get(i, "?"))
+        if st.session_state.get(k + "_neg") not in ids:
+            st.session_state.pop(k + "_neg", None)
+        scelta = st.pills(etichetta, ids, default=(ultimo if ultimo in ids else None), key=k + "_neg", format_func=lambda i: nomi.get(i, "?"))
     else:
         st.markdown(f"**{etichetta}**")
-        scelta = "__nuovo__"
-    if scelta == "__nuovo__":
-        c1, c2 = st.columns(2, gap="small")
-        nome = c1.text_input("Nome del negozio *", key=k + "_nn", placeholder="es. Esselunga")
-        citta = c2.text_input("Città", key=k + "_nc", placeholder="es. Torino")
-        ind = st.text_input("Indirizzo (per distinguere i punti vendita)", key=k + "_ni", placeholder="es. Corso Traiano 3")
-        return None, {"nome": nome, "citta": citta, "indirizzo": ind, "catena": nome}
+    nome = st.text_input("✍️ …oppure scrivi un negozio nuovo" if ids else "✍️ Scrivi il nome del negozio *", key=k + "_nn", placeholder="es. Lidl, Esselunga, Coop…")
+    if (nome or "").strip():
+        n_gia = ss_trova_negozio_da_testo(ss, nome)
+        with st.expander("➕ Città e indirizzo (facoltativi)"):
+            citta = st.text_input("Città", key=k + "_nc", placeholder="es. Torino")
+            ind = st.text_input("Indirizzo (per distinguere i punti vendita)", key=k + "_ni", placeholder="es. Corso Traiano 3")
+        if n_gia is not None and not (citta or ind):
+            st.caption(f"🏪 Uso il negozio che hai già: **{_ss_esc(ss_nome_negozio(n_gia))}**.")
+            return n_gia["id"], None
+        st.caption(f"➕ «{_ss_esc(nome.strip())}» sarà aggiunto ai tuoi negozi quando salvi (e diventa il primo dell'elenco).")
+        return None, {"nome": nome.strip(), "citta": (citta or "").strip(), "indirizzo": (ind or "").strip(), "catena": nome.strip()}
     return scelta, None
+
+
+def ss_negozio_da_scelta(ss_, neg_id, neg_nuovo):
+    """Al salvataggio: il negozio scelto, oppure quello nuovo (creato, o riconosciuto se c'è già). Diventa l'ultimo usato. None se manca."""
+    n = ss_trova(ss_, "negozi", neg_id) if neg_id else None
+    if n is None and (neg_nuovo or {}).get("nome"):
+        n = ss_trova_negozio_da_testo(ss_, neg_nuovo["nome"], neg_nuovo.get("citta", ""), neg_nuovo.get("indirizzo", ""))
+        if n is None:
+            n, _x = ss_aggiungi_negozio(ss_, neg_nuovo)
+    if n is not None:
+        ss_.setdefault("impostazioni", {})["ultimo_negozio"] = n["id"]
+    return n
+
+
+def _ss_scelta_negozio(ss, k, etichetta="🏪 Negozio"):
+    """Ritorna (negozio_id esistente | None, dati del negozio nuovo | None)."""
+    return ss_campo_negozio(ss, k, etichetta=etichetta)
 
 
 def _ss_v_inserisci(ss, disp):
@@ -1337,7 +1364,7 @@ def _ss_v_inserisci(ss, disp):
                 p, _n = ss_aggiungi_prodotto(ss_, nuovo_p)
             else:
                 p = ss_trova(ss_, "prodotti", scelta) or ss_materializza(ss_, dict(per_id[scelta]))
-            n = ss_trova(ss_, "negozi", neg_id) if neg_id else ss_aggiungi_negozio(ss_, neg_nuovo)[0]
+            n = ss_negozio_da_scelta(ss_, neg_id, neg_nuovo)
             r, err = ss_nuova_rilevazione(ss_, p["id"], n["id"], prezzo=prezzo, prezzo_promo=promo, confezioni=conf_x or None, formato_valore=fv_x or None,
                                           formato_unita=fu_x if fv_x else "", data=data_r, promo_dal=pdal, promo_al=pal, tessera=tessera, note=note)
             if err:
@@ -2222,7 +2249,7 @@ L'archivio dei prodotti è **lo stesso della Dispensa** e la lista della spesa p
          "spesa smart prezzi negozi confronto offerte lista ottimizzata scontrino dispensa"),
         ("⚡ Inserire un prezzo (3 tocchi)",
          """1. **⚡ Inserisci un prezzo** → scegli il **prodotto** (scrivi per cercare; oppure **📷 Leggi il codice a barre**; oppure **➕ Nuovo prodotto**).
-2. Il **negozio** resta quello dell'ultima volta (toccane un altro o **➕ Nuovo negozio**).
+2. Il **negozio** resta quello dell'ultima volta (toccane un altro, oppure scrivi il nome di uno nuovo nella riga **✍️ …oppure scrivi un negozio nuovo**: diventa il primo dell'elenco).
 3. Scrivi il **prezzo** e tocca **💾 Salva**. L'app calcola da sola il prezzo **al kg, al litro o al pezzo**.
 In **🏷️ Offerta, formato…** metti il prezzo in offerta con le date, se serve la tessera, un formato diverso, le note. Con **🧾 L'ho comprato adesso** registri anche l'acquisto e l'app ti propone di **aggiornare le scorte**.""",
          "inserire prezzo codice a barre negozio offerta tessera formato al kg al litro acquisto"),

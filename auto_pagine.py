@@ -145,8 +145,9 @@ def _au_corpo(coda):
                     ric_ = (au_leggi_libretto(testo) if modo.startswith("libretto") else au_leggi_doc(testo)) if (testo or "").strip() else {}
                     if not modo.startswith("libretto") and "il_leggi_campi" in globals() and il_disponibili(IL_ORDINE_VISTA):
                         try:                                                    # l'IA completa e corregge (con la foto se il testo è poco)
-                            imm = il_immagini(c["nome"], mime, c["dati"], max_pagine=2) if len((testo or "").strip()) < 300 else None
-                            r_lu = lu_leggi([(c["nome"], mime, c["dati"])], "auto", list(_AU_DOC_TIPI), LU_SEZIONI["auto"]["contesto"], testo=testo) if "lu_leggi" in globals() else {}
+                            r_lu = lu_leggi([(c["nome"], mime, c["dati"])], "auto", list(_AU_DOC_TIPI), LU_SEZIONI["auto"]["contesto"], testo=testo,
+                                            tipo_atteso=str((ric_.get("tipo") or {}).get("valore") or "") if isinstance(ric_.get("tipo"), dict) and (ric_.get("tipo") or {}).get("affidabilita") == "alta" else "") if "lu_leggi" in globals() else {}
+                            imm = il_immagini(c["nome"], mime, c["dati"], max_pagine=2) if (not r_lu and len((testo or "").strip()) < 300) else None   # solo se serve
                             if r_lu:
                                 for k_, v_ in (r_lu.get("campi") or {}).items():
                                     if k_ in ("titolo", "data", "scadenza", "importo") and v_ and k_ not in (r_lu.get("problemi") or {}):
