@@ -20,7 +20,7 @@ except Exception:
 import inspect as _inspect_tab
 import re as _re_tab
 import streamlit as _st_tab
-if getattr(_st_tab.tabs, "_versione", 0) < 4:                         # il numero sale a ogni correzione: così anche il server già acceso usa la versione nuova
+if getattr(_st_tab.tabs, "_versione", 0) < 5:                         # il numero sale a ogni correzione: così anche il server già acceso usa la versione nuova
     _tabs_originale = getattr(_st_tab.tabs, "_originale", None) or _st_tab.tabs
     try:
         _par_tab = _inspect_tab.signature(_tabs_originale).parameters
@@ -58,6 +58,12 @@ if getattr(_st_tab.tabs, "_versione", 0) < 4:                         # il numer
                 mem[base_n] = _nrm(tabs[0])
                 for k_ in [k_ for k_ in list(ss_.keys()) if str(k_).startswith(base_n + "#")]:
                     ss_.pop(k_, None)
+            _vt = ss_.get("_vai_tab")                                        # un avviso toccato chiede di aprire una scheda precisa (per esempio «Amministrazione» in Casa)
+            if _vt and any(str(_vt) in str(t) for t in tabs):
+                ss_.pop("_vai_tab", None)
+                mem[base_n] = _nrm(next(t for t in tabs if str(_vt) in str(t)))
+                for k_ in [k_ for k_ in list(ss_.keys()) if str(k_).startswith(base_n + "#")]:
+                    ss_.pop(k_, None)
         except Exception:
             pass
         chiave = base_n + "#" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:6]
@@ -79,7 +85,7 @@ if getattr(_st_tab.tabs, "_versione", 0) < 4:                         # il numer
             kw.pop("default", None)
             return _tabs_originale(tabs, **kw)
     _tabs_con_memoria._ricorda = True
-    _tabs_con_memoria._versione = 4
+    _tabs_con_memoria._versione = 5
     _tabs_con_memoria._attiva = bool(_tabs_ok)                     # lo legge il «Controllo tecnico»: dopo il primo ridisegno questo codice non si riesegue
     _tabs_con_memoria._originale = _tabs_originale
     _st_tab.tabs = _tabs_con_memoria

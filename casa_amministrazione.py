@@ -299,6 +299,21 @@ def amm_rate_vicine(spese, oggi_, giorni=10):
     return sorted(out, key=lambda t: t[1])
 
 
+def amm_rate_vicine_x(spese, oggi_, giorni=10):
+    """Come amm_rate_vicine ma con gli id (per aprire la spesa toccando l'avviso): [{nome, g, importo, spesa_id, rata_id, casa_id}]."""
+    out = []
+    for s in spese:
+        rate = amm_rate_ordinate(s)
+        for k, r in enumerate(rate, 1):
+            if amm_residuo(r) <= 0.004:
+                continue
+            g = amm_giorni_a(r.get("scadenza"), oggi_)
+            if g is not None and -365 <= g <= giorni:
+                out.append({"nome": f"{s.get('descrizione', 'Spesa')} · rata {r.get('n') or k}/{len(rate)}", "g": g, "importo": amm_residuo(r),
+                            "spesa_id": s.get("id"), "rata_id": r.get("id"), "casa_id": s.get("casa_id") or ""})
+    return sorted(out, key=lambda t: t["g"])
+
+
 def _ics_testo(t):
     return str(t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r", "").replace("\n", "\\n")
 
@@ -438,6 +453,9 @@ def ca_amm_tab(c):
     """L'area Amministrazione di Casa (prima scheda): schermata dei badge e le schermate interne. `c` = i dati della casa scelta."""
     st.markdown(_AMM_CSS, unsafe_allow_html=True)
     vista = st.session_state.get("amm_vista")
+    if vista != "spese":                                                  # la spesa aperta da un avviso resta aperta finché si resta in «Spese e scadenze»
+        st.session_state.pop("amm_apri", None)
+        st.session_state.pop("_amm_scroll_fatto", None)
     if vista:
         if st.button("← Torna ad Amministrazione", key="amm_indietro", width="stretch"):
             st.session_state["amm_vista"] = None
@@ -467,8 +485,18 @@ def ca_amm_tab(c):
     spese = _amm_lista(c, "spese_amm")
     if spese:
         r = amm_riepilogo(spese, _amm_oggi().year, _amm_oggi())
-        st.markdown(f"**Quest'anno:** {amm_euro(r['totale'])} · pagato {amm_euro(r['pagato'])} · ancora da pagare **{amm_euro(r['da_pagare'])}**"
-                    + (f" · 🔴 **{len(r['scadute'])} rate scadute**" if r["scadute"] else ""))
+        testo_r = f"Quest'anno: {amm_euro(r['totale'])} · pagato {amm_euro(r['pagato'])} · ancora da pagare {amm_euro(r['da_pagare'])}"
+        vicine = amm_rate_vicine_x(spese, _amm_oggi(), 15)
+        if r["scadute"] or vicine:
+            if st.button(testo_r + (f" · 🔴 {len(r['scadute'])} rate scadute" if r["scadute"] else f" · 🟠 {len(vicine)} rate in scadenza") + " — tocca per aprire",
+                         key=("neon_" if r["scadute"] else "neonA_") + "amm_riep", width="stretch"):
+                ids = list(dict.fromkeys([s_["id"] for s_, _r in r["scadute"]] + [x["spesa_id"] for x in vicine]))
+                st.session_state["amm_vista"], st.session_state["amm_apri"] = "spese", ids
+                st.session_state.pop("_amm_scroll_fatto", None)
+                st.session_state["amm_filtro"], st.session_state["amm_cerca"] = "Tutte", ""
+                st.rerun()
+        else:
+            st.markdown("**" + testo_r.replace(": ", ":** ", 1))
     _amm_pulsante_scambio()
 
 
@@ -791,7 +819,12 @@ def _amm_scheda_spesa(c, s, nomi_docs):
     st.markdown(f"<div class='amm-card'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><b>{_amm_h.escape(s['descrizione'])}</b>{_amm_stato_html(stato)}</div>"
                 f"<div style='opacity:.8'>{_amm_h.escape(s.get('categoria', ''))} · totale <b>{amm_euro(s['importo_totale'])}</b> · pagato {amm_euro(tot_pag)}</div>"
                 f"<div class='amm-barra'><span style='width:{perc}%'></span></div><div style='font-size:.92rem'>{sottotit}</div></div>", unsafe_allow_html=True)
-    with st.expander(f"🔽 Rate, pagamenti e documenti di «{s['descrizione'][:28]}»"):
+    apri = s["id"] in (st.session_state.get("amm_apri") or [])
+    if apri and not st.session_state.get("_amm_scroll_fatto"):
+        st.session_state["_amm_scroll_fatto"] = True
+        st.markdown(f"<div class='amm-qui-{s['id']}'></div>", unsafe_allow_html=True)
+        _ca_scroll_a(f".amm-qui-{s['id']}") if "_ca_scroll_a" in globals() else None
+    with st.expander(f"🔽 Rate, pagamenti e documenti di «{s['descrizione'][:28]}»", _aperta=apri):
         if s.get("amministratore_id") and _amm_nome_admin(c, s["amministratore_id"]):
             st.caption("👤 Amministratore: " + _amm_nome_admin(c, s["amministratore_id"]))
         if s.get("note"):
@@ -870,12 +903,22 @@ def _amm_schermata_spese(c):
         return
     prossime = amm_prossime(spese, oggi_, 5)
     if rp["scadute"] or prossime:
-        with st.expander(f"⏰ Prossime scadenze ({len(prossime)}) e rate scadute ({len(rp['scadute'])})"):
+        with st.expander(f"⏰ Prossime scadenze ({len(prossime)}) e rate scadute ({len(rp['scadute'])})", _aperta=bool(rp["scadute"])):
             for s, r in rp["scadute"]:
-                st.markdown(f"🔴 **{_amm_h.escape(s['descrizione'])}** · rata {r['n']} · {data_it(r['scadenza'])} · da pagare {amm_euro(amm_residuo(r))}")
+                if st.button(f"🔴 {s['descrizione']} · rata {r['n']} · {data_it(r['scadenza'])} · da pagare {amm_euro(amm_residuo(r))} — tocca per aprire", key=f"neon_amm_sc_{r['id']}", width="stretch"):
+                    st.session_state["amm_apri"] = [s["id"]]
+                    st.session_state.pop("_amm_scroll_fatto", None)
+                    st.rerun()
             for s, r in prossime:
                 g = amm_giorni_a(r["scadenza"], oggi_)
-                st.markdown(f"{AMM_STATI[amm_stato_rata(r, oggi_)][0]} **{_amm_h.escape(s['descrizione'])}** · rata {r['n']} · {data_it(r['scadenza'])} (tra {g} giorni) · {amm_euro(amm_residuo(r))}")
+                testo_p = f"{AMM_STATI[amm_stato_rata(r, oggi_)][0]} {s['descrizione']} · rata {r['n']} · {data_it(r['scadenza'])} (tra {g} giorni) · {amm_euro(amm_residuo(r))}"
+                if g is not None and g <= AMM_FINESTRA_IN_SCADENZA:
+                    if st.button(testo_p + " — tocca per aprire", key=f"neonA_amm_pr_{r['id']}", width="stretch"):
+                        st.session_state["amm_apri"] = [s["id"]]
+                        st.session_state.pop("_amm_scroll_fatto", None)
+                        st.rerun()
+                else:
+                    st.markdown(_amm_h.escape(testo_p))
     f1, f2 = st.columns(2, gap="small")
     filtro = f1.selectbox("Mostra", ["Tutte", "Da pagare", "In scadenza", "Scadute", "Pagate"], key="amm_filtro")
     cerca = f2.text_input("Cerca", key="amm_cerca", placeholder="descrizione, categoria…")
@@ -2231,6 +2274,7 @@ def ca_scadenze(c, oggi_, giorni=60):                                           
     sc = _amm_ca_scadenze_prima(c, oggi_, giorni)
     try:
         sc["spese"] = amm_rate_vicine([x for x in c.get("spese_amm", []) if isinstance(x, dict)], oggi_)
+        sc["spese_x"] = amm_rate_vicine_x([x for x in c.get("spese_amm", []) if isinstance(x, dict)], oggi_)
     except Exception:
-        sc["spese"] = []
+        sc["spese"], sc["spese_x"] = [], []
     return sc

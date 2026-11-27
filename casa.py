@@ -1815,14 +1815,19 @@ def ca_scadenze(c, oggi_, giorni=60):
         if d and (d - oggi_).days <= giorni and (m.get("bene_id") in nomi or not m.get("bene_id")):
             manut.append((nomi.get(m.get("bene_id")) or "Casa", m.get("intervento") or m.get("descrizione") or m.get("tipo") or "Manutenzione", (d - oggi_).days))
     docs = c.get("documenti", [])
-    bollette = []                                                                    # bollette da pagare tra 10 giorni o già scadute (fino a un anno fa) senza ricevuta
+    bollette, bollette_x = [], []                                                    # bollette da pagare tra 10 giorni o già scadute (fino a un anno fa) senza ricevuta
     for d in docs:
         sp = ca_stato_pagamento(d, docs, oggi_)
+        g = None
         if sp and sp[0] == "da_pagare" and sp[1] is not None and sp[1] <= 10:
-            bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", sp[1], d.get("importo")))
+            g = sp[1]
         elif sp and sp[0] == "scaduta" and sp[1] <= 365:
-            bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", -sp[1], d.get("importo")))
-    return {"garanzie": sorted(garanzie, key=lambda x: x[1]), "manutenzioni": sorted(manut, key=lambda x: x[2]), "bollette": sorted(bollette, key=lambda x: x[1])}
+            g = -sp[1]
+        if g is not None:
+            bollette.append((f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", g, d.get("importo")))
+            bollette_x.append({"nome": f"{_ca_argomento_di(d)} · {_ca_ente_di(d)}", "g": g, "importo": d.get("importo"), "id": d.get("id"), "casa_id": d.get("casa_id") or ""})
+    return {"garanzie": sorted(garanzie, key=lambda x: x[1]), "manutenzioni": sorted(manut, key=lambda x: x[2]), "bollette": sorted(bollette, key=lambda x: x[1]),
+            "bollette_x": sorted(bollette_x, key=lambda x: x["g"])}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1966,7 +1971,13 @@ box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:16px}
 .ca-card{background:#ffffffcc;border:1px solid #e3d9b8;border-radius:18px;padding:12px 14px;margin:6px 0}
 .ca-card b{font-size:1.02rem}.ca-chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.78rem;font-weight:700;margin:2px 4px 2px 0}
 .ca-evid{background:#fff8d6;border:1px solid #f1d36b;border-left:5px solid #f0b400;border-radius:12px;padding:7px 10px;margin:8px 0 2px;font-size:.92rem;color:#3e2e00;line-height:1.35}
-.ca-evid div{margin:2px 0}.ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
+.ca-evid div{margin:2px 0}
+[class*="st-key-neon_"] button{border:2px solid #ff3d6e!important;color:#fff!important;background:rgba(40,0,14,.92)!important;font-weight:800!important;
+text-shadow:0 0 6px #ff7aa0,0 0 12px #ff3d6e;box-shadow:0 0 5px #ff3d6e,0 0 14px #ff3d6e,inset 0 0 6px #ff3d6e;border-radius:16px!important;white-space:normal!important;text-align:left}
+[class*="st-key-neonA_"] button{border-color:#ffb300!important;background:rgba(40,24,0,.92)!important;text-shadow:0 0 6px #ffd54f,0 0 12px #ffb300;box-shadow:0 0 5px #ffb300,0 0 14px #ffb300,inset 0 0 6px #ffb300}
+@media (prefers-reduced-motion:no-preference){[class*="st-key-neon_"] button{animation:neonRosso 1.5s ease-in-out infinite}[class*="st-key-neonA_"] button{animation:neonAmbra 1.7s ease-in-out infinite}}
+@keyframes neonRosso{0%,100%{box-shadow:0 0 4px #ff3d6e,0 0 10px #ff3d6e,inset 0 0 4px #ff3d6e}50%{box-shadow:0 0 12px #ff3d6e,0 0 30px #ff3d6e,0 0 52px #ff1f5a,inset 0 0 12px #ff3d6e}}
+@keyframes neonAmbra{0%,100%{box-shadow:0 0 4px #ffb300,0 0 10px #ffb300,inset 0 0 4px #ffb300}50%{box-shadow:0 0 12px #ffb300,0 0 30px #ffb300,0 0 50px #ff9800,inset 0 0 12px #ffb300}}.ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
 </style>"""
 
 
@@ -2073,6 +2084,58 @@ def _ca_dlg_ricevute_bolletta(d):
         if s2.button("Annulla", key=k + "_no", width="stretch"):
             st.rerun()
     st.dialog("🧾 Aggiungi le ricevute")(_finestra)()
+
+
+def ca_vai_a(casa_id=None, tab=None, amm_vista=None, spese=None, doc=None):
+    """Porta alla «cartella» giusta di Casa: la casa (e la persona) giusta, la scheda, la schermata di Amministrazione, la spesa o il documento aperti."""
+    ss = st.session_state
+    if casa_id is not None:
+        try:
+            c = _ca_dati()
+            casa = next((x for x in (c.get("case") or []) if isinstance(x, dict) and x.get("id") == casa_id), None)
+            profili = cpf_profili() if "cpf_profili" in globals() else []
+            pids, nomi_p = [p for p, _n in profili], dict(profili)
+            if pids:
+                pers = cpf_di_chi(casa, pids) if casa else pids[0]
+                ss["ca_pers_sel"] = pers
+                if len(pids) > 1:
+                    ss["ca_pers_pillole"] = f"👤 {nomi_p[pers]}"                     # le pillole «di chi è la casa» si mettono sulla persona giusta (anche nel telefono)
+                case_p = cpf_case_persona(c, pers, pids)
+                if len(case_p) > 1:
+                    nome_c = next((x["nome"] for x in case_p if x["id"] == (casa_id or "")), None)
+                    if nome_c:
+                        ss[f"ca_casa_pillole_{pers}"] = f"🏡 {nome_c}"
+        except Exception:
+            pass
+        ss["ca_casa_sel"] = casa_id or ""
+    if tab:
+        ss["_vai_tab"] = tab
+    if amm_vista:
+        ss["amm_vista"] = amm_vista
+    ss.pop("_amm_scroll_fatto", None)
+    ss.pop("ca_doc_tenere", None)
+    if spese:
+        ss["amm_apri"] = [x for x in spese if x]
+        ss["amm_filtro"], ss["amm_cerca"] = "Tutte", ""
+    if doc:
+        ss["ca_doc_apri"] = doc
+        ss["ca_farg"], ss["ca_fbene"], ss["ca_cerca"] = "", "", ""
+        ss.pop("ca_fanno", None)
+    st.rerun()
+
+
+def ca_avviso_neon(testo, chiave, urgente=True):
+    """Un avviso che PULSA di luce al neon (rosso se è scaduto, ambra se è vicino) ed è un pulsante: ritorna True se è stato toccato."""
+    return st.button(testo, key=("neon_" if urgente else "neonA_") + chiave, width="stretch")
+
+
+def _ca_scroll_a(sel):
+    """Porta la pagina sull'elemento indicato (dopo un tocco su un avviso)."""
+    if "_inietta" in globals():
+        try:
+            _inietta("(function(){var n=0;function v(){var e=window.document.querySelector(" + json.dumps(sel) + ");if(e){e.scrollIntoView({block:'center'});return}if(++n<20)window.setTimeout(v,200)}v()})();")
+        except Exception:
+            pass
 
 
 def _ca_chip(testo, classe="ca-neutro"):
@@ -3824,10 +3887,19 @@ def _ca_tab_manuali(c):
             lista.sort(key=_ca_ordine, reverse=True)
             ultimo = _ca_data_it(lista[0].get("data_doc")) if lista[0].get("data_doc") else ""
             etichetta = f"🏢 {ente} · {len(lista)} document{'o' if len(lista) == 1 else 'i'}" + (f" · ultimo {ultimo}" if ultimo else "")
-            with st.expander(etichetta, expanded=bool(q) or len(enti) == 1 or bool(farg)):
+            apri_doc = st.session_state.get("ca_doc_apri") or st.session_state.get("ca_doc_tenere")
+            dentro = bool(apri_doc) and any(x.get("id") == apri_doc for x in lista)
+            with st.expander(etichetta, expanded=bool(q) or len(enti) == 1 or bool(farg) or dentro, _aperta=dentro):
                 chiave_tutti = f"ca_tutti_{arg}_{ente}"
-                visibili = lista if st.session_state.get(chiave_tutti) else lista[:12]
+                visibili = lista if (st.session_state.get(chiave_tutti) or dentro) else lista[:12]
                 for d in visibili:
+                    if dentro and d.get("id") == apri_doc:
+                        with st.container(key="ca_doc_qui"):
+                            _ca_riga_documento(d, nomi, "m", docs)
+                        if st.session_state.pop("ca_doc_apri", None):         # ci si porta sopra una volta; il gruppo resta aperto finché si lavora sul documento
+                            st.session_state["ca_doc_tenere"] = d["id"]
+                            _ca_scroll_a(".st-key-ca_doc_qui")
+                        continue
                     _ca_riga_documento(d, nomi, "m", docs)
                 if len(lista) > len(visibili) and st.button(f"Mostra tutti i {len(lista)} documenti", key="b_" + chiave_tutti):
                     st.session_state[chiave_tutti] = True
@@ -4120,10 +4192,17 @@ def schermata_casa():
         st.warning(f"🛡️ La garanzia di **{nome}** scade tra {g} giorni.")
     for nome, voce, g in sc["manutenzioni"][:3]:
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
-    for nome, g, imp in sc.get("spese", [])[:4]:                                      # rate dell'amministrazione (casa_amministrazione.py)
-        st.warning(f"🏢 **{nome}** (€ {ca_importo_fmt(imp)}) — " + (f"scaduta da {-g} giorni: registra il pagamento in Amministrazione → Spese e scadenze" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
-    for nome, g, imp in sc.get("bollette", [])[:4]:
-        st.warning(f"💶 **{nome}**" + (f" (€ {ca_importo_fmt(imp)})" if imp else "") + " — " + (f"scaduta da {-g} giorni, non risulta pagata: carica la ricevuta o tocca «Segna come pagata»" if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni"))
+    for i_, x in enumerate((sc.get("spese_x") or [{"nome": n_, "g": g_, "importo": i__} for n_, g_, i__ in sc.get("spese", [])])[:4]):   # rate dell'amministrazione (casa_amministrazione.py)
+        g = x["g"]
+        if ca_avviso_neon(f"🏢 {x['nome']} (€ {ca_importo_fmt(x['importo'])}) — " + (f"scaduta da {-g} giorni · tocca per aprire" if g < 0 else "da pagare oggi · tocca per aprire" if g == 0 else f"da pagare entro {g} giorni · tocca per aprire"),
+                          f"ca_sp_{i_}_{x.get('rata_id', '')}", g <= 0):
+            ca_vai_a(x.get("casa_id"), "Amministrazione", "spese", [x.get("spesa_id")])
+    for i_, x in enumerate(sc.get("bollette_x", [])[:4]):
+        g = x["g"]
+        if ca_avviso_neon(f"💶 {x['nome']}" + (f" (€ {ca_importo_fmt(x['importo'])})" if x.get("importo") else "") + " — "
+                          + (f"scaduta da {-g} giorni, non risulta pagata · tocca per aprire" if g < 0 else "da pagare oggi · tocca per aprire" if g == 0 else f"da pagare entro {g} giorni · tocca per aprire"),
+                          f"ca_bo_{i_}_{x.get('id', '')}", g <= 0):
+            ca_vai_a(x.get("casa_id"), "Documenti", doc=x.get("id"))
     sel_c = ca_selettore_casa(c)
     if sel_c == "__vuota__":                                           # la persona scelta non ha ancora una casa: si vede solo «➕ Aggiungi una casa»
         st.info("Questa persona non ha ancora una casa: toccala qui sopra in «➕ Aggiungi una casa» e dalle un nome.")

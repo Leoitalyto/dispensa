@@ -430,3 +430,7 @@ GA_SCHEDE["c_ricevute_evidenze"] = ("🧾 Ricevute di pagamento e cose important
 GA_DOVE.update({"c_ricevute_evidenze": ("casa",)})
 GA_NOVITA.append(("nv_ricevute", "🧾", "Più ricevute per ogni pagamento", "Casa: 📎 sulle rate del condominio e sulle bollette, una o più foto/PDF; e un riquadro giallo con importi e date su ogni documento"))
 GA_NOVITA.append(("nv_posta", "📧", "La posta di casa si archivia da sola", "Ogni sera: amministrazioni, bollette e comunicazioni dei fornitori, nella casa giusta e senza doppioni"))
+GA_NOVITA.append(("nv_neon_casa", "🚨", "Avvisi di Casa al neon, da toccare", "Rate e bollette scadute pulsano di luce: toccandole si apre la casa giusta con la spesa o la bolletta già aperta"))
+GA_SCHEDE["c_ricevute_evidenze"] = (GA_SCHEDE["c_ricevute_evidenze"][0], GA_SCHEDE["c_ricevute_evidenze"][1] + """
+**Avvisi al neon:** in cima a Casa e nel riepilogo «Quest'anno…» di Amministrazione, le **rate e le bollette scadute** pulsano di luce **rossa**, quelle **vicine** di luce **ambra**. **Toccale**: l'app apre la **casa giusta** (anche quella di tua madre), la scheda giusta e la **spesa o la bolletta già aperta**, pronta per «💶 Pagata» o «📎 Aggiungi ricevute».""",
+    GA_SCHEDE["c_ricevute_evidenze"][2] + " neon pulsa avviso rosso ambra toccare aprire cartella rata scaduta bolletta scaduta")
