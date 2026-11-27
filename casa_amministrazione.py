@@ -299,6 +299,15 @@ def amm_rate_vicine(spese, oggi_, giorni=10):
     return sorted(out, key=lambda t: t[1])
 
 
+def _amm_neon(c, urgente):
+    """Prefisso della chiave per un avviso al neon nel colore della persona della casa guardata (blu elettrico, fucsia…)."""
+    try:
+        lett = ca_neon_colore(c, st.session_state.get("_ca_casa_vista") or "")
+        return f"neon{lett}{'U' if urgente else 'P'}_"
+    except Exception:
+        return "neon_" if urgente else "neonA_"
+
+
 def amm_rate_vicine_x(spese, oggi_, giorni=10):
     """Come amm_rate_vicine ma con gli id (per aprire la spesa toccando l'avviso): [{nome, g, importo, spesa_id, rata_id, casa_id}]."""
     out = []
@@ -489,7 +498,7 @@ def ca_amm_tab(c):
         vicine = amm_rate_vicine_x(spese, _amm_oggi(), 15)
         if r["scadute"] or vicine:
             if st.button(testo_r + (f" · 🔴 {len(r['scadute'])} rate scadute" if r["scadute"] else f" · 🟠 {len(vicine)} rate in scadenza") + " — tocca per aprire",
-                         key=("neon_" if r["scadute"] else "neonA_") + "amm_riep", width="stretch"):
+                         key=_amm_neon(c, bool(r["scadute"])) + "amm_riep", width="stretch"):
                 ids = list(dict.fromkeys([s_["id"] for s_, _r in r["scadute"]] + [x["spesa_id"] for x in vicine]))
                 st.session_state["amm_vista"], st.session_state["amm_apri"] = "spese", ids
                 st.session_state.pop("_amm_scroll_fatto", None)
@@ -905,7 +914,7 @@ def _amm_schermata_spese(c):
     if rp["scadute"] or prossime:
         with st.expander(f"⏰ Prossime scadenze ({len(prossime)}) e rate scadute ({len(rp['scadute'])})", _aperta=bool(rp["scadute"])):
             for s, r in rp["scadute"]:
-                if st.button(f"🔴 {s['descrizione']} · rata {r['n']} · {data_it(r['scadenza'])} · da pagare {amm_euro(amm_residuo(r))} — tocca per aprire", key=f"neon_amm_sc_{r['id']}", width="stretch"):
+                if st.button(f"🔴 {s['descrizione']} · rata {r['n']} · {data_it(r['scadenza'])} · da pagare {amm_euro(amm_residuo(r))} — tocca per aprire", key=_amm_neon(c, True) + f"amm_sc_{r['id']}", width="stretch"):
                     st.session_state["amm_apri"] = [s["id"]]
                     st.session_state.pop("_amm_scroll_fatto", None)
                     st.rerun()
@@ -913,7 +922,7 @@ def _amm_schermata_spese(c):
                 g = amm_giorni_a(r["scadenza"], oggi_)
                 testo_p = f"{AMM_STATI[amm_stato_rata(r, oggi_)][0]} {s['descrizione']} · rata {r['n']} · {data_it(r['scadenza'])} (tra {g} giorni) · {amm_euro(amm_residuo(r))}"
                 if g is not None and g <= AMM_FINESTRA_IN_SCADENZA:
-                    if st.button(testo_p + " — tocca per aprire", key=f"neonA_amm_pr_{r['id']}", width="stretch"):
+                    if st.button(testo_p + " — tocca per aprire", key=_amm_neon(c, False) + f"amm_pr_{r['id']}", width="stretch"):
                         st.session_state["amm_apri"] = [s["id"]]
                         st.session_state.pop("_amm_scroll_fatto", None)
                         st.rerun()

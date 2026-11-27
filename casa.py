@@ -1880,7 +1880,8 @@ def ca_vista_casa(c, sel):
     for k in _CA_LISTE_CASA:
         v[k] = [x for x in c.get(k, []) if not isinstance(x, dict) or (k == "documenti" and x.get("tipo") in lavoro) or (x.get("casa_id") or "") == sel]
     try:
-        st.session_state["_ca_spese_vista"] = v.get("spese_amm") or []                 # le schede dei documenti mostrano lo stato delle rate collegate
+        st.session_state["_ca_spese_vista"] = v.get("spese_amm") or []
+        st.session_state["_ca_casa_vista"] = sel                 # le schede dei documenti mostrano lo stato delle rate collegate
     except Exception:
         pass
     return v
@@ -1965,6 +1966,27 @@ def _ca_ora():
 # Schermate
 # ---------------------------------------------------------------------------------------------------------------------
 _CA_AFF = {"alta": "🟢", "media": "🟡", "bassa": "🟠"}
+# Avvisi al neon colorati per PERSONA: la casa principale (Leonardo) blu elettrico, la seconda persona fucsia, poi verde e arancio.
+# U = scaduto/oggi (pulsa veloce, 🔴) · P = in scadenza (pulsa piano, 🟠).
+_CA_NEON_COLORI = (("B", "#1e90ff", "#8fd0ff", "0,10,40"), ("F", "#ff1fd2", "#ff9bef", "40,0,34"), ("V", "#39ff14", "#b6ff9e", "6,32,0"), ("O", "#ff8c00", "#ffc680", "40,20,0"))
+
+
+def _ca_neon_css():
+    out = []
+    for k, col, chiaro, bg in _CA_NEON_COLORI:
+        out.append(f'[class*="st-key-neon{k}U_"] button,[class*="st-key-neon{k}P_"] button{{border:2px solid {col}!important;color:#fff!important;background:rgba({bg},.92)!important;'
+                   f'font-weight:800!important;text-shadow:0 0 6px {chiaro},0 0 12px {col};box-shadow:0 0 5px {col},0 0 14px {col},inset 0 0 6px {col};'
+                   f'border-radius:16px!important;white-space:normal!important;text-align:left}}')
+        out.append(f'@keyframes neon{k}{{0%,100%{{box-shadow:0 0 4px {col},0 0 10px {col},inset 0 0 4px {col}}}50%{{box-shadow:0 0 12px {col},0 0 30px {col},0 0 52px {col},inset 0 0 12px {col}}}}}')
+        out.append(f'@media (prefers-reduced-motion:no-preference){{[class*="st-key-neon{k}U_"] button{{animation:neon{k} 1.2s ease-in-out infinite}}'
+                   f'[class*="st-key-neon{k}P_"] button{{animation:neon{k} 2.2s ease-in-out infinite}}}}')
+    out.append('.st-key-ca_neon_box{gap:.45rem!important}.ca-neon-chi{font-weight:800;font-size:.9rem;margin:4px 2px -2px}')
+    return "\n".join(out)
+
+
+_CA_NEON_CSS = _ca_neon_css()
+
+
 _CA_CSS = """<style>
 .ca-hero{background:linear-gradient(135deg,#7a5c00 0%,#d4a017 45%,#4aa3df 100%);color:#fff;padding:18px 22px;border-radius:24px;margin:6px 0 12px;
 box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:16px}
@@ -1979,6 +2001,7 @@ text-shadow:0 0 6px #ff7aa0,0 0 12px #ff3d6e;box-shadow:0 0 5px #ff3d6e,0 0 14px
 [class*="st-key-neonA_"] button{border-color:#ffb300!important;background:rgba(40,24,0,.92)!important;text-shadow:0 0 6px #ffd54f,0 0 12px #ffb300;box-shadow:0 0 5px #ffb300,0 0 14px #ffb300,inset 0 0 6px #ffb300}
 @media (prefers-reduced-motion:no-preference){[class*="st-key-neon_"] button{animation:neonRosso 1.5s ease-in-out infinite}[class*="st-key-neonA_"] button{animation:neonAmbra 1.7s ease-in-out infinite}}
 @keyframes neonRosso{0%,100%{box-shadow:0 0 4px #ff3d6e,0 0 10px #ff3d6e,inset 0 0 4px #ff3d6e}50%{box-shadow:0 0 12px #ff3d6e,0 0 30px #ff3d6e,0 0 52px #ff1f5a,inset 0 0 12px #ff3d6e}}
+"""+_CA_NEON_CSS+"""
 @keyframes neonAmbra{0%,100%{box-shadow:0 0 4px #ffb300,0 0 10px #ffb300,inset 0 0 4px #ffb300}50%{box-shadow:0 0 12px #ffb300,0 0 30px #ffb300,0 0 50px #ff9800,inset 0 0 12px #ffb300}}.ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
 </style>"""
 
@@ -2126,9 +2149,39 @@ def ca_vai_a(casa_id=None, tab=None, amm_vista=None, spese=None, doc=None):
     st.rerun()
 
 
-def ca_avviso_neon(testo, chiave, urgente=True):
-    """Un avviso che PULSA di luce al neon (rosso se è scaduto, ambra se è vicino) ed è un pulsante: ritorna True se è stato toccato."""
+def ca_avviso_neon(testo, chiave, urgente=True, colore=None):
+    """Un avviso che PULSA di luce al neon ed è un pulsante: ritorna True se è stato toccato.
+    colore = lettera della persona (ca_neon_colore): B blu elettrico (casa principale), F fucsia (seconda persona)…; senza colore: rosso/ambra."""
+    if colore:
+        return st.button(("🔴 " if urgente else "🟠 ") + testo, key=f"neon{colore}{'U' if urgente else 'P'}_" + chiave, width="stretch")
     return st.button(testo, key=("neon_" if urgente else "neonA_") + chiave, width="stretch")
+
+
+def ca_neon_chi(c, casa_id):
+    """(lettera colore, colore, etichetta «👤 Persona · casa») per gli avvisi di quella casa: ogni persona ha il suo colore neon."""
+    casa_id = casa_id or ""
+    case = ca_case(c)
+    casa = next((x for x in case if (x.get("id") or "") == casa_id), case[0])
+    profili = []
+    if "cpf_profili" in globals():
+        try:
+            profili = list(cpf_profili())
+        except Exception:
+            profili = []
+    pids = [p for p, _n in profili]
+    pid = (pids[0] if pids else "") if not casa_id else (casa.get("profilo") or "")
+    if pid and pid in pids:
+        i = pids.index(pid)
+    else:
+        i = next((k for k, x in enumerate(case) if (x.get("id") or "") == casa_id), 0)
+    k, col, _ch, _bg = _CA_NEON_COLORI[0 if i == 0 else 1 + (i - 1) % (len(_CA_NEON_COLORI) - 1)]
+    nome_p = dict(profili).get(pid, "") if pid else ""
+    dove = casa.get("indirizzo") or casa.get("nome") or ""
+    return k, col, " · ".join(x for x in (("👤 " + nome_p) if nome_p else "", dove) if x) or "🏡 Casa principale"
+
+
+def ca_neon_colore(c, casa_id):
+    return ca_neon_chi(c, casa_id)[0]
 
 
 def _ca_scroll_a(sel):
@@ -4194,17 +4247,27 @@ def schermata_casa():
         st.warning(f"🛡️ La garanzia di **{nome}** scade tra {g} giorni.")
     for nome, voce, g in sc["manutenzioni"][:3]:
         st.warning(f"🔧 **{nome}**: {voce} — " + (f"in ritardo di {-g} giorni" if g < 0 else "oggi" if g == 0 else f"tra {g} giorni"))
-    for i_, x in enumerate((sc.get("spese_x") or [{"nome": n_, "g": g_, "importo": i__} for n_, g_, i__ in sc.get("spese", [])])[:4]):   # rate dell'amministrazione (casa_amministrazione.py)
-        g = x["g"]
-        if ca_avviso_neon(f"🏢 {x['nome']} (€ {ca_importo_fmt(x['importo'])}) — " + (f"scaduta da {-g} giorni · tocca per aprire" if g < 0 else "da pagare oggi · tocca per aprire" if g == 0 else f"da pagare entro {g} giorni · tocca per aprire"),
-                          f"ca_sp_{i_}_{x.get('rata_id', '')}", g <= 0):
-            ca_vai_a(x.get("casa_id"), "Amministrazione", "spese", [x.get("spesa_id")])
-    for i_, x in enumerate(sc.get("bollette_x", [])[:4]):
-        g = x["g"]
-        if ca_avviso_neon(f"💶 {x['nome']}" + (f" (€ {ca_importo_fmt(x['importo'])})" if x.get("importo") else "") + " — "
-                          + (f"scaduta da {-g} giorni, non risulta pagata · tocca per aprire" if g < 0 else "da pagare oggi · tocca per aprire" if g == 0 else f"da pagare entro {g} giorni · tocca per aprire"),
-                          f"ca_bo_{i_}_{x.get('id', '')}", g <= 0):
-            ca_vai_a(x.get("casa_id"), "Documenti", doc=x.get("id"))
+    voci = [dict(x, _tipo="spesa") for x in (sc.get("spese_x") or [{"nome": n_, "g": g_, "importo": i__} for n_, g_, i__ in sc.get("spese", [])])] \
+        + [dict(x, _tipo="bolletta") for x in sc.get("bollette_x", [])]
+    if voci:                                                            # tutti gli avvisi insieme, raggruppati per persona (ognuna col suo colore neon)
+        ordine = {(x.get("id") or ""): k for k, x in enumerate(ca_case(c))}
+        gruppi = {}
+        for x in voci:
+            gruppi.setdefault(x.get("casa_id") or "", []).append(x)
+        with st.container(key="ca_neon_box"):
+            for cid in sorted(gruppi, key=lambda t: ordine.get(t, 99)):
+                lett, col, chi = ca_neon_chi(c, cid)
+                if len(gruppi) > 1:
+                    st.markdown(f"<div class='ca-neon-chi' style='color:{col};text-shadow:0 0 8px {col}'>{html.escape(chi)}</div>", unsafe_allow_html=True)
+                for i_, x in enumerate(sorted(gruppi[cid], key=lambda t: t["g"])[:6]):
+                    g = x["g"]
+                    quando = (f"scaduta da {-g} giorni" + (", non risulta pagata" if x["_tipo"] == "bolletta" else "") if g < 0 else "da pagare oggi" if g == 0 else f"da pagare entro {g} giorni")
+                    if x["_tipo"] == "spesa":
+                        if ca_avviso_neon(f"🏢 {x['nome']} (€ {ca_importo_fmt(x['importo'])}) — {quando} · tocca per aprire", f"ca_sp_{cid}_{i_}_{x.get('rata_id', '')}", g <= 0, lett):
+                            ca_vai_a(x.get("casa_id"), "Amministrazione", "spese", [x.get("spesa_id")])
+                    elif ca_avviso_neon(f"💶 {x['nome']}" + (f" (€ {ca_importo_fmt(x['importo'])})" if x.get("importo") else "") + f" — {quando} · tocca per aprire",
+                                        f"ca_bo_{cid}_{i_}_{x.get('id', '')}", g <= 0, lett):
+                        ca_vai_a(x.get("casa_id"), "Documenti", doc=x.get("id"))
     sel_c = ca_selettore_casa(c)
     if sel_c == "__vuota__":                                           # la persona scelta non ha ancora una casa: si vede solo «➕ Aggiungi una casa»
         st.info("Questa persona non ha ancora una casa: toccala qui sopra in «➕ Aggiungi una casa» e dalle un nome.")
