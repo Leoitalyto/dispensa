@@ -1341,7 +1341,7 @@ def _amm_schermata_raccolta(c):
     ids = [p["id"] for p in programmi]
     att = amm_programma_attivo(programmi)
     if len(programmi) > 1:
-        sel_id = st.pills("Programma", ids, default=st.session_state.get("amm_rc_sel") if st.session_state.get("amm_rc_sel") in ids else att["id"], key="amm_rc_pill",
+        sel_id = st.pills("Programma", ids, default=st.session_state.get("amm_rc_sel") if st.session_state.get("amm_rc_sel") in ids else att["id"], key=f"amm_rc_pill{st.session_state.get('amm_rc_n', 0) or ''}",
                           format_func=lambda i: ("✅ " if i == att["id"] else "") + next(p for p in programmi if p["id"] == i).get("nome", ""))
         sel_id = sel_id or att["id"]
         st.session_state["amm_rc_sel"] = sel_id
@@ -1441,6 +1441,7 @@ def _amm_schermata_raccolta(c):
             copia = amm_programma_duplica(p)
             _amm_salva(lambda cc: cc.setdefault("raccolta", []).append(copia), "Raccolta: programma duplicato")
             st.session_state["amm_rc_sel"] = copia["id"]
+            st.session_state["amm_rc_n"] = st.session_state.get("amm_rc_n", 0) + 1     # pillola nuova: mostra subito la copia (prima restava sul programma di prima)
             st.rerun()
         if b3.button("✏️ Nome", key="amm_pr_nome", width="stretch"):
             _amm_dlg_programma(c, p)

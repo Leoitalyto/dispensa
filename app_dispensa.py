@@ -634,7 +634,9 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
 try:                                                                  # ◁ INDIETRO del telefono: l'indirizzo non è più quello che ha scritto l'app → si torna a quella pagina
     _ss_nav = _st_pos.session_state
     _url_n = _st_pos.query_params.get("n") or None
-    if "sess" in _ss_nav and "_nav_url" in _ss_nav and _url_n != _ss_nav.get("_nav_url"):
+    if _url_n and _url_n == _ss_nav.get("_nav_url"):
+        _ss_nav["_nav_eco"] = True                                     # il browser ha davvero nell'indirizzo quello che l'app ha scritto
+    if "sess" in _ss_nav and "_nav_url" in _ss_nav and _url_n != _ss_nav.get("_nav_url") and _ss_nav.get("_nav_eco"):   # solo se l'indirizzo segue l'app (altrimenti, per esempio dentro un'anteprima, non si tocca niente)
         _dati_nav = _nav_decodifica(_url_n) if _url_n else {"vm_home": True}
         if _dati_nav:
             for _k_nav in _NAV_CHIAVI:
