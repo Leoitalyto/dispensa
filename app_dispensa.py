@@ -551,7 +551,7 @@ _SEZ_VALIDE = {"spesa_smart", "scadenziario", "salute", "documenti", "archivio",
 #   (prima l'indirizzo cambiava anche ogni 3 minuti e a ogni giro, e il tasto Indietro sembrava non fare niente).
 # • Se il telefono «stacca» l'app (fotocamera, file, WhatsApp, schermo spento) e la pagina riparte, si torna nella stessa pagina e voce.
 _NAV_CHIAVI = ("vm_home", "farmacia_aperta", "sezione_home", "lv_sezione", "au_vista", "au_sezione", "au_sel", "au_pannello", "an_sezione", "dg_vista", "amm_vista",
-               "ch_vista", "ss_vista", "sc_sez", "sz_mod", "ca_pers_sel", "ca_casa_sel", "sp_modulo", "doc_modulo", "pc_aperto")
+               "ch_vista", "ss_vista", "sc_sez", "sz_mod", "ca_pers_sel", "ca_casa_sel", "sp_modulo", "doc_modulo", "pc_aperto", "fa_profilo_ric")
 
 
 def _nav_codifica(ss_):
@@ -606,7 +606,10 @@ def _nav_scrivi():
             ss_["_nav_url"] = ora
             return
         ss_["_nav_url"] = ora
-        _st_pos.query_params.update({"n": ora, "s": _nav_sezione_ora(ss_), "t": str(int(_time_nav.time() // 60))})
+        nuovi_ = {"n": ora, "s": _nav_sezione_ora(ss_), "t": str(int(_time_nav.time() // 60))}
+        if _st_pos.query_params.get("p"):
+            nuovi_["p"] = _st_pos.query_params.get("p")                     # la persona scelta in Salute (scritta in silenzio da salute_profilo.py)
+        _st_pos.query_params.update(nuovi_)
     except Exception:
         pass
 
@@ -644,6 +647,9 @@ try:                                                                  # ◁ INDI
                     _ss_nav[_k_nav] = _dati_nav[_k_nav]
                 elif _url_n:
                     _ss_nav.pop(_k_nav, None)
+            _ric_nav = _ss_nav.get("fa_profilo_ric")
+            if isinstance(_ric_nav, dict) and _ric_nav.get("pid"):
+                _ss_nav["fa_profilo"] = _ric_nav["pid"]                   # Indietro riporta anche alla persona che guardavi in Salute
             for _k_nav in ("sp_ds_cor", "sp_ds_cat", "pcd_aperto", "lm_aperto", "lm_bozza", "_sc_dlg"):    # le finestre e i riquadri aperti della pagina lasciata si chiudono
                 _ss_nav.pop(_k_nav, None)
         _ss_nav["_nav_url"] = _url_n
