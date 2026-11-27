@@ -318,7 +318,8 @@ GA_SCHEDE["x_velocita_doc"] = ("⚡ Documenti letti più in fretta",
 - **🔄 Rileggi i documenti già archiviati** (Salute): i file si scaricano e si leggono **4 alla volta**: molto più veloce, stesse proposte.
 - **Riclassificazione in sottofondo**: mentre l'IA legge un documento, il file del successivo si scarica già; e i salvataggi avvengono in coda, senza far aspettare la lettura.""",
     "veloce lento lentezza velocità rileggi documenti archiviati riclassifica ricatalogare lettura documenti caricare documento OCR scansione intelligenza artificiale aspettare")
-GA_DOVE.update({"x_non_indietro": ("utilita", "dispensa", "spesa_smart"), "x_velocita_doc": ("farmacia", "documenti", "casa", "utilita")})
+GA_DOVE.update({"x_non_indietro": ("utilita", "dispensa", "spesa_smart", "farmacia", "casa"), "x_velocita_doc": ("farmacia", "documenti", "casa", "lavoro", "auto", "utilita"),
+                "d_prezzi": ("dispensa", "spesa_smart")})
 GA_NOVITA.append(("nv_nonindietro", "🧭", "Non si torna più indietro da soli", "Dopo un'azione resti nella stessa scheda e voce; se il telefono stacca l'app, torni dove eri. Negozio nuovo: scrivi il nome e basta"))
 GA_NOVITA.append(("nv_velocita", "⚡", "Documenti letti più in fretta", "Salute, Rileggi, riclassificazione e caricamenti: letture insieme e file preparati in anticipo, stessa qualità"))
 GA_DOVE.update({"d_prezzi": ("dispensa",)})
