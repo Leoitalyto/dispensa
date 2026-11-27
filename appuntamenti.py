@@ -95,7 +95,7 @@ def _apn_card(sez, a, passato):
         quando = "DOMANI"
     else:
         quando = sc_data_scritta(dd)
-    righe = [f"🕒 <b>{e(quando)}</b> alle <b>{e(a.get('ora', ''))}</b>"]
+    righe = [f"🕒 <b>{e(quando)}</b>" + (f" alle <b>{e(a.get('ora', ''))}</b>" if str(a.get("ora") or "").strip() else (" · tutto il giorno" if a.get("da_modulo") else ""))]
     if a.get("funzione"):
         righe.append("💼 " + e(a["funzione"]))
     if a.get("motivo"):

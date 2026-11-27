@@ -48,7 +48,7 @@ if not getattr(st.selectbox, "_spf", False):                                    
                 st.session_state["fa_profilo_ric"] = {"uid": (st.session_state.get("sess") or {}).get("uid"), "pid": v}   # fuori dal campo: non si perde quando il campo non viene disegnato
                 try:
                     if st.query_params.get("p") != v:
-                        st.query_params["p"] = v
+                        st.query_params.set_with_no_forward_msg("p", v)
                 except Exception:
                     pass
             return v

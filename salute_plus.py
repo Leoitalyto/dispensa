@@ -1727,7 +1727,18 @@ def _sp_riga_docsan(d, pid, f, p, vedi):
                                      ("m", "✏️", "Modifica", "Correggi i dati di questo documento"),
                                      ("i", "📤", "Invia", "Invia questo documento (WhatsApp, email…)", False, _inv_alterna, (f"inv_aperto_sp_ds_{d['id']}",)),
                                      ("e", "🗑️", "Elimina", "Elimina questo documento"),
-                                     ("c", "🏷️", "Categoria", "Cambia categoria (o cartella)")])
+                                     ("c", "🏷️", "Categoria", "Cambia categoria (o cartella)")]
+                 + ([("p", "🗂️", "Percorso", "Metti questo documento in un percorso di cura (resta anche qui, con la sua classificazione)")] if "pcd_scelta" in globals() else []))
+    if "pcd_badge" in globals():
+        try:
+            pcd_badge(f, pid, d["id"])
+        except Exception:
+            pass
+    if ev.get("p"):
+        st.session_state["pcd_aperto"] = None if st.session_state.get("pcd_aperto") == d["id"] else d["id"]
+        st.rerun()
+    if st.session_state.get("pcd_aperto") == d["id"] and "pcd_pannello_doc" in globals():
+        pcd_pannello_doc(f, pid, d)
     if ev["v"]:
         vedi.remove(ref["id"]) if aperto else vedi.append(ref["id"])
         st.rerun()
@@ -1823,6 +1834,11 @@ def sp_modulo_docsan(pid):
     visibili = [d for d in docs if all(x in _pagliaio(d) for x in q)] if q else docs
     _n_cerca = str(cerca or "").strip().lower().replace("n°", "").replace("n.", "").lstrip("n").strip()
     _numeri = stt_numeri_docsan(p.get("docsan") or []) if "stt_numeri_docsan" in globals() else {}
+    if "pcd_pannello_molti" in globals():                                       # 🗂️ tanti documenti insieme in un percorso di cura (restano anche qui)
+        try:
+            pcd_pannello_molti(f, pid, docs, _numeri)
+        except Exception as _e_pcd:
+            st.caption(f"(percorsi non disponibili: {type(_e_pcd).__name__})")
     if _n_cerca.isdigit() and any(str(_numeri.get(d.get("id"))) == _n_cerca for d in docs):
         visibili = [d for d in docs if str(_numeri.get(d.get("id"))) == _n_cerca]   # cerca per numero: solo quel documento
     if not visibili:

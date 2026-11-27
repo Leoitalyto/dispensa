@@ -782,6 +782,8 @@ def _pc_dialogo_testa(p):
             st.warning("Si cancellano appuntamenti, pagamenti, note e i file allegati che non sono usati altrove. Non si può annullare.")
             if st.checkbox("Sì, voglio eliminarla", key="pc_t_conf") and st.button("🗑️ Elimina definitivamente", key="pc_t_del", width="stretch"):
                 ids = {a["id"] for a in pc_allegati(p)}
+                ids -= {r.get("id") for x in p.get("documenti") or [] if str(x.get("da") or "").startswith(("docsan:", "visita:", "presc:")) or x.get("collegato")
+                        for r in x.get("allegati") or [] if isinstance(r, dict)}       # i file COLLEGATI da Salute non si toccano mai: restano nei loro documenti
                 _fa_salva(lambda f: f.__setitem__("percorsi", [x for x in f.get("percorsi") or [] if x.get("id") != p["id"]]), "Salute: percorso eliminato")
                 try:
                     usati = set(_ar_riuso_riferimenti(_fa_dati())) if "_ar_riuso_riferimenti" in globals() else ids
@@ -1041,7 +1043,10 @@ def _pc_vista_documenti(p, persona, oggi_):
         st.caption("Nessun documento: preventivo, fatture, ricevute, radiografie, consensi… stanno tutti qui.")
     vedi = st.session_state.setdefault("pc_vedi", [])
     for x in docs:
-        st.markdown(f"<div class='pc-riga'>📄 <b>{_pc_e(x.get('categoria'))}</b> · {_pc_e(x.get('titolo'))} · <small>{_pc_e(pc_data_it(x.get('data')))}</small></div>",
+        _cl = x.get("classificazione") or {}
+        _coll = ("<br><small>🔗 dai Documenti sanitari" + (": " + _pc_e(" · ".join(str(_cl[k]) for k in ("tipo", "specialita", "esame") if _cl.get(k))) if _cl else "")
+                 + " — resta anche lì; «Togli» lo toglie solo da questo percorso</small>") if str(x.get("da") or "").startswith("docsan:") else ""
+        st.markdown(f"<div class='pc-riga'>📄 <b>{_pc_e(x.get('categoria'))}</b> · {_pc_e(x.get('titolo'))} · <small>{_pc_e(pc_data_it(x.get('data')))}</small>{_coll}</div>",
                     unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
         if c1.button("🙈 Chiudi" if x["id"] in vedi else "👁️ Vedi / scarica", key=f"pc_doc_v_{x['id']}", width="stretch"):

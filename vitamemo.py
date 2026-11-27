@@ -24,7 +24,7 @@ import streamlit as st
 VM_NOME = "VitaMemo"
 VM_MOTTO = "Il tuo mondo, in ordine."
 VM_NEON = "#ccff00"                       # il colore fluorescente dei numeri e della pulsazione
-VM_RIPRESA_MIN = 20                       # entro quanti minuti, se la pagina riparte da sola, si torna nella sezione in cui si era
+VM_RIPRESA_MIN = 12 * 60                       # entro quanti minuti, se la pagina riparte da sola, si torna nella sezione in cui si era
 _VM_LARG, _VM_ALT = 720, 1280             # misure dell'immagine: le zone qui sotto sono in questi pixel
 # sezione, nome letto dallo schermo, x0, y0, x1, y1
 VM_ZONE = [
@@ -79,7 +79,7 @@ def _vm_segna_tempo():
         m = _vm_minuto()
         if abs(m - int(st.session_state.get("_vm_t") or 0)) >= 3 or st.query_params.get("t") is None:
             st.session_state["_vm_t"] = m
-            st.query_params["t"] = str(m)
+            st.query_params.set_with_no_forward_msg("t", str(m))      # prima ogni 3 minuti una voce in più nella cronologia: il tasto Indietro «non faceva niente»
     except Exception:
         pass
 
@@ -302,7 +302,7 @@ def vm_schermata_home():
                 pass
     try:
         if st.query_params.get("s") != "home":
-            st.query_params["s"] = "home"
+            st.query_params.set_with_no_forward_msg("s", "home")      # la voce nella cronologia la scrive app_dispensa (_nav_scrivi)
     except Exception:
         pass
     _vm_segna_tempo()

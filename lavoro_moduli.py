@@ -359,9 +359,15 @@ def lm_appuntamenti(rec):
     tipo = v.get("altro") if v.get("tipo") == "Altro" else v.get("tipo")
     out = []
     for i, (a, b) in enumerate(per):
-        out.append({"id": f"lm_{rec['id']}_{i}", "nome": tipo or "Permesso", "funzione": "Richiesta di permesso – ferie", "telefono": "", "data": a.isoformat(), "ora": "",
-                    "luogo": "", "motivo": (f"dal {_lm_fmt(a)} al {_lm_fmt(b)}" if b != a else f"il {_lm_fmt(a)}") + (f" (in tutto {lm_n_giorni(v)} giorni)" if len(per) > 1 else ""),
-                    "note": "Dal modulo compilato in Lavoro → Moduli.", "fatto": False, "priorita": "", "da_modulo": rec["id"]})
+        giorni = (b - a).days + 1
+        # prima c'era sempre «Richiesta di permesso – ferie», anche per la L. 104: ora il tipo vero (nel nome) e quale giorno è
+        out.append({"id": f"lm_{rec['id']}_{i}", "nome": tipo or "Permesso",
+                    "funzione": (f"Giorno {i + 1} di {len(per)} chiesti" if len(per) > 1 else "Giorno chiesto") if giorni == 1 else f"Periodo di {giorni} giorni",
+                    "telefono": "", "data": a.isoformat(), "ora": "",
+                    "luogo": "", "motivo": (f"dal {_lm_fmt(a)} al {_lm_fmt(b)}" if b != a else f"il {_lm_fmt(a)}")
+                    + (f" · richiesta di {lm_n_giorni(v)} giorni in tutto: " + ", ".join(_lm_fmt(x) if x == y else f"{_lm_fmt(x)}–{_lm_fmt(y)}" for x, y in per) if len(per) > 1 else ""),
+                    "note": "📝 Creato da solo dal modulo dei permessi compilato in Lavoro → Moduli da compilare (non serve fare altro: è un promemoria). "
+                            "Se elimini il modulo, sparisce anche questo.", "fatto": False, "priorita": "", "da_modulo": rec["id"]})
     return out
 
 
@@ -829,7 +835,13 @@ def _lm_card(rec, m):
     invii = rec.get("invii") or []
     stato = ("✍️ firmato" if rec.get("firmato") else "senza firma") + " · " + lm_stato(rec)[1]
     aperto = st.session_state.get("lm_aperto") == rec["id"]
-    st.markdown(f"<div class='lm-card'><b>{M['icona']} {sc_esc(lm_titolo(rec))}</b><div class='lm-s'>{sc_esc(M['titolo'])} · {_lm_fmt(quando)}<br>{sc_esc(stato)}</div></div>",
+    _v = rec.get("valori") or {}
+    _date = ""
+    if rec.get("modello") == "frassati_permessi" and lm_periodi(_v):              # 📅 quali giorni o quale periodo hai chiesto, scritti per intero
+        _tot = lm_n_giorni(_v)
+        _date = (f"<br>📅 <b>{sc_esc(lm_testo_periodi(_v).replace('  fino al  ', ' fino al '))}</b> · {_tot} {'giorno' if _tot == 1 else 'giorni'}"
+                 + (f" · {sc_esc(_v.get('altro') if _v.get('tipo') == 'Altro' else _v.get('tipo') or '')}" if _v.get("tipo") else ""))
+    st.markdown(f"<div class='lm-card'><b>{M['icona']} {sc_esc(lm_titolo(rec))}</b><div class='lm-s'>{sc_esc(M['titolo'])} · {_lm_fmt(quando)}{_date}<br>{sc_esc(stato)}</div></div>",
                 unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4, gap="small")
     if c1.button("🙈" if aperto else "👁️ Apri", key=f"lm_ap_{rec['id']}", width="stretch", type="primary" if not aperto else "secondary"):
@@ -892,6 +904,29 @@ def _lm_card(rec, m):
         _lm_invio(rec, m, pdf)
 
 
+def _lm_ripara_appuntamenti(m):
+    """Una volta per sessione: gli appuntamenti già creati dai moduli con la vecchia scritta «Richiesta di permesso – ferie» (sbagliata per la L. 104)
+    prendono il testo giusto con le date chieste. Non ricrea quelli che hai cancellato tu."""
+    if st.session_state.get("_lm_appunt_riparati") or "sc_dati" not in globals():
+        return
+    st.session_state["_lm_appunt_riparati"] = True
+    try:
+        lst = (sc_dati().get("appuntamenti") or {}).get("lavoro") or []
+        vecchi = [x for x in lst if x.get("da_modulo") and x.get("funzione") == "Richiesta di permesso – ferie"]
+        if not vecchi:
+            return
+        nuovi = {a["id"]: a for rec in m.get("compilati") or [] for a in lm_appuntamenti(rec)}
+
+        def _fn(d):
+            for x in (d.get("appuntamenti") or {}).get("lavoro") or []:
+                n_ = nuovi.get(x.get("id"))
+                if n_ and x.get("funzione") == "Richiesta di permesso – ferie":
+                    x.update({k: n_[k] for k in ("nome", "funzione", "motivo", "note")})
+        sc_salva(_fn, "Appuntamenti dei moduli: testo corretto con le date chieste")
+    except Exception:
+        pass
+
+
 def lm_pagina(c):
     """La pagina «📝 Moduli da compilare» dentro Lavoro."""
     if not (st.session_state.get("sess") or {}).get("admin"):          # i moduli e il catalogo sono personali dell'amministratore
@@ -899,6 +934,7 @@ def lm_pagina(c):
         return
     st.markdown(_LM_CSS, unsafe_allow_html=True)
     m = _lm_dati(c)
+    _lm_ripara_appuntamenti(m)
     st.markdown("### 📝 Moduli da compilare")
     st.caption("Scegli il modulo, rispondi alle domande: l'app scrive sul foglio originale, mette la tua firma e lo mandi a chi serve.")
     if _lm_editor(m):

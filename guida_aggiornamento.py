@@ -220,13 +220,14 @@ GA_SCHEDE.update({
 4. Nel riquadro verde tocca **📤 Manda il PDF**: si apre «Condividi» con il PDF già allegato, scegli **WhatsApp** e poi il tuo responsabile. Poi tocca **✅ Fatto: l'ho mandato**. Ci sono anche **⬇️ PDF**, **⬇️ Foto (JPG)** e **📨 Altri modi** (email, Telegram…).
 
 **✍️ La tua firma**: la carichi una volta (foto della firma su un foglio bianco): l'app toglie il bianco e tiene solo l'inchiostro. **⚙️ A chi li mandi**: nome e cellulare del responsabile e il tuo cantiere.
-I giorni di permesso entrano da soli negli **📅 Appuntamenti** di Lavoro (e nel riepilogo di Utilità).""",
+I giorni di permesso entrano da soli negli **📅 Appuntamenti** di Lavoro (e nel riepilogo di Utilità): uno per ogni giorno o periodo, con il **tipo vero** (per esempio «Permessi L. 104»), «tutto il giorno» e **tutte le date chieste** (per esempio «il 30/11/2026 · richiesta di 2 giorni in tutto: 30/11/2026, 02/12/2026»). Sono solo promemoria: se elimini il modulo, spariscono anche loro.""",
                  "moduli modulo compilare permesso ferie richiesta giorni non consecutivi firma responsabile whatsapp abbigliamento vestiario taglia pdf"),
     "l_moduli_catalogo": ("🗂️ Il catalogo dei moduli inviati",
                           """Ogni modulo compilato resta nel **🗂️ Catalogo dei moduli** (in fondo a **📝 Moduli da compilare**), diviso **per mese**.
 - **Filtri**: **Tipo** (permessi, abbigliamento), **Stato** (📤 Inviati, ⏳ Da inviare), **Anno** e **🔎 Cerca** (per esempio «ferie», «polo», il nome del responsabile).
 - Quando segni l'invio, l'app salva la **copia esatta del PDF inviato**, con data e ora: la trovi in **📎 Copie inviate** e resta così anche se poi modifichi il modulo o cambi la firma.
 - Se modifichi un modulo già mandato compare **«✏️ modificato dopo l'invio: da rimandare»**.
+- Sui permessi si leggono subito **📅 le date o il periodo chiesto** e il totale dei giorni.
 - Su ogni modulo: **👁️ Apri**, **✏️ Modifica**, **📄 Duplica** (comodo per l'ordine del mese dopo) e **🗑️ Elimina**.
 - **📊 Giorni chiesti nell'anno**: quanti giorni di ferie, permessi… (un giorno conta una volta sola).
 - **🗜️ ZIP**: scarichi in un solo file tutte le copie inviate dell'elenco che stai guardando.""",
@@ -306,9 +307,10 @@ GA_SCHEDE["x_non_indietro"] = ("🧭 L'app non torna più indietro da sola",
     """**Cosa è cambiato (27/11/2026):**
 - Dopo un'azione (Salva, Metti in lista, Applica…) resti **nella stessa scheda e nella stessa voce**: anche se sopra compare o sparisce un messaggio, o cambia un numero tra parentesi (per esempio «Messaggi (3)» → «(4)»).
 - Le **pillole** (per esempio le categorie dell'Archivio) ricordano la scelta anche quando apri un documento o un'altra voce e poi torni.
-- Se il telefono **«stacca» l'app** (fotocamera, scelta di un file, WhatsApp, schermo spento) e la pagina riparte entro 20 minuti, torni **nella sezione, nella voce e nella scheda** in cui eri, non una pagina indietro.
+- Se il telefono **«stacca» l'app** (fotocamera, scelta di un file, WhatsApp, schermo spento) e la pagina riparte, torni **nella sezione e nella voce** in cui eri, non una pagina indietro.
+- **Il tasto ◁ Indietro del telefono** ora porta alla **pagina di prima dell'app** (per esempio da «Moduli da compilare» ai pulsanti di Lavoro, poi alla Home). Dalla Home, un altro ◁ esce dall'app.
 **Negozio nuovo più semplice:** in Spesa Smart, in Modifica prezzo e in Dispensa, sotto i negozi che hai c'è sempre la riga **«✍️ …oppure scrivi un negozio nuovo»**: scrivi il nome e basta. Città e indirizzo solo se servono, in **«➕ Città e indirizzo»**. Il negozio nuovo diventa il primo dell'elenco. Quando metti in dispensa i prodotti presi, il negozio si sceglie **una volta sola** per tutta la spesa.""",
-    "indietro torna indietro pagina precedente scheda prima scheda si chiude perdo il punto ricomincia riparte negozio nuovo aggiungere negozio scrivere negozio città indirizzo")
+    "indietro torna indietro pagina precedente tasto indietro del telefono freccia indietro android scheda prima scheda si chiude perdo il punto ricomincia riparte negozio nuovo aggiungere negozio scrivere negozio città indirizzo")
 GA_SCHEDE["x_velocita_doc"] = ("⚡ Documenti letti più in fretta",
     """**Cosa è cambiato (27/11/2026), con la stessa qualità di prima:**
 - **Caricare un documento in Salute**: la lettura del testo e l'intelligenza artificiale lavorano **insieme** (prima una dopo l'altra).
@@ -321,6 +323,15 @@ GA_SCHEDE["x_velocita_doc"] = ("⚡ Documenti letti più in fretta",
 GA_DOVE.update({"x_non_indietro": ("utilita", "dispensa", "spesa_smart", "farmacia", "casa"), "x_velocita_doc": ("farmacia", "documenti", "casa", "lavoro", "auto", "utilita"),
                 "d_prezzi": ("dispensa", "spesa_smart")})
 GA_NOVITA.append(("nv_nonindietro", "🧭", "Non si torna più indietro da soli", "Dopo un'azione resti nella stessa scheda e voce; se il telefono stacca l'app, torni dove eri. Negozio nuovo: scrivi il nome e basta"))
+GA_SCHEDE["f_percorsi_doc"] = ("🗂️ Documenti sanitari in un percorso di cura",
+    """**Da dove:** Salute → scegli la persona → **🗂️ Documenti sanitari**.
+- **Un documento alla volta:** sotto la scheda del documento tocca **🗂️ Percorso**. Scegli un **percorso che c'è già** oppure **➕ Crea un percorso NUOVO**: nome, tipo di cura, studio e medico sono già proposti dai dati del documento. Tocca **🔗 Collega** (o **💾 Crea il percorso e collega**).
+- **Tanti insieme** (per esempio gli 8 documenti del dentista): sopra l'elenco apri **🗂️ Metti più documenti in un percorso di cura**, scegli i documenti, poi il percorso, e tocca **🔗 Collega N documenti**.
+**La classificazione resta intatta:** il documento **non si sposta e non si copia**. Resta nei Documenti sanitari con il suo tipo, area medica, data, medico e N°; nel percorso va solo un **collegamento allo stesso file** (con la scritta «🔗 dai Documenti sanitari»). Sulla scheda del documento vedi **«🗂️ Nel percorso di cura: …»**. Un documento può stare anche in più percorsi. «Togli» nel percorso lo toglie solo dal percorso; eliminando il percorso, i file collegati non si cancellano.""",
+    "percorso di cura cartella dentista collegare documento documenti sanitari mettere in un percorso più documenti insieme classificazione resta collegamento")
+GA_DOVE.update({"f_percorsi_doc": ("farmacia",)})
+GA_NOVITA.append(("nv_percorsi_doc", "🗂️", "Documenti sanitari nei percorsi di cura", "Salute → Documenti sanitari: 🗂️ Percorso (uno) o «Metti più documenti…» (tanti): restano anche lì, classificazione intatta"))
+GA_NOVITA.append(("nv_indietro_tel", "◁", "Il tasto Indietro del telefono", "Ora riporta alla pagina di prima dell'app (dalla Home esce)"))
 GA_NOVITA.append(("nv_velocita", "⚡", "Documenti letti più in fretta", "Salute, Rileggi, riclassificazione e caricamenti: letture insieme e file preparati in anticipo, stessa qualità"))
 GA_DOVE.update({"d_prezzi": ("dispensa",)})
 GA_NOVITA += [

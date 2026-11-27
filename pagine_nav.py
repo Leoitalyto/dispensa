@@ -191,7 +191,7 @@ def nav_pagine(corrente):
             pass
     try:                                                              # la sezione in cui sei si scrive nell'indirizzo: se la pagina riparte, si torna qui
         if st.query_params.get("s") != corrente:
-            st.query_params["s"] = corrente
+            st.query_params.set_with_no_forward_msg("s", corrente)        # niente voce in più nella cronologia: l'indirizzo lo scrive app_dispensa (_nav_scrivi)
     except Exception:
         pass
     nasc = sv_nascoste() if "sv_nascoste" in globals() else set()

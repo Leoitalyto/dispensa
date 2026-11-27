@@ -537,10 +537,13 @@ def _carica(percorso):
 
 import streamlit as _st_pos
 _SEZ_VALIDE = {"spesa_smart", "scadenziario", "salute", "documenti", "archivio", "casa", "lavoro", "auto", "animali", "chat", "utilita"}
-# DOVE SEI DENTRO LA SEZIONE (27/11/2026): se il telefono «stacca» l'app (fotocamera, scelta di un file, WhatsApp, schermo spento) la pagina
-# può ripartire da zero; prima si tornava solo alla sezione, cioè una pagina indietro. Ora si ricordano anche la voce aperta e le schede scelte.
-_NAV_CHIAVI = ("sezione_home", "lv_sezione", "au_vista", "au_sezione", "an_sezione", "dg_vista", "amm_vista", "ch_vista", "ss_vista", "sc_sez",
-               "fa_profilo", "ca_pers_sel", "ca_casa_sel", "_tabs_mem", "_linguette_vive")
+# DOVE SEI DENTRO LA SEZIONE (27/11/2026) e IL TASTO «INDIETRO» DEL TELEFONO.
+# • Ogni volta che cambi pagina (Home, sezione, voce aperta dentro la sezione) l'indirizzo cambia UNA volta (parametro «n»): il telefono lo ricorda
+#   nella sua cronologia. Con il tasto ◁ Indietro del telefono il browser torna all'indirizzo di prima e l'app torna alla pagina di prima
+#   (prima l'indirizzo cambiava anche ogni 3 minuti e a ogni giro, e il tasto Indietro sembrava non fare niente).
+# • Se il telefono «stacca» l'app (fotocamera, file, WhatsApp, schermo spento) e la pagina riparte, si torna nella stessa pagina e voce.
+_NAV_CHIAVI = ("vm_home", "farmacia_aperta", "sezione_home", "lv_sezione", "au_vista", "au_sezione", "au_sel", "au_pannello", "an_sezione", "dg_vista", "amm_vista",
+               "ch_vista", "ss_vista", "sc_sez", "sz_mod", "ca_pers_sel", "ca_casa_sel", "sp_modulo", "doc_modulo", "pc_aperto")
 
 
 def _nav_codifica(ss_):
@@ -549,10 +552,15 @@ def _nav_codifica(ss_):
     d_ = {}
     for k_ in _NAV_CHIAVI:
         v_ = ss_.get(k_)
-        if v_ is not None and v_ != {} and v_ != "":
-            d_[k_] = v_
+        if v_ is None or v_ == {} or v_ == "":
+            continue
+        try:
+            _json_n.dumps(v_)
+        except Exception:
+            continue                                                  # un valore che non si può scrivere nell'indirizzo si salta (gli altri restano)
+        d_[k_] = v_
     try:
-        return _b64_n.urlsafe_b64encode(_json_n.dumps(d_, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+        return _b64_n.urlsafe_b64encode(_json_n.dumps(d_, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")).decode("ascii").rstrip("=")
     except Exception:
         return ""
 
@@ -567,15 +575,44 @@ def _nav_decodifica(t_):
         return {}
 
 
-if not _st_pos.session_state.get("_pos_letta"):                       # sessione nuova (primo avvio, o la pagina è stata ripresa dopo una pausa): si torna alla sezione in cui eri
+def _nav_sezione_ora(ss_):
+    return "home" if ss_.get("vm_home") else "dispensa" if not ss_.get("farmacia_aperta") else (ss_.get("sezione_home") or "salute")
+
+
+def _nav_scrivi():
+    """Se la pagina è cambiata: UNA sola scrittura dell'indirizzo (n = dove sei, s = sezione, t = quando) → una voce nella cronologia del telefono.
+    _nav_stato = la pagina già scritta; _nav_url = il «n» che il browser ha nell'indirizzo (None = nessuno)."""
+    try:
+        import time as _time_nav
+        ss_ = _st_pos.session_state
+        if "sess" not in ss_:
+            return
+        ora = _nav_codifica(ss_)
+        if not ora or len(ora) > 1800 or ora == ss_.get("_nav_stato"):
+            return
+        ss_["_nav_stato"] = ora
+        if "_nav_url" not in ss_ and not _st_pos.query_params.get("n"):
+            ss_["_nav_url"] = None                                    # la prima pagina dopo l'accesso: niente voce in più (così da Home il tasto Indietro esce subito)
+            return
+        if _st_pos.query_params.get("n") == ora:
+            ss_["_nav_url"] = ora
+            return
+        ss_["_nav_url"] = ora
+        _st_pos.query_params.update({"n": ora, "s": _nav_sezione_ora(ss_), "t": str(int(_time_nav.time() // 60))})
+    except Exception:
+        pass
+
+
+if not _st_pos.session_state.get("_pos_letta"):                       # sessione nuova (primo avvio, o la pagina è stata ripresa dopo una pausa): si torna dove eri
     _st_pos.session_state["_pos_letta"] = True
-    try:                                                              # … e, se è ripartita da pochi minuti, anche alla voce e alla scheda in cui eri
+    try:
         import time as _time_nav
         _t_nav = int(_st_pos.query_params.get("t") or 0)
-        if _st_pos.query_params.get("n") and abs(int(_time_nav.time() // 60) - _t_nav) <= 20:
+        if _st_pos.query_params.get("n") and abs(int(_time_nav.time() // 60) - _t_nav) <= 12 * 60:
             for _k_nav, _v_nav in _nav_decodifica(_st_pos.query_params.get("n")).items():
                 if _k_nav not in _st_pos.session_state:
                     _st_pos.session_state[_k_nav] = _v_nav
+            _st_pos.session_state["_nav_url"] = _st_pos.query_params.get("n")
     except Exception:
         pass
     try:
@@ -586,12 +623,38 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
                 _st_pos.session_state["sezione_home"] = _s_url
     except Exception:
         pass
-try:                                                                  # a OGNI giro (anche nelle sezioni, che finiscono con st.stop): lo stato di dove sei va nell'indirizzo
-    _nav_ora = _nav_codifica(_st_pos.session_state)
-    if "sess" in _st_pos.session_state and _nav_ora and len(_nav_ora) < 1800 and _st_pos.query_params.get("n") != _nav_ora:
-        _st_pos.query_params["n"] = _nav_ora
+try:                                                                  # ◁ INDIETRO del telefono: l'indirizzo non è più quello che ha scritto l'app → si torna a quella pagina
+    _ss_nav = _st_pos.session_state
+    _url_n = _st_pos.query_params.get("n") or None
+    if "sess" in _ss_nav and "_nav_url" in _ss_nav and _url_n != _ss_nav.get("_nav_url"):
+        _dati_nav = _nav_decodifica(_url_n) if _url_n else {"vm_home": True}
+        if _dati_nav:
+            for _k_nav in _NAV_CHIAVI:
+                if _k_nav in _dati_nav:
+                    _ss_nav[_k_nav] = _dati_nav[_k_nav]
+                elif _url_n:
+                    _ss_nav.pop(_k_nav, None)
+            for _k_nav in ("sp_ds_cor", "sp_ds_cat", "pcd_aperto", "lm_aperto", "lm_bozza", "_sc_dlg"):    # le finestre e i riquadri aperti della pagina lasciata si chiudono
+                _ss_nav.pop(_k_nav, None)
+        _ss_nav["_nav_url"] = _url_n
+        _ss_nav["_nav_stato"] = _nav_codifica(_ss_nav)                 # la pagina di adesso è quella dell'indirizzo: niente da riscrivere
+    _nav_scrivi()
+    _ss_nav["_vm_nav_scrivi"] = _nav_scrivi                             # lo usa st.stop (le sezioni finiscono così): la pagina nuova va nell'indirizzo subito
 except Exception:
     pass
+if not getattr(_st_pos.stop, "_vm_nav", False):                       # st.stop: prima di fermarsi, scrive dove sei (una volta sola per server)
+    _stop_originale = _st_pos.stop
+
+    def _stop_con_nav(*a, **kw):
+        try:
+            fn_ = _st_pos.session_state.get("_vm_nav_scrivi")
+            if callable(fn_):
+                fn_()
+        except Exception:
+            pass
+        return _stop_originale(*a, **kw)
+    _stop_con_nav._vm_nav = True
+    _st_pos.stop = _stop_con_nav
 
 # CARICAMENTO A PROVA DI GUASTO: se una parte non essenziale dell'app non si carica (per esempio dopo un aggiornamento di Streamlit), le altre continuano a funzionare e l'amministratore
 # vede un avviso nella barra laterale e in Utilità → «Controllo tecnico». Le quattro parti essenziali (parte1-4) invece, se si rompono, fermano l'app come prima.
@@ -614,7 +677,7 @@ except Exception:
     pass
 for _nome in ("traduci_auto.py", "chiudi_ovunque.py", "contatti_comuni.py", "parte1.py", "parte2.py", "aggiunte.py", "categorie.py", "interattivi.py", "hero_foto.py", "stile.py", "spesa.py", "statistiche.py", "elimina.py", "stile2.py", "posto.py", "account.py", "dispensa_famiglia.py", "archivio_immagini.py", "foto_prodotto.py", "modifica.py", "bugiardino.py", "guida.py", "volantini.py", "farmacia.py", "info_sezioni.py", "ricerca_paesi.py", "tabella_intera.py", "famiglia.py", "invio.py", "scanner_medicinali.py", "navigazione.py", "archivio.py", "trasferimento.py", "assistente_ai.py", "utilita.py", "compleanni_img.py", "compleanni.py", "utilita_pdf.py", "controllo_ore.py", "ore_stipendio.py", "assistente.py", "casa.py", "sezioni.py", "pagine_nav.py", "nomi_utenti.py", "musica.py", "salute_catalogo.py", "salute_plus.py", "salute_esenzioni.py", "salute_scorte.py", "salute_prenotazioni.py", "salute_profilo.py", "salute_terapie_intervalli.py", "salute_calendario.py", "casa_cerca_manuale.py", "salute_tutto.py", "salute_rilettura.py", "controllo_tecnico.py", "avvisi_prova.py", "avvisi_sezione.py", "casa_amministrazione.py", "archivio_riuso.py", "auto_emergenza.py", "auto.py", "auto_pagine.py", "auto_diagnosi.py", "auto_soccorso.py", "auto_base.py", "auto_proposte.py", "auto_archivio.py", "animali.py", "animali_doc.py", "animali_report.py", "animali_scambio.py", "animali_logo.py", "animali_pagine.py", "libretto.py", "diagnostica_spie.py", "diagnostica_dtc.py", "diagnostica_ble.py", "diagnostica.py", "lavoro.py", "chat_famiglia.py", "scambio.py", "pensiero.py", "libera_spazio.py", "intestazioni.py", "immagini_sicure.py", "cestino.py", "guida_extra.py", "assistente_extra.py", "accessibilita.py", "vitamemo_img.py", "vitamemo.py", "vitamemo_tema.py", "vitamemo_img_lingue.py", "vitamemo_lingua.py", "donazioni_img.py", "donazioni.py",
               "guida_en.py", "guida_es.py", "guida_fr.py", "guida_de.py", "guida_ro.py", "guida_ar.py", "assistente_giro.py", "assistente_giro_lingue.py", "guida_pt.py", "riga_azioni.py", "casa_profili.py", "lettore.py", "sicurezza_dati.py",
-              "sezioni_comuni.py", "numeri_utili.py", "appuntamenti.py", "conti_casa.py", "badante.py", "segni_animati.py", "sepolture.py", "diario_ricordi.py", "tocco_sicuro.py", "ia_lettura.py", "meteo_avvisi.py", "spiegazioni_wiki.py", "festivita.py", "lettore_unico.py", "documenti_cqc.py", "patente_sync.py", "spesa_smart.py", "spesa_formato.py", "domotica.py", "domotica_orari_core.py", "domotica_orari_ui.py", "domotica_orologio.py", "scadenziario_core.py", "scadenziario.py", "salute_percorsi.py", "appuntamenti_tutti.py", "lavoro_moduli.py", "parcheggio.py", "dispensa_prezzi.py"):
+              "sezioni_comuni.py", "numeri_utili.py", "appuntamenti.py", "conti_casa.py", "badante.py", "segni_animati.py", "sepolture.py", "diario_ricordi.py", "tocco_sicuro.py", "ia_lettura.py", "meteo_avvisi.py", "spiegazioni_wiki.py", "festivita.py", "lettore_unico.py", "documenti_cqc.py", "patente_sync.py", "spesa_smart.py", "spesa_formato.py", "domotica.py", "domotica_orari_core.py", "domotica_orari_ui.py", "domotica_orologio.py", "scadenziario_core.py", "scadenziario.py", "salute_percorsi.py", "salute_percorsi_doc.py", "appuntamenti_tutti.py", "lavoro_moduli.py", "parcheggio.py", "dispensa_prezzi.py"):
     _carica_sicuro(os.path.join(_cartella, _nome))
 for _percorso in sorted(glob.glob(os.path.join(_cartella, "lingue*.py"))):
     _carica_sicuro(_percorso)
@@ -636,10 +699,4 @@ if _MODULI_FALLITI and (_st_pos.session_state.get("sess") or {}).get("admin"):
         _st_pos.sidebar.warning("⚠️ " + str(len(_MODULI_FALLITI)) + " parti dell'app non si sono caricate (il resto funziona): " + ", ".join(n_ for n_, _e in _MODULI_FALLITI[:4]) + ". Vedi Utilità → Controllo tecnico.")
     except Exception:
         pass
-try:                                                      # la sezione in cui sei si scrive nell'indirizzo (senza ridisegnare): serve a ritrovarla se la pagina riparte
-    if "sess" in _st_pos.session_state:
-        _sez_ora = "home" if _st_pos.session_state.get("vm_home") else "dispensa" if not _st_pos.session_state.get("farmacia_aperta") else (_st_pos.session_state.get("sezione_home") or "salute")
-        if _st_pos.query_params.get("s") != _sez_ora:
-            _st_pos.query_params["s"] = _sez_ora
-except Exception:
-    pass
+_nav_scrivi()                                             # dove sei va nell'indirizzo (una sola voce nella cronologia per ogni cambio di pagina)
