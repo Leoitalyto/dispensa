@@ -1872,6 +1872,10 @@ def ca_vista_casa(c, sel):
     v = dict(c)
     for k in _CA_LISTE_CASA:
         v[k] = [x for x in c.get(k, []) if not isinstance(x, dict) or (k == "documenti" and x.get("tipo") in lavoro) or (x.get("casa_id") or "") == sel]
+    try:
+        st.session_state["_ca_spese_vista"] = v.get("spese_amm") or []                 # le schede dei documenti mostrano lo stato delle rate collegate
+    except Exception:
+        pass
     return v
 
 
@@ -1961,8 +1965,114 @@ box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;align-items:center;gap:16px}
 .ca-hero h1{margin:0;font-size:1.7rem;line-height:1.15;color:#fff;padding:0}.ca-hero p{margin:2px 0 0;font-size:.95rem;opacity:.95}
 .ca-card{background:#ffffffcc;border:1px solid #e3d9b8;border-radius:18px;padding:12px 14px;margin:6px 0}
 .ca-card b{font-size:1.02rem}.ca-chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.78rem;font-weight:700;margin:2px 4px 2px 0}
-.ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
+.ca-evid{background:#fff8d6;border:1px solid #f1d36b;border-left:5px solid #f0b400;border-radius:12px;padding:7px 10px;margin:8px 0 2px;font-size:.92rem;color:#3e2e00;line-height:1.35}
+.ca-evid div{margin:2px 0}.ca-ok{background:#e8f5e9;color:#1b5e20}.ca-presto{background:#fff3e0;color:#bf360c}.ca-scaduta{background:#eceff1;color:#263238}.ca-neutro{background:#e3f2fd;color:#0d47a1}
 </style>"""
+
+
+_CA_RE_EVID = re.compile(r"(€\s?\d|\d\s?€|\b\d{1,2}/\d{1,2}(/\d{2,4})?\b|\bentro\b|\bscadenz|\brat[ae]\b|\bore\s\d)", re.I)
+
+
+def ca_evidenze(d, spese=None, oggi_=None):
+    """Le righe da mettere in evidenza sulla scheda di un documento, senza aprirlo: importi, date, rate collegate (stato).
+    1) d["evidenze"] (scritte quando il documento è stato archiviato); 2) altrimenti le frasi delle note con importi o date;
+    3) le spese con rate in Amministrazione collegate a questo documento (prossima rata da pagare o «tutte pagate"); 4) le ricevute di un pagamento."""
+    out = [str(x) for x in (d.get("evidenze") or []) if str(x).strip()]
+    if not out and d.get("note"):
+        pezzi = [p.strip(" ;") for p in re.split(r"\n|(?<=[.;])\s+(?=[A-ZÀ-Ü0-9])", str(d["note"])) if p.strip()]
+        for p in pezzi:
+            if p.lower().startswith(("email completa", "allegato «")) or not _CA_RE_EVID.search(p):
+                continue
+            out.append(("📌 " + p) if len(p) <= 170 else ("📌 " + p[:167].rsplit(" ", 1)[0] + "…"))
+            if len(out) >= 3:
+                break
+    oggi_ = oggi_ or date.today()
+    for sp in spese or []:
+        if not isinstance(sp, dict):
+            continue
+        rif_pag = any(d.get("id") in (p.get("ricevute") or []) or p.get("ricevuta_id") == d.get("id") for r in sp.get("rate") or [] for p in r.get("pagamenti") or [])
+        if d.get("id") not in (sp.get("allegati") or []) and not rif_pag:
+            continue
+        rate = sorted(sp.get("rate") or [], key=lambda r: r.get("scadenza") or "")
+        resto = lambda r: round(float(r.get("importo") or 0) - sum(float(p.get("importo") or 0) for p in r.get("pagamenti") or []), 2)
+        aperte = [r for r in rate if resto(r) > 0.004]
+        nome = str(sp.get("descrizione") or "Spesa")
+        if rif_pag:
+            out.append(f"🧾 Ricevuta di un pagamento di «{nome}»")
+        elif not aperte:
+            out.append(f"✅ «{nome}»: tutte le {len(rate)} rate risultano pagate")
+        else:
+            r = aperte[0]
+            try:
+                g = (date.fromisoformat(r["scadenza"]) - oggi_).days
+            except Exception:
+                g = None
+            quando = "" if g is None else (f" ⚠️ scaduta da {-g} giorni" if g < 0 else " · oggi" if g == 0 else f" · tra {g} giorni")
+            out.append(f"🏢 «{nome}»: prossima rata <b>{_ca_data_it(r.get('scadenza'))}</b> € <b>{ca_importo_fmt(resto(r))}</b>{quando}"
+                       + (f" · da pagare in tutto € {ca_importo_fmt(round(sum(resto(x) for x in aperte), 2))} ({len(aperte)} rate)" if len(aperte) > 1 else ""))
+    return out
+
+
+def _ca_evidenze_html(d):
+    try:
+        righe = ca_evidenze(d, st.session_state.get("_ca_spese_vista"), oggi() if "oggi" in globals() else None)
+    except Exception:
+        righe = []
+    if not righe:
+        return ""
+    sicuro = lambda t: _html_ca.escape(t).replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
+    return "<div class='ca-evid'>" + "".join(f"<div>{sicuro(t)}</div>" for t in righe[:5]) + "</div>"
+
+
+def ca_nuove_ricevute(files, titolo, importo="", data_doc="", ente="", argomento="", extra=None):
+    """Salva nell'archivio una o più ricevute di pagamento (foto o PDF) e restituisce le schede-documento da aggiungere alla Casa.
+    Ogni file resta originale (le foto molto grandi vengono solo rimpicciolite); i dati della ricevuta arrivano da chi la allega."""
+    nuove = []
+    for i, up in enumerate(files or [], 1):
+        try:
+            meta, dati = _fa_prepara_file(up)
+        except Exception as e:
+            raise ValueError(str(e))
+        nid = uuid.uuid4().hex[:12]
+        _ca_scrivi_file(nid, meta["nome"], meta["mime"], dati)
+        x = {"tipo": "Ricevuta di pagamento", "titolo": titolo + (f" ({i})" if len(files) > 1 else ""), "argomento": argomento or "", "ente": ente or "",
+             "importo": str(importo or ""), "data_doc": data_doc or "", "lingua": "it", "note": "", "id": uuid.uuid4().hex[:10], "creato_il": _ca_ora(),
+             "file": {"id": nid, "nome": meta["nome"], "mime": meta["mime"], "sha256": hashlib.sha256(dati).hexdigest(), "dimensione": len(dati), "originale": True},
+             "conferma": {"stato": "confermato", "da": (st.session_state.get("sess") or {}).get("nome", ""), "il": _ca_ora(), "modificati": [], "correzioni": 0}}
+        x.update(extra or {})
+        nuove.append(x)
+    return nuove
+
+
+def _ca_dlg_ricevute_bolletta(d):
+    """Una o più ricevute (foto o PDF) per una bolletta/fattura, caricate qui senza andare nella scheda Documenti: la bolletta risulta pagata."""
+    def _finestra():
+        k = f"ca_rb_{d['id']}"
+        st.markdown(f"**{_ca_testo(d.get('titolo'))}**", unsafe_allow_html=True)
+        files = st.file_uploader("📎 Ricevute di pagamento (foto o PDF, anche più di una)", type=["pdf", "jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key=k + "_f")
+        c1, c2 = st.columns(2)
+        dt = c1.date_input("Pagata il", value=oggi() if "oggi" in globals() else date.today(), format="DD/MM/YYYY", key=k + "_d")
+        imp = c2.text_input("Importo pagato (€)", value=ca_importo_fmt(d.get("importo")) if d.get("importo") else "", key=k + "_i")
+        s1, s2 = st.columns(2, gap="small")
+        if s1.button("💾 Salva le ricevute", key=k + "_ok", type="primary", width="stretch", disabled=not files):
+            try:
+                nuove = ca_nuove_ricevute(files, "Ricevuta · " + str(d.get("titolo") or "bolletta")[:80], (imp or "").replace(".", "").replace(",", "."), dt.isoformat(),
+                                          d.get("ente"), d.get("argomento"), {"collegato_a": d["id"], "casa_id": d.get("casa_id") or ""})
+            except ValueError as e:
+                st.error(str(e))
+                return
+
+            def _fn(cc, did=d["id"]):
+                cc.setdefault("documenti", []).extend(nuove)
+                x = next((y for y in cc.get("documenti", []) if y.get("id") == did), None)
+                if x is not None and not x.get("pagata_il"):
+                    x["pagata_il"] = dt.isoformat()
+            _ca_salva(_fn, "Casa: ricevute di pagamento")
+            st.session_state["messaggio"] = f"🧾 {len(nuove)} ricevut{'a salvata' if len(nuove) == 1 else 'e salvate'}: la bolletta risulta pagata."
+            st.rerun()
+        if s2.button("Annulla", key=k + "_no", width="stretch"):
+            st.rerun()
+    st.dialog("🧾 Aggiungi le ricevute")(_finestra)()
 
 
 def _ca_chip(testo, classe="ca-neutro"):
@@ -2142,10 +2252,8 @@ def _ca_pannello_pagamento(d, docs, k, stato_p):
     if r1.button("✏️ Modifica il pagamento" if pagata else "✅ Segna come pagata", key=f"ca_pgb_{k}", width="stretch"):
         st.session_state["ca_pag_ed"] = None if aperto else d["id"]
         st.rerun()
-    if r2.button("📎 Aggiungi la ricevuta", key=f"ca_pgr_{k}", width="stretch"):
-        st.session_state["ca_per_bolletta"] = d["id"]
-        st.session_state["messaggio"] = "📎 Ora carica la ricevuta (scheda Documenti, in cima): la collego a questa bolletta."
-        st.rerun()
+    if r2.button("📎 Aggiungi ricevute", key=f"ca_pgr_{k}", width="stretch"):
+        _ca_dlg_ricevute_bolletta(d)
     if not aperto:
         return
     ricevute = ca_ricevute_di(docs, d["id"])
@@ -2220,6 +2328,7 @@ def _ca_riga_documento(d, beni_nomi, pre="", docs=None):
                 + _ca_chip(_ca_testo(d.get("tipo") or "Documento")) + chip_p + (_ca_chip("💳 " + _ca_testo(d["modo_pagamento"])) if d.get("modo_pagamento") and docs is not None else "")
                 + (_ca_chip("🏠 " + _ca_testo(beni_nomi.get(d.get("bene_id"), "")), "ca-ok") if beni_nomi.get(d.get("bene_id")) else "")
                 + ("<br><span style='font-size:.9rem'>" + " · ".join(righe) + "</span>" if righe else "")
+                + _ca_evidenze_html(d)
                 + ("<br><span style='font-size:.85rem'>" + app + "</span>" if app else "")
                 + ("<br><span style='font-size:.8rem;opacity:.85'>" + cod + "</span>" if cod else "")
                 + (("<br><span style='font-size:.8rem;opacity:.85'>" + CA_LINGUE.get(d.get("lingua"), "") + "</span>") if d.get("lingua") and CA_LINGUE.get(d.get("lingua")) else "")

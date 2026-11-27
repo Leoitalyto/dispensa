@@ -171,11 +171,35 @@ def amm_registra_pagamento(spesa, rata_id, importo, data_iso, modo="", nota="", 
         return False, "Scrivi un importo maggiore di zero."
     if imp > amm_residuo(r) + 0.004:
         return False, f"L'importo supera quello che resta da pagare ({amm_euro(amm_residuo(r))})."
-    r.setdefault("pagamenti", []).append({"id": amm_id(), "data": data_iso, "importo": round(imp, 2), "modo": modo, "nota": nota.strip(), "ricevuta_id": ricevuta_id})
+    ric = [x for x in (ricevuta_id if isinstance(ricevuta_id, (list, tuple)) else [ricevuta_id]) if x]
+    r.setdefault("pagamenti", []).append({"id": amm_id(), "data": data_iso, "importo": round(imp, 2), "modo": modo, "nota": nota.strip(),
+                                          "ricevuta_id": ric[0] if ric else "", "ricevute": ric})
     _amm_log(spesa, f"Pagamento di {amm_euro(imp)} sulla rata {r.get('n')} ({data_iso})" + (" — rata saldata" if amm_residuo(r) <= 0.004 else f" — restano {amm_euro(amm_residuo(r))}"))
     if amm_residuo(r) <= 0.004 and spesa.get("rinnovo_auto"):
         amm_aggiungi_rate_ricorrenti(spesa, date.fromisoformat(data_iso) if data_iso else date.today())
     return True, "Pagamento registrato."
+
+
+def amm_ricevute_pagamento(p):
+    """Gli id dei documenti-ricevuta di un pagamento (anche quelli vecchi con una sola «ricevuta_id»)."""
+    out = list(p.get("ricevute") or [])
+    if p.get("ricevuta_id") and p["ricevuta_id"] not in out:
+        out.insert(0, p["ricevuta_id"])
+    return out
+
+
+def amm_aggiungi_ricevute(spesa, rata_id, pag_id, ids):
+    r = next((x for x in spesa.get("rate", []) if x.get("id") == rata_id), None)
+    p = next((x for x in (r or {}).get("pagamenti", []) if x.get("id") == pag_id), None)
+    if not p:
+        return False
+    tutte = amm_ricevute_pagamento(p)
+    for i in ids:
+        if i and i not in tutte:
+            tutte.append(i)
+    p["ricevute"], p["ricevuta_id"] = tutte, (tutte[0] if tutte else "")
+    _amm_log(spesa, f"Ricevute del pagamento della rata {r.get('n')}: {len(tutte)}")
+    return True
 
 
 def amm_annulla_pagamento(spesa, rata_id, pag_id):
@@ -615,17 +639,34 @@ def _amm_dlg_paga(c, s, r):
         imp = st.text_input("Quanto hai pagato (€)", value=f"{amm_residuo(r):.2f}".replace(".", ","), key=k + "_i", help="Puoi scrivere anche una cifra più bassa: è un pagamento parziale.")
         dt = st.date_input("Data del pagamento", value=_amm_oggi(), key=k + "_d", format="DD/MM/YYYY")
         modo = st.selectbox("Come hai pagato", _CA_MODI_PAGAMENTO if "_CA_MODI_PAGAMENTO" in globals() else ["Bonifico", "Contanti", "Altro"], key=k + "_m")
+        files = st.file_uploader("📎 Ricevute del pagamento (foto o PDF, anche più di una — facoltative)", type=["pdf", "jpg", "jpeg", "png", "webp"],
+                                 accept_multiple_files=True, key=k + "_f")
         docs = [d for d in _amm_lista(c, "documenti") if d.get("file") or d.get("files")]
-        opz = [""] + [d["id"] for d in docs]
-        ric = st.selectbox("Ricevuta (facoltativa, tra i documenti archiviati)", opz, key=k + "_r", format_func=lambda i: "— nessuna —" if not i else next((d.get("titolo") or d.get("tipo") or i for d in docs if d["id"] == i), i))
+        gia = st.multiselect("…oppure scegli ricevute già archiviate in Casa", [d["id"] for d in docs], key=k + "_r",
+                             format_func=lambda i: next((d.get("titolo") or d.get("tipo") or i for d in docs if d["id"] == i), i))
         nota = st.text_input("Nota", key=k + "_n")
         c1, c2 = st.columns(2, gap="small")
         if c1.button("✅ Registra il pagamento", key=k + "_ok", type="primary", width="stretch"):
             esito = {}
+            if (amm_importo(imp) or 0) <= 0:
+                st.error("Scrivi un importo maggiore di zero.")
+                return
+            if amm_importo(imp) > amm_residuo(r) + 0.004:
+                st.error(f"L'importo supera quello che resta da pagare ({amm_euro(amm_residuo(r))}).")
+                return
+            try:
+                nuove = ca_nuove_ricevute(files, f"Ricevuta · {s['descrizione'][:60]} · rata {r.get('n')}", amm_importo(imp) or "", dt.isoformat(),
+                                          _amm_nome_admin(c, s.get("amministratore_id")) or "", "Condominio",
+                                          {"spesa_id": s["id"], "rata_id": r["id"], "casa_id": s.get("casa_id") or ""}) if files and "ca_nuove_ricevute" in globals() else []
+            except ValueError as e:
+                st.error(str(e))
+                return
 
             def _fn(cc):
                 x = _amm_trova(cc, "spese_amm", s["id"])
-                esito["r"] = amm_registra_pagamento(x, r["id"], imp, dt.isoformat(), modo, nota, ric) if x else (False, "Spesa non trovata.")
+                esito["r"] = amm_registra_pagamento(x, r["id"], imp, dt.isoformat(), modo, nota, [n["id"] for n in nuove] + list(gia)) if x else (False, "Spesa non trovata.")
+                if esito["r"][0]:
+                    cc.setdefault("documenti", []).extend(nuove)
             _amm_salva(_fn, "Amministrazione: pagamento registrato")
             if not esito.get("r", (False,))[0]:
                 st.error(esito["r"][1])
@@ -634,6 +675,54 @@ def _amm_dlg_paga(c, s, r):
         if c2.button("Annulla", key=k + "_no", width="stretch"):
             st.rerun()
     st.dialog("💶 Registra un pagamento")(_finestra)()
+
+
+def _amm_dlg_ricevute(c, s, r, p):
+    def _finestra():
+        k = f"amm_rc_{p['id']}"
+        st.markdown(f"**{_amm_h.escape(s['descrizione'])}** — rata {r.get('n')} · pagamento del {data_it(p.get('data'))} · {amm_euro(p.get('importo'))}")
+        files = st.file_uploader("📎 Ricevute (foto o PDF, anche più di una)", type=["pdf", "jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key=k + "_f")
+        docs = [d for d in _amm_lista(c, "documenti") if (d.get("file") or d.get("files")) and d["id"] not in amm_ricevute_pagamento(p)]
+        gia = st.multiselect("…oppure scegli documenti già archiviati in Casa", [d["id"] for d in docs], key=k + "_r",
+                             format_func=lambda i: next((d.get("titolo") or d.get("tipo") or i for d in docs if d["id"] == i), i))
+        c1, c2 = st.columns(2, gap="small")
+        if c1.button("💾 Salva", key=k + "_ok", type="primary", width="stretch", disabled=not files and not gia):
+            try:
+                nuove = ca_nuove_ricevute(files, f"Ricevuta · {s['descrizione'][:60]} · rata {r.get('n')}", p.get("importo") or "", p.get("data") or "",
+                                          _amm_nome_admin(c, s.get("amministratore_id")) or "", "Condominio",
+                                          {"spesa_id": s["id"], "rata_id": r["id"], "casa_id": s.get("casa_id") or ""}) if files else []
+            except ValueError as e:
+                st.error(str(e))
+                return
+
+            def _fn(cc):
+                cc.setdefault("documenti", []).extend(nuove)
+                x = _amm_trova(cc, "spese_amm", s["id"])
+                if x:
+                    amm_aggiungi_ricevute(x, r["id"], p["id"], [n["id"] for n in nuove] + list(gia))
+            _amm_salva(_fn, "Amministrazione: ricevute del pagamento")
+            st.session_state["messaggio"] = "🧾 Ricevute salvate."
+            st.rerun()
+        if c2.button("Annulla", key=k + "_no", width="stretch"):
+            st.rerun()
+    st.dialog("🧾 Ricevute del pagamento")(_finestra)()
+
+
+def _amm_ricevute_vista(c, s, r, p):
+    """Sotto ogni pagamento: le sue ricevute (apri/scarica) e il pulsante per aggiungerne altre."""
+    ids = amm_ricevute_pagamento(p)
+    docs = {d["id"]: d for d in _amm_lista(c, "documenti") if d.get("id") in ids}
+    for i, rid in enumerate(ids, 1):
+        d = docs.get(rid)
+        if not d:
+            continue
+        f = d.get("file") or {}
+        dati = _ca_leggi_file(f) if f.get("id") and "_ca_leggi_file" in globals() else []
+        if dati:
+            nome, mime, b = dati[0]
+            st.download_button(f"🧾 Ricevuta {i}: {nome[:40]}", b, file_name=nome, mime=mime, key=f"amm_rcd_{p['id']}_{rid}", width="stretch")
+    if st.button(f"📎 Aggiungi ricevute a questo pagamento ({len(docs)})", key=f"amm_rca_{p['id']}", width="stretch"):
+        _amm_dlg_ricevute(c, s, r, p)
 
 
 def _amm_dlg_rata(c, s, r):
@@ -713,7 +802,10 @@ def _amm_scheda_spesa(c, s, nomi_docs):
             st.markdown(f"<div class='amm-card' style='padding:8px 12px'><b>Rata {r.get('n')}</b> · {data_it(r['scadenza'])} · <b>{amm_euro(r['importo'])}</b> {_amm_stato_html(st_r)}"
                         + (f"<div>⏳ Pagato in parte: {amm_euro(amm_pagato(r))} · resta <b>{amm_euro(amm_residuo(r))}</b></div>" if parz else "")
                         + "".join(f"<div style='font-size:.88rem'>✔ {data_it(p.get('data'))} · {amm_euro(p.get('importo'))}" + (f" · {_amm_h.escape(p['modo'])}" if p.get("modo") else "")
-                                  + (f" · {_amm_h.escape(p['nota'])}" if p.get("nota") else "") + "</div>" for p in r.get("pagamenti", [])) + "</div>", unsafe_allow_html=True)
+                                  + (f" · {_amm_h.escape(p['nota'])}" if p.get("nota") else "")
+                                  + (f" · 🧾 {len(amm_ricevute_pagamento(p))}" if amm_ricevute_pagamento(p) else "") + "</div>" for p in r.get("pagamenti", [])) + "</div>", unsafe_allow_html=True)
+            for p_ in r.get("pagamenti", []):
+                _amm_ricevute_vista(c, s, r, p_)
             b1, b2, b3 = st.columns(3, gap="small")
             if st_r != "pagata" and b1.button("💶 Pagata", key=f"amm_pg_b_{r['id']}", width="stretch"):
                 _amm_dlg_paga(c, s, r)

@@ -417,3 +417,16 @@ try:
     _ga_applica()
 except Exception:
     pass
+
+# ---- 27/11 sera: ricevute di pagamento multiple, evidenze sulle schede, posta archiviata da sola
+GA_SCHEDE["c_ricevute_evidenze"] = ("🧾 Ricevute di pagamento e cose importanti in evidenza",
+    """**Ricevute (anche più di una):**
+- **Rata del condominio** (Casa → 🏢 Amministrazione → 💶 Spese e scadenze → apri la spesa): tocca **💶 Pagata**, scrivi importo e data e nello stesso riquadro **📎 carica una o più ricevute** (foto o PDF). Dopo, sotto ogni pagamento, trovi **🧾 Ricevuta 1, 2…** da aprire e **📎 Aggiungi ricevute a questo pagamento** per aggiungerne altre quando vuoi.
+- **Bolletta o fattura** (Casa → 📚 Documenti): sulla scheda tocca **📎 Aggiungi ricevute**, scegli uno o più file: la bolletta risulta **pagata** e le ricevute restano sotto di lei.
+- Le ricevute sono anche tra i Documenti, con il tipo «Ricevuta di pagamento».
+**In evidenza sulla scheda:** ogni documento mostra in un **riquadro giallo** importi, scadenze, date di assemblee e la **prossima rata da pagare** della spesa collegata (o «tutte pagate»): apri il PDF solo se ti serve.
+**Posta archiviata da sola:** ogni sera l'app prende dalla tua Gmail le email delle amministrazioni (Matera, anche dalla PEC; Dente), le bollette di luce, gas, telefono e le comunicazioni dei fornitori e le archivia nella casa giusta: **un documento per ogni email**, con dentro il testo e gli allegati.""",
+    "ricevuta ricevute pagamento più ricevute allegare foto pdf rata condominio bolletta pagata evidenza riquadro giallo importi date scadenze prossima rata email posta automatica gmail pec")
+GA_DOVE.update({"c_ricevute_evidenze": ("casa",)})
+GA_NOVITA.append(("nv_ricevute", "🧾", "Più ricevute per ogni pagamento", "Casa: 📎 sulle rate del condominio e sulle bollette, una o più foto/PDF; e un riquadro giallo con importi e date su ogni documento"))
+GA_NOVITA.append(("nv_posta", "📧", "La posta di casa si archivia da sola", "Ogni sera: amministrazioni, bollette e comunicazioni dei fornitori, nella casa giusta e senza doppioni"))
