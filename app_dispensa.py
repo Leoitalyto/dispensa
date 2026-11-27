@@ -20,7 +20,7 @@ except Exception:
 import inspect as _inspect_tab
 import re as _re_tab
 import streamlit as _st_tab
-if getattr(_st_tab.tabs, "_versione", 0) < 3:                         # il numero sale a ogni correzione: così anche il server già acceso usa la versione nuova
+if getattr(_st_tab.tabs, "_versione", 0) < 4:                         # il numero sale a ogni correzione: così anche il server già acceso usa la versione nuova
     _tabs_originale = getattr(_st_tab.tabs, "_originale", None) or _st_tab.tabs
     try:
         _par_tab = _inspect_tab.signature(_tabs_originale).parameters
@@ -69,15 +69,17 @@ if getattr(_st_tab.tabs, "_versione", 0) < 3:                         # il numer
                     _st_tab.session_state.setdefault("_tabs_mem", {})[base_n] = _nrm(v)
             except Exception:
                 pass
-        if not kw.get("default") and mem.get(base_n):
-            kw["default"] = next((t for t in tabs if _nrm(t) == mem[base_n]), None)
+        if not kw.get("default") and mem.get(base_n) and chiave not in ss_:   # la scheda ricordata si rimette nello STATO (non come «default»):
+            _sc_mem = next((t for t in tabs if _nrm(t) == mem[base_n]), None)    # così le schede restano sempre le stesse e non «saltano»
+            if _sc_mem is not None:                                                # su una scheda vecchia quando si tocca in fretta
+                ss_[chiave] = _sc_mem
         try:
             return _tabs_originale(tabs, key=chiave, on_change=_ricorda, **kw)
         except Exception:
             kw.pop("default", None)
             return _tabs_originale(tabs, **kw)
     _tabs_con_memoria._ricorda = True
-    _tabs_con_memoria._versione = 3
+    _tabs_con_memoria._versione = 4
     _tabs_con_memoria._attiva = bool(_tabs_ok)                     # lo legge il «Controllo tecnico»: dopo il primo ridisegno questo codice non si riesegue
     _tabs_con_memoria._originale = _tabs_originale
     _st_tab.tabs = _tabs_con_memoria
@@ -607,8 +609,10 @@ def _nav_scrivi():
             return
         ss_["_nav_url"] = ora
         nuovi_ = {"n": ora, "s": _nav_sezione_ora(ss_), "t": str(int(_time_nav.time() // 60))}
-        if _st_pos.query_params.get("p"):
-            nuovi_["p"] = _st_pos.query_params.get("p")                     # la persona scelta in Salute (scritta in silenzio da salute_profilo.py)
+        _ric_p = ss_.get("fa_profilo_ric")
+        _p_url = (_ric_p.get("pid") if isinstance(_ric_p, dict) and _ric_p.get("uid") == (ss_.get("sess") or {}).get("uid") else None) or _st_pos.query_params.get("p")
+        if _p_url:
+            nuovi_["p"] = str(_p_url)                                       # la persona scelta in Salute: resta nell'indirizzo (se la pagina riparte si torna a lei)
         _st_pos.query_params.update(nuovi_)
     except Exception:
         pass
@@ -624,6 +628,14 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
                 if _k_nav not in _st_pos.session_state:
                     _st_pos.session_state[_k_nav] = _v_nav
             _st_pos.session_state["_nav_url"] = _st_pos.query_params.get("n")
+    except Exception:
+        pass
+    try:                                                              # Home o sezione? Si decide QUI, con l'ora che c'era nell'indirizzo (poi l'indirizzo si aggiorna)
+        import time as _time_nav
+        _rec_nav = abs(int(_time_nav.time() // 60) - int(_st_pos.query_params.get("t") or 0)) <= 3 * 60
+        _s_nav = _st_pos.query_params.get("s")
+        if "vm_home" not in _st_pos.session_state and _s_nav:
+            _st_pos.session_state["vm_home"] = not (_rec_nav and (_s_nav in _SEZ_VALIDE or _s_nav == "dispensa"))
     except Exception:
         pass
     try:
