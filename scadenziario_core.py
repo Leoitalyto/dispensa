@@ -259,7 +259,7 @@ def _sz_f_casa(d, oggi):
             continue
         nome = x.get("titolo") or " · ".join(y for y in (x.get("argomento"), x.get("ente")) if y) or x.get("tipo") or "Documento"
         if x.get("tipo") in ("Bolletta o fattura", "Polizza assicurativa"):
-            if x.get("pagata_il") or x["id"] in pagate:
+            if x.get("pagata_il") or x["id"] in pagate or str(x.get("modo_pagamento") or "").startswith("Addebito"):
                 continue                                                 # pagata: non è più da fare
             cat = "assicurazioni" if x.get("tipo") == "Polizza assicurativa" else "pagamenti"
             out.append(_sz_voce(f"casa:doc:{x['id']}", f"💶 Da pagare: {nome}", x["scadenza_doc"], cat, "casa", importo=x.get("importo"), priorita="Alta"))

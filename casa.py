@@ -1171,6 +1171,8 @@ def ca_stato_pagamento(d, docs, oggi_):
         return "pagata", (r[-1].get("data_doc") or d.get("pagata_il") or "")
     if d.get("pagata_il"):
         return "pagata", d["pagata_il"]
+    if str(d.get("modo_pagamento") or "").startswith("Addebito"):                    # addebito diretto in conto: si paga da sola alla scadenza
+        return "pagata", (d.get("scadenza_doc") or d.get("data_doc") or "")
     sc = _data(d.get("scadenza_doc"))
     if not sc:
         return "da_pagare", None                                                    # non c'è una scadenza scritta: si paga, ma senza data
