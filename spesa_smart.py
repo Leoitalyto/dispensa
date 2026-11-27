@@ -1302,6 +1302,9 @@ def _ss_v_inserisci(ss, disp):
             st.info(f"Il codice {ean} non è ancora nell'archivio: compila il prodotto nuovo qui sotto (ho cercato nome e formato su Open Food Facts).")
     opz = ["__nuovo__"] + list(per_id)
     idx = opz.index(pre_id) if pre_id else (0 if ean else None)
+    if ean and st.session_state.get(k + "_ean_visto") != ean:           # codice appena letto: il prodotto si sceglie da solo (trovato, oppure «➕ Nuovo prodotto» già compilato)
+        st.session_state[k + "_ean_visto"] = ean
+        st.session_state[k + "_prod"] = opz[idx]
     scelta = st.selectbox("🔎 Prodotto (scrivi per cercare)", opz, index=idx, key=k + "_prod", placeholder="Scrivi il nome…",
                           format_func=lambda i: "➕ Nuovo prodotto" if i == "__nuovo__" else _ss_etich_prodotto(per_id[i]))
     nuovo_p = None
