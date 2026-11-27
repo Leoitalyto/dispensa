@@ -598,11 +598,18 @@ def _nav_scrivi():
         if "sess" not in ss_:
             return
         ora = _nav_codifica(ss_)
+        dopo_ = ss_.pop("_nav_dopo_indietro", None)
         if not ora or len(ora) > 1800 or ora == ss_.get("_nav_stato"):
             return
+        if dopo_:
+            d_url_, d_ora_ = _nav_decodifica(dopo_), _nav_decodifica(ora)
+            if d_url_ and all(d_ora_.get(k_) == v_ for k_, v_ in d_url_.items()):
+                ss_["_nav_stato"] = ora                                  # dopo Indietro la sezione ha solo AGGIUNTO le sue scelte iniziali: stessa pagina, nessuna voce nuova
+                return
         ss_["_nav_stato"] = ora
         if "_nav_url" not in ss_ and not _st_pos.query_params.get("n"):
             ss_["_nav_url"] = None                                    # la prima pagina dopo l'accesso: niente voce in più (così da Home il tasto Indietro esce subito)
+            ss_["_nav_qs0"] = sorted((k_, str(v_)) for k_, v_ in _st_pos.query_params.to_dict().items() if k_ not in ("n", "s", "t", "p"))   # com'è l'indirizzo di questa prima voce (per riconoscerla quando ci si torna con Indietro)
             return
         if _st_pos.query_params.get("n") == ora:
             ss_["_nav_url"] = ora
@@ -614,6 +621,7 @@ def _nav_scrivi():
         if _p_url:
             nuovi_["p"] = str(_p_url)                                       # la persona scelta in Salute: resta nell'indirizzo (se la pagina riparte si torna a lei)
         _st_pos.query_params.update(nuovi_)
+        ss_["_nav_storia"] = (list(ss_.get("_nav_storia") or []) + [ora])[-40:]     # le pagine scritte in questa sessione: se il browser ne riporta una, è il tasto Indietro/Avanti
     except Exception:
         pass
 
@@ -651,7 +659,10 @@ try:                                                                  # ◁ INDI
     _url_n = _st_pos.query_params.get("n") or None
     if _url_n and _url_n == _ss_nav.get("_nav_url"):
         _ss_nav["_nav_eco"] = True                                     # il browser ha davvero nell'indirizzo quello che l'app ha scritto
-    if "sess" in _ss_nav and "_nav_url" in _ss_nav and _url_n != _ss_nav.get("_nav_url") and _ss_nav.get("_nav_eco"):   # solo se l'indirizzo segue l'app (altrimenti, per esempio dentro un'anteprima, non si tocca niente)
+    _qs_nav = sorted((k_, str(v_)) for k_, v_ in _st_pos.query_params.to_dict().items() if k_ not in ("n", "s", "t", "p"))
+    _eco_nav = bool(_ss_nav.get("_nav_eco")) or (_url_n is not None and _url_n in (_ss_nav.get("_nav_storia") or [])) or (
+        _url_n is None and bool(_ss_nav.get("_nav_qs0")) and _qs_nav == _ss_nav.get("_nav_qs0") and bool(_ss_nav.get("_nav_storia")))   # anche se fra la scrittura e Indietro non c'è stato nessun tocco
+    if "sess" in _ss_nav and "_nav_url" in _ss_nav and _url_n != _ss_nav.get("_nav_url") and _eco_nav:   # solo se l'indirizzo segue l'app (altrimenti, per esempio dentro un'anteprima, non si tocca niente)
         _dati_nav = _nav_decodifica(_url_n) if _url_n else {"vm_home": True}
         if _dati_nav:
             for _k_nav in _NAV_CHIAVI:
@@ -665,9 +676,10 @@ try:                                                                  # ◁ INDI
             for _k_nav in ("sp_ds_cor", "sp_ds_cat", "pcd_aperto", "lm_aperto", "lm_bozza", "_sc_dlg"):    # le finestre e i riquadri aperti della pagina lasciata si chiudono
                 _ss_nav.pop(_k_nav, None)
         _ss_nav["_nav_url"] = _url_n
-        _ss_nav["_nav_stato"] = _nav_codifica(_ss_nav)                 # la pagina di adesso è quella dell'indirizzo: niente da riscrivere
-    _nav_scrivi()
-    _ss_nav["_vm_nav_scrivi"] = _nav_scrivi                             # lo usa st.stop (le sezioni finiscono così): la pagina nuova va nell'indirizzo subito
+        _ss_nav["_nav_stato"] = _nav_codifica(_ss_nav)
+        if _url_n:
+            _ss_nav["_nav_dopo_indietro"] = _url_n                    # nel giro subito dopo Indietro la sezione può rimettere le sue scelte iniziali: non è una pagina nuova                 # la pagina di adesso è quella dell'indirizzo: niente da riscrivere
+    _ss_nav["_vm_nav_scrivi"] = _nav_scrivi                             # NIENTE scrittura qui in cima: la pagina si scrive UNA volta, a fine giro (o a st.stop), quando la sezione ha finito di prepararsi                             # lo usa st.stop (le sezioni finiscono così): la pagina nuova va nell'indirizzo subito
 except Exception:
     pass
 if not getattr(_st_pos.stop, "_vm_nav", False):                       # st.stop: prima di fermarsi, scrive dove sei (una volta sola per server)
