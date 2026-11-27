@@ -619,7 +619,7 @@ if not _st_pos.session_state.get("_pos_letta"):                       # sessione
     try:
         import time as _time_nav
         _t_nav = int(_st_pos.query_params.get("t") or 0)
-        if _st_pos.query_params.get("n") and abs(int(_time_nav.time() // 60) - _t_nav) <= 12 * 60:
+        if _st_pos.query_params.get("n") and abs(int(_time_nav.time() // 60) - _t_nav) <= 3 * 60:          # entro 3 ore dall'ultimo cambio di pagina; dopo, si riparte dalla schermata iniziale
             for _k_nav, _v_nav in _nav_decodifica(_st_pos.query_params.get("n")).items():
                 if _k_nav not in _st_pos.session_state:
                     _st_pos.session_state[_k_nav] = _v_nav

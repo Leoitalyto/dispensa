@@ -24,7 +24,7 @@ import streamlit as st
 VM_NOME = "VitaMemo"
 VM_MOTTO = "Il tuo mondo, in ordine."
 VM_NEON = "#ccff00"                       # il colore fluorescente dei numeri e della pulsazione
-VM_RIPRESA_MIN = 12 * 60                       # entro quanti minuti, se la pagina riparte da sola, si torna nella sezione in cui si era
+VM_RIPRESA_MIN = 3 * 60                       # entro quanti minuti, se la pagina riparte da sola, si torna nella sezione in cui si era
 _VM_LARG, _VM_ALT = 720, 1280             # misure dell'immagine: le zone qui sotto sono in questi pixel
 # sezione, nome letto dallo schermo, x0, y0, x1, y1
 VM_ZONE = [
