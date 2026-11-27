@@ -99,8 +99,10 @@ def dp_finito(d, r, motivo="finito", oggi_=None):
     ch = dp_chiave(r)
     if not ch:
         return "gia"
-    if dp_in_lista(d, ch) or dp_in_attesa(d, ch):
+    if dp_in_lista(d, ch):
         return "gia"
+    if dp_in_attesa(d, ch):
+        return "attesa"
     q = dp_regola(d, r)["quando"]
     if q == "sempre":
         aggiungi_a_spesa(d, r)
@@ -136,6 +138,25 @@ def dp_suggerisci_sempre(d, r):
     reg = dp_regola(d, r)
     st_ = reg.get("storia") or []
     return reg["quando"] == "chiedi" and len(st_) >= 3 and all(x == "lista" for x in st_[-3:])
+
+
+def dp_pulisci(d):
+    """Toglie dall'attesa i prodotti che sono TORNATI in dispensa (comprati e rimessi, da qualunque parte: Aggiungi, lista, Spesa Smart, scanner…).
+    «finito» → basta che ce ne sia di nuovo; «scorta» → deve essere tornato sopra la scorta minima. Ritorna quanti ne ha tolti."""
+    prima = list(d.get("spesa_attesa") or [])
+    resta = []
+    for v in prima:
+        ch = dp_chiave(v)
+        tot = dp_totale(d, ch) if ch else 0
+        if v.get("motivo") == "scorta":
+            tornato = tot > float(dp_regola(d, v).get("minima") or 0)
+        else:
+            tornato = tot > 0
+        if not tornato:
+            resta.append(v)
+    if len(resta) != len(prima):
+        d["spesa_attesa"] = resta
+    return len(prima) - len(resta)
 
 
 def dp_metti_in_lista(d, r, q=1):
@@ -443,6 +464,9 @@ def dp_sezioni_spesa(ricarica=None):
     ricarica = ricarica or _dp_ricarica
     st.markdown(_DP_CSS, unsafe_allow_html=True)
     d = _dp_dati()
+    if dp_pulisci(dict(d, spesa_attesa=list(d.get("spesa_attesa") or []))):          # tornati in dispensa: non si chiede più
+        salva(dp_pulisci, "Spesa: tolti dall'attesa i prodotti tornati in dispensa")
+        d = _dp_dati()
     if any(v.get("tipo") == "dopo" and v.get("quando") and v["quando"] <= dp_oggi().isoformat() for v in d.get("spesa_attesa") or []):
         esito = {}
         salva(lambda dd: esito.update(zip(("lista", "decidere"), dp_maturati(dd))), "Spesa: arrivato il giorno dei «più avanti»")
@@ -487,6 +511,9 @@ def dp_box_finiti():
     st.markdown(_DP_CSS, unsafe_allow_html=True)
     d = _dp_dati()
     _dp_sugg_sempre(st.rerun)
+    if d.get("spesa_attesa") and dp_pulisci(dict(d, spesa_attesa=list(d.get("spesa_attesa") or []))):      # tornati in dispensa: non si chiede più
+        salva(dp_pulisci, "Spesa: tolti dall'attesa i prodotti tornati in dispensa")
+        d = _dp_dati()
     voci = [v for v in d.get("spesa_attesa") or [] if v.get("tipo") == "decidere"]
     if not voci:
         return
@@ -543,7 +570,7 @@ def _dp_pannello_prezzo(r, ss):
                 for e in esito["err"]:
                     st.error(e)
             else:
-                if val and not r.get("formato_valore") and uni not in ("pz",):
+                if val and not a_peso and not r.get("formato_valore") and uni not in ("pz",):     # «a peso»: i grammi comprati non sono il formato del prodotto
                     try:
                         def _f2(d):
                             for a in d.get("articoli") or []:
@@ -642,7 +669,9 @@ if "pn_scadenze" in globals() and "_dp_scad_prima" not in globals():
     def pn_scadenze():                                                   # noqa: F811 — 🔔 finiti da decidere, «più avanti» arrivati, «se conviene» in offerta
         out = _dp_scad_prima()
         try:
-            d = _dp_dati()
+            d = dict(_dp_dati())
+            d["spesa_attesa"] = list(d.get("spesa_attesa") or [])
+            dp_pulisci(d)                                                 # solo per gli avvisi (la scrittura la fanno i riquadri)
             oggi_ = dp_oggi().isoformat()
             voci = []
             for v in d.get("spesa_attesa") or []:
@@ -653,7 +682,7 @@ if "pn_scadenze" in globals() and "_dp_scad_prima" not in globals():
             if voci:
                 out = dict(out)
                 out["dispensa"] = list(out.get("dispensa") or []) + voci
-            ss = _dp_ss()
+            ss = _dp_ss() if any(v.get("tipo") == "offerta" for v in d.get("spesa_attesa") or []) else None
             if ss:
                 off = dp_attesa_in_offerta(ss, {"spesa_attesa": [v for v in d.get("spesa_attesa") or [] if v.get("tipo") == "offerta"]},
                                            dp_oggi(), _dp_volantini())

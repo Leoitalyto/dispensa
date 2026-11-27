@@ -387,11 +387,12 @@ with tab_dispensa:
                 _esito = {}
                 try:
                     salva(lambda d: _esito.update(consuma_uno(d, _riga["id"])), "Consumato un prodotto")
-                    if _esito.get("stato") == "finito" and _esito.get("dove") in ("decidere", "offerta", "mai", "gia"):
+                    if _esito.get("stato") == "finito" and _esito.get("dove") in ("decidere", "offerta", "mai", "gia", "attesa"):
                         st.session_state["messaggio"] = {"decidere": f"❓ {_esito['nome']} è finito: scegli qui sotto se rimetterlo nella lista.",
                                                          "offerta": f"💭 {_esito['nome']} è finito: te lo propongo quando è in offerta.",
                                                          "mai": f"✅ {_esito['nome']} è finito (non lo ricompri: non l'ho messo in lista).",
-                                                         "gia": f"✅ {_esito['nome']} è finito: è già nella lista della spesa."}[_esito["dove"]]
+                                                         "gia": f"✅ {_esito['nome']} è finito: è già nella lista della spesa.",
+                                                         "attesa": f"✅ {_esito['nome']} è finito: è già tra quelli da decidere (scheda 🛒 Spesa)."}[_esito["dove"]]
                     elif _esito.get("stato") == "finito":
                         st.session_state["messaggio"] = "🛒 " + t("{nome} è finito: l'ho messo nella lista della spesa.", nome=_esito["nome"])
                     elif _esito.get("dove") in ("decidere", "offerta", "lista"):

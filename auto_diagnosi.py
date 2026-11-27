@@ -508,13 +508,26 @@ def _ad_con_il(jpeg, mezzo, letture):
 _AD_REGOLE_TESTO = _AD_REGOLE.replace("Ti viene mostrata la FOTO di un cruscotto con una o più spie accese.", "Ti viene descritta A PAROLE una spia del cruscotto o un guasto del mezzo (non c'è la foto).")
 
 
+def _ad_con_il_testo(domanda, mezzo):
+    """Come _ad_con_il, ma senza foto: la spia o il guasto descritti a parole, letti dai servizi gratuiti (ia_lettura.py)."""
+    try:
+        r, prov = il_testo(_AD_REGOLE_TESTO, _ad_messaggio_utente(mezzo, domanda), max_tokens=1800)
+    except Exception:
+        r, prov = "", ""
+    ris = _ad_parse(r) if r else None
+    if not isinstance(ris, dict):
+        return {"errore": "servizio" if not r else "formato", "testo": (r or "")[:1500]}
+    ris["_fonti"] = [(IL_FORNITORI.get(prov) or {}).get("nome", prov)] if prov else []
+    return ris
+
+
 def ad_analizza_testo(domanda, mezzo):
     """Come ad_analizza, ma da una descrizione scritta (spia o guasto), senza foto. Ritorna il risultato (dict) oppure {'errore': motivo}."""
     prov = ad_provider_scelto()
     cfg = ad_cfg(prov)
     con_il = "il_disponibili" in globals() and bool(il_disponibili())
     if not cfg["key"] or (prov == "altra" and not (cfg["url"] and cfg["modello"])):
-        return _ad_con_il(jpeg, mezzo, []) if con_il else {"errore": "chiave"}
+        return _ad_con_il_testo(domanda, mezzo) if con_il else {"errore": "chiave"}       # prima: «jpeg» non esisteva qui e l'app si fermava con un errore
     if cfg["fonte"] == "app" and not ad_puo():
         return {"errore": ad_errore_stop()}
     testo, err = _ad_invia(prov, cfg, _AD_REGOLE_TESTO, [("u", _ad_messaggio_utente(mezzo, domanda))], None, 1800, json_out=True)

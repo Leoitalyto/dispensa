@@ -20,7 +20,7 @@ except Exception:
 import inspect as _inspect_tab
 import re as _re_tab
 import streamlit as _st_tab
-if getattr(_st_tab.tabs, "_versione", 0) < 2:
+if getattr(_st_tab.tabs, "_versione", 0) < 3:                         # il numero sale a ogni correzione: così anche il server già acceso usa la versione nuova
     _tabs_originale = getattr(_st_tab.tabs, "_originale", None) or _st_tab.tabs
     try:
         _par_tab = _inspect_tab.signature(_tabs_originale).parameters
@@ -44,7 +44,9 @@ if getattr(_st_tab.tabs, "_versione", 0) < 2:
         ss_ = _st_tab.session_state
         vistE = ss_.setdefault("_tabs_viste", {})
         mem = ss_.setdefault("_tabs_mem", {})                                  # {schede senza numeri: scheda scelta (senza numeri)} — non è un widget: non si cancella da sola
-        base = "tabm_" + _hashlib_cc.md5("|".join(_tab_norm(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
+        _norm_l = [_tab_norm(t) for t in tabs]
+        _nrm = _tab_norm if len(set(_norm_l)) == len(_norm_l) else (lambda x: str(x))     # schede che differiscono SOLO per i numeri (es. anni): si usano i titoli interi
+        base = "tabm_" + _hashlib_cc.md5("|".join(_nrm(t) for t in tabs).encode("utf-8")).hexdigest()[:10]
         giro = ss_.get("_tabs_giro", 0)
         n = vistE.get(base)
         n = (n[1] + 1) if (n and n[0] == giro) else 0
@@ -53,29 +55,29 @@ if getattr(_st_tab.tabs, "_versione", 0) < 2:
         try:                                                                       # dopo «Salva in dispensa» si torna alla scheda Dispensa (la prima delle schede principali)
             if ss_.get("_vai_tab_dispensa") and any("Aggiungi" in str(t) for t in tabs) and len(tabs) >= 5:
                 ss_.pop("_vai_tab_dispensa", None)
-                mem[base_n] = _tab_norm(tabs[0])
+                mem[base_n] = _nrm(tabs[0])
                 for k_ in [k_ for k_ in list(ss_.keys()) if str(k_).startswith(base_n + "#")]:
                     ss_.pop(k_, None)
         except Exception:
             pass
         chiave = base_n + "#" + _hashlib_cc.md5("|".join(str(t) for t in tabs).encode("utf-8")).hexdigest()[:6]
 
-        def _ricorda(chiave=chiave, base_n=base_n):
+        def _ricorda(chiave=chiave, base_n=base_n, _nrm=_nrm):
             try:
                 v = _st_tab.session_state.get(chiave)
                 if v is not None:
-                    _st_tab.session_state.setdefault("_tabs_mem", {})[base_n] = _tab_norm(v)
+                    _st_tab.session_state.setdefault("_tabs_mem", {})[base_n] = _nrm(v)
             except Exception:
                 pass
         if not kw.get("default") and mem.get(base_n):
-            kw["default"] = next((t for t in tabs if _tab_norm(t) == mem[base_n]), None)
+            kw["default"] = next((t for t in tabs if _nrm(t) == mem[base_n]), None)
         try:
             return _tabs_originale(tabs, key=chiave, on_change=_ricorda, **kw)
         except Exception:
             kw.pop("default", None)
             return _tabs_originale(tabs, **kw)
     _tabs_con_memoria._ricorda = True
-    _tabs_con_memoria._versione = 2
+    _tabs_con_memoria._versione = 3
     _tabs_con_memoria._attiva = bool(_tabs_ok)                     # lo legge il «Controllo tecnico»: dopo il primo ridisegno questo codice non si riesegue
     _tabs_con_memoria._originale = _tabs_originale
     _st_tab.tabs = _tabs_con_memoria
@@ -202,7 +204,7 @@ if not getattr(_st_chiuse.expander, "_sempre_chiusa", False):
 # dalla prima voce, come se l'app fosse «tornata indietro». Qui si tiene una copia del valore e, se Streamlit l'ha cancellato da solo, lo si rimette.
 # Se invece è il programma a cancellarlo apposta (subito dopo averlo disegnato), si rispetta e non si rimette.
 from streamlit.delta_generator import DeltaGenerator as _DG_scelte
-if not getattr(_DG_scelte, "_vm_scelte_ricordate", False):
+if getattr(_DG_scelte, "_vm_scelte_ver", 0) < 2:                       # il numero sale a ogni correzione (il server già acceso prende la versione nuova)
     def _scelta_valida(v, opzioni, multi):
         try:
             ops = list(opzioni.keys()) if isinstance(opzioni, dict) else list(opzioni)
@@ -232,6 +234,8 @@ if not getattr(_DG_scelte, "_vm_scelte_ricordate", False):
         per_norm = {}
         for o in ops:
             per_norm.setdefault(_scelta_norm(o), o)
+        if len(per_norm) != len(ops):
+            return None                                                      # voci che differiscono solo per i numeri (es. anni): non si indovina
         if multi and isinstance(v, list):
             nuovi = [per_norm.get(_scelta_norm(x)) for x in v]
             return nuovi if all(nuovi) else None
@@ -274,13 +278,15 @@ if not getattr(_DG_scelte, "_vm_scelte_ricordate", False):
         return _nuovo
     for _nome_s in ("pills", "radio", "segmented_control"):
         try:
-            setattr(_DG_scelte, _nome_s, _scelte_avvolgi(getattr(_DG_scelte, _nome_s)))
+            _m_orig = getattr(_DG_scelte, _nome_s)
+            _m_orig = getattr(_m_orig, "__wrapped__", _m_orig)               # mai due involucri uno sull'altro
+            setattr(_DG_scelte, _nome_s, _scelte_avvolgi(_m_orig))
             setattr(_st_chiuse, _nome_s, getattr(_st_chiuse._main, _nome_s))
         except Exception:
             pass
     try:                                                       # se il programma CANCELLA apposta una scelta (per ricominciare da capo), non la si rimette
         from streamlit.runtime.state.session_state_proxy import SessionStateProxy as _SSP_sc
-        _del_originale_sc = _SSP_sc.__delitem__
+        _del_originale_sc = getattr(_SSP_sc.__delitem__, "__wrapped__", _SSP_sc.__delitem__)
 
         def _del_ricorda_sc(self, key):
             try:
@@ -291,10 +297,12 @@ if not getattr(_DG_scelte, "_vm_scelte_ricordate", False):
             except Exception:
                 pass
             return _del_originale_sc(self, key)
+        _del_ricorda_sc.__wrapped__ = _del_originale_sc
         _SSP_sc.__delitem__ = _del_ricorda_sc
     except Exception:
         pass
     _DG_scelte._vm_scelte_ricordate = True
+    _DG_scelte._vm_scelte_ver = 2
 
 # Punti in cui la Farmacia si aggancia alla Home (parte3.py). Ogni riga viene cercata UNA sola volta:
 # se non la trova, la dispensa funziona lo stesso e la Farmacia semplicemente non compare.
@@ -552,7 +560,7 @@ def _nav_codifica(ss_):
     d_ = {}
     for k_ in _NAV_CHIAVI:
         v_ = ss_.get(k_)
-        if v_ is None or v_ == {} or v_ == "":
+        if v_ is None or v_ == {}:
             continue
         try:
             _json_n.dumps(v_)
