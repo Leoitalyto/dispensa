@@ -757,7 +757,25 @@ def _amm_ricevute_vista(c, s, r, p):
         dati = _ca_leggi_file(f) if f.get("id") and "_ca_leggi_file" in globals() else []
         if dati:
             nome, mime, b = dati[0]
-            st.download_button(f"🧾 Ricevuta {i}: {nome[:40]}", b, file_name=nome, mime=mime, key=f"amm_rcd_{p['id']}_{rid}", width="stretch")
+            vedi = st.session_state.setdefault("amm_rc_vedi", [])
+            chiave = f"{p['id']}_{rid}"
+            aperta = chiave in vedi
+            st.markdown(f"🧾 **Ricevuta {i}:** {_amm_h.escape(d.get('titolo') or nome)}")
+            v1, v2 = st.columns(2, gap="small")
+            if v1.button("🙈 Chiudi l'anteprima" if aperta else "👁️ Vedi qui", key=f"amm_rcv_{chiave}", width="stretch",
+                         type="secondary" if aperta else "primary"):
+                if aperta:
+                    vedi.remove(chiave)
+                else:
+                    vedi.append(chiave)
+                st.rerun()
+            v2.download_button("⬇ Scarica", b, file_name=nome, mime=mime, key=f"amm_rcd_{p['id']}_{rid}", width="stretch")
+            if aperta:                                  # anteprima nella pagina: foto intera o prime pagine del PDF, senza scaricare niente
+                if "_ca_anteprima" in globals():
+                    with st.container(border=True):
+                        _ca_anteprima(nome, mime, b)
+                elif (mime or "").startswith("image/"):
+                    st.image(b, width="stretch")
     if st.button(f"📎 Aggiungi ricevute a questo pagamento ({len(docs)})", key=f"amm_rca_{p['id']}", width="stretch"):
         _amm_dlg_ricevute(c, s, r, p)
 
